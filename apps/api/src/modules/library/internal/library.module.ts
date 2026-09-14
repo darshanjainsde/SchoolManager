@@ -5,6 +5,7 @@ import { LibrarianGuard } from './librarian.guard';
 import { LibraryCatalogService } from './library-catalog.service';
 import { LibraryCirculationService } from './library-circulation.service';
 import { LibraryDueSoonService } from './library-due-soon.service';
+import { LibraryYearEndService } from './library-year-end.service';
 import { LibraryFinesService } from './library-fines.service';
 import { LibraryHallService } from './library-hall.service';
 import { LibraryMeService } from './library-me.service';
@@ -33,6 +34,9 @@ import {
     LibraryHallService,
     LibraryMeService,
     LibraryDueSoonService,
+    LibraryYearEndService,
   ],
+  // The one thing a sibling may use: the Sessions tab's year-end view of the library.
+  exports: [LibraryYearEndService],
 })
 export class LibraryModule {}

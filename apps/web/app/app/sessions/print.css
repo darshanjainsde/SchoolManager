@@ -1,0 +1,18 @@
+/* The promotion register on A4: the register and nothing else. The console
+   shell is Tailwind, so it cannot be hidden by class name — while `ses-printing`
+   is on <body> everything is invisible and the register is lifted to the top
+   of the page. Same rules as exam-hall/print.css: literal ink, hairline
+   borders, no shadows. */
+@media print {
+  @page { size: A4; margin: 14mm; }
+  html, body { background: #fff !important; color: #111 !important; }
+  body.ses-printing * { visibility: hidden; }
+  body.ses-printing .sk-ses-register, body.ses-printing .sk-ses-register * { visibility: visible; }
+  body.ses-printing .sk-ses-register { position: absolute; left: 0; top: 0; width: 100%; border: 0 !important; box-shadow: none !important; }
+  body.ses-printing .sk-noprint { display: none !important; }
+  .sk-ses-register .sk-card-h h3 { font-size: 16pt; }
+  .sk-ses-register .sk-tblwrap { max-height: none !important; overflow: visible !important; border: 0; }
+  .sk-ses-register .sk-tbl { font-size: 9.5pt; }
+  .sk-ses-register .sk-tbl th { position: static; background: #fff; color: #333; border-bottom: 1px solid #333; }
+  .sk-ses-register .sk-tbl td { border-top: 1px solid #ccc; padding: 4pt 6pt; white-space: normal; }
+}

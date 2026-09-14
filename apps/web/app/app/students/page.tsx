@@ -1,11 +1,42 @@
 'use client';
 import Link from 'next/link';
-import { useEffect, useRef, useState, type CSSProperties, type FocusEvent, type ReactNode } from 'react';
+import { useState, type CSSProperties, type FocusEvent, type ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, Trash2, Pencil, X, KeyRound, CheckCircle2, Send } from 'lucide-react';
+import { Plus, Trash2, Pencil, X, KeyRound, CheckCircle2, Send, UserMinus, Undo2 } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
+import { ApiError } from '@/lib/api';
 import { useHost } from '@/components/use-host';
+import DialogShell from '@/components/ui/dialog-shell';
+import LeaveDialog from './leave-dialog';
+
+/** The three slices of the roll the page can show (Active Roster). */
+type StatusTab = 'active' | 'left' | 'all';
+const STATUS_TABS: { id: StatusTab; label: string }[] = [
+  { id: 'active', label: 'Active' },
+  { id: 'left', label: 'Alumni & left' },
+  { id: 'all', label: 'All' },
+];
+
+type StudentStatus = 'ACTIVE' | 'ALUMNI' | 'TRANSFERRED' | 'LEFT';
+
+/** "Alumni · 2025-26", "Transferred · 31 Mar 2026", "Left · 31 Mar 2026". */
+function statusLabel(s: { status: StudentStatus; leftOn: string | null; alumniBatch: string | null }): string {
+  const when = s.leftOn
+    ? new Date(s.leftOn).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+    : null;
+  if (s.status === 'ALUMNI') return `Alumni${s.alumniBatch ? ` · ${s.alumniBatch}` : when ? ` · ${when}` : ''}`;
+  if (s.status === 'TRANSFERRED') return `Transferred${when ? ` · ${when}` : ''}`;
+  return `Left${when ? ` · ${when}` : ''}`;
+}
+
+/** The API answers a designed refusal with a `code` in the body; clients branch on it, never on the message. */
+function errorCode(err: unknown): string | undefined {
+  if (err instanceof ApiError && err.body && typeof err.body === 'object') {
+    return (err.body as { code?: string }).code;
+  }
+  return undefined;
+}
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -13,6 +44,14 @@ interface SchoolClass {
   id: string;
   name: string;
   grade: { name: string };
+  /** Which session the class belongs to (Sessions, Track C). Older rows may lack it. */
+  academicYear?: { id: string; name: string; isCurrent: boolean };
+}
+
+interface SessionYear {
+  id: string;
+  name: string;
+  isCurrent: boolean;
 }
 
 interface Student {
@@ -28,6 +67,12 @@ interface Student {
   photoAssetId: string | null;
   classSection: { name: string; grade: { name: string } } | null;
   userId: string | null;
+  status: StudentStatus;
+  leftOn: string | null;
+  alumniBatch: string | null;
+  dob: string | null;
+  showOnWebsite: boolean;
+  photoConsent: boolean;
 }
 
 interface MediaAsset {
@@ -83,84 +128,6 @@ function ringBlur(e: FocusEvent<HTMLElement>) {
 }
 
 // ── Dialog shell (Escape-to-close + basic focus trap) ────────────────────────
-
-function DialogShell({
-  onClose,
-  labelledBy,
-  maxWidth = 420,
-  children,
-}: {
-  onClose: () => void;
-  labelledBy: string;
-  maxWidth?: number;
-  children: ReactNode;
-}) {
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = containerRef.current;
-    const focusable = el?.querySelectorAll<HTMLElement>(
-      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-    );
-    focusable?.[0]?.focus();
-
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        onClose();
-        return;
-      }
-      if (e.key === 'Tab' && el) {
-        const items = Array.from(
-          el.querySelectorAll<HTMLElement>(
-            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-          ),
-        );
-        if (items.length === 0) return;
-        const first = items[0];
-        const last = items[items.length - 1];
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault();
-          last.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault();
-          first.focus();
-        }
-      }
-    }
-    document.addEventListener('keydown', onKeyDown, true);
-    return () => document.removeEventListener('keydown', onKeyDown, true);
-  }, [onClose]);
-
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 50,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'rgba(15, 30, 24, 0.5)',
-        padding: 16,
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        ref={containerRef}
-        className="sk-card"
-        style={{ width: '100%', maxWidth }}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={labelledBy}
-      >
-        {children}
-      </div>
-    </div>
-  );
-}
 
 // ── Invite-sent confirmation modal ───────────────────────────────────────────
 // Never shows a password — the recipient sets their own via the emailed link.
@@ -294,6 +261,10 @@ interface StudentFormData {
   guardianName: string;
   guardianPhone: string;
   email: string;
+  /** YYYY-MM-DD, or '' for none. Birthdays on the website need it. */
+  dob: string;
+  showOnWebsite: boolean;
+  photoConsent: boolean;
 }
 
 interface StudentFormProps {
@@ -303,9 +274,13 @@ interface StudentFormProps {
   onSave: (data: StudentFormData) => void;
   isSaving: boolean;
   onCancel: () => void;
+  /** The website-birthday switches: only once a student exists (create has no such fields). */
+  websiteOptions?: boolean;
+  /** The sessions a child can be admitted into (the current one, and the next while a plan is open). */
+  years?: SessionYear[];
 }
 
-function StudentForm({ title, initial = {}, classes, onSave, isSaving, onCancel }: StudentFormProps) {
+function StudentForm({ title, initial = {}, classes, onSave, isSaving, onCancel, websiteOptions = false, years }: StudentFormProps) {
   const [firstName, setFirstName] = useState(initial.firstName ?? '');
   const [lastName, setLastName] = useState(initial.lastName ?? '');
   const [admissionNo, setAdmissionNo] = useState(initial.admissionNo ?? '');
@@ -314,6 +289,15 @@ function StudentForm({ title, initial = {}, classes, onSave, isSaving, onCancel 
   const [guardianName, setGuardianName] = useState(initial.guardianName ?? '');
   const [guardianPhone, setGuardianPhone] = useState(initial.guardianPhone ?? '');
   const [email, setEmail] = useState(initial.email ?? '');
+  const [dob, setDob] = useState(initial.dob ?? '');
+  const [showOnWebsite, setShowOnWebsite] = useState(initial.showOnWebsite ?? true);
+  const [photoConsent, setPhotoConsent] = useState(initial.photoConsent ?? false);
+  // Session: the current year unless the child is being admitted for the next one.
+  const currentYear = years?.find((y) => y.isCurrent) ?? null;
+  const initialYear = initial.classSectionId ? (classes.find((c) => c.id === initial.classSectionId)?.academicYear?.id ?? currentYear?.id) : currentYear?.id;
+  const [yearId, setYearId] = useState(initialYear ?? '');
+  const nextYear = years?.find((y) => !y.isCurrent) ?? null;
+  const classesForYear = years && yearId ? classes.filter((c) => !c.academicYear || c.academicYear.id === yearId) : classes;
 
   const canSave = firstName.trim() && lastName.trim() && admissionNo.trim();
 
@@ -323,6 +307,35 @@ function StudentForm({ title, initial = {}, classes, onSave, isSaving, onCancel 
         <h3>{title}</h3>
       </div>
       <div className="sk-card-b">
+        {years && years.length > 1 && (
+          <>
+            {nextYear && currentYear && yearId === currentYear.id && (
+              <div className="sk-notice">
+                <p className="nt">Admitting for {nextYear.name}?</p>
+                <p className="nd">Switch the session below so the child lands in a {nextYear.name} class and is not moved again when the year turns.</p>
+              </div>
+            )}
+            <Field label="Session" htmlFor="sf-year">
+              <select
+                id="sf-year"
+                style={fieldStyle}
+                onFocus={ringFocus}
+                onBlur={ringBlur}
+                value={yearId}
+                onChange={(e) => {
+                  setYearId(e.target.value);
+                  setClassSectionId('');
+                }}
+              >
+                {years.map((y) => (
+                  <option key={y.id} value={y.id}>
+                    {y.name}{y.isCurrent ? ' (current)' : ' (next)'}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </>
+        )}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <Field label="First name" htmlFor="sf-first">
             <input
@@ -373,6 +386,7 @@ function StudentForm({ title, initial = {}, classes, onSave, isSaving, onCancel 
           </Field>
         </div>
 
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <Field label="Class (optional)" htmlFor="sf-class">
           <select
             id="sf-class"
@@ -383,13 +397,25 @@ function StudentForm({ title, initial = {}, classes, onSave, isSaving, onCancel 
             onChange={(e) => setClassSectionId(e.target.value)}
           >
             <option value="">— Unassigned —</option>
-            {classes.map((c) => (
+            {classesForYear.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.grade.name} — {c.name}
               </option>
             ))}
           </select>
         </Field>
+        <Field label="Date of birth (optional)" htmlFor="sf-dob">
+          <input
+            id="sf-dob"
+            type="date"
+            style={fieldStyle}
+            onFocus={ringFocus}
+            onBlur={ringBlur}
+            value={dob}
+            onChange={(e) => setDob(e.target.value)}
+          />
+        </Field>
+        </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <Field label="Guardian name (optional)" htmlFor="sf-guardian-name">
@@ -429,6 +455,20 @@ function StudentForm({ title, initial = {}, classes, onSave, isSaving, onCancel 
           />
         </Field>
 
+        {websiteOptions && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span className="sk-lab">Website birthdays</span>
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13.5, cursor: 'pointer' }}>
+              <input type="checkbox" checked={showOnWebsite} onChange={(e) => setShowOnWebsite(e.target.checked)} />
+              Show on the birthday wall
+            </label>
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13.5, cursor: 'pointer' }}>
+              <input type="checkbox" checked={photoConsent} onChange={(e) => setPhotoConsent(e.target.checked)} />
+              Parents have given photo consent
+            </label>
+          </div>
+        )}
+
         <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
           <button
             className="sk-btn sk-press"
@@ -443,6 +483,9 @@ function StudentForm({ title, initial = {}, classes, onSave, isSaving, onCancel 
                 guardianName: guardianName.trim(),
                 guardianPhone: guardianPhone.trim(),
                 email: email.trim(),
+                dob,
+                showOnWebsite,
+                photoConsent,
               })
             }
             disabled={isSaving || !canSave}
@@ -526,6 +569,7 @@ export default function StudentsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [classFilter, setClassFilter] = useState('');
+  const [showPast, setShowPast] = useState(false);
   const [search, setSearch] = useState('');
   // Id of the student added in this session, so their row can be seen landing
   // in the register rather than just being there on the next render.
@@ -534,8 +578,23 @@ export default function StudentsPage() {
     null,
   );
   const [promptStudent, setPromptStudent] = useState<Student | null>(null);
+  // Active Roster: which slice of the roll, the multi-select on it, and the
+  // children a "Mark as left" dialog is open for.
+  const [statusTab, setStatusTab] = useState<StatusTab>('active');
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [leaveTargets, setLeaveTargets] = useState<Student[] | null>(null);
 
   // ── Queries ──────────────────────────────────────────────────────────────
+  // The school's feature set (shared with the sidebar's query): PRESS means a
+  // Transfer Certificate is one click away after marking a child as left.
+  const meQuery = useQuery({
+    queryKey: ['me', host],
+    queryFn: () => api.get<{ features?: string[] }>('/auth/me'),
+    enabled: !!host,
+    staleTime: 5 * 60_000,
+  });
+  const hasPress = (meQuery.data?.features ?? []).includes('PRESS');
+
   const classesQuery = useQuery({
     queryKey: ['mng-classes'],
     queryFn: () => api.get<SchoolClass[]>('/manage/classes'),
@@ -544,11 +603,29 @@ export default function StudentsPage() {
     enabled: !!host,
   });
 
+  // Sessions (Track C): which years a child can be admitted into, and which are past.
+  const sessionsQuery = useQuery({
+    queryKey: ['sessions', host],
+    queryFn: () => api.get<{ years?: SessionYear[]; plan?: { toYearId: string } | null }>('/manage/sessions'),
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    enabled: !!host,
+  });
+  const years = sessionsQuery.data?.years ?? [];
+  const currentYear = years.find((y) => y.isCurrent) ?? null;
+  const openYears = years.filter((y) => y.isCurrent || sessionsQuery.data?.plan?.toYearId === y.id);
+  const openYearIds = new Set(openYears.map((y) => y.id));
+  const hasPastYears = years.some((y) => !openYearIds.has(y.id));
+  const classesShown = (classesQuery.data ?? []).filter((c) => showPast || !c.academicYear || openYearIds.has(c.academicYear.id));
+
   const studentsQuery = useQuery({
-    queryKey: ['mng-students', classFilter],
+    queryKey: ['mng-students', classFilter, statusTab, showPast ? 'past' : (currentYear?.id ?? 'all')],
     queryFn: () => {
-      const qs = classFilter ? `?classSectionId=${encodeURIComponent(classFilter)}` : '';
-      return api.get<Student[]>(`/manage/students${qs}`);
+      const params = new URLSearchParams({ status: statusTab });
+      if (classFilter) params.set('classSectionId', classFilter);
+      // Past sessions stay out of the default list — the register of the year that is running.
+      else if (!showPast && statusTab === 'active' && currentYear) params.set('academicYearId', currentYear.id);
+      return api.get<Student[]>(`/manage/students?${params.toString()}`);
     },
     staleTime: 30_000,
     refetchOnWindowFocus: false,
@@ -582,6 +659,7 @@ export default function StudentsPage() {
         guardianName: data.guardianName || undefined,
         guardianPhone: data.guardianPhone || undefined,
         email: data.email || undefined,
+        dob: data.dob || undefined,
       };
       return api.post<Student>('/manage/students', body);
     },
@@ -609,7 +687,7 @@ export default function StudentsPage() {
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: StudentFormData }) => {
-      const body: Record<string, string | undefined> = {
+      const body: Record<string, string | boolean | undefined> = {
         firstName: data.firstName,
         lastName: data.lastName,
         admissionNo: data.admissionNo,
@@ -618,6 +696,9 @@ export default function StudentsPage() {
         guardianName: data.guardianName || undefined,
         guardianPhone: data.guardianPhone || undefined,
         email: data.email || undefined,
+        dob: data.dob || undefined,
+        showOnWebsite: data.showOnWebsite,
+        photoConsent: data.photoConsent,
       };
       return api.put<Student>(`/manage/students/${id}`, body);
     },
@@ -644,8 +725,42 @@ export default function StudentsPage() {
       void queryClient.invalidateQueries({ queryKey: ['mng-students'] });
       toast.success('Student removed');
     },
-    onError: (err: Error) => toast.error(`Failed to delete student: ${err.message}`),
+    onError: (err: Error, id) => {
+      // Delete is for a wrong entry only. A child with attendance, results,
+      // diary, library or messages is marked as left instead — the API
+      // refuses (HAS_HISTORY) and the dialog opens in Delete's place.
+      if (errorCode(err) === 'HAS_HISTORY') {
+        toast.error('This student has history. Mark them as left instead.');
+        const target = (studentsQuery.data ?? []).find((s) => s.id === id);
+        if (target) setLeaveTargets([target]);
+        return;
+      }
+      toast.error(`Failed to delete student: ${err.message}`);
+    },
   });
+
+  const readmitMutation = useMutation({
+    mutationFn: (id: string) => api.post<{ id: string; status: 'ACTIVE' }>(`/manage/students/${id}/readmit`, {}),
+    onSuccess: (_r, id) => {
+      void queryClient.invalidateQueries({ queryKey: ['mng-students'] });
+      // Back on the roll with no class yet: land the office on the edit form
+      // so the seat is the next thing they set, on the Active tab.
+      setStatusTab('active');
+      setShowAdd(false);
+      setEditId(id);
+      toast.success('Re-admitted — set their class');
+    },
+    onError: (err: Error) => toast.error(`Could not re-admit: ${err.message}`),
+  });
+
+  function toggleSelected(id: string, on: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
 
   const createLoginMutation = useMutation({
     mutationFn: ({ studentId, email }: { studentId: string; email: string }) =>
@@ -672,9 +787,12 @@ export default function StudentsPage() {
   // Derive the initial values for the edit form from current student data
   const editingStudent = editId ? (studentsQuery.data ?? []).find((s) => s.id === editId) : null;
 
-  // Safe-delete: confirm before firing the destructive mutation.
+  // Safe-delete: confirm before firing the destructive mutation. The API
+  // refuses once the child has history, and the leave dialog takes over.
   function confirmDeleteStudent(student: Student) {
-    const ok = window.confirm(`Remove ${student.firstName} ${student.lastName}? This can’t be undone.`);
+    const ok = window.confirm(
+      `Delete ${student.firstName} ${student.lastName}? This is for a wrong entry only and can’t be undone. A child who has left the school should be marked as left instead.`,
+    );
     if (ok) deleteMutation.mutate(student.id);
   }
 
@@ -709,10 +827,28 @@ export default function StudentsPage() {
   });
   const unassignedCount = students.filter((s) => !s.classSectionId).length;
   const loginCount = students.filter((s) => s.userId).length;
+  // Only active children can be marked as left, and only the ones on screen.
+  const selectable = statusTab === 'active';
+  const selectedShown = selectable ? students.filter((s) => selected.has(s.id)) : [];
+  const allShownSelected = selectable && students.length > 0 && students.every((s) => selected.has(s.id));
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
+      {/* Mark as left — one child from a row, or the whole selection */}
+      {leaveTargets && leaveTargets.length > 0 && (
+        <LeaveDialog
+          students={leaveTargets}
+          hasPress={hasPress}
+          onDone={() => {
+            setLeaveTargets(null);
+            setSelected(new Set());
+            void queryClient.invalidateQueries({ queryKey: ['mng-students'] });
+          }}
+          onCancel={() => setLeaveTargets(null)}
+        />
+      )}
+
       {/* Invite-sent confirmation modal */}
       {inviteResult && (
         <InviteSentModal
@@ -759,6 +895,26 @@ export default function StudentsPage() {
         </button>
       </header>
 
+      {/* Which slice of the roll: the school as it is today, everyone who has
+          left, or the whole register. The same recipe as the Alumni Office tabs. */}
+      <nav className="sk-tabs" style={{ marginBottom: 18, padding: 0 }} aria-label="Roll">
+        {STATUS_TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            className="sk-tab"
+            aria-current={statusTab === t.id ? 'page' : undefined}
+            data-active={statusTab === t.id ? 'true' : undefined}
+            onClick={() => {
+              setStatusTab(t.id);
+              setSelected(new Set());
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </nav>
+
       {students.length > 0 && (
         <div className="sk-kpis" style={{ marginBottom: 18, gridTemplateColumns: 'repeat(3, minmax(0,1fr))' }}>
           {/* Counts read against each other — monospace, tabular, so the
@@ -793,6 +949,7 @@ export default function StudentsPage() {
           <StudentForm
             title="Add student"
             classes={classesQuery.data ?? []}
+            years={openYears.length > 1 ? openYears : undefined}
             onSave={(data) => addMutation.mutate(data)}
             isSaving={addMutation.isPending}
             onCancel={() => setShowAdd(false)}
@@ -804,6 +961,9 @@ export default function StudentsPage() {
       {editId && editingStudent && (
         <div style={{ marginBottom: 18 }}>
           <StudentForm
+            // Keyed on the child: the form seeds its fields once, so without this
+            // clicking Edit on a second row kept showing the first child's values.
+            key={editId}
             title="Edit student"
             initial={{
               firstName: editingStudent.firstName,
@@ -814,7 +974,11 @@ export default function StudentsPage() {
               guardianName: editingStudent.guardianName ?? '',
               guardianPhone: editingStudent.guardianPhone ?? '',
               email: editingStudent.email ?? '',
+              dob: editingStudent.dob ? editingStudent.dob.slice(0, 10) : '',
+              showOnWebsite: editingStudent.showOnWebsite ?? true,
+              photoConsent: editingStudent.photoConsent ?? false,
             }}
+            websiteOptions
             classes={classesQuery.data ?? []}
             onSave={(data) => updateMutation.mutate({ id: editId, data })}
             isSaving={updateMutation.isPending}
@@ -844,12 +1008,24 @@ export default function StudentsPage() {
           aria-label="Filter by class"
         >
           <option value="">All classes</option>
-          {(classesQuery.data ?? []).map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.grade.name} — {c.name}
-            </option>
+          {Array.from(new Map(classesShown.map((c) => [c.academicYear?.id ?? '', c.academicYear?.name ?? ''])).entries()).map(([yid, yname]) => (
+            <optgroup key={yid || 'none'} label={yname || 'Classes'}>
+              {classesShown
+                .filter((c) => (c.academicYear?.id ?? '') === yid)
+                .map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.grade.name} — {c.name}
+                  </option>
+                ))}
+            </optgroup>
           ))}
         </select>
+        {hasPastYears && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, whiteSpace: 'nowrap' }}>
+            <input type="checkbox" checked={showPast} onChange={(e) => { setShowPast(e.target.checked); setClassFilter(''); }} />
+            Show past sessions
+          </label>
+        )}
         {search.trim() ? (
           <span className="count">
             {students.length} of {allStudents.length}
@@ -865,11 +1041,33 @@ export default function StudentsPage() {
       {!studentsQuery.isLoading && students.length === 0 && (
         <p className="sk-state">
           {allStudents.length === 0
-            ? 'No students yet. Add the first one above.'
+            ? statusTab === 'left'
+              ? 'Nobody has left yet. When a child passes out or moves school, mark them as left and they will be kept here.'
+              : 'No students yet. Add the first one above.'
             : search.trim()
               ? `Nobody matches “${search.trim()}”.`
               : 'No students in that class.'}
         </p>
+      )}
+
+      {/* The selection bar: how many, and the one thing you do with them. */}
+      {selectedShown.length > 0 && (
+        <div className="sk-toolbar" role="region" aria-label="Selected students" style={{ marginBottom: 12 }}>
+          <span style={{ fontSize: 13, fontWeight: 650 }}>
+            {selectedShown.length} selected
+          </span>
+          <button
+            type="button"
+            className="sk-btn sk-press"
+            data-variant="primary"
+            onClick={() => setLeaveTargets(selectedShown)}
+          >
+            <UserMinus className="h-4 w-4" /> Mark as left
+          </button>
+          <button type="button" className="sk-btn sk-press" onClick={() => setSelected(new Set())}>
+            Clear
+          </button>
+        </div>
       )}
 
       {/* Students table */}
@@ -879,6 +1077,18 @@ export default function StudentsPage() {
             <table className="sk-tbl">
               <thead>
                 <tr>
+                  {selectable && (
+                    <th style={{ width: 36 }}>
+                      <input
+                        type="checkbox"
+                        aria-label="Select every student shown"
+                        checked={allShownSelected}
+                        onChange={(e) =>
+                          setSelected(e.target.checked ? new Set(students.map((s) => s.id)) : new Set())
+                        }
+                      />
+                    </th>
+                  )}
                   <th>Roll</th>
                   <th>Name</th>
                   <th>Admission no.</th>
@@ -901,6 +1111,16 @@ export default function StudentsPage() {
                   // Reduced motion collapses this to the settled row, which is
                   // the same information minus the pointer.
                   <tr key={student.id} className={student.id === justAddedId ? 'sk-pinin sk-in' : undefined}>
+                    {selectable && (
+                      <td>
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${student.firstName} ${student.lastName}`}
+                          checked={selected.has(student.id)}
+                          onChange={(e) => toggleSelected(student.id, e.target.checked)}
+                        />
+                      </td>
+                    )}
                     {/* Roll and admission numbers are read down the column, so
                         they take the register's monospace face. */}
                     <td className="num">{student.rollNo ?? '—'}</td>
@@ -916,6 +1136,12 @@ export default function StudentsPage() {
                         <Link href={`/app/students/${student.id}`} className="sk-seelink" style={{ color: 'var(--sk-ink)', fontWeight: 650 }}>
                           {student.firstName} {student.lastName}
                         </Link>
+                        {/* Where they stand, when it is not "here". */}
+                        {student.status !== 'ACTIVE' && (
+                          <span className="sk-pill" data-tone={student.status === 'ALUMNI' ? 'info' : 'neutral'}>
+                            {statusLabel(student)}
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="num">{student.admissionNo}</td>
@@ -983,17 +1209,43 @@ export default function StudentsPage() {
                         >
                           <Pencil className="h-4 w-4" />
                         </button>
-                        <button
-                          className="sk-btn sk-press"
-                          data-icon
-                          data-tone="bad"
-                          aria-label={`Delete ${student.firstName} ${student.lastName}`}
-                          title="Delete"
-                          disabled={deleteMutation.isPending}
-                          onClick={() => confirmDeleteStudent(student)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {student.status === 'ACTIVE' ? (
+                          <>
+                            {/* The ordinary way a child leaves the roll. */}
+                            <button
+                              className="sk-btn sk-press"
+                              data-icon
+                              aria-label={`Mark ${student.firstName} ${student.lastName} as left`}
+                              title="Mark as left"
+                              onClick={() => setLeaveTargets([student])}
+                            >
+                              <UserMinus className="h-4 w-4" />
+                            </button>
+                            {/* For a wrong entry only — the API refuses once there is history. */}
+                            <button
+                              className="sk-btn sk-press"
+                              data-icon
+                              data-tone="bad"
+                              aria-label={`Delete ${student.firstName} ${student.lastName}`}
+                              title="Delete (wrong entry only)"
+                              disabled={deleteMutation.isPending}
+                              onClick={() => confirmDeleteStudent(student)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            className="sk-btn sk-press"
+                            data-icon
+                            aria-label={`Re-admit ${student.firstName} ${student.lastName}`}
+                            title="Re-admit"
+                            disabled={readmitMutation.isPending}
+                            onClick={() => readmitMutation.mutate(student.id)}
+                          >
+                            <Undo2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </span>
                     </td>
                   </tr>

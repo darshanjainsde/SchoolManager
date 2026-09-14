@@ -24,6 +24,12 @@ export interface ChildProfile {
   /** Deterministic accent for the spine band / avatar ring — stable per school. */
   accent: string;
   session: Session;
+  /**
+   * The school marked this child as left, so the login is closed for good
+   * (the API refuses the refresh with "User no longer active"). The spine
+   * stays on the shelf as a card that says so, and is never refreshed again.
+   */
+  closed?: boolean;
 }
 
 interface FamilyState {
@@ -119,6 +125,46 @@ export const family = {
     let next: ChildProfile | null = null;
     if (state.activeKey === key) {
       next = state.children[0] ?? null;
+      state.activeKey = next?.key ?? null;
+      if (next) {
+        await session.set(next.session);
+        await session.setSchoolHost(next.schoolHost);
+      } else {
+        await session.clear();
+      }
+    }
+    await save(state);
+    return next;
+  },
+
+  /**
+   * The school closed this child's login. Keep the spine (the family should
+   * see WHY the diary stopped, not a blank), and if they were the active
+   * child, fall over to the next open sibling exactly as remove() does —
+   * or sign out when there is nobody else.
+   */
+  async markClosed(key: string): Promise<ChildProfile | null> {
+    const state = await load();
+    return this.markClosedIn(state, key);
+  },
+
+  /**
+   * The same, keyed by the SESSION whose refresh was refused — never by
+   * "whoever is active now": two requests racing on one dead token could
+   * otherwise close a healthy sibling after the first had already fallen over.
+   */
+  async markClosedFor(s: Session): Promise<ChildProfile | null> {
+    const state = await load();
+    return this.markClosedIn(state, keyFor(s));
+  },
+
+  async markClosedIn(state: FamilyState, key: string): Promise<ChildProfile | null> {
+    const child = state.children.find((c) => c.key === key);
+    if (!child) return null;
+    child.closed = true;
+    let next: ChildProfile | null = null;
+    if (state.activeKey === key) {
+      next = state.children.find((c) => c.key !== key && !c.closed) ?? null;
       state.activeKey = next?.key ?? null;
       if (next) {
         await session.set(next.session);

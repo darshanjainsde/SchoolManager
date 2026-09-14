@@ -1,5 +1,6 @@
 import Constants from 'expo-constants';
 import { session, type Session } from './session';
+import { family } from './family-store';
 
 const BASE = (Constants.expoConfig?.extra?.apiUrl as string) ?? 'http://localhost:4000';
 
@@ -82,17 +83,50 @@ async function rawFetch(path: string, s: Session | null, opts: Opts) {
 // concurrent 401s share one in-flight /auth/refresh call and its result.
 let refreshInFlight: Promise<Session | null> | null = null;
 
+// Why the last refresh was refused, when it was. A closed login ("User no
+// longer active" — the school marked the child as left) is a different fact
+// from an expired one, and the shelf needs to know which it was.
+let lastRefreshRefusal: string | null = null;
+
 async function doRefresh(s: Session): Promise<Session | null> {
   const res = await safeFetch(`${BASE}/auth/refresh`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Skoolos-Host': s.schoolHost },
     body: JSON.stringify({ refreshToken: s.refreshToken }),
   });
-  if (!res.ok) return null;
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { message?: string };
+    lastRefreshRefusal = typeof body.message === 'string' ? body.message : null;
+    return null;
+  }
+  lastRefreshRefusal = null;
   const data = (await res.json()) as IssuedTokens;
   const next: Session = { ...s, accessToken: data.accessToken, refreshToken: data.refreshToken };
   await session.set(next);
   return next;
+}
+
+/**
+ * The refresh was refused and the session is gone. When the school has closed
+ * this login, the child stays on the shelf as a "no longer enrolled" card and
+ * the app falls over to the next open sibling (family.markClosed); otherwise it
+ * is an ordinary expiry and the gate asks for a sign-in again.
+ */
+async function refreshRefused(s: Session): Promise<never> {
+  const closed = /no longer active/i.test(lastRefreshRefusal ?? '');
+  if (closed) {
+    // Keyed by the session that was refused, not by whoever is active now.
+    const child = await family.markClosedFor(s);
+    // A child not on the shelf (a teacher, or a pre-shelf session) has no
+    // card to keep — just sign out. A shelf child either fell over to a
+    // sibling inside markClosedFor or cleared the session there.
+    const shelved = (await family.list()).some((c) => c.closed && c.schoolHost === s.schoolHost && c.displayName === s.displayName);
+    if (!shelved) await session.clear();
+    void child;
+    throw new ApiError(401, 'This login has been closed by the school.');
+  }
+  await session.clear();
+  throw new ApiError(401, 'Session expired — please log in again.');
 }
 
 async function tryRefresh(s: Session): Promise<Session | null> {
@@ -110,10 +144,7 @@ export const api = {
     let res = await rawFetch(path, s, opts);
     if (res.status === 401 && s) {
       const refreshed = await tryRefresh(s);
-      if (!refreshed) {
-        await session.clear();
-        throw new ApiError(401, 'Session expired — please log in again.');
-      }
+      if (!refreshed) return refreshRefused(s);
       s = refreshed;
       res = await rawFetch(path, s, opts);
     }
@@ -137,10 +168,7 @@ export const api = {
     let res = await rawUpload(path, s, form);
     if (res.status === 401 && s) {
       const refreshed = await tryRefresh(s);
-      if (!refreshed) {
-        await session.clear();
-        throw new ApiError(401, 'Session expired — please log in again.');
-      }
+      if (!refreshed) return refreshRefused(s);
       s = refreshed;
       res = await rawUpload(path, s, form);
     }

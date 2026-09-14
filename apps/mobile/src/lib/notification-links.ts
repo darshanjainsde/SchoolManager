@@ -33,6 +33,8 @@ export const KIND_ICON: Record<string, string> = {
   // glyph's neighbourhood rather than inventing one — see the mobile library
   // tab task.
   LIBRARY: 'assignments',
+  // No sports screen in the app yet; the notice reads in the list.
+  SPORTS: 'notices',
 };
 
 /**

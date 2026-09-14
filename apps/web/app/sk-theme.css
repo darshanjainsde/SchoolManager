@@ -95,11 +95,18 @@
   --sk-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --sk-ease: cubic-bezier(0.22, 1, 0.36, 1);
 
+  /* One hue per sport on the timetable and the schedule. Medium saturation so
+     the same eight read on the warm page and on the dark card. */
+  --sk-t0: #4f46e5; --sk-t1: #0e8ea8; --sk-t2: #12855f; --sk-t3: #c2740b;
+  --sk-t4: #c0392f; --sk-t5: #7c4ddb; --sk-t6: #b8397f; --sk-t7: #5a6b8c;
+
   color: var(--sk-ink);
   font-variant-numeric: tabular-nums;
 }
 @media (prefers-color-scheme: dark) {
   .skosx {
+    --sk-t0: #8b83ff; --sk-t1: #3fc0dc; --sk-t2: #3fc493; --sk-t3: #eaa33a;
+    --sk-t4: #f0756a; --sk-t5: #b191ff; --sk-t6: #ef79b7; --sk-t7: #94a6c4;
     --sk-paper: #141224;
     --sk-ink: #edebfa;
     --sk-ink-2: #b9b6d0;
@@ -2044,6 +2051,9 @@ button.sk-availcell:hover { filter: brightness(0.97); }
 .sk-availpanel .meta { font-size: 11.5px; color: var(--sk-ink-3); margin-bottom: 8px; }
 
 .sk-input {
+  /* border-box or every `width: 100%` use overflows its track by its own
+     padding. Three rules had patched that locally before it was fixed here. */
+  box-sizing: border-box;
   border: 1px solid var(--sk-line-2); border-radius: 10px; padding: 7px 11px;
   background: var(--sk-card); color: var(--sk-ink); font: inherit; font-size: 13px;
 }
@@ -3335,3 +3345,495 @@ html[data-theme='light'] .skosx { color-scheme: light; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .skosx { color-scheme: dark; } }
 html[data-theme='dark'] .skosx { color-scheme: dark; }
 html[data-theme='light'] .skosx { color-scheme: light; }
+
+/* ── WEBSITE · CELEBRATIONS TAB ──────────────────────────────────────────
+   The birthday wall's settings (Active Roster, Track B). Two columns from
+   tablet width — the choices on the left, "this week on the site" on the
+   right, so every choice is checked against real names, not imagined ones.
+   One column on a phone. Style pickers carry a small drawn thumbnail because
+   "Notice Board" means nothing until you have seen the cork. Every value
+   resolves through an existing token, so both schemes follow. */
+.sk-cel-grid { display: grid; grid-template-columns: 1fr; gap: 14px; align-items: start; }
+@media (min-width: 900px) { .sk-cel-grid { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); } }
+.sk-cel-sec { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--sk-line); }
+.sk-cel-sec:first-of-type { border-top: 0; padding-top: 0; }
+.sk-cel-hint { font-size: 12px; color: var(--sk-ink-3); line-height: 1.45; }
+.sk-cel-hint a { color: var(--sk-brand); font-weight: 650; text-decoration: none; }
+.sk-cel-hint a:hover { text-decoration: underline; }
+.sk-cel-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.sk-cel-styles { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(136px, 100%), 1fr)); gap: 8px; }
+.sk-cel-style {
+  display: flex; flex-direction: column; gap: 7px; padding: 8px; text-align: left; cursor: pointer;
+  border: 1.5px solid var(--sk-line-2); border-radius: var(--sk-r-sm); background: var(--sk-card); color: var(--sk-ink);
+  font: inherit; transition: border-color 0.12s ease, background 0.12s ease;
+}
+.sk-cel-style[aria-pressed="true"] { border-color: var(--sk-brand); background: var(--sk-brand-tint); }
+.sk-cel-style:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: 2px; }
+.sk-cel-style b { font-size: 13px; font-weight: 700; }
+.sk-cel-style small { font-size: 11.5px; color: var(--sk-ink-3); line-height: 1.35; }
+.sk-cel-thumb { display: block; width: 100%; height: auto; border-radius: 8px; }
+.sk-cel-switchrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; }
+.sk-cel-switchrow > span { font-size: 13.5px; min-width: 0; }
+.sk-cel-switchrow small { display: block; font-size: 11.5px; color: var(--sk-ink-3); }
+.sk-cel-consent {
+  display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: var(--sk-r-sm);
+  background: var(--sk-amber-tint); color: var(--sk-amber-ink); font-size: 13px; font-weight: 650; cursor: pointer;
+}
+.sk-cel-consent input { margin-top: 3px; flex: none; }
+.sk-cel-consent small { display: block; font-weight: 400; opacity: 0.85; font-size: 11.5px; margin-top: 2px; }
+.sk-cel-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 9px 0; border-top: 1px solid var(--sk-line); }
+.sk-cel-row:first-of-type { border-top: 0; }
+.sk-cel-date { width: 44px; text-align: center; border-radius: 10px; background: var(--sk-bg-2); padding: 5px 0; line-height: 1.1; }
+.sk-cel-date b { display: block; font-size: 16px; font-weight: 750; }
+.sk-cel-date small { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--sk-ink-3); }
+.sk-cel-row .nm { font-weight: 650; font-size: 13.5px; }
+.sk-cel-row .meta { font-size: 11.5px; color: var(--sk-ink-3); }
+.sk-cel-toggles { display: flex; gap: 14px; }
+.sk-cel-toggle { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10.5px; font-weight: 650; color: var(--sk-ink-3); }
+.sk-cel-example { font-size: 13.5px; padding: 10px 12px; border-radius: var(--sk-r-sm); background: var(--sk-bg-2); line-height: 1.5; }
+.sk-cel-example i { font-style: normal; padding: 1px 6px; border-radius: 6px; background: var(--sk-card); border: 1px dashed var(--sk-line-2); font-size: 12px; }
+.sk-cel-mrow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 0; border-top: 1px solid var(--sk-line); }
+.sk-cel-mrow:first-of-type { border-top: 0; }
+.sk-cel-mrow .name { flex: 1 1 9em; min-width: 0; }
+.sk-cel-mrow .day { width: 4.5em; }
+.sk-cel-mrow .month { width: 6.5em; }
+.sk-cel-mrow .cls { flex: 1 1 5em; min-width: 0; }
+.sk-cel-actions { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 12px; border-top: 1px solid var(--sk-line); }
+@media (prefers-reduced-motion: reduce) { .sk-cel-style { transition: none; } }
+
+/* ── SESSIONS (year end) ──────────────────────────────────────────────────
+   Six steps in one card. `.sk-steps` is the Exam Hall step header, shared
+   now (Exam Hall and Sessions) — the same recipe, so the two never drift. */
+.sk-steps { display: flex; border-top: 1px solid var(--sk-line); border-bottom: 1px solid var(--sk-line); background: var(--sk-bg-2); overflow-x: auto; margin-top: 12px; }
+.sk-steps > button {
+  flex: 1; min-width: 158px; display: flex; align-items: center; gap: 9px;
+  padding: 13px 15px; border: 0; border-right: 1px solid var(--sk-line);
+  background: transparent; cursor: pointer; font: inherit; font-size: 13.5px;
+  font-weight: 650; color: var(--sk-ink-3); text-align: left; white-space: nowrap;
+}
+.sk-steps > button:last-child { border-right: 0; }
+.sk-steps > button > .n {
+  flex: none; width: 22px; height: 22px; border-radius: 50%;
+  display: grid; place-items: center; font-family: var(--sk-mono); font-size: 11px;
+  border: 1px solid var(--sk-line-2); color: var(--sk-ink-3);
+}
+.sk-steps > button[aria-selected="true"] { background: var(--sk-card); color: var(--sk-ink); }
+.sk-steps > button[aria-selected="true"] > .n { background: var(--sk-brand); border-color: var(--sk-brand); color: #fff; }
+.sk-steps > button:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: -2px; }
+.sk-ses-stephead { padding: 14px 16px 0; }
+.sk-ses-yearsgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 12px; }
+.sk-ses-yearcard[data-current] { border-color: var(--sk-brand); }
+.sk-ses-yearcard .sk-card-b { gap: 6px; }
+.sk-ses-yearcard b { font-family: var(--sk-serif); font-size: 18px; }
+.sk-ses-yearhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sk-ses-years { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.sk-ses-year { display: flex; flex-direction: column; gap: 3px; padding: 12px 14px; border: 1px solid var(--sk-line); border-radius: var(--sk-r-sm); background: var(--sk-bg-2); min-width: 0; }
+.sk-ses-year b { font-family: var(--sk-serif); font-size: 18px; }
+.sk-ses-arrow { font-size: 20px; color: var(--sk-ink-3); }
+.sk-ses-copyrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.sk-ses-pickrow { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; }
+.sk-ses-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.sk-ses-decide { display: flex; flex-direction: column; gap: 10px; }
+.sk-ses-name { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* One line per child: the four buttons never wrap, and the Goes-to column keeps
+   one width whether it holds a class select or the Leaving pair (which stacks),
+   so picking Leaving cannot push every other row onto two lines. The table
+   scrolls inside .sk-tblwrap on a narrow screen instead. */
+.sk-ses-buttons { display: flex; gap: 4px; flex-wrap: nowrap; }
+.sk-ses-buttons .sk-chip { padding: 5px 10px; font-size: 12px; white-space: nowrap; }
+.sk-ses-goto { width: 13em; }
+.sk-ses-goto .sk-input { width: 100%; min-width: 0; box-sizing: border-box; }
+.sk-ses-leave { display: grid; grid-template-columns: 1fr; gap: 4px; width: 13em; }
+.sk-ses-leave .sk-input { min-width: 0; width: 100%; }
+.sk-tbl td[data-tone="warn"] { color: var(--sk-amber-ink); font-weight: 700; }
+.sk-ses-library { border: 1px solid var(--sk-line); border-radius: var(--sk-r-sm); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.sk-ses-libhead { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
+.sk-ses-libactions { display: flex; gap: 8px; flex-wrap: wrap; }
+.sk-ses-lastdue { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px solid var(--sk-line); }
+.sk-ses-lastdue-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.sk-ses-ttprev { display: flex; flex-direction: column; gap: 10px; padding: 10px 0 4px; border-top: 1px solid var(--sk-line); }
+
+/* ═══════════════════════════════════════════════════════════════
+   Sports wing — the desk at /app/sports and /sports. Same strip
+   treatment as the library (`.sk-lib-tabs`), then the pieces the
+   library never needed: a bracket, a heat sheet, a day board, the
+   rules book and the wizard's sport picker. Every grid minimum is
+   min(100%, Npx) so a phone can always collapse it (sk-responsive).
+   ═══════════════════════════════════════════════════════════════ */
+.sk-tabs.sk-sp-tabs { max-width: none; margin: 0 0 14px; padding: 0; border-bottom: 1px solid var(--sk-line); }
+.sk-sp-stack { display: flex; flex-direction: column; gap: 16px; }
+.sk-sp-fieldrow { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+.sk-sp-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.sk-sp-field > .sk-input { min-width: 0; }
+.sk-sp-field[data-grow] { flex: 1 1 200px; }
+.sk-sp-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.sk-sp-kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); gap: 8px 14px; }
+.sk-sp-kv > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sk-sp-kv b { font-size: 13.5px; }
+.sk-sp-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 50%; flex: none; border: 1px solid rgba(0,0,0,0.12); vertical-align: middle; }
+/* Three views side by side on a desk; stacked on a phone rather than clipped. */
+.sk-sp-views { flex-wrap: wrap; }
+.sk-sp-views > button { flex: 1 1 auto; }
+
+/* wizard: pick sports */
+.sk-sp-sportgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 168px), 1fr)); gap: 8px; }
+.sk-sp-sport {
+  display: flex; flex-direction: column; gap: 3px; text-align: left; padding: 9px 11px; min-width: 0;
+  border: 1px solid var(--sk-line); border-radius: var(--sk-r-sm); background: var(--sk-card); cursor: pointer; font: inherit; color: var(--sk-ink);
+}
+.sk-sp-sport:hover { border-color: var(--sk-brand); }
+.sk-sp-sport[aria-pressed="true"] { border-color: var(--sk-brand); background: var(--sk-brand-tint); }
+.sk-sp-sport .nm { font-weight: 650; font-size: 13px; }
+.sk-sp-sport .meta { font-size: 11px; color: var(--sk-ink-3); }
+.sk-sp-group { display: flex; flex-direction: column; gap: 6px; }
+.sk-sp-eventrow { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border: 1px solid var(--sk-line); border-radius: var(--sk-r-sm); background: var(--sk-bg-2); }
+.sk-sp-eventrow[data-bad="true"] { border-color: var(--sk-bad); }
+.sk-sp-eventhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sk-sp-eventhead .nm { font-weight: 700; font-size: 14px; color: var(--sk-ink); }
+.sk-sp-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.sk-sp-roster { display: flex; flex-direction: column; max-height: 320px; overflow-y: auto; border: 1px solid var(--sk-line); border-radius: var(--sk-r-sm); background: var(--sk-card); }
+.sk-sp-roster label { display: flex; align-items: center; gap: 9px; padding: 7px 11px; border-top: 1px solid var(--sk-line); font-size: 13px; cursor: pointer; }
+.sk-sp-roster label:first-child { border-top: 0; }
+.sk-sp-roster label:hover { background: var(--sk-bg-2); }
+.sk-sp-roster .meta { margin-left: auto; font-size: 11.5px; color: var(--sk-ink-3); white-space: nowrap; }
+.sk-sp-classhead { display: flex; align-items: center; gap: 8px; padding: 6px 11px; background: var(--sk-bg-2); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--sk-ink-3); border-top: 1px solid var(--sk-line); position: sticky; top: 0; }
+
+/* bracket */
+.sk-sp-bracket { --cell: 74px; --gut: 26px; display: flex; gap: var(--gut); overflow-x: auto; padding: 4px 2px 10px; }
+.sk-sp-round { display: flex; flex-direction: column; flex: 0 0 auto; width: min(100%, 210px); }
+.sk-sp-round > .sk-lab { margin-bottom: 6px; display: flex; gap: 7px; align-items: baseline; }
+.sk-sp-round > .sk-lab em { font-style: normal; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--sk-ink-3); }
+.sk-sp-round .cells { display: flex; flex-direction: column; }
+/* A cell doubles each round, so a card centres against the two that feed it. */
+.sk-sp-round .cell { height: calc(var(--cell) * var(--pow)); display: flex; align-items: center; position: relative; min-width: 0; }
+.sk-sp-round .cell > * { width: 100%; }
+/* The lines: a stub out of every card, and a vertical joining each pair. */
+.sk-sp-round:not(:last-child) .cell::after {
+  content: ''; position: absolute; right: calc(var(--gut) * -1); width: var(--gut); top: 50%;
+  border-top: 1px solid var(--sk-line-2);
+}
+.sk-sp-round:not(:first-child) .cell::before {
+  content: ''; position: absolute; left: calc(var(--gut) / -2); top: 25%; height: 50%;
+  border-left: 1px solid var(--sk-line-2);
+}
+.sk-sp-bye { display: flex; align-items: baseline; gap: 8px; font-size: 12.5px; color: var(--sk-ink-3); padding: 0 4px; min-width: 0; }
+.sk-sp-bye em { font-style: normal; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; opacity: .75; }
+.sk-sp-match {
+  display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; text-align: left; min-width: 0; width: 100%;
+  border: 1px solid var(--sk-line); border-radius: var(--sk-r-sm); background: var(--sk-card); font: inherit; color: var(--sk-ink); cursor: pointer;
+}
+.sk-sp-match:disabled { cursor: default; }
+.sk-sp-match:hover:not(:disabled) { border-color: var(--sk-brand); }
+.sk-sp-match[data-state="done"] { background: var(--sk-good-tint); border-color: transparent; }
+.sk-sp-match[data-state="live"] { border-color: var(--sk-brand); }
+.sk-sp-match[data-state="open"][aria-pressed="true"] { border-color: var(--sk-brand); background: var(--sk-brand-tint); }
+.sk-sp-match[data-bye="true"] { border-style: dashed; background: transparent; }
+.sk-sp-side { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: 13px; }
+.sk-sp-side .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--sk-ink-2); }
+.sk-sp-side .s { font-family: var(--sk-mono); font-size: 12px; color: var(--sk-ink-3); white-space: nowrap; }
+.sk-sp-side[data-win="true"] .n, .sk-sp-side[data-win="true"] .s { color: var(--sk-ink); font-weight: 700; }
+.sk-sp-side[data-empty="true"] .n { color: var(--sk-ink-3); font-style: italic; }
+.sk-sp-slot { font-size: 11px; color: var(--sk-ink-3); display: flex; gap: 6px; flex-wrap: wrap; }
+.sk-sp-scorebox { border: 1px solid var(--sk-brand); border-radius: var(--sk-r-sm); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; background: var(--sk-card); }
+.sk-sp-games { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 130px), 1fr)); gap: 8px; }
+.sk-sp-game { display: flex; flex-direction: column; gap: 4px; }
+.sk-sp-game .pair { display: flex; align-items: center; gap: 6px; }
+.sk-sp-game .sk-input { width: 100%; min-width: 0; font-family: var(--sk-mono); text-align: center; }
+
+/* heat sheet */
+.sk-sp-heat .sk-input { width: 9em; min-width: 0; font-family: var(--sk-mono); }
+.sk-sp-heathead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* day board */
+
+/* rules book */
+.sk-sp-rules { display: grid; grid-template-columns: minmax(min(100%, 200px), 230px) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 720px) { .sk-sp-rules { grid-template-columns: 1fr; } }
+.sk-sp-rail { display: flex; flex-direction: column; gap: 2px; border: 1px solid var(--sk-line); border-radius: var(--sk-r); background: var(--sk-card); padding: 8px; max-height: 70vh; overflow-y: auto; }
+.sk-sp-rail .sk-lab { padding: 10px 8px 4px; }
+.sk-sp-rail button { text-align: left; padding: 7px 10px; border: 0; border-radius: var(--sk-r-sm); background: transparent; font: inherit; font-size: 13px; color: var(--sk-ink-2); cursor: pointer; }
+.sk-sp-rail button:hover { background: var(--sk-bg-2); color: var(--sk-ink); }
+.sk-sp-rail button[aria-pressed="true"] { background: var(--sk-brand-tint); color: var(--sk-brand-2); font-weight: 650; }
+.sk-sp-article { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.sk-sp-article h2 { font-family: var(--sk-serif); font-size: 22px; font-weight: 650; letter-spacing: -0.01em; color: var(--sk-ink); }
+.sk-sp-article .sum { font-size: 14.5px; color: var(--sk-ink-2); max-width: 62ch; }
+.sk-sp-article h4 { font-family: var(--sk-serif); font-size: 15px; font-weight: 650; margin-bottom: 6px; color: var(--sk-ink); }
+.sk-sp-article ul { display: flex; flex-direction: column; gap: 6px; padding-left: 18px; font-size: 13.5px; color: var(--sk-ink-2); max-width: 70ch; }
+.sk-sp-article li::marker { color: var(--sk-brand); }
+.sk-sp-diagram { background: var(--sk-bg-2); border: 1px solid var(--sk-line); border-radius: var(--sk-r); padding: 12px; display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.sk-sp-diagram svg { max-width: 100%; height: auto; display: block; }
+.sk-sp-diagram .cap { font-size: 11.5px; color: var(--sk-ink-3); text-align: center; }
+.sk-sp-facts { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* records, houses, teachers, settings */
+.sk-sp-recval { font-family: var(--sk-mono); font-weight: 700; white-space: nowrap; }
+.sk-sp-houses { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 12px; }
+.sk-sp-house { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1px solid var(--sk-line); border-left-width: 4px; border-radius: var(--sk-r); background: var(--sk-card); min-width: 0; }
+.sk-sp-house .nm { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; }
+.sk-sp-house .pts { font-family: var(--sk-serif); font-size: 26px; font-weight: 700; letter-spacing: -0.02em; color: var(--sk-ink); }
+.sk-sp-house .meta { font-size: 11.5px; color: var(--sk-ink-3); }
+.sk-sp-perms { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 210px), 1fr)); gap: 6px 12px; }
+.sk-sp-perms label { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 4px 0; cursor: pointer; }
+.sk-sp-band { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; padding: 10px 0; border-top: 1px solid var(--sk-line); }
+.sk-sp-band:first-child { border-top: 0; }
+.sk-sp-band .sk-input { width: 12.5em; min-width: 0; }
+.sk-sp-stds { display: flex; gap: 4px; flex-wrap: wrap; }
+.sk-sp-stds .sk-chip { padding: 4px 8px; font-size: 12px; min-width: 2.2em; justify-content: center; }
+.sk-sp-pointsrow { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+/* The narrow box is for the number of points. A <select> in the same row
+   holds a house name and must size itself, or "Raffles Red House" reads
+   "Raff". */
+.sk-sp-pointsrow input.sk-input { width: 6em; min-width: 0; text-align: center; font-family: var(--sk-mono); }
+.sk-sp-pointsrow select.sk-input { min-width: 0; max-width: min(100%, 18em); }
+/* wizard v2: the defaults bar, the events table, the players grid */
+.sk-sp-defaults { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 10px 18px; padding: 12px 14px; border: 1px dashed var(--sk-line-2); border-radius: var(--sk-r-sm); background: var(--sk-bg-2); }
+.sk-sp-evtable td.nm { font-weight: 700; white-space: nowrap; }
+.sk-sp-evtable td .sk-muted { font-size: 12px; }
+.sk-sp-evtable tr[data-bad="true"] td { background: var(--sk-bad-tint); }
+.sk-sp-vbadge { font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 1px 6px; border-radius: 6px; background: var(--sk-brand-tint); color: var(--sk-brand-2); margin-left: 4px; }
+.sk-sp-vbadge[data-tone="warn"] { background: var(--sk-amber-tint); color: var(--sk-amber-ink); }
+.sk-sp-vbadge[data-tone="bad"] { background: var(--sk-bad-tint); color: var(--sk-bad); }
+.sk-sp-vbadge[data-tone="good"] { background: var(--sk-good-tint); color: var(--sk-good); }
+.sk-sp-matrix th { text-align: center; }
+.sk-sp-matrix th:first-child, .sk-sp-matrix td:first-child { text-align: left; }
+.sk-sp-matrix td { text-align: center; }
+.sk-sp-matrix tr.cls td { background: var(--sk-bg-2); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--sk-ink-3); font-weight: 700; text-align: left; }
+.sk-sp-matrix input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--sk-brand); }
+.sk-sp-problem { display: flex; gap: 8px; align-items: flex-start; padding: 9px 12px; border-radius: var(--sk-r-sm); background: var(--sk-amber-tint); color: var(--sk-amber-ink); font-size: 13px; }
+.sk-sp-problem[data-ok="true"] { background: var(--sk-good-tint); color: var(--sk-good); }
+.sk-sp-problem .sk-btn { margin: 0 4px; }
+/* An exception opens WHERE its line is: a full-width row under it, not a panel
+   at the foot of a twelve-row table (which is how far the eye had to travel). */
+.sk-sp-editrow > td { padding: 0 !important; background: var(--sk-bg-2); }
+.sk-sp-editbox { margin: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; border: 1px solid var(--sk-brand); border-radius: var(--sk-r-sm); background: var(--sk-card); }
+/* The cell that says a line has nowhere to play IS the way to fix it. */
+.sk-sp-novenue { display: inline-flex; align-items: center; gap: 7px; padding: 3px 6px; margin: -3px -6px; border: 0; border-radius: var(--sk-r-sm); background: none; font: inherit; font-size: 13px; color: var(--sk-ink-3); cursor: pointer; text-align: left; }
+.sk-sp-novenue:hover { background: var(--sk-bad-tint); color: var(--sk-bad); }
+.sk-sp-novenue:focus-visible { outline: 2px solid var(--sk-bad); outline-offset: 1px; }
+/* A worded button may carry the bad tone without shrinking to an icon box. */
+.sk-btn[data-tone="bad"]:not([data-icon]) { color: var(--sk-bad); }
+.sk-btn[data-tone="bad"]:not([data-icon]):hover:not(:disabled) { border-color: var(--sk-bad); background: var(--sk-bad-tint); }
+
+/* Players step: a meet of 1,800 children is entered from shut class rows, so
+   the page keeps its shape whatever the roll size. */
+.sk-sp-mass { display: flex; flex-direction: column; gap: 7px; padding: 11px 14px; border: 1px dashed var(--sk-line-2); border-radius: var(--sk-r-sm); background: var(--sk-bg-2); }
+.sk-chip[data-strong="true"] { border-color: var(--sk-brand); color: var(--sk-brand-2); font-weight: 650; }
+.sk-sp-cost { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; padding: 11px 14px; border: 1px solid var(--sk-line); border-left-width: 3px; border-left-color: var(--sk-good); border-radius: var(--sk-r-sm); background: var(--sk-card); }
+.sk-sp-cost[data-fits="false"] { border-left-color: var(--sk-amber); background: var(--sk-amber-tint); }
+.sk-sp-cost > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sk-sp-cost b { font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.sk-sp-cost > .sp { flex: 1 1 auto; }
+.sk-sp-classlist { display: flex; flex-direction: column; border: 1px solid var(--sk-line); border-radius: var(--sk-r); background: var(--sk-card); overflow: hidden; }
+.sk-sp-classbar { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 9px 12px; background: var(--sk-bg-2); border-bottom: 1px solid var(--sk-line); font-size: 13px; }
+.sk-sp-classbar > .sp { flex: 1 1 auto; }
+.sk-sp-class { border-top: 1px solid var(--sk-line); }
+.sk-sp-class:first-of-type { border-top: 0; }
+.sk-sp-class > .hd { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 7px 12px; }
+.sk-sp-class[data-open="true"] > .hd { background: var(--sk-brand-tint); }
+.sk-sp-class > .hd > .sk-sp-chips { margin-left: auto; }
+.sk-sp-class .tog { display: inline-flex; align-items: center; gap: 8px; padding: 3px 6px; margin: -3px -6px; border: 0; border-radius: var(--sk-r-sm); background: none; font: inherit; color: inherit; cursor: pointer; text-align: left; min-width: 0; }
+.sk-sp-class .tog:hover { background: var(--sk-bg-2); }
+.sk-sp-class .tog .nm { font-weight: 700; font-size: 13.5px; white-space: nowrap; }
+.sk-sp-class .tog .meta { font-size: 11.5px; color: var(--sk-ink-3); }
+.sk-sp-class .tog svg { flex: none; color: var(--sk-ink-3); transition: transform 120ms ease; }
+.sk-sp-class[data-open="true"] .tog svg { transform: rotate(90deg); }
+.sk-sp-class .sk-tblwrap { border-top: 1px solid var(--sk-line); }
+.sk-sp-count { font-family: var(--sk-mono); font-size: 11px; color: var(--sk-ink-3); }
+.sk-chip[aria-pressed="true"] .sk-sp-count { color: inherit; }
+.sk-sp-funnel { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); gap: 8px; list-style: none; padding: 0; }
+.sk-sp-funnel li { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 9px 12px; border: 1px solid var(--sk-line); border-left-width: 3px; border-left-color: var(--sk-brand); border-radius: var(--sk-r-sm); background: var(--sk-bg-2); font-size: 12px; color: var(--sk-ink-2); }
+.sk-sp-funnel li b { font-size: 13px; color: var(--sk-ink); }
+.sk-sp-funnel li:last-child { border-left-color: var(--sk-amber); }
+@media (prefers-reduced-motion: reduce) { .sk-sp-class .tog svg { transition: none; } }
+@media (max-width: 640px) {
+  .sk-sp-class > .hd > .sk-sp-chips { margin-left: 0; width: 100%; }
+  .sk-sp-cost { gap: 8px 14px; }
+}
+
+/* Days & courts: the shape of the meet, and how full that shape is. */
+.sk-sp-plangrid { display: flex; flex-direction: column; border: 1px solid var(--sk-line); border-radius: var(--sk-r); background: var(--sk-card); overflow-x: auto; }
+.sk-sp-planday { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-top: 1px solid var(--sk-line); min-width: max-content; }
+.sk-sp-planday:first-child { border-top: 0; }
+.sk-sp-planday > .d { flex: 0 0 clamp(104px, 20vw, 168px); display: flex; flex-direction: column; gap: 1px; min-width: 0; text-align: left; }
+.sk-sp-planday > .v { flex: 1 0 62px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.sk-sp-planday > .tot { flex: 0 0 58px; text-align: right; font-family: var(--sk-mono); font-size: 12px; }
+.sk-sp-planhead { background: var(--sk-bg-2); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--sk-ink-3); }
+.sk-sp-planhead > .v { flex-direction: row; align-items: center; gap: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sk-sp-planhead > .v button {
+  display: inline-flex; align-items: center; justify-content: center; border: 0; background: none;
+  color: inherit; cursor: pointer;
+  /* The glyph stays 11px; the hit area does not. */
+  min-width: 26px; min-height: 26px; margin: -7px -6px; border-radius: var(--sk-r-sm);
+}
+.sk-sp-planhead > .v button:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: -2px; }
+.sk-sp-planhead > .v button:hover { color: var(--sk-bad); }
+.sk-sp-planday[data-beyond="true"] { background: var(--sk-amber-tint); }
+.sk-sp-planday button.d { border: 0; background: none; font: inherit; cursor: pointer; border-radius: var(--sk-r-sm); padding: 2px 4px; margin: -2px -4px; }
+.sk-sp-planday button.d:hover { background: var(--sk-brand-tint); }
+.sk-sp-planday .d b { font-size: 13px; }
+.sk-sp-planday .d .sk-muted { font-size: 11px; }
+.sk-sp-planday .bar { display: block; height: 7px; border-radius: 4px; background: var(--sk-bg-2); border: 1px solid var(--sk-line); overflow: hidden; }
+.sk-sp-planday .bar i { display: block; height: 100%; background: var(--sk-brand); }
+.sk-sp-planday .bar i[data-full="true"] { background: var(--sk-amber); }
+.sk-sp-planday .n { font-family: var(--sk-mono); font-size: 10.5px; color: var(--sk-ink-3); }
+.sk-sp-planday .tot b[data-late="true"] { color: var(--sk-bad); }
+.sk-sp-dayseg button[data-beyond="true"] { color: var(--sk-amber-ink); }
+
+/* Schedule — the meet by sport, then by the class inside it. */
+.sk-sp-schedule { display: flex; flex-direction: column; border: 1px solid var(--sk-line); border-radius: var(--sk-r); background: var(--sk-card); overflow: hidden; }
+.sk-sp-sportrow { border-top: 1px solid var(--sk-line); }
+.sk-sp-sportrow .hd, .sk-sp-grouprow > .hd {
+  display: flex; align-items: center; gap: 9px; flex-wrap: wrap; width: 100%; min-width: 0; padding: 9px 12px;
+  border: 0; background: none; font: inherit; color: inherit; cursor: pointer; text-align: left; border-left: 3px solid transparent;
+}
+.sk-sp-sportrow .hd { border-left-color: var(--tone, var(--sk-brand)); }
+/* Beside a button it is a flex item, not a full-width block, or the two overlap. */
+.sk-sp-sportrow .hd-row > .hd { width: auto; flex: 1 1 auto; }
+.sk-sp-sportrow[data-tone="0"] { --tone: var(--sk-t0); } .sk-sp-sportrow[data-tone="1"] { --tone: var(--sk-t1); }
+.sk-sp-sportrow[data-tone="2"] { --tone: var(--sk-t2); } .sk-sp-sportrow[data-tone="3"] { --tone: var(--sk-t3); }
+.sk-sp-sportrow[data-tone="4"] { --tone: var(--sk-t4); } .sk-sp-sportrow[data-tone="5"] { --tone: var(--sk-t5); }
+.sk-sp-sportrow[data-tone="6"] { --tone: var(--sk-t6); } .sk-sp-sportrow[data-tone="7"] { --tone: var(--sk-t7); }
+.sk-sp-sportrow .hd:hover, .sk-sp-grouprow > .hd:hover { background: var(--sk-bg-2); }
+.sk-sp-sportrow[data-open="true"] .hd-row { background: var(--sk-bg-2); }
+.sk-sp-sportrow .nm { font-weight: 700; font-size: 13.5px; }
+.sk-sp-sportrow .meta, .sk-sp-grouprow .meta { font-size: 11.5px; color: var(--sk-ink-3); }
+.sk-sp-sportrow > .hd > .sp, .sk-sp-grouprow > .hd > .sp { flex: 1 1 auto; }
+.sk-sp-sportrow .on, .sk-sp-grouprow .on { font-family: var(--sk-mono); font-size: 11.5px; color: var(--sk-ink-2); white-space: nowrap; }
+.sk-sp-sportrow .nm, .sk-sp-grouprow .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.sk-sp-sportrow svg, .sk-sp-grouprow svg { flex: none; color: var(--sk-ink-3); transition: transform 120ms ease; }
+.sk-sp-sportrow[data-open="true"] .hd svg, .sk-sp-grouprow[data-open="true"] > .hd svg { transform: rotate(90deg); }
+.sk-sp-sportrow > .body { border-top: 1px solid var(--sk-line); background: var(--sk-bg-2); }
+.sk-sp-grouprow { border-top: 1px solid var(--sk-line); }
+.sk-sp-grouprow:first-child { border-top: 0; }
+.sk-sp-grouprow > .hd { padding-left: 26px; }
+.sk-sp-grouprow .nm { font-weight: 650; font-size: 12.5px; }
+.sk-sp-grouprow .slots { display: flex; flex-direction: column; list-style: none; padding: 0 0 6px 26px; }
+.sk-sp-slotline {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; width: 100%; padding: 5px 12px;
+  border: 0; border-left: 2px solid var(--sk-line-2); background: none; font: inherit; font-size: 12.5px; color: inherit; cursor: pointer; text-align: left;
+}
+.sk-sp-slotline:hover { background: var(--sk-card); border-left-color: var(--sk-brand); }
+.sk-sp-slotline[data-state="done"] { border-left-color: var(--sk-good); }
+.sk-sp-slotline .t { font-family: var(--sk-mono); font-size: 11.5px; color: var(--sk-ink-3); white-space: nowrap; }
+.sk-sp-slotline .w { font-weight: 650; }
+.sk-sp-slotline .who { color: var(--sk-ink-2); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.sk-sp-slotline .v { margin-left: auto; font-size: 11.5px; color: var(--sk-ink-3); white-space: nowrap; }
+
+/* Timetable — one day on a proportional time axis. */
+/* The stepper, the list and the stepper stay ONE row. A select sizes itself to
+   its longest option ("Sun 13 Sep · 84 slots · not booked"), so left to wrap it
+   pushed both arrows onto lines of their own. */
+.sk-sp-daypick { display: flex; align-items: flex-end; gap: 6px; flex-wrap: nowrap; min-width: 0; }
+.sk-sp-daypick .sk-sp-field { flex: 1 1 auto; min-width: 0; }
+.sk-sp-daypick .sk-input { width: 100%; min-width: 0; box-sizing: border-box; }
+.sk-sp-daypick .sk-btn { flex: none; }
+.sk-sp-dayseg button { display: inline-flex; align-items: baseline; gap: 5px; }
+.sk-sp-dayseg .n { font-family: var(--sk-mono); font-size: 10.5px; opacity: 0.7; }
+.sk-sp-tt { display: flex; gap: 0; border: 1px solid var(--sk-line); border-radius: var(--sk-r); background: var(--sk-card); overflow-x: auto; }
+.sk-sp-tt .hours { flex: 0 0 52px; position: sticky; left: 0; z-index: 2; background: var(--sk-card); border-right: 1px solid var(--sk-line); }
+.sk-sp-tt .cols { display: flex; flex: 1 1 auto; min-width: max-content; }
+.sk-sp-tt .col { flex: 1 0 clamp(128px, 18vw, 230px); border-right: 1px solid var(--sk-line); min-width: 0; }
+.sk-sp-tt .col:last-child { border-right: 0; }
+.sk-sp-tt .vh {
+  height: 34px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border-bottom: 1px solid var(--sk-line); background: var(--sk-bg-2);
+  font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--sk-ink-3);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: sticky; top: 0; z-index: 1;
+}
+/* The 9 o'clock label sits on its own rule, so the track starts below the
+   venue header rather than under it. */
+.sk-sp-tt .track { position: relative; height: var(--tt-h); margin-top: 10px; }
+.sk-sp-tt .hr { position: absolute; left: 0; right: 6px; text-align: right; font-family: var(--sk-mono); font-size: 10.5px; color: var(--sk-ink-3); transform: translateY(-50%); }
+.sk-sp-tt .rule { position: absolute; left: 0; right: 0; height: 1px; background: var(--sk-line); opacity: 0.7; }
+.sk-sp-tt .blk {
+  position: absolute; left: 4px; right: 4px; display: flex; flex-direction: column; gap: 1px; overflow: hidden;
+  padding: 3px 7px; border: 1px solid var(--sk-line); border-left: 3px solid var(--tone, var(--sk-brand));
+  border-radius: var(--sk-r-sm); background: var(--sk-card); font: inherit; font-size: 11.5px; color: inherit; cursor: pointer; text-align: left;
+}
+.sk-sp-tt .blk[data-tone="0"] { --tone: var(--sk-t0); } .sk-sp-tt .blk[data-tone="1"] { --tone: var(--sk-t1); }
+.sk-sp-tt .blk[data-tone="2"] { --tone: var(--sk-t2); } .sk-sp-tt .blk[data-tone="3"] { --tone: var(--sk-t3); }
+.sk-sp-tt .blk[data-tone="4"] { --tone: var(--sk-t4); } .sk-sp-tt .blk[data-tone="5"] { --tone: var(--sk-t5); }
+.sk-sp-tt .blk[data-tone="6"] { --tone: var(--sk-t6); } .sk-sp-tt .blk[data-tone="7"] { --tone: var(--sk-t7); }
+.sk-sp-tt .blk:hover { border-color: var(--sk-brand); border-left-color: var(--tone, var(--sk-brand)); }
+.sk-sp-tt .blk[data-state="done"] { background: var(--sk-good-tint); }
+.sk-sp-tt .blk[data-state="clash"] { background: var(--sk-bad-tint); border-color: var(--sk-bad); }
+.sk-sp-tt .blk .t { font-family: var(--sk-mono); font-size: 10.5px; color: var(--sk-ink-3); }
+.sk-sp-tt .blk .w { font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sk-sp-tt .blk[data-tight="true"] { flex-direction: row; align-items: baseline; gap: 6px; padding: 2px 7px; }
+.sk-sp-tt .blk[data-tight="true"] .t { flex: none; }
+.sk-sp-tt .blk .who { color: var(--sk-ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (prefers-reduced-motion: reduce) { .sk-sp-sportrow svg, .sk-sp-grouprow svg { transition: none; } }
+@media (max-width: 640px) {
+  .sk-sp-sportrow .on, .sk-sp-grouprow .on { width: 100%; }
+  .sk-sp-slotline .v { margin-left: 0; }
+}
+
+/* Moving things: the control opens UNDER the row it belongs to, never in a
+   panel at the foot of the list. */
+.sk-sp-sportrow .hd-row { display: flex; align-items: center; gap: 8px; padding-right: 12px; }
+.sk-sp-sportrow .hd-row > .hd { flex: 1 1 auto; }
+.sk-sp-movebox { display: flex; flex-direction: column; gap: 9px; margin: 8px 12px; padding: 12px 14px; border: 1px solid var(--sk-brand); border-radius: var(--sk-r-sm); background: var(--sk-card); }
+.sk-sp-movebox p { font-size: 12.5px; }
+.sk-sp-classrow { border-top: 1px solid var(--sk-line); }
+.sk-sp-classrow > .line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 7px 14px 7px 40px; font-size: 13px; }
+.sk-sp-classrow > .line .nm { font-weight: 650; }
+.sk-sp-classrow > .line .meta { font-size: 11.5px; color: var(--sk-ink-3); }
+.sk-sp-classrow > .line .sp { flex: 1 1 auto; }
+.sk-sp-classrow > .line .on { font-family: var(--sk-mono); font-size: 11.5px; color: var(--sk-ink-2); white-space: nowrap; }
+.sk-sp-classrow .slots { display: flex; flex-direction: column; list-style: none; padding: 0 0 6px 40px; }
+
+/* A block you may move says so, and follows the finger while it is held. */
+.sk-sp-tt .blk[data-move="true"] { cursor: grab; touch-action: none; }
+.sk-sp-tt .blk[data-held="true"] { cursor: grabbing; z-index: 4; box-shadow: 0 8px 22px rgba(33,29,69,.28); opacity: .96; }
+.sk-sp-tt .col[data-aim="true"] { background: var(--sk-brand-tint); }
+.sk-sp-tt .aim { position: absolute; left: 3px; right: 3px; height: 2px; background: var(--sk-brand); border-radius: 2px; }
+.sk-sp-tt .vh .off {
+  margin-left: auto; border: 0; background: none; font: inherit; font-size: 10.5px; letter-spacing: .05em;
+  color: var(--sk-ink-3); cursor: pointer;
+  /* A finger needs 24px even when the ink is 10px — measured at 32×12. */
+  display: inline-flex; align-items: center; padding: 0 6px; min-height: 26px; border-radius: var(--sk-r-sm);
+}
+.sk-sp-tt .vh .off:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: 1px; }
+.sk-sp-tt .vh .off:hover { color: var(--sk-bad); }
+@media (max-width: 640px) {
+  .sk-sp-classrow > .line { padding-left: 22px; }
+  .sk-sp-classrow .slots { padding-left: 22px; }
+}
+
+/* One toolbar under the card head, not a second beige bar repeating it. */
+.sk-sp-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.sk-sp-toolbar > .sp { flex: 1 1 auto; }
+/* A segmented control reads as ONE control: joined, not three loose pills. */
+.sk-sp-spine { display: inline-flex; border: 1px solid var(--sk-line-2); border-radius: 999px; background: var(--sk-bg-2); padding: 2px; }
+.sk-sp-spine button { border: 0; background: none; font: inherit; font-size: 13px; font-weight: 600; padding: 5px 14px; border-radius: 999px; color: var(--sk-ink-3); cursor: pointer; }
+.sk-sp-spine button:hover { color: var(--sk-ink); }
+.sk-sp-spine button[aria-pressed="true"] { background: var(--sk-brand); color: #fff; }
+/* The shape of the meet: one grid, one control width, labels that line up. */
+.sk-sp-shape { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: 12px 16px; align-items: end; }
+.sk-sp-shape .sk-sp-field[data-wide] { grid-column: span 2; }
+@media (max-width: 620px) { .sk-sp-shape .sk-sp-field[data-wide] { grid-column: span 1; } }
+/* .sk-input carries padding and a border but no border-box, so a full-width
+   one overflows its grid track by exactly its own padding. */
+.sk-sp-shape .sk-input, .sk-sp-unit > .sk-input { width: 100%; min-width: 0; box-sizing: border-box; }
+.sk-sp-unit { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.sk-sp-unit > .sk-input { flex: 1 1 auto; min-width: 0; }
+.sk-sp-unit > span { font-size: 12px; color: var(--sk-ink-3); white-space: nowrap; }
+.sk-sp-unit > .sk-btn { flex: none; }
+
+/* Where the meet is: what is done, what is next, what is in the way. */
+.sk-sp-next { border: 1px solid var(--sk-line); border-radius: var(--sk-r); background: var(--sk-card); overflow: hidden; }
+.sk-sp-next > .hd { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 10px 14px; background: var(--sk-bg-2); border-bottom: 1px solid var(--sk-line); font-size: 13.5px; }
+.sk-sp-next ol { list-style: none; padding: 0; margin: 0; }
+.sk-sp-next li { display: flex; align-items: flex-start; gap: 11px; padding: 10px 14px; border-top: 1px solid var(--sk-line); border-left: 3px solid transparent; }
+.sk-sp-next li:first-child { border-top: 0; }
+.sk-sp-next li[data-state="blocked"] { border-left-color: var(--sk-bad); background: var(--sk-bad-tint); }
+.sk-sp-next li[data-state="now"] { border-left-color: var(--sk-brand); }
+.sk-sp-next li[data-state="done"] { border-left-color: var(--sk-good); }
+.sk-sp-next li[data-state="later"] { border-left-color: var(--sk-amber); }
+.sk-sp-next li > .sk-pill { flex: none; margin-top: 1px; }
+.sk-sp-next .w { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.sk-sp-next .w b { font-size: 13.5px; }
+.sk-sp-next .how { font-size: 12.5px; color: var(--sk-ink-2); }
+.sk-sp-next li > .sk-btn { flex: none; }
+@media (max-width: 560px) { .sk-sp-next li { flex-wrap: wrap; } }
+/* A number of days is a symptom; the arithmetic behind it is what you act on. */
+.sk-sp-why { display: block; margin-bottom: 8px; }

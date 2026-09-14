@@ -79,6 +79,7 @@ const ALLOWED: Record<string, string> = {
   // ── Crons: no JWT, and the rows span every school ─────────────────────────
   'modules/management/exam-reminders.service.ts': 'daily cron across all schools',
   'modules/management/notification-outbox.service.ts': 'outbox drain across all schools',
+  'modules/management/sessions.service.ts': 'scheduled session-start cron scans SCHEDULED plans across all schools; every write then runs under withTenant per school',
   'modules/library/internal/library-due-soon.service.ts': 'daily cron across all schools',
 
   // ── Delivery: dispatched post-commit, outside any tenant transaction ──────

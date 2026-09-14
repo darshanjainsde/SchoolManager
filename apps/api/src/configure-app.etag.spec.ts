@@ -8,6 +8,15 @@ import type { INestApplication } from '@nestjs/common';
 import { configureApp } from './configure-app';
 import { loadEnv } from '@skoolos/config';
 
+// configureApp's CORS check reads the live custom domains. Left real, every
+// request in this file opens a socket to a database that is not there, and the
+// connect attempt — not the assertion — is what times the suite out once the
+// whole test run is competing for the machine.
+jest.mock('@skoolos/db', () => ({
+  ...jest.requireActual('@skoolos/db'),
+  getPlatformPrisma: () => ({ domain: { findMany: jest.fn().mockResolvedValue([]) } }),
+}));
+
 /**
  * A 304 is a CORS failure in disguise.
  *

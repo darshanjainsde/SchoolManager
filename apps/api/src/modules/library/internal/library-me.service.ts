@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
 import { ApiError } from '../../../common/errors/api-error';
-import { istTodayISO } from '../../management';
+import { istTodayISO } from '../../../common/dates/timetable-date';
 import { LibrarySettingsService } from './library-settings.service';
 import {
   accruedFineRupees,

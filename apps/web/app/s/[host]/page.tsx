@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { fetchPublicSite } from '@/lib/public-api';
+import { fetchPublicBirthdays, fetchPublicRecords, fetchPublicSite } from '@/lib/public-api';
 import PublicSite from '@/components/public/PublicSite';
 import { schoolMetadata } from '@/lib/school-metadata';
 
@@ -57,5 +57,13 @@ export default async function SchoolHomePage({ params }: Params) {
   // A school-style host that resolves to no live site (unknown, suspended, or
   // not yet published) must 404 — never fall through to a platform page.
   if (!data) notFound();
-  return <PublicSite data={data} />;
+  // The homepage teaser needs this week's rows; fetched only when the school
+  // shows one, so a school with Birthdays off costs nothing extra.
+  const birthdays =
+    data.celebrations?.enabled && data.celebrations.placement === 'TEASER_AND_PAGE'
+      ? await fetchPublicBirthdays(decodeURIComponent(host), data.celebrations.window)
+      : null;
+  // The records band needs the book; fetched only when the school shows one.
+  const records = data.records?.enabled ? await fetchPublicRecords(decodeURIComponent(host)) : null;
+  return <PublicSite data={data} birthdays={birthdays} records={records} />;
 }

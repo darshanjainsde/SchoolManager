@@ -5,6 +5,8 @@ import { Roles } from '../../common/auth/roles.decorator';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import type { SchoolJwtPayload } from '../../common/auth/jwt-payload';
 import { PortalService } from './portal.service';
+import { PublicBirthdaysService } from '../public';
+import { TenantContextService } from '../tenancy';
 import { RequireFeature, RequireFeatureGuard } from '../features';
 import { RegisterForEventDto, RegisterPushTokenDto, SignDiaryEntryDto } from './portal.dto';
 
@@ -12,7 +14,17 @@ import { RegisterForEventDto, RegisterPushTokenDto, SignDiaryEntryDto } from './
 @Roles('STUDENT')
 @Controller('me')
 export class PortalController {
-  constructor(private readonly portal: PortalService) {}
+  constructor(
+    private readonly portal: PortalService,
+    private readonly birthdays: PublicBirthdaysService,
+    private readonly tenant: TenantContextService,
+  ) {}
+
+  /** The birthday wall as a signed-in family sees it (audience FAMILIES or BOTH). */
+  @Get('birthdays')
+  birthdaysWall(@Query('window') window?: string) {
+    return this.birthdays.forAudience(this.tenant.requireTenant().schoolId, 'FAMILIES', window);
+  }
 
   @Get('profile') profile(@CurrentUser() u: SchoolJwtPayload) { return this.portal.profile(u.sub); }
   @Get('timetable') timetable(@CurrentUser() u: SchoolJwtPayload) { return this.portal.timetable(u.sub); }

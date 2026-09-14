@@ -1,7 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, withTenant } from '@skoolos/db';
-import type { UpdateProfileDto, UpdateHomepageDto, StatItemDto, SocialLinkDto } from './cms.dto';
+import type { UpdateProfileDto, UpdateHomepageDto, StatItemDto, SocialLinkDto, UpdateCelebrationsDto, UpdateRecordsSiteDto } from './cms.dto';
 import { sanitizeCustomCssMap, sanitizeHtmlBlock } from './custom-code';
+import { normalizeCelebrationsConfig, type CelebrationsConfig } from './celebrations-config';
+import { normalizeRecordsConfig, type RecordsSiteConfig } from './records-config';
+import { SportsBookService, type LineIndexRow } from '../../sports';
+import { activeStudentsWhere } from '../../../common/roster/active-students';
+import { ApiError } from '../../../common/errors/api-error';
+import { addDays, effectiveDayMonth, inWindow, todayInZone } from '../../../common/dates/birthdays';
+import { FeatureResolverService } from '../../features';
 import { LIST_CEILING } from '../../../common/lists/list-ceiling';
 import { assertTenantOwned } from '../../../common/tenancy/assert-tenant-owned';
 
@@ -17,6 +24,8 @@ const PROFILE_JSON_KEYS = [
 
 @Injectable()
 export class SiteContentService {
+  constructor(private readonly features: FeatureResolverService, private readonly book: SportsBookService) {}
+
   async getContent(schoolId: string) {
     return withTenant(schoolId, async (tx) => {
       const [profile, homepage, stats, socialLinks] = await Promise.all([
@@ -109,6 +118,125 @@ export class SiteContentService {
       tx.homepageContent.upsert({ where: { schoolId }, update: data, create: { schoolId, ...data } }),
     );
     return this.getContent(schoolId);
+  }
+
+  // ── The Book of Records on the website (Sports wing) ───────────────────────
+
+  async getRecordsSite(schoolId: string): Promise<RecordsSiteConfig> {
+    const p = await withTenant(schoolId, (tx) => tx.schoolProfile.findUnique({ where: { schoolId }, select: { recordsConfig: true } }));
+    return normalizeRecordsConfig(p?.recordsConfig);
+  }
+
+  /**
+   * Patch over the stored config. Switching the book on needs the SPORTS
+   * feature and the consent tick in the same request — children's names go
+   * on a public page, so "on" is never the result of an unticked default.
+   */
+  async updateRecordsSite(schoolId: string, dto: UpdateRecordsSiteDto): Promise<RecordsSiteConfig> {
+    const current = await this.getRecordsSite(schoolId);
+    const wantsOn = dto.enabled ?? current.enabled;
+    if (wantsOn && !(await this.features.getFeatures(schoolId)).has('SPORTS')) {
+      throw new ApiError('VALIDATION', 'The Book of Records needs the Sports wing on this school', 400, 'enabled');
+    }
+    if (wantsOn && !(dto.consentConfirmed ?? current.consentConfirmed)) {
+      throw new ApiError('CONSENT_REQUIRED', 'Confirm that the school may name its record holders on the public website', 400, 'consentConfirmed');
+    }
+    const next = normalizeRecordsConfig({ ...current, ...dto });
+    await withTenant(schoolId, (tx) =>
+      tx.schoolProfile.upsert({
+        where: { schoolId },
+        update: { recordsConfig: next as unknown as Prisma.InputJsonValue },
+        create: { schoolId, recordsConfig: next as unknown as Prisma.InputJsonValue },
+      }),
+    );
+    return next;
+  }
+
+  /** Every line the school has, so the office can pin the ones the homepage shows. */
+  recordsLines(schoolId: string): Promise<LineIndexRow[]> {
+    return this.book.lineIndex(schoolId);
+  }
+
+  // ── Birthdays & celebrations (Active Roster, Track B) ──────────────────────
+
+  async getCelebrations(schoolId: string): Promise<CelebrationsConfig> {
+    const p = await withTenant(schoolId, (tx) =>
+      tx.schoolProfile.findUnique({ where: { schoolId }, select: { celebrationsConfig: true } }),
+    );
+    return normalizeCelebrationsConfig(p?.celebrationsConfig);
+  }
+
+  /**
+   * Patch over the stored config, normalised. Turning the wall public is the one
+   * change that is refused rather than quietly downgraded: the office must tick
+   * the consent box in the same request, so "families only" never becomes
+   * "everyone" by an unticked default (D3).
+   */
+  async updateCelebrations(schoolId: string, dto: UpdateCelebrationsDto): Promise<CelebrationsConfig> {
+    const current = await this.getCelebrations(schoolId);
+    // D5: the records source is a Management-plan feature; other tiers keep a typed list.
+    if (dto.source === 'STUDENTS' && !(await this.features.getFeatures(schoolId)).has('MANAGEMENT')) {
+      throw new ApiError('VALIDATION', 'Pulling birthdays from student records needs the Management plan', 400, 'source');
+    }
+    const wantsPublic = dto.audience === 'PUBLIC' || dto.audience === 'BOTH';
+    const consent = dto.consentConfirmed ?? current.consentConfirmed;
+    if (wantsPublic && !consent) {
+      throw new ApiError(
+        'CONSENT_REQUIRED',
+        'Confirm that the school holds parental consent before showing birthdays on the public website',
+        400,
+        'consentConfirmed',
+      );
+    }
+    const next = normalizeCelebrationsConfig({ ...current, ...dto });
+    await withTenant(schoolId, (tx) =>
+      tx.schoolProfile.upsert({
+        where: { schoolId },
+        update: { celebrationsConfig: next as unknown as Prisma.InputJsonValue },
+        create: { schoolId, celebrationsConfig: next as unknown as Prisma.InputJsonValue },
+      }),
+    );
+    return next;
+  }
+
+  /**
+   * What the wall would show this week, for the Celebrations tab: every ACTIVE
+   * child with a birthday in the next seven days (school timezone), with the
+   * two per-child switches the office can flip, plus how many children have no
+   * date of birth at all — the number that explains an empty wall.
+   */
+  async celebrationsPreview(schoolId: string, now: Date = new Date()) {
+    return withTenant(schoolId, async (tx) => {
+      const school = await tx.school.findUnique({ where: { id: schoolId }, select: { timezone: true } });
+      const today = todayInZone(school?.timezone ?? 'Asia/Kolkata', now);
+      const end = addDays(today, 6);
+      const [students, missingDob] = await Promise.all([
+        tx.student.findMany({
+          take: LIST_CEILING.ROSTER,
+          where: activeStudentsWhere(schoolId, { dob: { not: null } }),
+          select: {
+            id: true, firstName: true, lastName: true, dob: true,
+            showOnWebsite: true, photoConsent: true, photoAssetId: true,
+            classSection: { select: { name: true, grade: { select: { name: true } } } },
+          },
+        }),
+        tx.student.count({ where: activeStudentsWhere(schoolId, { dob: null }) }),
+      ]);
+      const week = students
+        .filter((s) => s.dob && inWindow(s.dob, today, end))
+        .map((s) => ({
+          studentId: s.id,
+          name: `${s.firstName} ${s.lastName}`.trim(),
+          classLabel: s.classSection ? `${s.classSection.grade.name} ${s.classSection.name}` : null,
+          day: effectiveDayMonth(s.dob!, today.y).d,
+          month: effectiveDayMonth(s.dob!, today.y).m,
+          showOnWebsite: s.showOnWebsite,
+          photoConsent: s.photoConsent,
+          hasPhoto: !!s.photoAssetId,
+        }))
+        .sort((a, b) => a.month - b.month || a.day - b.day || a.name.localeCompare(b.name));
+      return { week, missingDob, generatedFor: `${today.y}-${String(today.m).padStart(2, '0')}-${String(today.d).padStart(2, '0')}` };
+    });
   }
 
   async setStats(schoolId: string, items: StatItemDto[]) {

@@ -2,9 +2,10 @@
 import { useEffect, useRef, useState, type CSSProperties, type FocusEvent, type ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, Trash2, Upload, Pencil, X, KeyRound, CheckCircle2, Send } from 'lucide-react';
+import { Plus, Trash2, Upload, Pencil, X, KeyRound, CheckCircle2, Send, UserMinus, Undo2 } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
+import ReleaseSheet from './release-sheet';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -19,7 +20,16 @@ interface Teacher {
   primarySubjectId?: string | null;
   bio?: string | null;
   isActive: boolean;
+  /** Active Roster: `isActive` mirrors this; LEFT rows carry `leftOn`. */
+  status?: 'ACTIVE' | 'LEFT';
+  leftOn?: string | null;
   userId?: string | null;
+}
+
+/** "Left · 31 Mar 2026" — the pill on a row that is no longer here. */
+function leftLabel(t: Teacher): string {
+  if (!t.leftOn) return 'Left';
+  return `Left · ${new Date(t.leftOn).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`;
 }
 
 interface MediaAsset {
@@ -486,11 +496,25 @@ export default function TeachersPage() {
     setEditPhotoUrl(null);
   }
 
-  // Safe-delete: confirm before firing the destructive mutation.
+  // Safe-delete: confirm before firing the destructive mutation. Delete is for
+  // a wrong entry; a teacher who is leaving is removed from this school instead.
   function confirmDeleteTeacher(teacher: Teacher) {
-    const ok = window.confirm(`Remove ${fullName(teacher)}? This can’t be undone.`);
+    const ok = window.confirm(
+      `Delete ${fullName(teacher)}? This is for a wrong entry only and can’t be undone. A teacher who is leaving should be removed from this school instead, so their history stays.`,
+    );
     if (ok) deleteMutation.mutate(teacher.id);
   }
+
+  // Active Roster: the handover sheet, and the way back.
+  const [releaseTarget, setReleaseTarget] = useState<Teacher | null>(null);
+  const reactivateMutation = useMutation({
+    mutationFn: (id: string) => api.post<{ id: string; status: 'ACTIVE' }>(`/manage/teachers/${id}/reactivate`, {}),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['mng-teachers'] });
+      toast.success('Back on the roll — their login is open again');
+    },
+    onError: (err: Error) => toast.error(`Could not reactivate: ${err.message}`),
+  });
 
   const teachers = teachersQuery.data ?? [];
   const activeCount = teachers.filter((t) => t.isActive).length;
@@ -648,7 +672,7 @@ export default function TeachersPage() {
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
                       {!teacher.isActive && (
                         <span className="sk-pill" data-tone="warn">
-                          Inactive
+                          {leftLabel(teacher)}
                         </span>
                       )}
                       {teacher.userId ? (
@@ -700,22 +724,58 @@ export default function TeachersPage() {
                   >
                     <Pencil className="h-4 w-4" />
                   </button>
-                  <button
-                    className="sk-btn sk-press"
-                    data-icon
-                    data-tone="bad"
-                    aria-label={`Delete ${fullName(teacher)}`}
-                    title="Delete"
-                    disabled={deleteMutation.isPending}
-                    onClick={() => confirmDeleteTeacher(teacher)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  {teacher.isActive ? (
+                    <>
+                      {/* The ordinary way a teacher leaves: hand over, mark left, close the login. */}
+                      <button
+                        className="sk-btn sk-press"
+                        data-icon
+                        aria-label={`Remove ${fullName(teacher)} from this school`}
+                        title="Remove from this school"
+                        onClick={() => setReleaseTarget(teacher)}
+                      >
+                        <UserMinus className="h-4 w-4" />
+                      </button>
+                      <button
+                        className="sk-btn sk-press"
+                        data-icon
+                        data-tone="bad"
+                        aria-label={`Delete ${fullName(teacher)}`}
+                        title="Delete (wrong entry only)"
+                        disabled={deleteMutation.isPending}
+                        onClick={() => confirmDeleteTeacher(teacher)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      className="sk-btn sk-press"
+                      data-icon
+                      aria-label={`Reactivate ${fullName(teacher)}`}
+                      title="Reactivate"
+                      disabled={reactivateMutation.isPending}
+                      onClick={() => reactivateMutation.mutate(teacher.id)}
+                    >
+                      <Undo2 className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             ),
           )}
         </div>
+      )}
+
+      {releaseTarget && (
+        <ReleaseSheet
+          teacher={releaseTarget}
+          onDone={() => {
+            setReleaseTarget(null);
+            void queryClient.invalidateQueries({ queryKey: ['mng-teachers'] });
+          }}
+          onCancel={() => setReleaseTarget(null)}
+        />
       )}
     </>
   );

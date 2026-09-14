@@ -67,7 +67,7 @@ function wwwRedirect(req: NextRequest): NextResponse | null {
  * an entry.
  */
 const HOST_ROUTED_EXACT = new Set([
-  '/', '/academics', '/admissions', '/gallery', '/contact', '/connect',
+  '/', '/academics', '/admissions', '/gallery', '/contact', '/connect', '/birthdays', '/records',
 ]);
 /** Admin-built pages live at a frozen slug under /p/. */
 const HOST_ROUTED_PREFIX = ['/p/'];
@@ -106,7 +106,7 @@ function isInternalSiteRoute(pathname: string): boolean {
  * /app, /portal, /teacher, /staff, /library, /platform, /owner, /account.
  */
 const CACHEABLE_TENANT_EXACT = new Set([
-  '/', '/academics', '/admissions', '/gallery', '/contact', '/connect',
+  '/', '/academics', '/admissions', '/gallery', '/contact', '/connect', '/birthdays', '/records',
 ]);
 const CACHEABLE_TENANT_PREFIX = ['/blog', '/p/', '/overview/'];
 /** Marketing pages on the platform apex — the same reasoning, no tenant involved. */
@@ -233,7 +233,12 @@ export function middleware(req: NextRequest) {
   // including while the refresh happens. GET only: a POST must never be
   // answered from a cache.
   if (req.method === 'GET' && cacheableFor(pathname, bareHost)) {
-    res.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=600');
+    // The birthday wall gets no stale window: a child the office just hid
+    // must be gone within the minute the console promises, not ten.
+    res.headers.set(
+      'Cache-Control',
+      pathname === '/birthdays' ? 'public, s-maxage=60, must-revalidate' : 'public, s-maxage=60, stale-while-revalidate=600',
+    );
   }
   return res;
 }
@@ -251,6 +256,7 @@ export const config = {
     // object-src, no form-action. `console-segments.test.ts` now fails if a
     // future sibling is forgotten the same way.
     '/library/:path*',
+    '/sports/:path*',
     '/staff/:path*',
     // The alumni portal holds a session too — and the ONE whose credential
     // JavaScript can read: `sk_alumni_session` lives in localStorage and is
@@ -266,6 +272,8 @@ export const config = {
     '/academics',
     '/admissions',
     '/gallery',
+    '/birthdays',
+    '/records',
     '/contact',
     '/connect',
     '/s/:path*',

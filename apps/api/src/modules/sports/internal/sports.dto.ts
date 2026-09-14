@@ -1,0 +1,200 @@
+import { Type } from 'class-transformer';
+import { MAX_MEET_DAYS } from '@skoolos/types';
+import {
+  ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, ValidateIf, ValidateNested,
+} from 'class-validator';
+
+// ── Settings ──────────────────────────────────────────────
+
+export class BandDto {
+  @IsString() @Matches(/^[a-z0-9-]{1,20}$/) id!: string;
+  @IsString() @IsNotEmpty() @MaxLength(40) label!: string;
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(12) @IsInt({ each: true }) @Min(1, { each: true }) @Max(12, { each: true }) stds!: number[];
+}
+
+export class UpdateSportsSettingsDto {
+  @IsOptional() @IsIn(['BANDS', 'AGE']) grouping?: 'BANDS' | 'AGE';
+  @IsOptional() @IsArray() @ArrayMaxSize(6) @ValidateNested({ each: true }) @Type(() => BandDto) bands?: BandDto[];
+  @IsOptional() @IsArray() @ArrayMinSize(1) @ArrayMaxSize(10) @IsInt({ each: true }) @Min(0, { each: true }) @Max(100, { each: true }) pointsPlacing?: number[];
+  @IsOptional() @IsInt() @Min(0) @Max(100) pointsMatchWin?: number;
+  @IsOptional() @IsInt() @Min(0) @Max(100) pointsClassWin?: number;
+  @IsOptional() @IsBoolean() publishNeedsAdmin?: boolean;
+}
+
+// ── Houses ────────────────────────────────────────────────
+
+export class CreateHouseDto {
+  @IsString() @IsNotEmpty() @MaxLength(40) name!: string;
+  @IsOptional() @Matches(/^#[0-9a-fA-F]{6}$/) color?: string;
+}
+
+export class UpdateHouseDto {
+  @IsOptional() @IsString() @IsNotEmpty() @MaxLength(40) name?: string;
+  @IsOptional() @Matches(/^#[0-9a-fA-F]{6}$/) color?: string;
+  @IsOptional() @IsInt() @Min(0) @Max(100) order?: number;
+}
+
+export class AssignHouseDto {
+  /** null takes the students out of any house. */
+  @ValidateIf((o) => o.houseId !== null) @IsUUID() houseId!: string | null;
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(2000) @IsUUID('all', { each: true }) studentIds!: string[];
+}
+
+export class AwardPointsDto {
+  @IsInt() @Min(-1000) @Max(1000) points!: number;
+  @IsString() @IsNotEmpty() @MaxLength(120) reason!: string;
+}
+
+// ── Tournaments ───────────────────────────────────────────
+
+export class VenueInDto {
+  @IsString() @IsNotEmpty() @MaxLength(40) name!: string;
+}
+
+export class EventInDto {
+  /** A catalogue key, or the word `custom` with `customName` + `presetKey`. */
+  @IsString() @IsNotEmpty() @MaxLength(80) sportKey!: string;
+  @IsOptional() @IsString() @MaxLength(40) customName?: string;
+  @IsOptional() @IsString() @MaxLength(20) presetKey?: string;
+  @IsOptional() @IsInt() @Min(1) @Max(20) teamSize?: number;
+  /** Custom sports: where it is played, so venues bind. */
+  @IsOptional() @IsIn(['court', 'table', 'field', 'track', 'pool', 'hall', 'board', 'mat', 'ring', 'range']) customVenue?: string;
+  /** Team sports: what a side is. Omitted = suggested from the entrants' classes. */
+  @IsOptional() @IsIn(['SECTIONS', 'CLASSES', 'HOUSES']) teamBasis?: 'SECTIONS' | 'CLASSES' | 'HOUSES';
+  /** Measured/judged: how a big field reaches a final. */
+  @IsOptional() @IsIn(['CLASS_QUAL', 'OPEN_QUAL', 'STRAIGHT']) stageShape?: 'CLASS_QUAL' | 'OPEN_QUAL' | 'STRAIGHT';
+  @IsOptional() @IsInt() @Min(1) @Max(8) advancePerClass?: number;
+  @IsOptional() @IsInt() @Min(2) @Max(16) finalists?: number;
+  /** Pin this event to a day of the meet (0-based). */
+  @IsOptional() @IsInt() @Min(0) @Max(MAX_MEET_DAYS - 1) dayIdx?: number;
+  @IsString() @IsNotEmpty() @MaxLength(20) groupKey!: string;
+  @IsIn(['Boys', 'Girls', 'Mixed']) category!: 'Boys' | 'Girls' | 'Mixed';
+  @IsIn(['CLASS', 'DRAW']) structure!: 'CLASS' | 'DRAW';
+  /** Indexes into `venues`. */
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(20) @IsInt({ each: true }) @Min(0, { each: true }) venueIdx!: number[];
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(500) @IsUUID('all', { each: true }) studentIds!: string[];
+  @IsOptional() @IsInt() @Min(5) @Max(240) slotMin?: number;
+  @IsOptional() @IsInt() @Min(1) @Max(16) lanes?: number;
+}
+
+export class CreateTournamentDto {
+  @IsString() @IsNotEmpty() @MaxLength(80) name!: string;
+  @Matches(/^\d{4}-\d{2}-\d{2}$/) startsOn!: string;
+  @Matches(/^\d{4}-\d{2}-\d{2}$/) endsOn!: string;
+  @IsOptional() @IsInt() @Min(0) @Max(1439) dayStartMin?: number;
+  @IsOptional() @IsInt() @Min(1) @Max(1440) dayEndMin?: number;
+  /** Minutes between two slots of the same child. */
+  @IsOptional() @IsInt() @Min(0) @Max(120) restMin?: number;
+  /** Break left on the venue after each slot. */
+  @IsOptional() @IsInt() @Min(0) @Max(60) gapMin?: number;
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(20) @ValidateNested({ each: true }) @Type(() => VenueInDto) venues!: VenueInDto[];
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(60) @ValidateNested({ each: true }) @Type(() => EventInDto) events!: EventInDto[];
+}
+
+/** Grow or reshape a meet after it was created. */
+export class UpdateTournamentDto {
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) endsOn?: string;
+  @IsOptional() @IsInt() @Min(0) @Max(1439) dayStartMin?: number;
+  @IsOptional() @IsInt() @Min(1) @Max(1440) dayEndMin?: number;
+  @IsOptional() @IsInt() @Min(0) @Max(120) restMin?: number;
+  /** Break left on the venue after each slot. */
+  @IsOptional() @IsInt() @Min(0) @Max(60) gapMin?: number;
+}
+
+export class AddVenueDto {
+  @IsString() @IsNotEmpty() @MaxLength(40) name!: string;
+}
+
+/** Pin an event to a day, or unpin it with null. */
+export class PinEventDto {
+  @ValidateIf((o) => o.dayIdx !== null) @IsInt() @Min(0) @Max(MAX_MEET_DAYS - 1) dayIdx!: number | null;
+}
+
+/** Move one class's unplayed slots together. */
+export class MoveGroupDto {
+  @IsUUID() eventId!: string;
+  @IsString() @IsNotEmpty() @MaxLength(40) groupLabel!: string;
+  @IsInt() @Min(-720) @Max(720) deltaMin!: number;
+}
+
+/** Hold several events — a whole category — to one day, or free them all. */
+export class HoldDto {
+  @IsArray() @ArrayMaxSize(200) @IsUUID('4', { each: true }) eventIds!: string[];
+  @ValidateIf((o) => o.dayIdx !== null) @IsInt() @Min(0) @Max(MAX_MEET_DAYS - 1) dayIdx!: number | null;
+}
+
+export class MoveSlotDto {
+  @IsOptional() @IsUUID() venueId?: string;
+  @IsInt() @Min(0) @Max(1440 * MAX_MEET_DAYS) atMin!: number;
+}
+
+export class ShiftDto {
+  @IsInt() @Min(-720) @Max(720) deltaMin!: number;
+  @IsOptional() @IsUUID() eventId?: string;
+  /** Only slots at or after this minute move (default: everything unplayed). */
+  @IsOptional() @IsInt() @Min(0) fromMin?: number;
+}
+
+// ── Results ───────────────────────────────────────────────
+
+export class ScoreDto {
+  @IsArray() @ArrayMaxSize(9) @IsInt({ each: true }) @Min(0, { each: true }) @Max(999, { each: true }) scoreA!: number[];
+  @IsArray() @ArrayMaxSize(9) @IsInt({ each: true }) @Min(0, { each: true }) @Max(999, { each: true }) scoreB!: number[];
+  /** The version the desk loaded; a stale one is refused with MATCH_CHANGED. */
+  @IsInt() @Min(1) version!: number;
+  /** The side that turned up when the other did not. */
+  @IsOptional() @IsIn(['A', 'B']) walkover?: 'A' | 'B';
+}
+
+export class MarkInDto {
+  @IsUUID() studentId!: string;
+  /** null = did not finish / no mark. */
+  @ValidateIf((o) => o.mark !== null) @IsNumber() @Min(0) @Max(1_000_000) mark!: number | null;
+}
+
+export class MarksDto {
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(64) @ValidateNested({ each: true }) @Type(() => MarkInDto) marks!: MarkInDto[];
+  /** Done ranks the heat, checks records and (for a heat) may build the final. */
+  @IsBoolean() done!: boolean;
+}
+
+// ── Records ───────────────────────────────────────────────
+
+export class SubmitAttemptDto {
+  @IsString() @IsNotEmpty() @MaxLength(80) sportKey!: string;
+  @IsString() @IsNotEmpty() @MaxLength(20) groupKey!: string;
+  @IsIn(['Boys', 'Girls', 'Mixed']) category!: 'Boys' | 'Girls' | 'Mixed';
+  @IsUUID() studentId!: string;
+  @IsNumber() @Min(0) @Max(1_000_000) value!: number;
+  @IsIn(['PRACTICE', 'TRIAL']) source!: 'PRACTICE' | 'TRIAL';
+  @IsBoolean() witnessed!: boolean;
+}
+
+export class DecideAttemptDto {
+  @IsBoolean() approve!: boolean;
+  @IsOptional() @IsString() @MaxLength(200) note?: string;
+}
+
+export class AddRecordDto {
+  @IsString() @IsNotEmpty() @MaxLength(80) sportKey!: string;
+  @IsString() @IsNotEmpty() @MaxLength(20) groupKey!: string;
+  @IsIn(['Boys', 'Girls', 'Mixed']) category!: 'Boys' | 'Girls' | 'Mixed';
+  @IsNumber() @Min(0) @Max(1_000_000) value!: number;
+  @IsString() @IsNotEmpty() @MaxLength(80) holderName!: string;
+  @IsOptional() @IsUUID() holderStudentId?: string;
+  @IsInt() @Min(1900) @Max(2100) sinceYear!: number;
+  /** Set for a past record (history); leave empty for the standing one. */
+  @IsOptional() @IsInt() @Min(1900) @Max(2100) untilYear?: number;
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) setOn?: string;
+  @IsOptional() @IsString() @MaxLength(200) note?: string;
+}
+
+export class VoidRecordDto {
+  @IsString() @IsNotEmpty() @MaxLength(200) note!: string;
+}
+
+// ── Teachers (admin) ──────────────────────────────────────
+
+export class SetCoachPermsDto {
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(6) @IsIn(['ENTER', 'VERIFY', 'CREATE', 'PUBLISH', 'HOUSES', 'SETTINGS'], { each: true }) sportsPerms!: string[];
+}

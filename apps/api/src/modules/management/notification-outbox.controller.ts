@@ -25,6 +25,7 @@ import {
 export class NotificationOutboxController {
   constructor(private readonly outbox: NotificationOutboxService) {}
 
+  /** Nightly: the safety net, and the one place the retention sweep runs. */
   @Get('notification-outbox')
   runFromCron(): Promise<NotificationOutboxDrainResult> {
     return this.outbox.drain();

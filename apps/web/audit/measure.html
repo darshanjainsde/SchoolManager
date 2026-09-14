@@ -1,0 +1,49 @@
+<!doctype html><html><head><meta charset="utf-8"><title>audit</title>
+<style>body{margin:0;font:13px ui-monospace,monospace;background:#111;color:#ddd}
+#out{padding:12px;white-space:pre-wrap;line-height:1.5}iframe{position:fixed;left:-9999px;top:0;border:0}</style>
+</head><body><div id="out">measuring…</div>
+<script>
+const WIDTHS=[390,414,768,1024,1280];
+const log=[];
+function audit(doc,win,w){
+  const R=[];const vw=win.innerWidth;
+  const de=doc.documentElement;
+  if(de.scrollWidth>vw+0.5) R.push(`PAGE SCROLLS SIDEWAYS: scrollWidth ${de.scrollWidth} > ${vw}`);
+  const all=[...doc.querySelectorAll('*')];
+  // an element is "contained" if it or an ancestor scrolls horizontally
+  const scrolls=e=>{const s=win.getComputedStyle(e);return /auto|scroll/.test(s.overflowX)||/auto|scroll/.test(s.overflow)};
+  const inScroller=e=>{let p=e.parentElement;while(p&&p!==de){if(scrolls(p))return true;p=p.parentElement}return false};
+  for(const e of all){
+    const r=e.getBoundingClientRect();
+    if(r.width===0&&r.height===0) continue;
+    const panel=e.closest('.audit-panel')?.dataset.panel||'?';
+    // 1. overflows the viewport and is NOT inside a horizontal scroller
+    if(r.right>vw+0.5&&!inScroller(e)&&!scrolls(e))
+      R.push(`${panel} | OVERFLOW ${Math.round(r.right)}>${vw} | ${e.tagName.toLowerCase()}.${(e.className||'').toString().split(' ')[0]} | "${(e.textContent||'').trim().slice(0,40)}"`);
+    // 2. text clipped: content wider than the box, box does not scroll, no ellipsis
+    const s=win.getComputedStyle(e);
+    if(e.children.length===0&&e.scrollWidth>e.clientWidth+1&&!scrolls(e)&&s.textOverflow!=='ellipsis'&&e.clientWidth>0)
+      R.push(`${panel} | CLIPPED ${e.scrollWidth}>${e.clientWidth} | ${e.tagName.toLowerCase()}.${(e.className||'').toString().split(' ')[0]} | "${(e.textContent||'').trim().slice(0,40)}"`);
+    // 3. tap targets under 24px on touch widths
+    if(w<=414&&/^(button|a|input|select)$/i.test(e.tagName)&&(r.height<24||r.width<24)&&r.height>0)
+      R.push(`${panel} | TAP ${Math.round(r.width)}x${Math.round(r.height)} | ${e.tagName.toLowerCase()}.${(e.className||'').toString().split(' ')[0]} | "${(e.textContent||'').trim().slice(0,30)}"`);
+  }
+  return R;
+}
+(async()=>{
+  for(const w of WIDTHS){
+    const f=document.createElement('iframe');
+    f.width=w;f.height=900;f.src='./screens.html';document.body.appendChild(f);
+    await new Promise(r=>f.onload=r);
+    await new Promise(r=>setTimeout(r,250));
+    const R=audit(f.contentDocument,f.contentWindow,w);
+    const uniq=[...new Set(R)];
+    log.push(`\n══════ ${w}px ══════  ${uniq.length===0?'CLEAN':uniq.length+' finding(s)'}`);
+    log.push(...uniq.slice(0,40).map(x=>'  '+x));
+    if(uniq.length>40) log.push(`  …and ${uniq.length-40} more`);
+    f.remove();
+  }
+  document.getElementById('out').textContent=log.join('\n');
+  document.title='audit done';
+})();
+</script></body></html>

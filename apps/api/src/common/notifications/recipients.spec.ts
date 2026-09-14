@@ -21,7 +21,7 @@ describe('resolveSectionRecipients', () => {
     const emails = await resolveSectionRecipients(db as never, SCHOOL, 'cs-1');
 
     expect(db.student.findMany).toHaveBeenCalledWith({
-      where: { schoolId: SCHOOL, classSectionId: 'cs-1', userId: { not: null } },
+      where: { schoolId: SCHOOL, status: 'ACTIVE', classSectionId: 'cs-1', userId: { not: null } },
       select: { userId: true },
     });
     expect(db.user.findMany).toHaveBeenCalledWith({
@@ -65,7 +65,7 @@ describe('resolveSchoolRecipients', () => {
     const emails = await resolveSchoolRecipients(db as never, SCHOOL);
 
     expect(db.student.findMany).toHaveBeenCalledWith({
-      where: { schoolId: SCHOOL, userId: { not: null } },
+      where: { schoolId: SCHOOL, status: 'ACTIVE', userId: { not: null } },
       select: { userId: true },
     });
     expect(emails).toEqual(['a@x.com', 'b@x.com']);
@@ -97,7 +97,7 @@ describe('resolveStudentRecipients', () => {
     const recipients = await resolveStudentRecipients(db as never, SCHOOL, ['s-1', 's-2']);
 
     expect(db.student.findMany).toHaveBeenCalledWith({
-      where: { schoolId: SCHOOL, id: { in: ['s-1', 's-2'] }, userId: { not: null } },
+      where: { schoolId: SCHOOL, status: 'ACTIVE', id: { in: ['s-1', 's-2'] }, userId: { not: null } },
       select: { userId: true, firstName: true, lastName: true },
     });
     expect(recipients).toEqual([

@@ -45,7 +45,7 @@ beforeEach(() => vi.resetModules());
 describe('pages the edge may hold', () => {
   it('caches a school public site', async () => {
     const mw = await load();
-    for (const p of ['/', '/academics', '/admissions', '/gallery', '/contact', '/connect']) {
+    for (const p of ['/', '/academics', '/admissions', '/gallery', '/contact', '/connect', '/birthdays']) {
       expect(cc(mw(req(SCHOOL, p))), p).toMatch(/^public, s-maxage=\d+/);
     }
   });
@@ -106,7 +106,7 @@ describe('pages the edge must never hold', () => {
 describe('host-routed school pages', () => {
   // The visitor's URL never changes; only the internal path does. This is what
   // lets the response be cached at all — see the middleware comment.
-  it.each(['/', '/academics', '/admissions', '/gallery', '/contact', '/connect', '/p/transport'])(
+  it.each(['/', '/academics', '/admissions', '/gallery', '/contact', '/connect', '/birthdays', '/p/transport'])(
     'rewrites a school host at %s to its own path',
     async (path) => {
       const mw = await load();
@@ -118,7 +118,7 @@ describe('host-routed school pages', () => {
 
   // The apex serves marketing. A school view rewritten there would put one
   // school's pages under the platform's own name.
-  it.each(['/academics', '/admissions', '/gallery', '/contact', '/connect', '/p/transport'])(
+  it.each(['/academics', '/admissions', '/gallery', '/contact', '/connect', '/birthdays', '/p/transport'])(
     'never rewrites %s on the platform apex',
     async (path) => {
       const mw = await load();

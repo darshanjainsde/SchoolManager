@@ -82,7 +82,10 @@ export default function Login() {
       let s: Session | null = stored ? await attempt(stored) : null;
       if (!s) {
         // The cache was absent or wrong — ask the platform which school(s)
-        // this identifier belongs to and try each in turn.
+        // this identifier belongs to and try each in turn. A code the school
+        // has marked as left resolves nowhere too (the resolver answers for
+        // active students only) and gets the same neutral message below —
+        // the gate never says WHY, by design.
         const hosts = (await api.resolveSchool(id)).filter((h) => !tried.includes(h));
         for (const host of hosts) {
           s = await attempt(host);

@@ -35,7 +35,23 @@ function initials(name: string): string {
  * THIS spine. Under reduce-motion the lift simply does not happen; the
  * navigation that follows is the feedback.
  */
-function Spine({ child, active, onPress }: { child: ChildProfile; active: boolean; onPress: () => void }) {
+/** "raffles.sckools.com" → "Raffles" — the school, as the shelf already names it. */
+function schoolLabel(host: string): string {
+  const first = host.split('.')[0] ?? host;
+  return first.charAt(0).toUpperCase() + first.slice(1);
+}
+
+function Spine({
+  child,
+  active,
+  onPress,
+  onRemove,
+}: {
+  child: ChildProfile;
+  active: boolean;
+  onPress: () => void;
+  onRemove: () => void;
+}) {
   const tokens = useTokens();
   const reduced = useReduceMotion();
   const lift = useRef(new Animated.Value(0)).current;
@@ -44,6 +60,61 @@ function Spine({ child, active, onPress }: { child: ChildProfile; active: boolea
     if (reduced.current) return;
     Animated.timing(lift, { toValue: to, duration: DUR.press, easing: EASE, useNativeDriver: true }).start();
   };
+
+  // The school closed this child's login (marked as left). The spine stays so
+  // the family sees WHY the diary stopped, and offers exactly one action.
+  if (child.closed) {
+    return (
+      <View
+        testID={`spine-${child.key}`}
+        accessibilityRole="summary"
+        accessibilityLabel={`${child.displayName} is no longer enrolled at ${schoolLabel(child.schoolHost)}`}
+        style={{
+          width: '23%',
+          borderRadius: 12,
+          borderWidth: 1,
+          borderStyle: 'dashed',
+          borderColor: tokens.color.line,
+          backgroundColor: tokens.color.surface,
+          overflow: 'hidden',
+          alignItems: 'center',
+          paddingBottom: 10,
+        }}
+      >
+        <View style={{ alignSelf: 'stretch', height: 8, backgroundColor: tokens.color.line }} />
+        <View
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            marginTop: 10,
+            marginBottom: 6,
+            backgroundColor: tokens.color.line,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Text style={{ color: tokens.color.sub, fontWeight: '800', fontSize: 14 }}>{initials(child.displayName)}</Text>
+        </View>
+        <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: tokens.color.sub, maxWidth: '90%' }}>
+          {child.displayName.split(' ')[0]}
+        </Text>
+        <Text numberOfLines={2} style={{ fontSize: 8.5, color: tokens.color.sub, maxWidth: '92%', textAlign: 'center' }}>
+          No longer enrolled at {schoolLabel(child.schoolHost)}
+        </Text>
+        <Pressable
+          testID={`spine-remove-${child.key}`}
+          accessibilityRole="button"
+          accessibilityLabel={`Remove ${child.displayName} from the shelf`}
+          onPress={onRemove}
+          hitSlop={8}
+          style={{ marginTop: 6 }}
+        >
+          <Text style={{ fontSize: 9, fontWeight: '800', color: tokens.color.ink }}>REMOVE</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   return (
     <Animated.View style={{ width: '23%', transform: [{ translateY: lift }] }}>
@@ -125,10 +196,23 @@ export default function Shelf() {
   );
 
   async function open(child: ChildProfile) {
-    if (busy) return;
+    if (busy || child.closed) return;
     setBusy(true);
     await family.setActive(child.key);
     router.replace('/(family)/(tabs)/home');
+  }
+
+  async function removeClosed(child: ChildProfile) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await family.remove(child.key);
+      const [list, key] = await Promise.all([family.list(), family.activeKey()]);
+      setChildren(list);
+      setActiveKey(key);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function addChild() {
@@ -182,7 +266,13 @@ export default function Shelf() {
       ) : (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 9, justifyContent: 'flex-start' }}>
           {shown.map((c) => (
-            <Spine key={c.key} child={c} active={c.key === activeKey} onPress={() => void open(c)} />
+            <Spine
+              key={c.key}
+              child={c}
+              active={c.key === activeKey}
+              onPress={() => void open(c)}
+              onRemove={() => void removeClosed(c)}
+            />
           ))}
           <Pressable
             testID="shelf-add"

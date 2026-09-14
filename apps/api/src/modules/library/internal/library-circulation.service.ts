@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { withTenant, type TenantTx } from '@skoolos/db';
 import { ApiError } from '../../../common/errors/api-error';
 import { isP2002 } from '../../../common/errors/prisma-errors';
-import { istTodayISO } from '../../management';
+import { istTodayISO } from '../../../common/dates/timetable-date';
 import { LibrarySettingsService } from './library-settings.service';
 import {
   accruedFineRupees,

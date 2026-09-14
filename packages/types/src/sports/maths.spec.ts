@@ -1,0 +1,449 @@
+import { sportByKey } from './catalogue';
+import {
+  cursorFrom, stdOfGrade, validateBands, sideOfClass, sideOfHouse, sideOfEntry, suggestTeamBasis, newDiary,
+  planStages, planClassHeats, advanceFrom, advanceCount, capacityOf, dayFloor,
+  ageGroupFor, bandFor, beatsRecord, bracketSize, buildDraw, drawPlacings, findClashes, finalists, fitInDay, formatMark, hhmm,
+  judgeScores, nextSlot, parseMark, parseSide, placingPoints, planClassStage, planHeats, planRounds, rankMarks, roundName,
+  seedPositions, shiftSlots, shuffle, sideOfSection, sideOfStudent, sayProblem, whyNot, type Placement } from './maths';
+
+const badminton = sportByKey('badminton')!.scoring;
+const tt = sportByKey('table-tennis')!.scoring;
+const volley = sportByKey('volleyball')!.scoring;
+const football = sportByKey('football')!.scoring;
+const sprint = sportByKey('ath-100m')!.scoring;
+const jump = sportByKey('ath-long-jump')!.scoring;
+if (sprint.type !== 'MARK' || jump.type !== 'MARK') throw new Error('catalogue changed');
+
+describe('side keys', () => {
+  it('round-trip a student, a section, a class and a house', () => {
+    expect(parseSide(sideOfStudent('u1'))).toEqual({ kind: 'student', studentId: 'u1' });
+    expect(parseSide(sideOfSection(9, ' a '))).toEqual({ kind: 'section', std: 9, section: 'A' });
+    expect(parseSide(sideOfClass(9))).toEqual({ kind: 'class', std: 9 });
+    expect(parseSide(sideOfHouse('h1'))).toEqual({ kind: 'house', houseId: 'h1' });
+    expect(parseSide('nonsense')).toBeNull();
+  });
+  it('a child\'s side follows the team basis; the suggested basis is sections only when every class has two', () => {
+    const e = { studentId: 'u1', std: 9, section: 'b', houseId: 'h1' };
+    expect(sideOfEntry(e, false, 'SECTIONS')).toBe('s:u1');
+    expect(sideOfEntry(e, true, 'SECTIONS')).toBe('c:9-B');
+    expect(sideOfEntry(e, true, 'CLASSES')).toBe('k:9');
+    expect(sideOfEntry(e, true, 'HOUSES')).toBe('h:h1');
+    expect(sideOfEntry({ ...e, houseId: null }, true, 'HOUSES')).toBeNull();
+    expect(suggestTeamBasis([{ std: 9, section: 'A' }, { std: 9, section: 'B' }, { std: 10, section: 'A' }, { std: 10, section: 'b' }])).toBe('SECTIONS');
+    expect(suggestTeamBasis([{ std: 9, section: 'A' }, { std: 9, section: 'B' }, { std: 11, section: 'A' }])).toBe('CLASSES');
+    expect(suggestTeamBasis([])).toBe('SECTIONS');
+  });
+});
+
+describe('judgeScores — games', () => {
+  it('badminton: 21-15 21-19 wins in two; 21-19 19-21 is level and still going', () => {
+    expect(judgeScores(badminton, [21, 21], [15, 19])).toEqual({ winner: 'A', complete: true });
+    expect(judgeScores(badminton, [21, 19], [19, 21])).toEqual({ winner: null, complete: false });
+  });
+  it('win by two: 21-20 is not a finished game; 22-20 is; 30-29 ends at the cap', () => {
+    expect(judgeScores(badminton, [21], [20])).toEqual({ winner: null, complete: false });
+    expect(judgeScores(badminton, [22], [20])).toEqual({ winner: null, complete: false }); // one game of three
+    expect(judgeScores(badminton, [22, 21], [20, 8])).toEqual({ winner: 'A', complete: true });
+    expect(judgeScores(badminton, [30, 21], [29, 0])).toEqual({ winner: 'A', complete: true });
+    expect(judgeScores(badminton, [31], [29])).toMatchObject({ error: 'BAD_SCORE' });
+  });
+  it('an unfinished game may only be the last one listed; a game after the match is decided is an error', () => {
+    expect(judgeScores(badminton, [10, 21], [5, 3])).toMatchObject({ error: 'BAD_SCORE' });
+    expect(judgeScores(badminton, [21, 21, 21], [3, 3, 3])).toMatchObject({ error: 'EXTRA_GAME' });
+  });
+  it('table tennis has no cap: 15-13 is a game; volleyball’s fifth set is to 15', () => {
+    expect(judgeScores(tt, [15, 11, 11], [13, 4, 4])).toEqual({ winner: 'A', complete: true });
+    expect(judgeScores(volley, [25, 20, 25, 20, 15], [20, 25, 20, 25, 13])).toEqual({ winner: 'A', complete: true });
+    expect(judgeScores(volley, [25, 20, 25, 20, 25], [20, 25, 20, 25, 23])).toEqual({ winner: 'A', complete: true }); // 25-23 still a valid fifth set (to 15, win by 2)
+  });
+  it('rejects negatives, fractions and ragged arrays', () => {
+    expect(judgeScores(badminton, [21], [-1])).toMatchObject({ error: 'BAD_SCORE' });
+    expect(judgeScores(badminton, [21.5], [1])).toMatchObject({ error: 'BAD_SCORE' });
+    expect(judgeScores(badminton, [21, 21], [1])).toMatchObject({ error: 'BAD_SCORE' });
+    expect(judgeScores(sprint, [1], [2])).toMatchObject({ error: 'NOT_A_MATCH' });
+  });
+});
+
+describe('judgeScores — single number', () => {
+  it('football: 2-1 wins; 1-1 needs the decider; 1-1 then 4-3 on penalties wins', () => {
+    expect(judgeScores(football, [2], [1])).toEqual({ winner: 'A', complete: true });
+    expect(judgeScores(football, [1], [1])).toMatchObject({ complete: false, error: 'TIE_DECIDER' });
+    expect(judgeScores(football, [1, 4], [1, 3])).toEqual({ winner: 'A', complete: true });
+    expect(judgeScores(football, [1, 4], [1, 4])).toMatchObject({ error: 'TIE_DECIDER' });
+  });
+  it('a decider without a tie, or a third number, is a bad score; an empty sheet is simply not started', () => {
+    expect(judgeScores(football, [2, 4], [1, 3])).toMatchObject({ error: 'BAD_SCORE' });
+    expect(judgeScores(football, [1, 1, 1], [1, 1, 0])).toMatchObject({ error: 'BAD_SCORE' });
+    expect(judgeScores(football, [], [])).toEqual({ winner: null, complete: false });
+  });
+});
+
+describe('marks', () => {
+  it('formats seconds, minutes, metres, kilograms and counts', () => {
+    expect(formatMark(sprint, 12.3)).toBe('12.30 s');
+    expect(formatMark(sprint, 65.2)).toBe('1:05.20');
+    expect(formatMark(jump, 5.4)).toBe('5.40 m');
+    expect(formatMark({ type: 'MARK', label: 'Total', unit: 'kg', lowerIsBetter: false, precision: 0 }, 62)).toBe('62 kg');
+    expect(formatMark({ type: 'MARK', label: 'Jumps', unit: 'reps', lowerIsBetter: false, precision: 0 }, 112)).toBe('112');
+    expect(formatMark(sprint, null)).toBe('—');
+  });
+  it('parses what the desk types, and rounds to the sport’s precision', () => {
+    expect(parseMark(sprint, '12.345')).toBe(12.35);
+    expect(parseMark(sprint, '1:05.20')).toBe(65.2);
+    expect(parseMark(sprint, '12.3 s')).toBe(12.3);
+    expect(parseMark(jump, '5,42')).toBeNull();
+    expect(parseMark(sprint, '-1')).toBeNull();
+    expect(parseMark(sprint, '')).toBeNull();
+    expect(parseMark(sprint, '1:xx')).toBeNull();
+  });
+  it('ranks fastest first with shared ranks, and no-marks last without a rank', () => {
+    const r = rankMarks([{ item: 'a', mark: 12.5 }, { item: 'b', mark: 12.1 }, { item: 'c', mark: null }, { item: 'd', mark: 12.1 }], true);
+    expect(r.map((x) => [x.item, x.rank])).toEqual([['b', 1], ['d', 1], ['a', 3], ['c', null]]);
+    const far = rankMarks([{ item: 'a', mark: 5.1 }, { item: 'b', mark: 5.4 }], false);
+    expect(far.map((x) => x.item)).toEqual(['b', 'a']);
+  });
+  it('a record is beaten strictly, at the sport’s precision', () => {
+    expect(beatsRecord(sprint, 12.29, 12.3)).toBe(true);
+    expect(beatsRecord(sprint, 12.3, 12.3)).toBe(false);
+    expect(beatsRecord(sprint, 12.304, 12.3)).toBe(false);
+    expect(beatsRecord(jump, 5.41, 5.4)).toBe(true);
+    expect(beatsRecord(jump, 5.39, 5.4)).toBe(false);
+  });
+});
+
+describe('knockout draws', () => {
+  it('bracket sizes and the standard seeding order', () => {
+    expect([2, 3, 4, 5, 8, 9, 16, 17].map(bracketSize)).toEqual([2, 4, 4, 8, 8, 16, 16, 32]);
+    expect(seedPositions(8)).toEqual([1, 8, 4, 5, 2, 7, 3, 6]);
+  });
+  it('9 players → a 16 draw with 7 byes and exactly one real first-round match; byes are placed into round 2', () => {
+    const sides = Array.from({ length: 9 }, (_, i) => `s:p${i + 1}`);
+    const { size, rounds } = buildDraw(sides);
+    expect(size).toBe(16);
+    expect(rounds.map((r) => r.length)).toEqual([8, 4, 2, 1]);
+    const real = rounds[0].filter((m) => !m.bye);
+    expect(real).toHaveLength(1);
+    expect(real[0]).toMatchObject({ a: 's:p8', b: 's:p9' });
+    expect(rounds[0].filter((m) => m.bye).every((m) => m.winner)).toBe(true);
+    // seed 1 and 2 are in opposite halves and already in round 2
+    expect(rounds[1][0].a).toBe('s:p1');
+    expect(rounds[1][2].a).toBe('s:p2');
+    expect(rounds[1][0].b).toBeNull(); // waits for the real match (8 v 9 feeds slot 0b)
+    expect(rounds[1][3].b).toBe('s:p6');
+  });
+  it('never builds a match with two empty sides, for every field size from 2 to 40', () => {
+    for (let n = 2; n <= 40; n++) {
+      const { rounds } = buildDraw(Array.from({ length: n }, (_, i) => `s:${i}`));
+      expect(rounds[0].some((m) => !m.a && !m.b)).toBe(false);
+      expect(rounds[0].filter((m) => m.bye)).toHaveLength(bracketSize(n) - n);
+    }
+  });
+  it('duplicate sides collapse; a single side is refused', () => {
+    expect(buildDraw(['s:a', 's:a', 's:b']).size).toBe(2);
+    expect(() => buildDraw(['s:a', 's:a'])).toThrow('NEED_TWO_SIDES');
+  });
+  it('round names and the slot a winner advances into', () => {
+    expect([0, 1, 2, 3].map((r) => roundName(r, 4))).toEqual(['Round of 16', 'Quarter-final', 'Semi-final', 'Final']);
+    expect(roundName(0, 1)).toBe('Final');
+    expect(nextSlot(0, 5)).toEqual({ round: 1, pos: 2, side: 'b' });
+    expect(nextSlot(1, 2)).toEqual({ round: 2, pos: 1, side: 'a' });
+  });
+  it('a seeded shuffle is repeatable and keeps every item', () => {
+    const a = shuffle([1, 2, 3, 4, 5, 6], 42);
+    expect(shuffle([1, 2, 3, 4, 5, 6], 42)).toEqual(a);
+    expect([...a].sort()).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(shuffle([1, 2, 3, 4, 5, 6], 7)).not.toEqual(a);
+  });
+  it('placings: champion, runner-up, joint third for the semi losers, joint fifth for the quarter losers; byes place nobody', () => {
+    const { rounds } = buildDraw(['s:1', 's:2', 's:3', 's:4', 's:5']); // 8 draw, 3 byes
+    const [r1, r2, r3] = rounds;
+    const real = r1.find((m) => !m.bye)!;
+    real.winner = real.a; // s:4 beats s:5
+    const ns = nextSlot(real.round, real.pos);
+    r2[ns.pos][ns.side] = real.winner;
+    for (const m of r2) m.winner = m.a; // s:1 beats s:4, s:2 beats s:3
+    r3[0].a = r2[0].winner; r3[0].b = r2[1].winner; r3[0].winner = r3[0].a;
+    const placed = drawPlacings(rounds);
+    expect(placed.filter((p) => p.rank === 1)).toHaveLength(1);
+    expect(placed.filter((p) => p.rank === 2)).toHaveLength(1);
+    expect(placed.filter((p) => p.rank === 3)).toHaveLength(2);
+    expect(placed.filter((p) => p.rank === 5)).toHaveLength(1); // only the one real quarter-final produced a loser
+    expect(placed.find((p) => p.side === 's:5')?.rank).toBe(5);
+  });
+});
+
+describe('class stage', () => {
+  it('two or more classes → a class round each; a lone entrant is champion by walkover; one class → a plain draw', () => {
+    const plan = planClassStage([
+      { side: 's:a', std: 9 }, { side: 's:b', std: 9 }, { side: 's:c', std: 10 }, { side: 's:d', std: 11 }, { side: 's:e', std: 11 }, { side: 's:e', std: 11 },
+    ]);
+    expect(plan.mode).toBe('CLASS');
+    expect(plan.classes).toEqual([
+      { std: 9, sides: ['s:a', 's:b'], walkover: null },
+      { std: 10, sides: ['s:c'], walkover: 's:c' },
+      { std: 11, sides: ['s:d', 's:e'], walkover: null },
+    ]);
+    expect(planClassStage([{ side: 's:a', std: 9 }, { side: 's:b', std: 9 }]).mode).toBe('DRAW');
+  });
+});
+
+describe('heats', () => {
+  it('a field that fits the lanes is the final straight away', () => {
+    expect(planHeats(['s:1', 's:2', 's:3'], 6)).toEqual([{ idx: 0, kind: 'FINAL', lanes: [{ lane: 1, side: 's:1' }, { lane: 2, side: 's:2' }, { lane: 3, side: 's:3' }] }]);
+  });
+  it('13 runners on 6 lanes → three balanced heats of 5, 4, 4', () => {
+    const heats = planHeats(Array.from({ length: 13 }, (_, i) => `s:${i}`), 6);
+    expect(heats.map((h) => h.lanes.length)).toEqual([5, 4, 4]);
+    expect(heats.every((h) => h.kind === 'HEAT')).toBe(true);
+    expect(new Set(heats.flatMap((h) => h.lanes.map((l) => l.side))).size).toBe(13);
+  });
+  it('the final takes the best marks across heats and brings a tie at the cut along', () => {
+    const marks = [
+      { side: 'a', mark: 12.1 }, { side: 'b', mark: 12.5 }, { side: 'c', mark: 12.3 }, { side: 'd', mark: 12.5 }, { side: 'e', mark: null }, { side: 'f', mark: 13.0 },
+    ];
+    expect(finalists(marks, 3, true)).toEqual(['a', 'c', 'b', 'd']);
+    expect(finalists(marks, 2, true)).toEqual(['a', 'c']);
+    expect(finalists([], 6, true)).toEqual([]);
+  });
+});
+
+describe('day board time', () => {
+  const w = { dayStartMin: 540, dayEndMin: 960, days: 2 };
+  it('prints hh:mm from an absolute minute and rolls a slot that would overrun the day', () => {
+    expect(hhmm(540)).toBe('09:00');
+    expect(hhmm(1440 + 615)).toBe('10:15');
+    expect(fitInDay(0, 25, w)).toBe(540);
+    expect(fitInDay(940, 25, w)).toBe(1440 + 540);
+    expect(fitInDay(935, 25, w)).toBe(935);
+  });
+  it('places rounds on the earliest free venue, and a round never starts before the previous one ends', () => {
+    const cursor = new Map<string, number>();
+    const slots = planRounds([4, 2, 1], ['c1', 'c2'], 25, cursor, w);
+    expect(slots[0].map((s) => [s.venueId, hhmm(s.atMin)])).toEqual([['c1', '09:00'], ['c2', '09:00'], ['c1', '09:25'], ['c2', '09:25']]);
+    expect(slots[1].every((s) => s.atMin >= 590)).toBe(true);
+    expect(slots[2][0].atMin).toBeGreaterThanOrEqual(615);
+    expect(cursor.get('c1')).toBeGreaterThan(600);
+  });
+  it('with a diary, a child is never booked twice at once and gets a rest gap between their own slots', () => {
+    const cursor = new Map<string, number>();
+    const diary = newDiary(15);
+    planRounds([[['aarav', 'chirag', 'hiten']]], ['track'], 5, cursor, w, diary);
+    const semis = planRounds([[['aarav', 'rohan'], ['hiten', 'kabir']]], ['c1', 'c2'], 25, cursor, w, diary);
+    expect(semis[0][0]).toEqual({ venueId: 'c1', atMin: 560 }); // heat ends 545, plus the 15-minute rest
+    expect(semis[0][1]).toEqual({ venueId: 'c2', atMin: 560 });
+    expect(diary.free.get('aarav')).toBe(585);
+    const noDiary = planRounds([2], ['c3'], 25, new Map(), w);
+    expect(noDiary[0].map((s) => s.atMin)).toEqual([540, 565]);
+  });
+
+  it('a shared cursor lets a second event queue behind the first on the same courts', () => {
+    const cursor = new Map<string, number>();
+    planRounds([2], ['c1'], 60, cursor, w);
+    const next = planRounds([1], ['c1'], 60, cursor, w);
+    expect(hhmm(next[0][0].atMin)).toBe('11:00');
+    expect(() => planRounds([1], [], 10, cursor, w)).toThrow('NEED_VENUE');
+  });
+  it('rain delay slides slots and rolls past the end of the day', () => {
+    const moved = shiftSlots([{ venueId: 'c1', atMin: 900 }, { venueId: 'c1', atMin: 600 }], 60, 30, w);
+    expect(moved.map((s) => hhmm(s.atMin))).toEqual(['09:00', '11:00']);
+    expect(moved[0].atMin).toBe(1440 + 540);
+  });
+});
+
+describe('clashes', () => {
+  it('finds a person booked twice at once and a venue holding two matches, ignoring unscheduled bookings', () => {
+    const clashes = findClashes([
+      { id: 'm1', people: ['u1', 'u2'], venueId: 'c1', atMin: 600, slotMin: 25 },
+      { id: 'm2', people: ['u2', 'u3'], venueId: 'c2', atMin: 610, slotMin: 25 },
+      { id: 'm3', people: ['u9'], venueId: 'c1', atMin: 620, slotMin: 25 },
+      { id: 'm4', people: ['u1'], venueId: 'c1', atMin: 625, slotMin: 25 },
+      { id: 'm5', people: ['u1'], venueId: null, atMin: null, slotMin: 25 },
+    ]);
+    expect(clashes).toEqual(expect.arrayContaining([
+      { kind: 'PERSON', who: 'u2', first: 'm1', second: 'm2' },
+      { kind: 'VENUE', who: 'c1', first: 'm1', second: 'm3' },
+      { kind: 'VENUE', who: 'c1', first: 'm3', second: 'm4' },
+    ]));
+    expect(clashes.find((c) => c.first === 'm5' || c.second === 'm5')).toBeUndefined();
+    expect(clashes.find((c) => c.kind === 'PERSON' && c.who === 'u1')).toBeUndefined(); // m1 ends at 625 exactly when m4 starts
+  });
+});
+
+describe('class numbers and band validation', () => {
+  it('reads the class number out of the names schools actually use', () => {
+    expect(['9', '9th', 'Class 9', 'Grade IX', 'STD-10', 'Std. 12', 'Class XI', '1st', 'Class 10 (Science)'].map((name) => stdOfGrade({ name }))).toEqual([9, 9, 9, 9, 10, 12, 11, 1, 10]);
+    expect(['Nursery', 'LKG', 'UKG', 'Pre-primary'].map((name) => stdOfGrade({ name, order: 1 }))).toEqual([null, null, null, null]);
+    expect(stdOfGrade({ name: 'Seniors', order: 11 })).toBe(11);
+    expect(stdOfGrade({ name: 'Seniors', order: 0 })).toBeNull();
+    expect(stdOfGrade({ name: 'Class 13' })).toBeNull();
+  });
+  it('bands: one to six, unique ids, a label, classes 1–12 and no class twice', () => {
+    expect(validateBands([{ id: 'a', label: 'A', stds: [1, 2] }, { id: 'b', label: 'B', stds: [3] }])).toBeNull();
+    expect(validateBands([])).toMatch(/between one and six/);
+    expect(validateBands([{ id: 'a', label: 'A', stds: [1] }, { id: 'a', label: 'B', stds: [2] }])).toMatch(/unique short id/);
+    expect(validateBands([{ id: 'a', label: '', stds: [1] }])).toMatch(/needs a name/);
+    expect(validateBands([{ id: 'a', label: 'A', stds: [] }])).toMatch(/at least one class/);
+    expect(validateBands([{ id: 'a', label: 'A', stds: [13] }])).toMatch(/outside 1–12/);
+    expect(validateBands([{ id: 'a', label: 'A', stds: [1, 1] }])).toMatch(/in two bands/);
+    expect(validateBands('nope')).not.toBeNull();
+  });
+  it('cursorFrom starts every venue at the day start and moves past what is booked', () => {
+    const w = { dayStartMin: 540, dayEndMin: 960, days: 1 };
+    const c = cursorFrom([{ venueId: 'c1', atMin: 600, slotMin: 25 }, { venueId: 'c1', atMin: 560, slotMin: 25 }, { venueId: 'zz', atMin: 900, slotMin: 25 }, { venueId: null, atMin: null, slotMin: 25 }], ['c1', 'c2'], w);
+    expect([...c.entries()]).toEqual([['c1', 625], ['c2', 540]]);
+  });
+});
+
+describe('points and grouping', () => {
+  it('placing points fall off the table to zero', () => {
+    const t = [10, 7, 5, 3, 2, 1];
+    expect([1, 2, 6, 7, null].map((r) => placingPoints(r, t))).toEqual([10, 7, 1, 0, 0]);
+  });
+  it('bands by class; age groups by the School Games rule (born on or after 1 Jan of meetYear − N + 1)', () => {
+    const bands = [{ id: 'jun', label: 'Junior', stds: [7, 8] }, { id: 'sen', label: 'Senior', stds: [9, 10] }];
+    expect(bandFor(bands, 8)?.id).toBe('jun');
+    expect(bandFor(bands, 12)).toBeNull();
+    expect(ageGroupFor(new Date('2012-01-01'), 2025)?.id).toBe('u14');
+    expect(ageGroupFor(new Date('2011-12-31'), 2025)?.id).toBe('u17');
+    expect(ageGroupFor(new Date('2009-01-01'), 2025)?.id).toBe('u17');
+    expect(ageGroupFor(new Date('2008-12-31'), 2025)?.id).toBe('u19');
+    expect(ageGroupFor(new Date('2006-12-31'), 2025)).toBeNull();
+  });
+});
+
+describe('stages — how a thousand entries reach a final', () => {
+  const base = { entries: 240, classes: 4, lanes: 6, shape: 'CLASS_QUAL' as const, advancePerClass: 2, finalists: 6 };
+  it('a field that fits the lanes is just a final', () => {
+    expect(planStages({ ...base, entries: 5 })).toEqual([{ kind: 'FINAL', label: 'Final', field: 5, slots: 1 }]);
+    expect(planStages({ ...base, entries: 0 })).toEqual([]);
+  });
+  it('class qualifying: heats inside each class, the best of each class, then one band final', () => {
+    // 2 from each of 4 classes is 8 — more than the 6 lanes, so the band runs semis first.
+    // The funnel SHOWS that, which is how the office learns to advance one per class instead.
+    expect(planStages(base).map((s) => [s.label, s.field, s.slots])).toEqual([['Class heats', 240, 40], ['Band semi-finals', 8, 2], ['Final', 6, 1]]);
+    expect(planStages({ ...base, advancePerClass: 1 }).map((s) => [s.label, s.field, s.slots])).toEqual([['Class heats', 240, 40], ['Band final', 4, 1]]);
+    // more per class than a heat holds → the band needs semis first
+    expect(planStages({ ...base, advancePerClass: 3, classes: 5, entries: 300 }).map((s) => [s.label, s.field, s.slots]))
+      .toEqual([['Class heats', 300, 50], ['Band semi-finals', 15, 3], ['Final', 6, 1]]);
+    expect(advanceCount(base, 'HEAT')).toBe(8);
+    expect(advanceCount({ ...base, advancePerClass: 1 }, 'HEAT')).toBe(4);
+  });
+  it('open qualifying: heats, semis when the shortlist is bigger than a heat, then the final', () => {
+    expect(planStages({ ...base, shape: 'OPEN_QUAL' }).map((s) => [s.label, s.field, s.slots])).toEqual([['Qualifying heats', 240, 40], ['Semi-finals', 18, 3], ['Final', 6, 1]]);
+    expect(planStages({ ...base, shape: 'OPEN_QUAL', finalists: 2 }).map((s) => s.label)).toEqual(['Qualifying heats', 'Final']);
+  });
+  it('straight is today’s behaviour: heats, then the fastest lane-full', () => {
+    expect(planStages({ ...base, shape: 'STRAIGHT' }).map((s) => [s.label, s.field, s.slots])).toEqual([['Heats', 240, 40], ['Final', 6, 1]]);
+    expect(planStages({ ...base, shape: 'CLASS_QUAL', classes: 1 }).map((s) => s.label)).toEqual(['Heats', 'Final']);
+  });
+  it('class heats keep each class together and are labelled by it', () => {
+    const entries = [{ side: 's:a', std: 9 }, { side: 's:b', std: 9 }, { side: 's:c', std: 10 }, { side: 's:d', std: 10 }, { side: 's:e', std: 10 }];
+    expect(planClassHeats(entries, 2).map((h) => [h.idx, h.groupLabel, h.lanes.map((l) => l.side)])).toEqual([
+      [0, 'Class 9', ['s:a', 's:b']],
+      [1, 'Class 10', ['s:c', 's:d']],
+      [2, 'Class 10', ['s:e']],
+    ]);
+  });
+  it('advancement takes the best of each group, with ties at the cut', () => {
+    const marks = [
+      { side: 's:a', mark: 12.1, groupLabel: 'Class 9' }, { side: 's:b', mark: 12.4, groupLabel: 'Class 9' }, { side: 's:c', mark: 12.9, groupLabel: 'Class 9' },
+      { side: 's:d', mark: 12.2, groupLabel: 'Class 10' }, { side: 's:e', mark: 12.2, groupLabel: 'Class 10' }, { side: 's:f', mark: null, groupLabel: 'Class 10' },
+    ];
+    expect(advanceFrom(marks, 2, true)).toEqual(['s:a', 's:b', 's:d', 's:e']);
+    expect(advanceFrom(marks.map((m) => ({ ...m, groupLabel: null })), 3, true)).toEqual(['s:a', 's:d', 's:e']); // a tie at the cut comes along
+  });
+  it('capacity says how many days a plan needs and whether it fits', () => {
+    const c = capacityOf({ stages: [{ slots: 40, slotMin: 5, venues: 1 }, { slots: 1, slotMin: 5, venues: 1 }], dayStartMin: 540, dayEndMin: 960, days: 1 });
+    expect(c).toMatchObject({ neededMin: 205, dayMin: 420, daysNeeded: 1, fits: true });
+    const big = capacityOf({ stages: [{ slots: 200, slotMin: 5, venues: 1 }], dayStartMin: 540, dayEndMin: 960, days: 1 });
+    expect(big).toMatchObject({ daysNeeded: 3, fits: false });
+    expect(capacityOf({ stages: [{ slots: 200, slotMin: 5, venues: 2 }], dayStartMin: 540, dayEndMin: 960, days: 2 }).fits).toBe(true);
+  });
+  it('a day pin gives the first minute of that day', () => {
+    expect(dayFloor(0, { dayStartMin: 540, dayEndMin: 960, days: 3 })).toBe(540);
+    expect(dayFloor(2, { dayStartMin: 540, dayEndMin: 960, days: 3 })).toBe(2 * 1440 + 540);
+  });
+  it('planRounds honours a floor, so a pinned event never starts earlier', () => {
+    const cursor = new Map<string, number>();
+    const slots = planRounds([2], ['v1'], 30, cursor, { dayStartMin: 540, dayEndMin: 960, days: 3 }, undefined, 1440 + 540);
+    expect(slots[0].map((s) => s.atMin)).toEqual([1980, 2010]);
+  });
+});
+
+describe('whyNot — the one rule that decides if a slot may move', () => {
+  const W = { dayStartMin: 540, dayEndMin: 960 };
+  const p = (over: Partial<Placement> = {}): Placement => ({
+    id: 'x', people: ['a'], venueId: 'v1', atMin: 600, slotMin: 25, eventId: 'e1', roundIdx: 1, played: false, ...over,
+  });
+
+  it('lets a clear slot through', () => {
+    expect(whyNot(p(), [p({ id: 'o', atMin: 700, people: ['b'] })], W)).toBeNull();
+  });
+
+  it('never moves a played slot, whatever else is true', () => {
+    expect(whyNot(p({ played: true }), [], W)).toEqual({ kind: 'PLAYED' });
+  });
+
+  it('keeps the slot inside the day, both ends', () => {
+    expect(whyNot(p({ atMin: 520 }), [], W)).toEqual({ kind: 'DAY_START', min: 540 });
+    expect(whyNot(p({ atMin: 950 }), [], W)).toEqual({ kind: 'DAY_END', min: 960 });
+    expect(whyNot(p({ atMin: 935 }), [], W)).toBeNull(); // finishes exactly on the bell
+    // a later day is judged by its own hours, not by the minutes since day one
+    expect(whyNot(p({ atMin: 1440 + 600 }), [], W)).toBeNull();
+  });
+
+  it('refuses a double-booked venue and names the slot already there', () => {
+    expect(whyNot(p(), [p({ id: 'o', atMin: 610, people: ['b'] })], W)).toEqual({ kind: 'VENUE', otherId: 'o' });
+    expect(whyNot(p(), [p({ id: 'o', atMin: 625, people: ['b'] })], W)).toBeNull(); // starts as the other ends
+  });
+
+  it('refuses a child in two places and names the child', () => {
+    expect(whyNot(p({ people: ['a', 'b'] }), [p({ id: 'o', venueId: 'v2', atMin: 610, people: ['c', 'b'] })], W))
+      .toEqual({ kind: 'PERSON', who: 'b', otherId: 'o' });
+  });
+
+  it('keeps the rounds of an event in order, even when nothing overlaps', () => {
+    const final = p({ roundIdx: 2, atMin: 600 });
+    const heat = p({ id: 'h', roundIdx: 1, venueId: 'v2', people: ['z'], atMin: 590, slotMin: 30 });
+    expect(whyNot(final, [heat], W)).toEqual({ kind: 'ORDER', otherId: 'h' });
+    expect(whyNot(p({ roundIdx: 2, atMin: 620 }), [heat], W)).toBeNull();
+    // a different event's rounds are its own business
+    expect(whyNot(final, [{ ...heat, eventId: 'e2' }], W)).toBeNull();
+  });
+
+  it('ignores what is not on the timetable yet, and itself', () => {
+    expect(whyNot(p(), [p({ id: 'o', atMin: null, people: ['a'] })], W)).toBeNull();
+    expect(whyNot(p(), [p()], W)).toBeNull();
+  });
+
+  it('says each refusal in words, once, for both the API and the board', () => {
+    const n = { venue: () => 'Court 1', person: () => 'Saanvi Krishnamurthy', slot: () => 'Badminton Final', at: () => '09:25' };
+    expect(sayProblem({ kind: 'PLAYED' }, n)).toBe('That slot has a result in, so it stays where it happened.');
+    expect(sayProblem({ kind: 'VENUE', otherId: 'o' }, n)).toBe('Court 1 already has Badminton Final at 09:25.');
+    expect(sayProblem({ kind: 'PERSON', who: 'a', otherId: 'o' }, n)).toBe('Saanvi Krishnamurthy is in Badminton Final at the same time.');
+    expect(sayProblem({ kind: 'ORDER', otherId: 'o' }, n)).toBe('Badminton Final has to finish first — it feeds this round.');
+    expect(sayProblem({ kind: 'DAY_END', min: 960 }, n)).toBe('That would run past 16:00, when the day ends.');
+  });
+});
+
+describe('a break on the venue between slots', () => {
+  const W = { dayStartMin: 540, dayEndMin: 960, days: 1 };
+
+  it('leaves the court empty for the break before the next slot starts', () => {
+    const back = planRounds([3], ['v1'], 20, cursorFrom([], ['v1'], W), W);
+    expect(back[0].map((s) => s.atMin)).toEqual([540, 560, 580]);
+    const gapped = planRounds([3], ['v1'], 20, cursorFrom([], ['v1'], { ...W, gapMin: 10 }), { ...W, gapMin: 10 });
+    expect(gapped[0].map((s) => s.atMin)).toEqual([540, 570, 600]);
+  });
+
+  it('counts the break against the day, so the plan does not look emptier than it is', () => {
+    const stages = [{ slots: 12, slotMin: 25, venues: 1 }];
+    expect(capacityOf({ stages, dayStartMin: 540, dayEndMin: 960, days: 1 })).toMatchObject({ neededMin: 300, daysNeeded: 1 });
+    expect(capacityOf({ stages, dayStartMin: 540, dayEndMin: 960, days: 1, gapMin: 15 })).toMatchObject({ neededMin: 480, daysNeeded: 2 });
+  });
+
+  it('starts a fresh venue after a played slot plus its break', () => {
+    const c = cursorFrom([{ venueId: 'v1', atMin: 540, slotMin: 25 }], ['v1'], { ...W, gapMin: 10 });
+    expect(c.get('v1')).toBe(575);
+  });
+});

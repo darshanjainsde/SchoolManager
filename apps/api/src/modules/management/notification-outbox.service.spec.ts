@@ -111,7 +111,7 @@ describe('NotificationOutboxService', () => {
 
     expect(result).toEqual({ processed: 1, sent: 1, failed: 0, purged: 0 });
     expect(dbMock.student.findMany).toHaveBeenCalledWith({
-      where: { schoolId: SCHOOL, classSectionId: CLASS_SECTION, userId: { not: null } },
+      where: { schoolId: SCHOOL, status: 'ACTIVE', classSectionId: CLASS_SECTION, userId: { not: null } },
       select: { userId: true },
     });
     expect(push.send).toHaveBeenCalledWith(
@@ -261,6 +261,24 @@ describe('NotificationOutboxService', () => {
      * "simplifies" this to an OR on `sentAt: null`, or drops the `sentAt`
      * clause and filters on `createdAt` instead, this fails.
      */
+    /**
+     * The sweep filters on `sentAt`, which is not the leading column of the
+     * only index here, so it scans. Once a night that is nothing; on the
+     * opportunistic path it rode along with every message sent. These assert
+     * the sweep stays on the cron.
+     */
+    it('the opportunistic delivery path does not sweep', async () => {
+      const r = await svc.drain({ purge: false });
+      expect(dbMock.notificationOutbox.deleteMany).not.toHaveBeenCalled();
+      expect(r.purged).toBe(0);
+    });
+
+    it('drainSoon never sweeps — it runs on the hot path of an ordinary request', async () => {
+      svc.drainSoon();
+      await new Promise((r) => setTimeout(r, 0));
+      expect(dbMock.notificationOutbox.deleteMany).not.toHaveBeenCalled();
+    });
+
     it('only ever deletes rows that were actually delivered', async () => {
       await svc.drain();
 

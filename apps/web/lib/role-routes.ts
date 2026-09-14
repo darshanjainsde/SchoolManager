@@ -20,9 +20,12 @@ export function homeForRole(role: string | undefined, staffRole?: string | null)
       return '/teacher';
     case 'STAFF':
       // Which KIND of staff decides the door: the librarian's home is the
-      // library; every other staff kind lands on /staff. `staffRole` comes
-      // from `GET /auth/me` (never from a client-chosen tab).
-      return staffRole === 'LIBRARIAN' ? '/library' : '/staff';
+      // library, the sports teacher's is the sports desk; every other staff
+      // kind lands on /staff. `staffRole` comes from `GET /auth/me` (never
+      // from a client-chosen tab).
+      if (staffRole === 'LIBRARIAN') return '/library';
+      if (staffRole === 'SPORTS') return '/sports';
+      return '/staff';
     case 'SCHOOL_ADMIN':
       return '/app';
     case 'ALUMNUS':

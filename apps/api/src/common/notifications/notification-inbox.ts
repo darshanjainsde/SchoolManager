@@ -1,4 +1,5 @@
 import type { TenantTx } from '@skoolos/db';
+import { activeStudentsWhere } from '../roster/active-students';
 import { assertNotificationKind, type NotificationKind } from '@skoolos/types';
 
 /**
@@ -52,7 +53,7 @@ export async function sectionStudentUserIds(
   classSectionId: string,
 ): Promise<string[]> {
   const students = await tx.student.findMany({
-    where: { schoolId, classSectionId, userId: { not: null } },
+    where: activeStudentsWhere(schoolId, { classSectionId, userId: { not: null } }),
     select: { userId: true },
   });
   return students.map((s) => s.userId).filter((id): id is string => Boolean(id));

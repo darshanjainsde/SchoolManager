@@ -41,6 +41,15 @@ on:
         required: false
         type: boolean
         default: false
+      seed_sports:
+        description: >-
+          STAGING ONLY — a school slug (e.g. raffles) to seed the Sports wing
+          on, with that school's existing students: classes tidied, houses,
+          the Book of Records, a finished and a live meet, the website switch.
+          Idempotent; refused against production.
+        required: false
+        type: string
+        default: ''
       resolve_applied:
         description: >-
           RECOVERY ONLY — a migration name to record as already applied,
@@ -161,6 +170,15 @@ jobs:
           # the intended target.
           printf 'DATABASE_URL="%s"\nDIRECT_URL="%s"\n' "$DATABASE_URL" "$DIRECT_URL" > .env
           pnpm --filter @skoolos/db exec tsx prisma/seed.ts
+
+      - name: Seed the Sports wing on ${{ github.event.inputs.seed_sports }} (staging only)
+        if: ${{ github.event.inputs.seed_sports != '' && github.event.inputs.environment == 'staging' && github.event.inputs.inspect_only != 'true' }}
+        env:
+          DATABASE_URL: ${{ secrets.DIRECT_URL }}
+          SEED_SCHOOL_SLUG: ${{ github.event.inputs.seed_sports }}
+        run: |
+          pnpm --filter @skoolos/db exec prisma generate
+          pnpm --filter @skoolos/api exec tsx scripts/seed-sports-raffles.ts
 
       - name: Confirm the target is current
         # An inspection only reports — pending migrations are its answer, not a failure.

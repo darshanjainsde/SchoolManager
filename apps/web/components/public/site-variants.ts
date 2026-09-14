@@ -99,8 +99,8 @@ export const HERO_MEDIA_OPTIONS: StyleOption<HeroMedia>[] = [
    sectionVariants (SchoolProfile Json) = { [sectionKey]: { layout?, gesture? } }.
    Layout changes the arrangement of one band; gesture overrides the page-wide
    motionGesture for that one band. DEFAULT everywhere = today's page. */
-export type SectionKey = 'stats' | 'about' | 'courses' | 'admissions' | 'gallery' | 'hof' | 'staff' | 'contact';
-export const SECTION_KEYS: SectionKey[] = ['stats', 'about', 'courses', 'admissions', 'gallery', 'hof', 'staff', 'contact'];
+export type SectionKey = 'stats' | 'about' | 'courses' | 'admissions' | 'gallery' | 'hof' | 'records' | 'staff' | 'contact';
+export const SECTION_KEYS: SectionKey[] = ['stats', 'about', 'courses', 'admissions', 'gallery', 'hof', 'records', 'staff', 'contact'];
 
 export interface SectionVariantChoice {
   layout?: string;
@@ -182,6 +182,16 @@ export const SECTION_VARIANT_DEFS: Record<
       { value: 'SCOREBOARD', label: 'Scoreboard', hint: 'Leaderboard rows with a score bar — for results with numbers.' },
     ],
   },
+  records: {
+    label: 'Book of Records',
+    hint: 'The sports records band — every layout reads the same holders from the desk.',
+    layouts: [
+      { value: 'TILES', label: 'Podium tiles', hint: 'Tiles in the site’s card shape: the number, the holder, a “since” chip.' },
+      { value: 'BOARD', label: 'Stadium board', hint: 'A dark band with the marks in big accent numerals.' },
+      { value: 'CABINET', label: 'Trophy cabinet', hint: 'Brass plaques on a wooden shelf behind glass.' },
+      { value: 'STRIP', label: 'Honours strip', hint: 'A single line under the menu that reads the records out.' },
+    ],
+  },
   staff: {
     label: 'Educators',
     hint: 'The featured-staff band.',
@@ -210,6 +220,7 @@ const SECTION_DEFAULT_LAYOUT: Record<SectionKey, string> = {
   admissions: 'JOURNEY',
   gallery: 'GRID',
   hof: 'PODIUM',
+  records: 'TILES',
   staff: 'GRID',
   contact: 'SPLIT',
 };
@@ -325,6 +336,7 @@ export const ORDERABLE_HOME_SECTIONS: { key: string; label: string }[] = [
   { key: 'admissions', label: 'Admissions steps' },
   { key: 'gallery', label: 'Gallery' },
   { key: 'hof', label: 'Hall of fame' },
+  { key: 'records', label: 'Book of Records' },
   { key: 'events', label: 'News & events' },
   { key: 'staff', label: 'Educators' },
   { key: 'contact', label: 'Contact & enquiry' },

@@ -3,9 +3,10 @@ import { withTenant, type FeatureKey } from '@skoolos/db';
 import { TenantContextService } from '../tenancy';
 import { FeatureResolverService } from '../features';
 import { PublicEventsService } from '../community';
-import { mergeSectionVariantContent, pickDesignConfig, photoAssetIdsOf, projectHallOfFame, readHallOfFame } from '../cms';
+import { mergeSectionVariantContent, normalizeCelebrationsConfig, pickDesignConfig, photoAssetIdsOf, projectHallOfFame, readHallOfFame } from '../cms';
 import type { PublicSiteData } from './public.dto';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
+import { normalizeRecordsConfig } from '../cms';
 
 @Injectable()
 export class PublicSiteService {
@@ -40,7 +41,13 @@ export class PublicSiteService {
           tx.statItem.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId }, orderBy: { order: 'asc' } }),
           tx.socialLink.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId }, orderBy: { order: 'asc' } }),
           tx.mediaAsset.findMany({ take: LIST_CEILING.ACTIVITY, where: { schoolId, kind: 'GALLERY' }, orderBy: { order: 'asc' } }),
-          tx.featuredStaff.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId }, orderBy: { order: 'asc' } }),
+          // A teacher who has left never keeps a card on the Educators band, even
+          // though FeaturedStaff keeps their name and photo (Active Roster).
+          tx.featuredStaff.findMany({
+            take: LIST_CEILING.STRUCTURE,
+            where: { schoolId, OR: [{ teacherId: null }, { teacher: { status: 'ACTIVE' } }] },
+            orderBy: { order: 'asc' },
+          }),
           tx.course.findMany({ take: LIST_CEILING.STRUCTURE,
             where: { schoolId },
             orderBy: { order: 'asc' },
@@ -188,8 +195,32 @@ export class PublicSiteService {
               showGallery: homepage.showGallery,
               showEvents: homepage.showEvents,
               showContact: homepage.showContact,
+              showBirthdays: homepage.showBirthdays,
             }
           : null,
+        celebrations: (() => {
+          const c = normalizeCelebrationsConfig(rawProfile?.celebrationsConfig);
+          const enabled = !!homepage?.showBirthdays && (c.audience === 'PUBLIC' || c.audience === 'BOTH');
+          // Nothing about a wall that is not public leaves the school.
+          if (!enabled) return null;
+          return {
+            enabled,
+            placement: c.placement,
+            audience: c.audience,
+            teaser: c.teaser,
+            page: c.page,
+            nameFormat: c.nameFormat,
+            showClass: c.showClass,
+            wishLine: c.wishLine,
+            window: c.window,
+          };
+        })(),
+        records: (() => {
+          const r = normalizeRecordsConfig(rawProfile?.recordsConfig);
+          // The site only needs to know the page exists and how it is laid out; the book itself is /public/records.
+          if (!(r.enabled && r.consentConfirmed && has('SPORTS'))) return null;
+          return { enabled: true as const, pageLayout: r.pageLayout, showTopFive: r.showTopFive };
+        })(),
         stats: stats.map((s) => ({ label: s.label, value: s.value })),
         socialLinks: has('SOCIAL') ? socials.map((s) => ({ platform: s.platform, url: s.url })) : [],
         gallery: has('GALLERY') ? galleryAssets.map((g) => ({ url: g.url, caption: g.caption })) : [],

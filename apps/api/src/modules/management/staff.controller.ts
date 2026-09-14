@@ -16,7 +16,9 @@ import { Roles } from '../../common/auth/roles.decorator';
 import { RequireFeature, RequireFeatureGuard } from '../features';
 import { TenantContextService } from '../tenancy';
 import { StaffService } from './staff.service';
-import { CreateLoginDto, CreateStaffDto, UpdateStaffDto } from './management.dto';
+import { CreateLoginDto, CreateStaffDto, ReleaseStaffDto, UpdateStaffDto } from './management.dto';
+import { CurrentUser } from '../../common/auth/current-user.decorator';
+import type { SchoolJwtPayload } from '../../common/auth/jwt-payload';
 
 /**
  * The school's staff records. SCHOOL_ADMIN only, every route.
@@ -73,6 +75,21 @@ export class StaffController {
   @HttpCode(204)
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.staff.remove(this.sid(), id);
+  }
+
+  /** "Remove from this school": mark LEFT, close the login; never a hard delete. */
+  @Post(':id/release')
+  release(
+    @CurrentUser() u: SchoolJwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReleaseStaffDto,
+  ) {
+    return this.staff.release(this.sid(), u.sub, id, dto);
+  }
+
+  @Post(':id/reactivate')
+  reactivate(@CurrentUser() u: SchoolJwtPayload, @Param('id', ParseUUIDPipe) id: string) {
+    return this.staff.reactivate(this.sid(), u.sub, id);
   }
 
   /**

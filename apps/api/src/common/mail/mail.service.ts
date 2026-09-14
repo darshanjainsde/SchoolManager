@@ -171,6 +171,49 @@ export class MailService {
     });
   }
 
+  /**
+   * The alumni door (Active Roster, Track C): sent once to every child who
+   * passed out, when the school has the Homecoming wing. The claim link IS the
+   * credential — single use, then a 90-day device session — so there is no
+   * password in this mail and nothing to remember.
+   */
+  async sendAlumniWelcome(to: string, schoolName: string, claimUrl: string, schoolId: string | null = null): Promise<boolean> {
+    return this.sendLetter(to, schoolId, `Your journey at ${schoolName} is complete`, {
+      title: 'Congratulations on passing out',
+      intro: `Your time at ${schoolName} is complete, and the school would like to stay in touch. This link is your alumni sign-in: it opens your alumni page and keeps you signed in on that device for 90 days.`,
+      cta: { label: 'Open your alumni door', url: claimUrl },
+      note: 'The link works once. If it has been used or has expired, ask the school office for a new one — there is no password to remember.',
+    });
+  }
+
+  /** Passed out without the Homecoming wing: the plain letter, no door to open. */
+  async sendPassedOut(to: string, schoolName: string, childName: string, sessionName: string, schoolId: string | null = null): Promise<boolean> {
+    return this.sendLetter(to, schoolId, `${childName} has passed out of ${schoolName}`, {
+      title: 'Congratulations on passing out',
+      intro: `${childName}'s journey at ${schoolName} is complete with the ${sessionName} session. The school keeps the record; the office can issue the transfer certificate and mark sheets whenever they are needed.`,
+      note: 'The student login has been closed. For certificates, write to the school office.',
+    });
+  }
+
+  /** Left or transferred at the year end: the record is kept, the login is closed. */
+  async sendLeft(to: string, schoolName: string, childName: string, status: 'TRANSFERRED' | 'LEFT', sessionName: string, schoolId: string | null = null): Promise<boolean> {
+    const what = status === 'TRANSFERRED' ? 'transferred from' : 'left';
+    return this.sendLetter(to, schoolId, `${childName} has ${what} ${schoolName}`, {
+      title: status === 'TRANSFERRED' ? 'Transfer recorded' : 'Leaving recorded',
+      intro: `${schoolName} has recorded that ${childName} ${what} the school at the end of the ${sessionName} session.`,
+      note: 'The student login has been closed. The office can issue the transfer certificate on request.',
+    });
+  }
+
+  /** New session started: which class the child is in now. One per family with an address. */
+  async sendSessionStarted(to: string, schoolName: string, childName: string, className: string, sessionName: string, schoolId: string | null = null): Promise<boolean> {
+    return this.sendLetter(to, schoolId, `${childName} is in ${className} for ${sessionName}`, {
+      title: `New session ${sessionName}`,
+      intro: `${schoolName} has started the ${sessionName} session. ${childName} is now in ${className}.`,
+      note: 'Open the Sckools app to see the new class, timetable and diary.',
+    });
+  }
+
   // ── School notifications ────────────────────────────────
 
   async sendTestScheduled(to: string, info: TestScheduledInfo, schoolId: string | null = null): Promise<boolean> {

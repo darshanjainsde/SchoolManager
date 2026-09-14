@@ -7,6 +7,7 @@ import {
   IsIn,
   IsInt,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   IsUrl,
@@ -15,6 +16,7 @@ import {
   Matches,
   Max,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -193,9 +195,7 @@ export class CreateTeacherDto {
   @IsString()
   bio?: string;
 
-  @IsOptional()
-  @IsBoolean()
-  isActive?: boolean;
+  // `isActive` mirrors `status` and is written only by release / reactivate.
 }
 
 export class UpdateTeacherDto {
@@ -229,21 +229,19 @@ export class UpdateTeacherDto {
   @IsString()
   bio?: string;
 
-  @IsOptional()
-  @IsBoolean()
-  isActive?: boolean;
+  // `isActive` mirrors `status` and is written only by release / reactivate.
 }
 
 // ── Staff (non-teaching) ────────────────────────────────────────────────────
 
 /**
- * Mirrors the `StaffRole` enum in schema.prisma. LIBRARIAN is the one value
- * that also decides a DOOR: a staff member with that job signs in as ordinary
+ * Mirrors the `StaffRole` enum in schema.prisma. LIBRARIAN and SPORTS are the
+ * two values that also decide a DOOR (/library, /sports): a staff member with that job signs in as ordinary
  * STAFF and lands on /library (homeForRole reads `staffRole` from /auth/me).
  * The login role stays STAFF — the job title, not the account type, is what
  * makes a librarian.
  */
-const STAFF_ROLES = ['OFFICE', 'SUPPORT', 'DRIVER', 'HELPER', 'SECURITY', 'LIBRARIAN', 'OTHER'] as const;
+const STAFF_ROLES = ['OFFICE', 'SUPPORT', 'DRIVER', 'HELPER', 'SECURITY', 'LIBRARIAN', 'SPORTS', 'OTHER'] as const;
 export type StaffRoleValue = (typeof STAFF_ROLES)[number];
 
 export class CreateStaffDto {
@@ -266,9 +264,7 @@ export class CreateStaffDto {
   @IsString()
   phone?: string;
 
-  @IsOptional()
-  @IsBoolean()
-  isActive?: boolean;
+  // `isActive` mirrors `status` and is written only by release / reactivate.
 }
 
 export class UpdateStaffDto {
@@ -294,9 +290,7 @@ export class UpdateStaffDto {
   @IsString()
   phone?: string;
 
-  @IsOptional()
-  @IsBoolean()
-  isActive?: boolean;
+  // `isActive` mirrors `status` and is written only by release / reactivate.
 }
 
 // ── ClassSection ─────────────────────────────────────────────────────────────
@@ -434,9 +428,12 @@ export class UpdateStudentDto {
   @IsUUID()
   photoAssetId?: string;
 
-  @IsOptional()
-  @IsBoolean()
-  isActive?: boolean;
+  // `isActive` is NOT editable here: it mirrors `status`, and both are written
+  // only by StudentLifecycleService (leave / readmit). Track A, 2026-09.
+
+  // Birthdays (Track B): off the wall with one switch; a photo needs the family's yes.
+  @IsOptional() @IsBoolean() showOnWebsite?: boolean;
+  @IsOptional() @IsBoolean() photoConsent?: boolean;
 
   // ── Admission-register facts (statutory TC, Annexure-I). All optional. ──
   @IsOptional() @IsString() @Length(0, 120) fatherName?: string;
@@ -1109,3 +1106,67 @@ export class PreviewSeatingDto {
 }
 
 export class SaveSeatingDto extends PreviewSeatingDto {}
+
+// ── Person lifecycle (Active Roster, Track A) ────────────────────────────────
+
+export class LeaveStudentDto {
+  @IsIn(['ALUMNI', 'TRANSFERRED', 'LEFT'])
+  status!: 'ALUMNI' | 'TRANSFERRED' | 'LEFT';
+
+  @IsDateString()
+  leftOn!: string;
+
+  @IsOptional() @IsString() @Length(0, 120)
+  reason?: string;
+
+  @IsOptional() @IsString() @Length(0, 2000)
+  note?: string;
+
+  /** ALUMNI only; defaults to the current academic year's name. */
+  @IsOptional() @IsString() @Length(0, 40)
+  alumniBatch?: string;
+}
+
+export class ReadmitStudentDto {
+  @IsOptional() @IsUUID()
+  classSectionId?: string;
+}
+
+export class TeacherHandoverDto {
+  /** Class-teacher seats: sectionId → replacement teacher id, or null to leave the seat empty. */
+  @IsOptional() @IsObject()
+  classSections?: Record<string, string | null>;
+
+  /** Open timetable slots go to this teacher; null/absent ends them (shown as unassigned). */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsUUID()
+  timetableTeacherId?: string | null;
+
+  /** Keep them on the website's Educators section (default: removed). */
+  @IsOptional() @IsBoolean()
+  keepFeatured?: boolean;
+}
+
+export class ReleaseTeacherDto {
+  @IsDateString()
+  leftOn!: string;
+
+  @IsOptional() @IsString() @Length(0, 120)
+  reason?: string;
+
+  @IsOptional() @IsString() @Length(0, 2000)
+  note?: string;
+
+  @IsOptional() @ValidateNested() @Type(() => TeacherHandoverDto)
+  handover?: TeacherHandoverDto;
+}
+
+export class ReleaseStaffDto {
+  @IsDateString()
+  leftOn!: string;
+
+  @IsOptional() @IsString() @Length(0, 120)
+  reason?: string;
+
+  @IsOptional() @IsString() @Length(0, 2000)
+  note?: string;
+}

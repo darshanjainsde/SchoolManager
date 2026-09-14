@@ -1,0 +1,584 @@
+import 'reflect-metadata';
+
+const txMock = {
+  sportsSettings: { findUnique: jest.fn(), create: jest.fn() },
+  sportsTournament: { findMany: jest.fn(), findFirst: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn(), delete: jest.fn() },
+  sportsVenue: { createMany: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn(), count: jest.fn(), delete: jest.fn() },
+  sportsEvent: { groupBy: jest.fn(), create: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
+  sportsEntry: { createMany: jest.fn(), findMany: jest.fn() },
+  sportsMatch: { createMany: jest.fn(), findMany: jest.fn(), updateMany: jest.fn(), update: jest.fn() },
+  sportsHeat: { create: jest.fn(), findMany: jest.fn(), updateMany: jest.fn(), update: jest.fn() },
+  student: { findMany: jest.fn() },
+  school: { findUnique: jest.fn() },
+  notification: { createMany: jest.fn() },
+  notificationOutbox: { createMany: jest.fn() },
+  house: { findMany: jest.fn() },
+};
+jest.mock('@skoolos/db', () => ({
+  ...jest.requireActual('@prisma/client'),
+  withTenant: (_s: string, fn: (tx: unknown) => unknown) => fn(txMock),
+}));
+
+import { SportsSettingsService } from './sports-settings.service';
+import { SportsTournamentsService, dayLabel } from './sports-tournaments.service';
+
+const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+const ACTOR = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+const T = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
+const E = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
+const V1 = 'ffffffff-ffff-ffff-ffff-fffffffffff1';
+const V2 = 'ffffffff-ffff-ffff-ffff-fffffffffff2';
+const uid = (n: number) => `12345678-1234-1234-1234-${String(n).padStart(12, '0')}`;
+const settingsRow = {
+  schoolId: SCHOOL, grouping: 'BANDS', bands: [{ id: 'jun', label: 'Junior', stds: [7, 8] }, { id: 'sen', label: 'Senior', stds: [9, 10, 11, 12] }],
+  pointsPlacing: [10, 7, 5, 3, 2, 1], pointsMatchWin: 5, pointsClassWin: 3, publishNeedsAdmin: false, createdAt: new Date(), updatedAt: new Date(),
+};
+const student = (n: number, std: number, section = 'A', over: Record<string, unknown> = {}) => ({
+  id: uid(n), firstName: `S${n}`, lastName: 'X', dob: new Date('2012-06-01T00:00:00Z'), gender: 'M', houseId: null,
+  classSection: { name: section, grade: { name: `Class ${std}`, order: std } }, ...over,
+});
+const tournamentRow = (over: Record<string, unknown> = {}) => ({
+  id: T, schoolId: SCHOOL, name: 'Annual meet', startsOn: new Date('2026-09-15T00:00:00Z'), endsOn: new Date('2026-09-16T00:00:00Z'), grouping: 'BANDS',
+  dayStartMin: 540, dayEndMin: 960, restMin: 15, status: 'DRAFT', published: false, version: 1, createdById: ACTOR, createdAt: new Date(), updatedAt: new Date(), ...over,
+});
+const svc = () => new SportsTournamentsService(new SportsSettingsService());
+const baseDto = () => ({
+  name: ' Annual meet ', startsOn: '2026-09-15', endsOn: '2026-09-16', venues: [{ name: 'Court 1' }, { name: 'Court 2' }],
+  events: [{ sportKey: 'badminton', groupKey: 'sen', category: 'Boys' as const, structure: 'CLASS' as const, venueIdx: [0, 1], studentIds: [uid(1), uid(2), uid(3), uid(4)] }],
+});
+
+beforeEach(() => {
+  jest.resetAllMocks();
+  txMock.sportsSettings.findUnique.mockResolvedValue(settingsRow);
+  txMock.student.findMany.mockResolvedValue([student(1, 9), student(2, 9, 'B'), student(3, 10), student(4, 10)]);
+  txMock.sportsTournament.create.mockResolvedValue({ id: T });
+  txMock.sportsVenue.createMany.mockResolvedValue({ count: 2 });
+  txMock.sportsVenue.findMany.mockResolvedValue([{ id: V1 }, { id: V2 }]);
+  txMock.sportsEvent.create.mockResolvedValue({ id: E });
+  txMock.sportsEntry.createMany.mockResolvedValue({ count: 4 });
+  txMock.sportsMatch.createMany.mockResolvedValue({ count: 0 });
+  txMock.sportsHeat.create.mockResolvedValue({ id: 'h' });
+  txMock.sportsTournament.update.mockResolvedValue({});
+  txMock.house.findMany.mockResolvedValue([]);
+});
+
+describe('create — what the wizard may not do', () => {
+  it('dates in the wrong order, a mistyped year, duplicate venues, an unknown sport and a venue index off the list are refused before any write', async () => {
+    const s = svc();
+    await expect(s.create(SCHOOL, ACTOR, { ...baseDto(), endsOn: '2026-09-14' })).rejects.toMatchObject({ response: { code: 'VALIDATION', field: 'endsOn' } });
+    await expect(s.create(SCHOOL, ACTOR, { ...baseDto(), endsOn: '2126-09-15' })).rejects.toMatchObject({ response: { field: 'endsOn' } });
+    await expect(s.create(SCHOOL, ACTOR, { ...baseDto(), venues: [{ name: 'Court' }, { name: ' court ' }] })).rejects.toMatchObject({ response: { field: 'venues' } });
+    await expect(s.create(SCHOOL, ACTOR, { ...baseDto(), events: [{ ...baseDto().events[0], sportKey: 'quidditch' }] })).rejects.toMatchObject({ response: { code: 'UNKNOWN_SPORT' } });
+    await expect(s.create(SCHOOL, ACTOR, { ...baseDto(), events: [{ ...baseDto().events[0], venueIdx: [5] }] })).rejects.toMatchObject({ response: { field: 'events.0.venueIdx' } });
+    expect(txMock.sportsTournament.create).not.toHaveBeenCalled();
+  });
+
+  it('students off the roll, a class without a number, a child outside the band, and a one-player draw are refused', async () => {
+    const s = svc();
+    txMock.student.findMany.mockResolvedValueOnce([student(1, 9)]);
+    await expect(s.create(SCHOOL, ACTOR, baseDto())).rejects.toMatchObject({ response: { message: expect.stringMatching(/3 chosen students are not on the active roll/) } });
+    txMock.student.findMany.mockResolvedValueOnce([student(1, 9, 'A', { classSection: { name: 'A', grade: { name: 'Nursery', order: 0 } } }), student(2, 9), student(3, 10), student(4, 10)]);
+    await expect(s.create(SCHOOL, ACTOR, baseDto())).rejects.toMatchObject({ response: { message: expect.stringMatching(/S1 X is in "Nursery"/) } });
+    txMock.student.findMany.mockResolvedValueOnce([student(1, 7), student(2, 9), student(3, 10), student(4, 10)]);
+    await expect(s.create(SCHOOL, ACTOR, baseDto())).rejects.toMatchObject({ response: { message: 'S1 X (class 7) is not in Senior.', field: 'events.0.studentIds' } });
+    txMock.student.findMany.mockResolvedValueOnce([student(1, 9)]);
+    await expect(s.create(SCHOOL, ACTOR, { ...baseDto(), events: [{ ...baseDto().events[0], studentIds: [uid(1)] }] })).rejects.toMatchObject({ response: { code: 'SPORTS_NEED_TWO' } });
+    expect(txMock.sportsTournament.create).not.toHaveBeenCalled();
+  });
+
+  it('age grouping needs a date of birth and checks the School Games rule', async () => {
+    txMock.sportsSettings.findUnique.mockResolvedValue({ ...settingsRow, grouping: 'AGE' });
+    const s = svc();
+    const dto = { ...baseDto(), events: [{ ...baseDto().events[0], groupKey: 'u14' }] };
+    txMock.student.findMany.mockResolvedValueOnce([student(1, 9, 'A', { dob: null }), student(2, 9), student(3, 10), student(4, 10)]);
+    await expect(s.create(SCHOOL, ACTOR, dto)).rejects.toMatchObject({ response: { message: expect.stringMatching(/no date of birth/) } });
+    txMock.student.findMany.mockResolvedValueOnce([student(1, 9, 'A', { dob: new Date('2010-01-01T00:00:00Z') }), student(2, 9), student(3, 10), student(4, 10)]);
+    await expect(s.create(SCHOOL, ACTOR, dto)).rejects.toMatchObject({ response: { message: 'S1 X is not in Under 14 for 2026.' } });
+  });
+});
+
+describe('create — the one transaction', () => {
+  it('writes the tournament, venues, an event with a class draw per class, entries, and scheduled matches', async () => {
+    const r = await svc().create(SCHOOL, ACTOR, baseDto());
+    expect(r).toEqual({ id: T, days: 2, daysNeeded: 1, warnings: [] });
+    expect(txMock.sportsTournament.create.mock.calls[0][0].data).toMatchObject({ schoolId: SCHOOL, name: 'Annual meet', grouping: 'BANDS', dayStartMin: 540, dayEndMin: 960, createdById: ACTOR });
+    expect(txMock.sportsVenue.createMany.mock.calls[0][0].data).toEqual([{ schoolId: SCHOOL, tournamentId: T, name: 'Court 1', order: 0 }, { schoolId: SCHOOL, tournamentId: T, name: 'Court 2', order: 1 }]);
+    expect(txMock.sportsEvent.create.mock.calls[0][0].data).toMatchObject({ sportKey: 'badminton', sportName: 'Badminton', kind: 'MATCH', groupKey: 'sen', category: 'Boys', structure: 'CLASS', slotMin: 25, venueIds: [V1, V2], order: 0 });
+    expect(txMock.sportsEntry.createMany.mock.calls[0][0].data).toEqual([
+      { schoolId: SCHOOL, eventId: E, studentId: uid(1), std: 9, section: 'A' }, { schoolId: SCHOOL, eventId: E, studentId: uid(2), std: 9, section: 'B' },
+      { schoolId: SCHOOL, eventId: E, studentId: uid(3), std: 10, section: 'A' }, { schoolId: SCHOOL, eventId: E, studentId: uid(4), std: 10, section: 'A' },
+    ]);
+    const matches = txMock.sportsMatch.createMany.mock.calls[0][0].data;
+    expect(matches.map((m: { groupLabel: string; roundName: string }) => `${m.groupLabel} ${m.roundName}`)).toEqual(['Class 9 Final', 'Class 10 Final']);
+    expect(matches.every((m: { venueId: string; atMin: number }) => m.venueId && m.atMin === 540)).toBe(true); // two courts, both finals at 09:00
+    expect(txMock.sportsHeat.create).not.toHaveBeenCalled();
+  });
+
+  it('a team sport draws sections; a measured event gets heats with lane marks; a custom sport is accepted', async () => {
+    txMock.student.findMany.mockResolvedValue([student(1, 9), student(2, 9, 'B'), student(3, 9, 'B'), student(4, 10), student(5, 10), student(6, 10), student(7, 10), student(8, 10), student(9, 10), student(10, 10)]);
+    const dto = {
+      ...baseDto(), venues: [{ name: 'Field' }, { name: 'Track' }],
+      events: [
+        { sportKey: 'football', groupKey: 'sen', category: 'Boys' as const, structure: 'DRAW' as const, venueIdx: [0], studentIds: [uid(1), uid(2), uid(3), uid(4)], teamBasis: 'SECTIONS' as const },
+        { sportKey: 'ath-100m', groupKey: 'sen', category: 'Boys' as const, structure: 'CLASS' as const, venueIdx: [1], studentIds: [uid(4), uid(5), uid(6), uid(7), uid(8), uid(9), uid(10)], lanes: 4 },
+        { sportKey: 'custom', customName: 'Tug of war', presetKey: 'points', teamSize: 8, groupKey: 'sen', category: 'Mixed' as const, structure: 'DRAW' as const, venueIdx: [0], studentIds: [uid(1), uid(4)] },
+      ],
+    };
+    await svc().create(SCHOOL, ACTOR, dto);
+    const football = txMock.sportsMatch.createMany.mock.calls[0][0].data;
+    expect(football.map((m: { roundName: string }) => m.roundName)).toEqual(['Semi-final', 'Semi-final', 'Final']);
+    expect(football.filter((m: { bye: boolean }) => m.bye)).toHaveLength(1);
+    expect(new Set(football.flatMap((m: { aSide: string | null; bSide: string | null }) => [m.aSide, m.bSide]).filter(Boolean))).toEqual(new Set(['c:9-A', 'c:9-B', 'c:10-A']));
+    expect(txMock.sportsEvent.create.mock.calls[0][0].data).toMatchObject({ teamBasis: 'SECTIONS' });
+    expect(txMock.sportsEvent.create.mock.calls[1][0].data).toMatchObject({ kind: 'MEASURED', structure: 'HEATS', lanes: 4, slotMin: 5 });
+    expect(txMock.sportsHeat.create).toHaveBeenCalledTimes(2); // 7 runners on 4 lanes → heats of 4 + 3
+    const heat = txMock.sportsHeat.create.mock.calls[0][0].data;
+    expect(heat).toMatchObject({ kind: 'HEAT', idx: 0, venueId: V2 });
+    expect(heat.atMin).toBeGreaterThanOrEqual(540); // uid(4) also plays football first, so the diary may push this heat later
+    expect(heat.marks.createMany.data).toEqual([1, 2, 3, 4].map((lane, i) => ({ schoolId: SCHOOL, studentId: uid(4 + i), lane })));
+    expect(txMock.sportsEvent.create.mock.calls[2][0].data).toMatchObject({ sportKey: 'custom:points:8:tug-of-war', sportName: 'Tug of war', kind: 'MATCH', structure: 'DRAW' });
+  });
+
+  it('a team sport with a single-section class defaults to whole classes as the teams; houses need houses', async () => {
+    txMock.student.findMany.mockResolvedValue([student(1, 9), student(2, 9, 'B'), student(3, 10), student(4, 11)]);
+    const dto = { ...baseDto(), venues: [{ name: 'Field' }], events: [{ sportKey: 'football', groupKey: 'sen', category: 'Boys' as const, structure: 'CLASS' as const, venueIdx: [0], studentIds: [uid(1), uid(2), uid(3), uid(4)] }] };
+    await svc().create(SCHOOL, ACTOR, dto);
+    expect(txMock.sportsEvent.create.mock.calls[0][0].data).toMatchObject({ teamBasis: 'CLASSES', structure: 'DRAW' });
+    const sides = new Set(txMock.sportsMatch.createMany.mock.calls[0][0].data.flatMap((m: { aSide: string | null; bSide: string | null }) => [m.aSide, m.bSide]).filter(Boolean));
+    expect(sides).toEqual(new Set(['k:9', 'k:10', 'k:11']));
+    await expect(svc().create(SCHOOL, ACTOR, { ...dto, events: [{ ...dto.events[0], teamBasis: 'HOUSES' }] })).rejects.toMatchObject({ response: { code: 'SPORTS_NEED_TWO', field: 'events.0.teamBasis' } });
+  });
+
+  it('the diary keeps a child in two events apart: the same students in badminton and table tennis are never on two courts at once', async () => {
+    txMock.student.findMany.mockResolvedValue([student(1, 9), student(2, 9), student(3, 9), student(4, 9)]);
+    const dto = { ...baseDto(), venues: [{ name: 'Court 1' }, { name: 'Table 1' }], events: [
+      { sportKey: 'badminton', groupKey: 'sen', category: 'Boys' as const, structure: 'DRAW' as const, venueIdx: [0], studentIds: [uid(1), uid(2), uid(3), uid(4)] },
+      { sportKey: 'table-tennis', groupKey: 'sen', category: 'Boys' as const, structure: 'DRAW' as const, venueIdx: [1], studentIds: [uid(1), uid(2), uid(3), uid(4)] },
+    ] };
+    await svc().create(SCHOOL, ACTOR, dto);
+    const bad = txMock.sportsMatch.createMany.mock.calls[0][0].data as { aSide: string; bSide: string; atMin: number | null }[];
+    const tt = txMock.sportsMatch.createMany.mock.calls[1][0].data as { aSide: string; bSide: string; atMin: number | null }[];
+    for (const b of bad) for (const t of tt) {
+      if (b.atMin == null || t.atMin == null) continue;
+      const shared = [b.aSide, b.bSide].some((s) => s && [t.aSide, t.bSide].includes(s));
+      if (shared) expect(b.atMin < t.atMin + 20 && t.atMin < b.atMin + 25).toBe(false);
+    }
+  });
+
+  it('warns when the venues cannot hold the plan inside the days given', async () => {
+    txMock.student.findMany.mockResolvedValue([student(1, 9), student(2, 9, 'B'), student(3, 9, 'C'), student(4, 9, 'D')]);
+    const dto = {
+      ...baseDto(), endsOn: '2026-09-15', dayStartMin: 540, dayEndMin: 600, venues: [{ name: 'Field' }],
+      events: [{ sportKey: 'football', groupKey: 'sen', category: 'Boys' as const, structure: 'DRAW' as const, venueIdx: [0], studentIds: [uid(1), uid(2), uid(3), uid(4)] }],
+    };
+    const r = await svc().create(SCHOOL, ACTOR, dto);
+    expect(r.days).toBe(1);
+    expect(r.daysNeeded).toBe(3); // three 60-minute matches, one hour a day on one field
+    expect(r.warnings[0]).toMatch(/needs 3 days/);
+  });
+});
+
+describe('get', () => {
+  it('404 for another school; otherwise one payload with names for every side and the group label', async () => {
+    txMock.sportsTournament.findFirst.mockResolvedValue(null);
+    await expect(svc().get(SCHOOL, T)).rejects.toMatchObject({ response: { code: 'TOURNAMENT_NOT_FOUND' } });
+    txMock.sportsTournament.findFirst.mockResolvedValue(tournamentRow());
+    txMock.sportsVenue.findMany.mockResolvedValue([{ id: V1, name: 'Court 1', order: 0 }]);
+    txMock.sportsEvent.findMany.mockResolvedValue([{ id: E, sportKey: 'football', sportName: 'Football', kind: 'MATCH', groupKey: 'sen', category: 'Boys', structure: 'CLASS', teamBasis: 'SECTIONS', slotMin: 60, lanes: 6, venueIds: [V1], order: 0 }]);
+    txMock.house.findMany.mockResolvedValue([{ id: 'h1', name: 'Red' }]);
+    txMock.sportsEntry.findMany.mockResolvedValue([{ eventId: E, studentId: uid(1), std: 9, section: 'a', student: { firstName: 'Aarav', lastName: 'M', houseId: null } }]);
+    txMock.sportsMatch.findMany.mockResolvedValue([]);
+    txMock.sportsHeat.findMany.mockResolvedValue([]);
+    const d = await svc().get(SCHOOL, T);
+    expect(d).toMatchObject({ id: T, startsOn: '2026-09-15', endsOn: '2026-09-16', status: 'DRAFT', venues: [{ id: V1, name: 'Court 1' }] });
+    expect(d.sideNames).toEqual({ [`s:${uid(1)}`]: 'Aarav M', 'c:9-A': '9 a', 'k:9': 'Class 9', 'h:h1': 'Red' });
+    expect(d.events[0]).toMatchObject({ groupLabel: 'Senior', teamSize: 11, scoring: { type: 'SINGLE', label: 'Goals' }, entries: [{ side: 'c:9-A', std: 9 }] });
+  });
+});
+
+describe('publish / finish / remove', () => {
+  beforeEach(() => {
+    txMock.school.findUnique.mockResolvedValue({ name: 'Raffles' });
+    txMock.sportsVenue.findMany.mockResolvedValue([{ id: V1, name: 'Court 1' }]);
+    txMock.sportsEvent.findMany.mockResolvedValue([{ id: E, sportName: 'Badminton', groupKey: 'sen', category: 'Boys', kind: 'MATCH', sportKey: 'badminton' }]);
+    txMock.sportsEntry.findMany.mockResolvedValue([
+      { eventId: E, studentId: uid(1), std: 9, section: 'A', student: { userId: 'u1', firstName: 'Aarav' } },
+      { eventId: E, studentId: uid(2), std: 9, section: 'A', student: { userId: null, firstName: 'Bela' } },
+    ]);
+    txMock.sportsMatch.findMany.mockResolvedValue([
+      { eventId: E, aSide: `s:${uid(1)}`, bSide: `s:${uid(2)}`, roundName: 'Final', groupLabel: 'Class 9', venueId: V1, atMin: 1440 + 615 },
+      { eventId: E, aSide: `s:${uid(1)}`, bSide: null, roundName: 'Semi-final', groupLabel: 'Class 9', venueId: V1, atMin: 600 },
+    ]);
+    txMock.sportsHeat.findMany.mockResolvedValue([]);
+    txMock.notification.createMany.mockResolvedValue({ count: 1 });
+    txMock.notificationOutbox.createMany.mockResolvedValue({ count: 1 });
+  });
+
+  it('a finished meet cannot be published; publishing can be reserved for the admin', async () => {
+    txMock.sportsTournament.findFirst.mockResolvedValue(tournamentRow({ status: 'DONE' }));
+    await expect(svc().publish(SCHOOL, T, false)).rejects.toMatchObject({ response: { code: 'TOURNAMENT_STATE' } });
+    txMock.sportsTournament.findFirst.mockResolvedValue(tournamentRow());
+    txMock.sportsSettings.findUnique.mockResolvedValue({ ...settingsRow, publishNeedsAdmin: true });
+    await expect(svc().publish(SCHOOL, T, false)).rejects.toMatchObject({ response: { code: 'SPORTS_PERM' } });
+    expect(txMock.sportsTournament.update).not.toHaveBeenCalled();
+  });
+
+  it('first publish goes LIVE and tells each entered child with a login their earliest slot; a re-publish tells nobody twice', async () => {
+    txMock.sportsTournament.findFirst.mockResolvedValue(tournamentRow());
+    const r = await svc().publish(SCHOOL, T, false);
+    expect(r).toEqual({ notified: 1 });
+    expect(txMock.sportsTournament.update.mock.calls[0][0].data).toEqual({ status: 'LIVE', published: true, version: { increment: 1 } });
+    const bell = txMock.notification.createMany.mock.calls[0][0].data[0];
+    expect(bell).toMatchObject({ userId: 'u1', kind: 'SPORTS', title: "Annual meet: you're in", linkType: 'sports', linkId: T });
+    expect(bell.body).toBe('One event. First: Badminton: Semi-final (Class 9), Tue 15 Sep 10:00 at Court 1.');
+    expect(txMock.notificationOutbox.createMany.mock.calls[0][0].data[0]).toMatchObject({ kind: 'SPORTS_NOTICE', targetUserId: 'u1' });
+    txMock.sportsTournament.findFirst.mockResolvedValue(tournamentRow({ published: true, status: 'LIVE' }));
+    expect(await svc().publish(SCHOOL, T, true)).toEqual({ notified: 0 });
+  });
+
+  it('finish needs LIVE; delete needs DRAFT', async () => {
+    txMock.sportsTournament.findFirst.mockResolvedValue(tournamentRow());
+    await expect(svc().finish(SCHOOL, T)).rejects.toMatchObject({ response: { code: 'TOURNAMENT_STATE' } });
+    await svc().remove(SCHOOL, T);
+    expect(txMock.sportsTournament.delete).toHaveBeenCalledWith({ where: { id: T } });
+    txMock.sportsTournament.findFirst.mockResolvedValue(tournamentRow({ status: 'LIVE' }));
+    await expect(svc().remove(SCHOOL, T)).rejects.toMatchObject({ response: { code: 'TOURNAMENT_STATE' } });
+    await svc().finish(SCHOOL, T);
+    expect(txMock.sportsTournament.update.mock.calls.at(-1)![0].data).toEqual({ status: 'DONE', version: { increment: 1 } });
+  });
+});
+
+describe('board edits', () => {
+  beforeEach(() => txMock.sportsTournament.findFirst.mockResolvedValue(tournamentRow({ status: 'LIVE' })));
+
+  it('rain delay moves only unplayed, scheduled slots from the given minute, in one statement per table', async () => {
+    txMock.sportsMatch.updateMany.mockResolvedValue({ count: 4 });
+    txMock.sportsHeat.updateMany.mockResolvedValue({ count: 1 });
+    expect(await svc().shift(SCHOOL, T, { deltaMin: 45, fromMin: 600 })).toEqual({ matches: 4, heats: 1 });
+    expect(txMock.sportsMatch.updateMany.mock.calls[0][0]).toEqual({
+      where: { schoolId: SCHOOL, event: { tournamentId: T }, atMin: { not: null, gte: 600 }, winner: null, bye: false }, data: { atMin: { increment: 45 } },
+    });
+    expect(txMock.sportsHeat.updateMany.mock.calls[0][0].where).toMatchObject({ done: false });
+  });
+
+  /** One badminton court, two matches on it, and a sprint heat on the track. */
+  function board() {
+    txMock.sportsVenue.findFirst.mockResolvedValue({ id: V2 });
+    txMock.sportsVenue.findMany.mockResolvedValue([{ id: V1, name: 'Court 1' }, { id: V2, name: 'Track' }]);
+    txMock.sportsEvent.findMany.mockResolvedValue([
+      { id: E, sportKey: 'badminton', sportName: 'Badminton', slotMin: 25, teamBasis: 'SECTIONS' },
+    ]);
+    const rows = [
+      { id: 'm1', eventId: E, roundIdx: 0, roundName: 'Round 1', groupLabel: 'Class 9', aSide: `s:${uid(1)}`, bSide: `s:${uid(2)}`, venueId: V1, atMin: 540, winner: null, scoreA: [], bye: false },
+      { id: 'm2', eventId: E, roundIdx: 0, roundName: 'Round 1', groupLabel: 'Class 9', aSide: `s:${uid(3)}`, bSide: `s:${uid(4)}`, venueId: V1, atMin: 565, winner: null, scoreA: [], bye: false },
+      { id: 'done', eventId: E, roundIdx: 0, roundName: 'Round 1', groupLabel: 'Class 9', aSide: `s:${uid(5)}`, bSide: `s:${uid(6)}`, venueId: V1, atMin: 590, winner: `s:${uid(5)}`, scoreA: [21], bye: false },
+      { id: 'final', eventId: E, roundIdx: 1, roundName: 'Final', groupLabel: 'Final', aSide: null, bSide: null, venueId: V1, atMin: 700, winner: null, scoreA: [], bye: false },
+    ];
+    // moveGroup narrows by groupLabel in SQL; a mock that ignores the where
+    // clause would hand it the whole draw and prove nothing.
+    txMock.sportsMatch.findMany.mockImplementation((args: { where?: { groupLabel?: string } }) =>
+      Promise.resolve(args?.where?.groupLabel ? rows.filter((r) => r.groupLabel === args.where!.groupLabel) : rows));
+    txMock.sportsHeat.findMany.mockResolvedValue([]);
+    txMock.sportsEntry.findMany.mockResolvedValue([1, 2, 3, 4, 5, 6].map((n) => ({ eventId: E, studentId: uid(n), std: 9, section: 'A', student: { houseId: null, firstName: 'Kid', lastName: String(n) } })));
+    txMock.student.findMany.mockResolvedValue([{ id: uid(1), firstName: 'Saanvi', lastName: 'Krishnamurthy' }]);
+  }
+
+  it('refuses a move onto a court that is already busy, and names what is there', async () => {
+    board();
+    await expect(svc().move(SCHOOL, T, 'match', 'm2', { atMin: 545 })).rejects.toMatchObject({
+      response: { code: 'SLOT_REFUSED', message: 'Court 1 already has Badminton Round 1 (Class 9) at 09:00.' },
+    });
+    expect(txMock.sportsMatch.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('refuses a move that would put one child in two places, and names the child', async () => {
+    board();
+    // m2 onto the track at 09:00 is free of m1's court, but they share nobody…
+    await svc().move(SCHOOL, T, 'match', 'm2', { venueId: V2, atMin: 540 });
+    expect(txMock.sportsMatch.updateMany).toHaveBeenCalledWith({ where: { id: 'm2', schoolId: SCHOOL, event: { tournamentId: T } }, data: { atMin: 540, venueId: V2 } });
+    // …whereas a match sharing a player with m1 cannot sit on top of it
+    txMock.sportsMatch.findMany.mockResolvedValue([
+      { id: 'm1', eventId: E, roundIdx: 0, roundName: 'Round 1', groupLabel: 'Class 9', aSide: `s:${uid(1)}`, bSide: `s:${uid(2)}`, venueId: V1, atMin: 540, winner: null, scoreA: [], bye: false },
+      { id: 'm2', eventId: E, roundIdx: 0, roundName: 'Round 1', groupLabel: 'Class 9', aSide: `s:${uid(1)}`, bSide: `s:${uid(4)}`, venueId: V2, atMin: 700, winner: null, scoreA: [], bye: false },
+    ]);
+    await expect(svc().move(SCHOOL, T, 'match', 'm2', { venueId: V2, atMin: 540 })).rejects.toMatchObject({
+      response: { code: 'SLOT_REFUSED', message: 'Saanvi Krishnamurthy is in Badminton Round 1 (Class 9) at the same time.' },
+    });
+  });
+
+  it('never moves a slot that has a result, and never lets a final jump its own round', async () => {
+    board();
+    await expect(svc().move(SCHOOL, T, 'match', 'done', { atMin: 800 })).rejects.toMatchObject({
+      response: { code: 'SLOT_REFUSED', message: 'That slot has a result in, so it stays where it happened.' },
+    });
+    await expect(svc().move(SCHOOL, T, 'match', 'final', { venueId: V2, atMin: 545 })).rejects.toMatchObject({
+      response: { code: 'SLOT_REFUSED', message: expect.stringContaining('has to finish first') },
+    });
+  });
+
+  it('keeps a move inside the day, and still checks the venue and the slot exist', async () => {
+    board();
+    await expect(svc().move(SCHOOL, T, 'match', 'final', { atMin: 950 })).rejects.toMatchObject({
+      response: { code: 'SLOT_REFUSED', message: 'That would run past 16:00, when the day ends.' },
+    });
+    txMock.sportsVenue.findFirst.mockResolvedValue(null);
+    await expect(svc().move(SCHOOL, T, 'match', 'm1', { venueId: V2, atMin: 700 })).rejects.toMatchObject({ response: { field: 'venueId' } });
+    board();
+    await expect(svc().move(SCHOOL, T, 'match', 'nope', { atMin: 700 })).rejects.toMatchObject({ response: { code: 'MATCH_NOT_FOUND' } });
+  });
+
+  it('moves a whole class together, or refuses the batch and moves none of it', async () => {
+    board();
+    txMock.sportsMatch.updateMany.mockResolvedValue({ count: 2 });
+    txMock.sportsHeat.updateMany.mockResolvedValue({ count: 0 });
+    // +100 puts Class 9 at 10:40 and 11:05, still finishing before the 11:40 final it feeds
+    await svc().moveGroup(SCHOOL, T, { eventId: E, groupLabel: 'Class 9', deltaMin: 100 });
+    expect(txMock.sportsMatch.updateMany.mock.calls[0][0]).toEqual({ where: { id: { in: ['m1', 'm2'] } }, data: { atMin: { increment: 100 } } });
+    jest.clearAllMocks();
+    board();
+    // +160 would land Class 9 on top of the final on the same court, so nothing moves at all
+    await expect(svc().moveGroup(SCHOOL, T, { eventId: E, groupLabel: 'Class 9', deltaMin: 160 })).rejects.toMatchObject({ response: { code: 'SLOT_REFUSED' } });
+    expect(txMock.sportsMatch.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('will not move a group in which nothing is left to play', async () => {
+    board();
+    txMock.sportsMatch.findMany.mockResolvedValue([{ id: 'done', winner: 's:x', scoreA: [21] }]);
+    txMock.sportsHeat.findMany.mockResolvedValue([]);
+    await expect(svc().moveGroup(SCHOOL, T, { eventId: E, groupLabel: 'Class 9', deltaMin: 30 }))
+      .rejects.toMatchObject({ response: { field: 'groupLabel' } });
+  });
+});
+
+describe('ensureFinal — the band final builds itself', () => {
+  const event = { id: E, tournamentId: T, structure: 'CLASS', kind: 'MATCH', teamBasis: 'SECTIONS', slotMin: 25, venueIds: [V1], sportKey: 'badminton', sportName: 'Badminton' };
+  beforeEach(() => {
+    txMock.sportsEvent.findFirst.mockResolvedValue(event);
+    txMock.sportsEntry.findMany.mockResolvedValue([{ studentId: uid(1), std: 9, section: 'A', student: { houseId: null } }, { studentId: uid(2), std: 9, section: 'A', student: { houseId: null } }, { studentId: uid(3), std: 10, section: 'A', student: { houseId: null } }]);
+    txMock.sportsTournament.findUnique.mockResolvedValue(tournamentRow());
+    txMock.sportsHeat.findMany.mockResolvedValue([]);
+  });
+
+  it('waits while a class is still playing; skips a DRAW event and an event that already has its final', async () => {
+    txMock.sportsMatch.findMany.mockResolvedValue([{ stage: 'CLASS', groupLabel: 'Class 9', roundIdx: 0, winner: null }]);
+    expect(await svc().ensureFinal(txMock as never, SCHOOL, E)).toBe(false);
+    txMock.sportsMatch.findMany.mockResolvedValue([{ stage: 'FINAL', groupLabel: 'Final', roundIdx: 0, winner: null }]);
+    expect(await svc().ensureFinal(txMock as never, SCHOOL, E)).toBe(false);
+    txMock.sportsEvent.findFirst.mockResolvedValue({ ...event, structure: 'DRAW' });
+    expect(await svc().ensureFinal(txMock as never, SCHOOL, E)).toBe(false);
+    expect(txMock.sportsMatch.createMany).not.toHaveBeenCalled();
+  });
+
+  it('class 9 champion and the class 10 walkover meet in a final placed after the last booked slot on the court', async () => {
+    txMock.sportsMatch.findMany
+      .mockResolvedValueOnce([{ stage: 'CLASS', groupLabel: 'Class 9', roundIdx: 0, winner: `s:${uid(1)}` }])
+      .mockResolvedValueOnce([{ venueId: V1, atMin: 700, event: { slotMin: 25 } }]);
+    expect(await svc().ensureFinal(txMock as never, SCHOOL, E)).toBe(true);
+    const rows = txMock.sportsMatch.createMany.mock.calls[0][0].data;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ stage: 'FINAL', groupLabel: 'Final', roundName: 'Final', bye: false, venueId: V1, atMin: 725 });
+    expect([rows[0].aSide, rows[0].bSide].sort()).toEqual([`s:${uid(1)}`, `s:${uid(3)}`]);
+    expect(txMock.sportsTournament.update).toHaveBeenCalledWith({ where: { id: T }, data: { version: { increment: 1 } } });
+  });
+});
+
+describe('ensureHeatFinal — the funnel, one step at a time', () => {
+  const measured = (over: Record<string, unknown> = {}) => ({ id: E, tournamentId: T, kind: 'MEASURED', lanes: 2, slotMin: 5, venueIds: [V1], sportKey: 'ath-100m', sportName: '100 m sprint', stageShape: 'STRAIGHT', advancePerClass: 2, finalists: 6, dayIdx: null, ...over });
+  beforeEach(() => {
+    txMock.sportsEvent.findFirst.mockResolvedValue(measured());
+    txMock.sportsTournament.findUnique.mockResolvedValue(tournamentRow());
+    txMock.sportsMatch.findMany.mockResolvedValue([]);
+    txMock.sportsEntry.findMany.mockResolvedValue([1, 2, 3, 4].map((n) => ({ studentId: uid(n), std: n <= 2 ? 9 : 10 })));
+  });
+
+  it('nothing until every heat of the step is done, and a final is never rebuilt', async () => {
+    txMock.sportsHeat.findMany.mockResolvedValue([{ kind: 'HEAT', groupLabel: null, done: true, marks: [] }, { kind: 'HEAT', groupLabel: null, done: false, marks: [] }]);
+    expect(await svc().ensureHeatFinal(txMock as never, SCHOOL, E)).toBe(false);
+    txMock.sportsHeat.findMany.mockResolvedValue([{ kind: 'FINAL', groupLabel: null, done: true, marks: [] }]);
+    expect(await svc().ensureHeatFinal(txMock as never, SCHOOL, E)).toBe(false);
+    expect(txMock.sportsHeat.create).not.toHaveBeenCalled();
+  });
+
+  it('STRAIGHT: two heats done → a final of the fastest lane-full, after the heats', async () => {
+    txMock.sportsHeat.findMany
+      .mockResolvedValueOnce([
+        { kind: 'HEAT', groupLabel: null, done: true, marks: [{ studentId: uid(1), mark: 12.5 }, { studentId: uid(2), mark: 12.1 }] },
+        { kind: 'HEAT', groupLabel: null, done: true, marks: [{ studentId: uid(3), mark: 12.3 }, { studentId: uid(4), mark: null }] },
+      ])
+      .mockResolvedValueOnce([{ venueId: V1, atMin: 545, event: { slotMin: 5 } }]);
+    expect(await svc().ensureHeatFinal(txMock as never, SCHOOL, E)).toBe(true);
+    const data = txMock.sportsHeat.create.mock.calls[0][0].data;
+    expect(data).toMatchObject({ kind: 'FINAL', idx: 2, venueId: V1, atMin: 550 });
+    expect(data.marks.createMany.data).toEqual([{ schoolId: SCHOOL, studentId: uid(2), lane: 1 }, { schoolId: SCHOOL, studentId: uid(3), lane: 2 }]);
+  });
+
+  it('CLASS_QUAL: the best of EACH class go to the band final, not the fastest overall', async () => {
+    txMock.sportsEvent.findFirst.mockResolvedValue(measured({ stageShape: 'CLASS_QUAL', advancePerClass: 1, lanes: 2 }));
+    txMock.sportsHeat.findMany
+      .mockResolvedValueOnce([
+        { kind: 'HEAT', groupLabel: 'Class 9', done: true, marks: [{ studentId: uid(1), mark: 12.1 }, { studentId: uid(2), mark: 12.2 }] },
+        { kind: 'HEAT', groupLabel: 'Class 10', done: true, marks: [{ studentId: uid(3), mark: 13.0 }, { studentId: uid(4), mark: 13.4 }] },
+      ])
+      .mockResolvedValueOnce([]);
+    expect(await svc().ensureHeatFinal(txMock as never, SCHOOL, E)).toBe(true);
+    const data = txMock.sportsHeat.create.mock.calls[0][0].data;
+    // uid(2) is faster than uid(3) but is not their class's best — the class champions meet
+    expect(data.marks.createMany.data.map((m: { studentId: string }) => m.studentId)).toEqual([uid(1), uid(3)]);
+    expect(data.kind).toBe('FINAL');
+  });
+
+  it('a band bigger than the lanes runs semi-finals first, then the final from those', async () => {
+    txMock.sportsEntry.findMany.mockResolvedValue([1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({ studentId: uid(n), std: 9 + (n % 4) })));
+    txMock.sportsEvent.findFirst.mockResolvedValue(measured({ stageShape: 'CLASS_QUAL', advancePerClass: 2, lanes: 2, finalists: 2 }));
+    const heat = (n: number, std: number, marks: [number, number][]) => ({ kind: 'HEAT', groupLabel: `Class ${std}`, done: true, marks: marks.map(([id, m]) => ({ studentId: uid(id), mark: m })) });
+    txMock.sportsHeat.findMany
+      .mockResolvedValueOnce([heat(0, 9, [[1, 12.1], [5, 12.6]]), heat(1, 10, [[2, 12.2], [6, 12.7]]), heat(2, 11, [[3, 12.3], [7, 12.8]]), heat(3, 12, [[4, 12.4], [8, 12.9]])])
+      .mockResolvedValueOnce([]);
+    expect(await svc().ensureHeatFinal(txMock as never, SCHOOL, E)).toBe(true);
+    expect(txMock.sportsHeat.create.mock.calls.map((c) => c[0].data.kind)).toEqual(['SEMI', 'SEMI', 'SEMI', 'SEMI']); // 8 qualifiers on 2 lanes
+    jest.clearAllMocks();
+    txMock.sportsTournament.findUnique.mockResolvedValue(tournamentRow());
+    txMock.sportsEvent.findFirst.mockResolvedValue(measured({ stageShape: 'CLASS_QUAL', advancePerClass: 2, lanes: 2, finalists: 2 }));
+    txMock.sportsEntry.findMany.mockResolvedValue([1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({ studentId: uid(n), std: 9 + (n % 4) })));
+    txMock.sportsHeat.findMany
+      .mockResolvedValueOnce([
+        heat(0, 9, [[1, 12.1], [5, 12.6]]), heat(1, 10, [[2, 12.2], [6, 12.7]]), heat(2, 11, [[3, 12.3], [7, 12.8]]), heat(3, 12, [[4, 12.4], [8, 12.9]]),
+        { kind: 'SEMI', groupLabel: null, done: true, marks: [{ studentId: uid(1), mark: 12.0 }, { studentId: uid(2), mark: 12.5 }] },
+        { kind: 'SEMI', groupLabel: null, done: true, marks: [{ studentId: uid(3), mark: 12.1 }, { studentId: uid(4), mark: 12.6 }] },
+      ])
+      .mockResolvedValueOnce([]);
+    expect(await svc().ensureHeatFinal(txMock as never, SCHOOL, E)).toBe(true);
+    const fin = txMock.sportsHeat.create.mock.calls[0][0].data;
+    expect(fin.kind).toBe('FINAL');
+    expect(fin.marks.createMany.data.map((m: { studentId: string }) => m.studentId)).toEqual([uid(1), uid(3)]);
+  });
+});
+
+describe('growing a meet after it was created', () => {
+  const venues = [{ id: V1, name: 'Track' }, { id: V2, name: 'Court 1' }];
+  beforeEach(() => {
+    txMock.sportsVenue.findMany.mockResolvedValue(venues);
+    txMock.sportsVenue.count.mockResolvedValue(2);
+    txMock.sportsEvent.findMany.mockResolvedValue([]);
+    txMock.sportsMatch.findMany.mockResolvedValue([]);
+    txMock.sportsHeat.findMany.mockResolvedValue([]);
+    txMock.sportsEntry.findMany.mockResolvedValue([]);
+    txMock.house.findMany.mockResolvedValue([]);
+    txMock.sportsEvent.updateMany.mockResolvedValue({ count: 1 });
+  });
+
+  it('a day can be added while the meet is live; the hours and the rest gap cannot', async () => {
+    txMock.sportsTournament.findFirst.mockResolvedValue(tournamentRow({ status: 'LIVE' }));
+    await svc().update(SCHOOL, T, { endsOn: '2026-09-18' });
+    expect(txMock.sportsTournament.update.mock.calls[0][0].data).toMatchObject({ endsOn: new Date('2026-09-18T00:00:00Z') });
+    txMock.sportsTournament.findFirst.mockResolvedValue(tournamentRow({ status: 'LIVE' }));
+    await expect(svc().update(SCHOOL, T, { dayEndMin: 1080 })).rejects.toMatchObject({ response: { code: 'TOURNAMENT_STATE' } });
+    txMock.sportsTournament.findFirst.mockResolvedValue(tournamentRow());
+    await expect(svc().update(SCHOOL, T, { endsOn: '2026-09-01' })).rejects.toMatchObject({ response: { field: 'endsOn' } });
+    await expect(svc().update(SCHOOL, T, { dayStartMin: 900, dayEndMin: 930 })).rejects.toMatchObject({ response: { field: 'dayEndMin' } });
+  });
+
+  it('a new venue joins every event that belongs on that kind of place, and the plan is re-laid', async () => {
+    txMock.sportsTournament.findFirst.mockResolvedValue(tournamentRow());
+    txMock.sportsVenue.create.mockResolvedValue({ id: 'v-new' });
+    txMock.sportsEvent.findMany
+      .mockResolvedValueOnce([
+        { id: 'e-badminton', sportKey: 'badminton', sportName: 'Badminton', venueIds: [V2] },
+        { id: 'e-sprint', sportKey: 'ath-100m', sportName: '100 m sprint', venueIds: [V1] },
+      ])
+      .mockResolvedValue([]);
+    await svc().addVenue(SCHOOL, T, { name: 'Court 2' });
+    expect(txMock.sportsVenue.create.mock.calls[0][0].data).toMatchObject({ name: 'Court 2', order: 2 });
+    const updated = txMock.sportsEvent.update.mock.calls.map((c) => c[0]);
+    expect(updated).toHaveLength(1); // the courts event only
+    expect(updated[0]).toMatchObject({ where: { id: 'e-badminton' }, data: { venueIds: [V2, 'v-new'] } });
+    txMock.sportsTournament.findFirst.mockResolvedValue(tournamentRow());
+    txMock.sportsVenue.findMany.mockResolvedValue(venues);
+    await expect(svc().addVenue(SCHOOL, T, { name: ' track ' })).rejects.toMatchObject({ response: { field: 'name' } });
+  });
+
+  it('a hall rescues the chess that had nowhere to play, and leaves the chess that already has a board', async () => {
+    txMock.sportsTournament.findFirst.mockResolvedValue(tournamentRow());
+    txMock.sportsVenue.create.mockResolvedValue({ id: 'v-hall' });
+    txMock.sportsEvent.findMany
+      .mockResolvedValueOnce([
+        { id: 'e-chess-stranded', sportKey: 'chess', sportName: 'Chess', venueIds: [] },
+        { id: 'e-chess-housed', sportKey: 'chess', sportName: 'Chess', venueIds: ['v-board'] },
+        { id: 'e-sprint', sportKey: 'ath-100m', sportName: '100 m sprint', venueIds: [V1] },
+      ])
+      .mockResolvedValue([]);
+    await svc().addVenue(SCHOOL, T, { name: 'Main hall' });
+    const updated = txMock.sportsEvent.update.mock.calls.map((c) => c[0]);
+    expect(updated).toHaveLength(1);
+    expect(updated[0]).toMatchObject({ where: { id: 'e-chess-stranded' }, data: { venueIds: ['v-hall'] } });
+  });
+
+  it('the last venue, and a venue an event depends on, cannot be removed', async () => {
+    txMock.sportsTournament.findFirst.mockResolvedValue(tournamentRow());
+    txMock.sportsVenue.findFirst.mockResolvedValue({ id: V1 });
+    txMock.sportsVenue.count.mockResolvedValue(1);
+    await expect(svc().removeVenue(SCHOOL, T, V1)).rejects.toMatchObject({ response: { message: 'A meet needs at least one venue.' } });
+    txMock.sportsVenue.count.mockResolvedValue(2);
+    txMock.sportsEvent.findMany.mockResolvedValueOnce([{ id: E, sportName: '100 m sprint', venueIds: [V1] }]);
+    await expect(svc().removeVenue(SCHOOL, T, V1)).rejects.toMatchObject({ response: { message: expect.stringMatching(/100 m sprint has nowhere else to play/) } });
+    txMock.sportsTournament.findFirst.mockResolvedValue(tournamentRow({ status: 'LIVE' }));
+    await expect(svc().removeVenue(SCHOOL, T, V1)).rejects.toMatchObject({ response: { code: 'TOURNAMENT_STATE' } });
+  });
+
+  it('refit moves only what has not been played, and keeps every played slot in the diary', async () => {
+    txMock.sportsTournament.findFirst.mockResolvedValue(tournamentRow({ status: 'LIVE', endsOn: new Date('2026-09-15T00:00:00Z') }));
+    txMock.sportsEvent.findMany.mockResolvedValue([
+      { id: E, tournamentId: T, sportKey: 'ath-100m', sportName: '100 m sprint', kind: 'MEASURED', slotMin: 5, lanes: 6, venueIds: [V1], teamBasis: 'SECTIONS', dayIdx: null, order: 0, groupKey: 'sen', category: 'Boys', structure: 'HEATS', stageShape: 'STRAIGHT', advancePerClass: 2, finalists: 6 },
+    ]);
+    txMock.sportsHeat.findMany.mockResolvedValue([
+      { id: 'h-done', eventId: E, kind: 'HEAT', groupLabel: null, idx: 0, venueId: V1, atMin: 540, done: true, marks: [{ studentId: uid(1), lane: 1 }] },
+      { id: 'h-open', eventId: E, kind: 'HEAT', groupLabel: null, idx: 1, venueId: V1, atMin: 545, done: false, marks: [{ studentId: uid(1), lane: 1 }, { studentId: uid(2), lane: 2 }] },
+    ]);
+    await svc().refit(SCHOOL, T);
+    const moved = txMock.sportsHeat.update.mock.calls.map((c) => c[0]);
+    expect(moved).toHaveLength(1);
+    expect(moved[0].where).toEqual({ id: 'h-open' });
+    // uid(1) finished the first heat at 545, so with a 15-minute rest the open heat cannot start before 560
+    expect(moved[0].data.atMin).toBeGreaterThanOrEqual(560);
+  });
+
+  it('pinning an event to a day holds its slots to that day', async () => {
+    txMock.sportsTournament.findFirst.mockResolvedValue(tournamentRow({ endsOn: new Date('2026-09-17T00:00:00Z') }));
+    txMock.sportsEvent.findMany.mockResolvedValue([
+      { id: E, tournamentId: T, sportKey: 'ath-100m', sportName: '100 m sprint', kind: 'MEASURED', slotMin: 5, lanes: 6, venueIds: [V1], teamBasis: 'SECTIONS', dayIdx: 2, order: 0, groupKey: 'sen', category: 'Boys', structure: 'HEATS', stageShape: 'STRAIGHT', advancePerClass: 2, finalists: 6 },
+    ]);
+    txMock.sportsHeat.findMany.mockResolvedValue([{ id: 'h1', eventId: E, kind: 'HEAT', groupLabel: null, idx: 0, venueId: null, atMin: null, done: false, marks: [{ studentId: uid(1), lane: 1 }] }]);
+    await svc().pinEvent(SCHOOL, T, E, { dayIdx: 2 });
+    expect(txMock.sportsEvent.updateMany.mock.calls[0][0]).toMatchObject({ where: { id: E, schoolId: SCHOOL, tournamentId: T }, data: { dayIdx: 2 } });
+    expect(txMock.sportsHeat.update.mock.calls[0][0].data.atMin).toBe(2 * 1440 + 540);
+  });
+
+  it('a meet is as long as the office says, and only a mistyped year is refused', async () => {
+    txMock.sportsTournament.findFirst.mockResolvedValue(tournamentRow());
+    await svc().update(SCHOOL, T, { endsOn: '2026-12-15' }); // a league across a whole term
+    expect(txMock.sportsTournament.update.mock.calls[0][0].data).toMatchObject({ endsOn: new Date('2026-12-15T00:00:00Z') });
+    txMock.sportsTournament.findFirst.mockResolvedValue(tournamentRow());
+    await expect(svc().update(SCHOOL, T, { endsOn: '2126-09-15' })).rejects.toMatchObject({ response: { field: 'endsOn' } });
+  });
+
+  it('a finished meet has a timetable nobody may re-lay', async () => {
+    for (const run of [
+      () => svc().pinEvent(SCHOOL, T, E, { dayIdx: 1 }),
+      () => svc().refit(SCHOOL, T),
+      () => svc().update(SCHOOL, T, { endsOn: '2026-09-18' }),
+      () => svc().addVenue(SCHOOL, T, { name: 'Court 9' }),
+    ]) {
+      txMock.sportsTournament.findFirst.mockResolvedValue(tournamentRow({ status: 'DONE' }));
+      await expect(run()).rejects.toMatchObject({ response: { code: 'TOURNAMENT_STATE' } });
+    }
+    expect(txMock.sportsEvent.updateMany).not.toHaveBeenCalled();
+    expect(txMock.sportsVenue.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('dayLabel', () => {
+  it('names the day of the meet from the DATE column', () => {
+    expect(dayLabel(new Date('2026-09-15T00:00:00Z'), 0)).toBe('Tue 15 Sep');
+    expect(dayLabel(new Date('2026-09-15T00:00:00Z'), 1)).toBe('Wed 16 Sep');
+  });
+});

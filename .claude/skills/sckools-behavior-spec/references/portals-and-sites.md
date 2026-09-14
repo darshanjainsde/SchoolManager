@@ -12,6 +12,7 @@ Nav is filtered by the `features[]` array from `GET /auth/me`. **Until features 
 | `/app/blog` Blog | `BLOG` |
 | `/app/enquiries` Enquiries | `ENQUIRY` |
 | `/app/classes` (+ `/structure`) | `MANAGEMENT` |
+| `/app/sessions` Sessions (year end) | `MANAGEMENT` |
 | `/app/teachers`, `/app/staff`, `/app/students` | `MANAGEMENT` |
 | `/app/staff-attendance` | `MANAGEMENT` |
 | `/app/timetable`, `/app/availability` | `MANAGEMENT` |
@@ -20,8 +21,23 @@ Nav is filtered by the `features[]` array from `GET /auth/me`. **Until features 
 | `/app/events` | `EVENTS` |
 | `/app/announcements` | — |
 
-`/app/website` is a tabbed CMS: Homepage, About, Branding, Theme, Design, Courses, Admissions,
-Gallery, Hall of Fame, Staff, Contact.
+`/app/website` is a tabbed CMS: Studio (design), Homepage, About, Contact & address, Courses, Admissions,
+Hall of Fame, Celebrations, Gallery, Staff.
+
+**Celebrations tab** (Active Roster, Track B): the birthday wall's whole config is one `GET|PUT /site/celebrations`
+(`SchoolProfile.celebrationsConfig`, normalised by `celebrations-config.ts`). Turning the audience to PUBLIC/BOTH
+without `consentConfirmed` is refused 400 `CONSENT_REQUIRED` — the tab shows the consent tick and keeps Save
+disabled until it is ticked. `GET /site/celebrations/preview` is this week from records with the per-child
+`showOnWebsite` / `photoConsent` switches (they PUT `/manage/students/:id`) and the count of ACTIVE children
+with no `dob`. A school without `MANAGEMENT` cannot pick the Active-students source; it keeps a typed list
+(`manual`, max 500, no year). The section itself is switched on in Homepage → Sections (`showBirthdays`).
+
+**Sports** (`/app/sports`, feature `SPORTS`): Tournaments (wizard: the meet → sports → events → players → review;
+the live board with day board / events & results / clashes), Records (verify queue, the book, history, old register,
+claims), Houses (table, add, assign, award, ledger), Rules (the catalogue's rules book with diagrams), Settings
+(grouping, points, who may publish), Teachers (admin only: each sports teacher's rights). A STAFF login with the
+SPORTS job cannot enter `/app`; `/sports` is its own door with the same sections minus Teachers (an admin landing
+there is sent to `/app/sports<section>`).
 
 ## 2. Teacher portal — `/teacher` (tenant host, `TEACHER`)
 
@@ -34,9 +50,16 @@ Class pickers offer **only the teacher's own classes** (commit `d4a6292`).
 
 ## 3. Student portal — `/portal` (tenant host, `STUDENT`)
 
-`Home` · `Timetable` · `Attendance` · `Results` · `Announcements` · `Profile`.
+`Home` · `Timetable` · `Attendance` · `Results` · `Announcements` · `Birthdays` (only while the school's wall
+audience is FAMILIES/BOTH and the section is on — the nav probes `GET /me/birthdays` and hides the entry on
+404) · `Profile`.
 
 Used by both student and guardian on one shared login — keep copy role-neutral.
+
+**Sports** (`/portal/sports`, feature `SPORTS`; `GET /me/sports`): "Up next" (the earliest unplayed match with both
+sides known, or open heat, across live meets), each meet's events with W/L scorelines and heat times with places, the
+child's house, records held and claims waiting. A teacher on the same route sees the published meets and the house
+table. A plan without the feature shows a plain "not part of your plan" line, never an error.
 
 ## 4. Mobile app (Expo, `apps/mobile`)
 
@@ -74,13 +97,31 @@ Also: dark mode (system/light/dark), real server-side logout, Expo push registra
 ## 5. Public school site (tenant host)
 
 `GET /public/site` returns everything in one payload. Pages: `/` (homepage), `/academics`, `/admissions`,
-`/gallery`, `/connect` (events), `/contact`, `/blog`.
+`/gallery`, `/connect` (events), `/contact`, `/blog`, `/birthdays` (noindex, revalidate 60).
 
 **Only a `LIVE` school serves a public site** — `SETUP` and `SUSPENDED` return **404**, while the admin
 can still log in and build it.
 
 Homepage sections are individually toggleable (`showAdmissions`, `showGallery`, `showEvents`,
-`showContact`). Full detail always lives on the dedicated pages regardless of toggles.
+`showContact`, `showBirthdays`). Full detail always lives on the dedicated pages regardless of toggles.
+
+**Birthdays** (`public-birthdays.service.ts`): `GET /public/birthdays` answers only when `showBirthdays` is on AND
+the configured audience allows the public host (PUBLIC/BOTH); the portal's `GET /me/birthdays` needs
+FAMILIES/BOTH. `?window=` may NARROW the configured window (TODAY ⊂ WEEK ⊂ MONTH), never widen it. Without
+`MANAGEMENT` a STUDENTS source is served as the typed list, and the API refuses to save `source: STUDENTS`
+(400). The public projection carries `celebrations: null` when the wall is not public. Caches: the API answers
+`max-age=60, s-maxage=60, stale-while-revalidate=<to midnight>`; the `/birthdays` page gets `s-maxage=60,
+must-revalidate` at the edge (no stale window), so a hidden child is gone within a minute. Rows carry **day and month only** — never a year, an age, a date string or a student id
+(`key` is a hash). Only `ACTIVE` students with a `dob` and `showOnWebsite`; a photo rides only on
+`photoConsent` AND `showPhotos`, everyone else gets an initials coin. "Today" is the school's
+`timezone`; 29 Feb shows on 28 Feb in a non-leap year. Homepage teaser (CAKE_BADGE / RIBBON) only when
+placement is TEASER_AND_PAGE and somebody is in the window; page looks PARTY_WALL / MONTH_PLANNER /
+NOTICE_BOARD. Motion freezes under `animationLevel` NONE and `prefers-reduced-motion`. The Our-school menu
+gains a Birthdays leaf when `celebrations.enabled`.
+
+The Educators band projects `FeaturedStaff` rows whose linked teacher is still `ACTIVE` (or never linked);
+a teacher removed from the school never keeps a card unless the office ticked "Keep them on the website"
+(`public-site.service.ts`, Active Roster).
 
 Theming (`SchoolProfile`): brand colours, heading font, `heroLayout` / `heroTextAlign` /
 `heroOverlayStyle` / `heroOverlayOpacity` / `heroHeight`, `headlineAccent`, `navStyle` / `navColor` /
@@ -177,3 +218,12 @@ as follow-up, deliberately not pretended-at.
 
 `img-src` allows any `https:` because school logos/photos live on operator-supplied hosts.
 `frame-src` allows Google Maps for contact pages.
+
+## Public school site — the Book of Records (Sports wing)
+
+`/records` (host-routed like `/birthdays`; `app/s/[host]/records/page.tsx`): four rooms chosen in Website → Records
+— Medal cabinet, Scoreboard, Register, Progression — plus sport chips, the verified record marked apart from the
+all-time bests, "no record yet" lines, and "The book opens at the first meet." for an empty book. Homepage band: a Studio
+band `records` (Podium tiles · Stadium board · Trophy cabinet · Honours strip under the menu), only lines with a record,
+linking to `/records`. Everything wears the school's colours, heading font and section shape. Names arrive from the
+API already in the school's chosen format.

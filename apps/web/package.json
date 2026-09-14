@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "icons": "node scripts/generate-icons.mjs",
-    "blog-art": "node scripts/generate-blog-art.mjs"
+    "blog-art": "node scripts/generate-blog-art.mjs",
+    "audit:screens": "vitest run --config audit/vitest.audit.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.4.2",

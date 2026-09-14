@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { withTenant, type TenantTx } from '@skoolos/db';
+import { activeStudentsWhere } from '../../common/roster/active-students';
 import type {
   DiaryEntryRow,
   DiaryPageResult,
@@ -134,7 +135,7 @@ export class DiaryService {
 
       const names = await this.teacherNames(tx, entries.map((e) => e.authorTeacherId));
       const editable = date === istTodayISO();
-      const rosterCount = await tx.student.count({ where: { schoolId, classSectionId } });
+      const rosterCount = await tx.student.count({ where: activeStudentsWhere(schoolId, { classSectionId }) });
 
       return {
         date,
@@ -209,7 +210,7 @@ export class DiaryService {
         throw new ApiError('CLASS_NOT_FOUND', 'classSectionId not found', 404, 'classSectionId');
       }
       const rosterCount = await tx.student.count({
-        where: { schoolId, classSectionId: dto.classSectionId },
+        where: activeStudentsWhere(schoolId, { classSectionId: dto.classSectionId }),
       });
       // An admin with no Teacher row still has to be attributable; there is no
       // Teacher.id to store, so refuse rather than write an unattributed line.
@@ -224,7 +225,7 @@ export class DiaryService {
       let named: { id: string; firstName: string; lastName: string }[] = [];
       if (studentIds.length > 0) {
         named = await tx.student.findMany({ take: LIST_CEILING.ROSTER,
-          where: { schoolId, id: { in: studentIds }, classSectionId: dto.classSectionId },
+          where: activeStudentsWhere(schoolId, { id: { in: studentIds }, classSectionId: dto.classSectionId }),
           select: { id: true, firstName: true, lastName: true },
         });
         if (named.length !== studentIds.length) {
@@ -327,11 +328,10 @@ export class DiaryService {
     studentIds: string[] | null,
   ): Promise<string[]> {
     const students = await tx.student.findMany({ take: LIST_CEILING.ROSTER,
-      where: {
-        schoolId,
+      where: activeStudentsWhere(schoolId, {
         userId: { not: null },
         ...(studentIds ? { id: { in: studentIds } } : { classSectionId }),
-      },
+      }),
       select: { userId: true },
     });
     return students.map((s) => s.userId).filter((id): id is string => Boolean(id));
@@ -427,7 +427,7 @@ export class DiaryService {
           entry.audience === 'SELECTED'
             ? entry.recipients.length
             : await tx.student.count({
-                where: { schoolId, classSectionId: entry.classSectionId },
+                where: activeStudentsWhere(schoolId, { classSectionId: entry.classSectionId }),
               }),
         createdAt: entry.createdAt.toISOString(),
         editable: true,

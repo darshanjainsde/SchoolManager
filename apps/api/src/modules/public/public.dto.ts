@@ -118,7 +118,23 @@ export interface PublicSiteData {
     showGallery: boolean;
     showEvents: boolean;
     showContact: boolean;
+    showBirthdays: boolean;
   } | null;
+  /** Birthdays & celebrations (Track B): the settings the site renders with. Rows come from /public/birthdays. */
+  celebrations: {
+    /** The homepage switch is on AND the audience includes the public host. */
+    enabled: boolean;
+    placement: 'TEASER_AND_PAGE' | 'PAGE_ONLY';
+    audience: 'FAMILIES' | 'PUBLIC' | 'BOTH';
+    teaser: 'CAKE_BADGE' | 'RIBBON';
+    page: 'PARTY_WALL' | 'MONTH_PLANNER' | 'NOTICE_BOARD';
+    nameFormat: 'FIRST' | 'FIRST_INITIAL' | 'FULL';
+    showClass: boolean;
+    wishLine: string;
+    window: 'TODAY' | 'WEEK' | 'MONTH';
+  } | null;
+  /** The Book of Records (Sports wing): the page exists and how it is laid out. Lines come from /public/records. */
+  records: { enabled: true; pageLayout: 'SCOREBOARD' | 'REGISTER' | 'CABINET' | 'PROGRESSION'; showTopFive: boolean } | null;
   stats: { label: string; value: string }[];
   socialLinks: { platform: string; url: string }[];
   gallery: { url: string; caption: string | null }[];

@@ -2,18 +2,19 @@
 import { useEffect, useState, type CSSProperties, type FocusEvent, type ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { BookOpen, Plus, Trash2, Pencil, X, KeyRound, CheckCircle2, Send } from 'lucide-react';
+import { BookOpen, Plus, Trash2, Pencil, X, KeyRound, CheckCircle2, Send, UserMinus, Undo2 } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
+import DialogShell from '@/components/ui/dialog-shell';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
 /**
  * Job titles a school actually hires for, ordered as a school would read them.
- * LIBRARIAN is a JOB — the login it gets is ordinary STAFF; the door follows
- * from /auth/me's staffRole (see lib/role-routes.ts).
+ * LIBRARIAN and SPORTS are JOBS — the login each gets is ordinary STAFF; the
+ * door follows from /auth/me's staffRole (see lib/role-routes.ts).
  */
-const STAFF_ROLES = ['OFFICE', 'SUPPORT', 'DRIVER', 'HELPER', 'SECURITY', 'LIBRARIAN', 'OTHER'] as const;
+const STAFF_ROLES = ['OFFICE', 'SUPPORT', 'DRIVER', 'HELPER', 'SECURITY', 'LIBRARIAN', 'SPORTS', 'OTHER'] as const;
 type StaffRoleValue = (typeof STAFF_ROLES)[number];
 
 const ROLE_LABELS: Record<StaffRoleValue, string> = {
@@ -23,6 +24,7 @@ const ROLE_LABELS: Record<StaffRoleValue, string> = {
   HELPER: 'Helper',
   SECURITY: 'Security',
   LIBRARIAN: 'Librarian',
+  SPORTS: 'Sports teacher',
   OTHER: 'Other',
 };
 
@@ -35,6 +37,9 @@ interface Staff {
   phone?: string | null;
   userId?: string | null;
   isActive: boolean;
+  /** Active Roster: `isActive` mirrors this; LEFT rows carry `leftOn`. */
+  status?: 'ACTIVE' | 'LEFT';
+  leftOn?: string | null;
 }
 
 /** Shape returned by both `.../login` and `.../invite/resend`. */
@@ -56,6 +61,79 @@ function initials(s: Staff) {
 
 function fullName(s: Staff) {
   return `${s.firstName} ${s.lastName}`;
+}
+
+/** "Left · 31 Mar 2026" — the pill on a row that is no longer here. */
+function leftLabel(s: Staff): string {
+  if (!s.leftOn) return 'Left';
+  return `Left · ${new Date(s.leftOn).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+}
+
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * "Remove from this school" for non-teaching staff: no seats or periods to
+ * hand over, so one small sheet — the date, a reason, and the consequence
+ * spelled out (the row stays, the login closes; a librarian loses /library).
+ */
+function StaffReleaseDialog({
+  member,
+  isSaving,
+  onSubmit,
+  onClose,
+}: {
+  member: Staff;
+  isSaving: boolean;
+  onSubmit: (body: { leftOn: string; reason?: string }) => void;
+  onClose: () => void;
+}) {
+  const [leftOn, setLeftOn] = useState(todayIso);
+  const [reason, setReason] = useState('');
+  return (
+    <DialogShell onClose={onClose} labelledBy="staff-release-h" maxWidth={440}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!isSaving) onSubmit({ leftOn, reason: reason.trim() || undefined });
+        }}
+      >
+        <div className="sk-card-h">
+          <h3 id="staff-release-h">Remove {fullName(member)} from this school</h3>
+          <p>
+            Their record and history stay. Their login closes
+            {member.role === 'LIBRARIAN' ? ', and the library counter with it' : member.role === 'SPORTS' ? ', and the sports desk with it' : ''}.
+          </p>
+        </div>
+        <div className="sk-card-b" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.4fr)', gap: 10 }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <span className="sk-lab">Leaving on</span>
+            <input className="sk-input" type="date" value={leftOn} onChange={(e) => setLeftOn(e.target.value)} required />
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <span className="sk-lab">Reason</span>
+            <input
+              className="sk-input"
+              aria-label="Reason"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              maxLength={120}
+              placeholder="Resigned, retired…"
+            />
+          </label>
+        </div>
+        <div className="sk-card-b" style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 0 }}>
+          <button type="button" className="sk-btn sk-press" onClick={onClose} disabled={isSaving}>
+            Cancel
+          </button>
+          <button type="submit" className="sk-btn sk-press" data-variant="primary" disabled={isSaving}>
+            {isSaving ? 'Removing…' : 'Remove from this school'}
+          </button>
+        </div>
+      </form>
+    </DialogShell>
+  );
 }
 
 function Field({ label, htmlFor, children }: { label: string; htmlFor: string; children: ReactNode }) {
@@ -356,10 +434,11 @@ export default function StaffPage() {
     enabled: !!host,
   });
   const hasLibrary = meQuery.data?.features?.includes('LIBRARY') ?? false;
+  const hasSports = meQuery.data?.features?.includes('SPORTS') ?? false;
   // Librarian only appears where the school has a library. Offering it
   // otherwise creates a person whose login lands on a counter that refuses
   // her, which reads as a bug in the product rather than a missing feature.
-  const allowedRoles = hasLibrary ? STAFF_ROLES : STAFF_ROLES.filter((r) => r !== 'LIBRARIAN');
+  const allowedRoles = STAFF_ROLES.filter((r) => (r === 'LIBRARIAN' ? hasLibrary : r === 'SPORTS' ? hasSports : true));
 
   // ── Mutations ─────────────────────────────────────────────────────────────
   const addMutation = useMutation({
@@ -419,7 +498,7 @@ export default function StaffPage() {
   // with curl. What was missing was any way to do it from the console, which
   // meant the LIBRARIAN role shipped unreachable.
   const createLoginMutation = useMutation({
-    mutationFn: ({ staffId, role }: { staffId: string; role?: 'LIBRARIAN' }) =>
+    mutationFn: ({ staffId, role }: { staffId: string; role?: 'LIBRARIAN' | 'SPORTS' }) =>
       api.post<LoginInviteResult>(`/manage/staff/${staffId}/login`, role ? { role } : {}),
     onSuccess: (result, { staffId }) => {
       void queryClient.invalidateQueries({ queryKey: ['mng-staff'] });
@@ -438,11 +517,35 @@ export default function StaffPage() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  // Safe-delete: confirm before firing the destructive mutation.
+  // Safe-delete: confirm before firing the destructive mutation. Delete is for
+  // a wrong entry; somebody who is leaving is removed from this school instead.
   function confirmDeleteStaff(member: Staff) {
-    const ok = window.confirm(`Remove ${fullName(member)}? This can’t be undone.`);
+    const ok = window.confirm(
+      `Delete ${fullName(member)}? This is for a wrong entry only and can’t be undone. Somebody who is leaving should be removed from this school instead, so their history stays.`,
+    );
     if (ok) deleteMutation.mutate(member.id);
   }
+
+  // Active Roster: remove from this school, and the way back.
+  const [releaseTarget, setReleaseTarget] = useState<Staff | null>(null);
+  const releaseMutation = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: { leftOn: string; reason?: string } }) =>
+      api.post<{ released: true }>(`/manage/staff/${id}/release`, body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['mng-staff'] });
+      setReleaseTarget(null);
+      toast.success('Removed from this school — their record and history stay');
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+  const reactivateMutation = useMutation({
+    mutationFn: (id: string) => api.post<{ id: string; status: 'ACTIVE' }>(`/manage/staff/${id}/reactivate`, {}),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['mng-staff'] });
+      toast.success('Back on the roll — their login is open again');
+    },
+    onError: (err: Error) => toast.error(`Could not reactivate: ${err.message}`),
+  });
 
   const staff = staffQuery.data ?? [];
   const activeCount = staff.filter((s) => s.isActive).length;
@@ -582,7 +685,7 @@ export default function StaffPage() {
                       style={{
                         marginTop: 2,
                         fontWeight: 650,
-                        color: member.role === 'LIBRARIAN' ? 'var(--sk-brand-2)' : 'var(--sk-ink-2)',
+                        color: member.role === 'LIBRARIAN' || member.role === 'SPORTS' ? 'var(--sk-brand-2)' : 'var(--sk-ink-2)',
                       }}
                     >
                       {ROLE_LABELS[member.role]}
@@ -599,7 +702,7 @@ export default function StaffPage() {
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
                       {!member.isActive && (
                         <span className="sk-pill" data-tone="warn">
-                          Inactive
+                          {leftLabel(member)}
                         </span>
                       )}
                       {member.userId ? (
@@ -669,22 +772,55 @@ export default function StaffPage() {
                   >
                     <Pencil className="h-4 w-4" />
                   </button>
-                  <button
-                    className="sk-btn sk-press"
-                    data-icon
-                    data-tone="bad"
-                    aria-label={`Delete ${fullName(member)}`}
-                    title="Delete"
-                    disabled={deleteMutation.isPending}
-                    onClick={() => confirmDeleteStaff(member)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  {member.isActive ? (
+                    <>
+                      <button
+                        className="sk-btn sk-press"
+                        data-icon
+                        aria-label={`Remove ${fullName(member)} from this school`}
+                        title="Remove from this school"
+                        onClick={() => setReleaseTarget(member)}
+                      >
+                        <UserMinus className="h-4 w-4" />
+                      </button>
+                      <button
+                        className="sk-btn sk-press"
+                        data-icon
+                        data-tone="bad"
+                        aria-label={`Delete ${fullName(member)}`}
+                        title="Delete (wrong entry only)"
+                        disabled={deleteMutation.isPending}
+                        onClick={() => confirmDeleteStaff(member)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      className="sk-btn sk-press"
+                      data-icon
+                      aria-label={`Reactivate ${fullName(member)}`}
+                      title="Reactivate"
+                      disabled={reactivateMutation.isPending}
+                      onClick={() => reactivateMutation.mutate(member.id)}
+                    >
+                      <Undo2 className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             ),
           )}
         </div>
+      )}
+
+      {releaseTarget && (
+        <StaffReleaseDialog
+          member={releaseTarget}
+          isSaving={releaseMutation.isPending}
+          onSubmit={(body) => releaseMutation.mutate({ id: releaseTarget.id, body })}
+          onClose={() => setReleaseTarget(null)}
+        />
       )}
     </>
   );

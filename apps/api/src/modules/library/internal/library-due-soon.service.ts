@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { getPlatformPrisma, resolveFeatures, type Prisma } from '@skoolos/db';
 import { MailService } from '../../../common/mail/mail.service';
 import type { LibraryNoticeOutboxPayload } from '../../../common/notifications/notification.types';
-import { istTodayISO } from '../../management';
+import { istTodayISO } from '../../../common/dates/timetable-date';
 import { addDaysISO, dateOnlyISO } from './library-policy';
 
 /** Days before dueOn that the nudge goes out — the approved "3 days before". */

@@ -179,6 +179,10 @@ describe('shared portal contracts', () => {
       'LIBRARY_NOTICE',
       'MESSAGE_RECEIVED',
       'RESULT_PUBLISHED',
+      // The year end (Sessions): 'Aarav is in 6 A for 2026-27', one row per family.
+      'SESSION_STARTED',
+      // The sports desk: a fixture, a result, a record — one row per player.
+      'SPORTS_NOTICE',
     ]);
   });
 

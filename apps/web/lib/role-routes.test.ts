@@ -14,6 +14,12 @@ describe('homeForRole', () => {
     expect(homeForRole('STAFF')).toBe('/staff');
   });
 
+  it('routes the sports teacher (STAFF + staffRole SPORTS) to /sports, and no other role there', () => {
+    expect(homeForRole('STAFF', 'SPORTS')).toBe('/sports');
+    expect(homeForRole('TEACHER', 'SPORTS')).toBe('/teacher');
+    expect(homeForRole('SCHOOL_ADMIN', 'SPORTS')).toBe('/app');
+  });
+
   it('routes the librarian (STAFF + staffRole LIBRARIAN) to /library', () => {
     expect(homeForRole('STAFF', 'LIBRARIAN')).toBe('/library');
     // Any other staff kind — or an unknown/missing staffRole — stays on /staff.

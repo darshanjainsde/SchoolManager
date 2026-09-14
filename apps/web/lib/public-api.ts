@@ -69,7 +69,22 @@ export interface PublicSiteData {
     showGallery: boolean;
     showEvents: boolean;
     showContact: boolean;
+    showBirthdays: boolean;
   } | null;
+  /** Birthdays & celebrations (Track B): settings only; rows come from fetchPublicBirthdays. */
+  celebrations: {
+    enabled: boolean;
+    placement: 'TEASER_AND_PAGE' | 'PAGE_ONLY';
+    audience: 'FAMILIES' | 'PUBLIC' | 'BOTH';
+    teaser: 'CAKE_BADGE' | 'RIBBON';
+    page: 'PARTY_WALL' | 'MONTH_PLANNER' | 'NOTICE_BOARD';
+    nameFormat: 'FIRST' | 'FIRST_INITIAL' | 'FULL';
+    showClass: boolean;
+    wishLine: string;
+    window: 'TODAY' | 'WEEK' | 'MONTH';
+  } | null;
+  /** The Book of Records (Sports wing): the page exists and how it is laid out; lines come from fetchPublicRecords. */
+  records: { enabled: true; pageLayout: 'SCOREBOARD' | 'REGISTER' | 'CABINET' | 'PROGRESSION'; showTopFive: boolean } | null;
   stats: { label: string; value: string }[];
   socialLinks: { platform: string; url: string }[];
   gallery: { url: string; caption: string | null }[];
@@ -226,5 +241,85 @@ export async function fetchMarketingConfig(): Promise<MarketingConfigData> {
     return (await res.json()) as MarketingConfigData;
   } catch {
     return MARKETING_DEFAULTS;
+  }
+}
+
+// ── Birthdays (Active Roster, Track B) ──────────────────────────────────────
+
+/** One birthday on the wall: day and month only — never a year, an age or an id. */
+export interface BirthdayRow {
+  day: number;
+  month: number;
+  name: string;
+  classLabel: string | null;
+  photoUrl: string | null;
+  key: string;
+}
+
+export interface BirthdaysResult {
+  /** The school's "today", YYYY-MM-DD in its own timezone. */
+  generatedFor: string;
+  window: 'TODAY' | 'WEEK' | 'MONTH';
+  today: BirthdayRow[];
+  upcoming: BirthdayRow[];
+  next: BirthdayRow | null;
+  maxAge: number;
+}
+
+/**
+ * The birthday wall for a school host. Null when the school has not switched
+ * Birthdays on for the public (the API answers 404). Same server-side base,
+ * headers and per-host tag as fetchPublicSite, so a school's publish purges it.
+ */
+export async function fetchPublicBirthdays(host: string, window?: string): Promise<BirthdaysResult | null> {
+  const raw = process.env.API_INTERNAL_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:3001';
+  const base = raw.replace('localhost', '127.0.0.1');
+  const qs = window ? `?window=${encodeURIComponent(window)}` : '';
+  try {
+    const res = await fetch(`${base}/public/birthdays${qs}`, {
+      headers: { 'X-Forwarded-Host': host, 'X-Skoolos-Host': host },
+      next: { revalidate: 60, tags: [`site:${host}`] },
+    });
+    if (!res.ok) return null;
+    return res.json() as Promise<BirthdaysResult>;
+  } catch {
+    return null;
+  }
+}
+
+// ── The Book of Records (Sports wing) ────────────────────────────────────────
+
+export interface RecordHolder { name: string; text: string; value: number; year: number }
+export interface RecordLine {
+  key: string;
+  sportKey: string; sportName: string; groupKey: string; groupLabel: string; category: string;
+  unit: string; lowerIsBetter: boolean;
+  record: (RecordHolder & { setOn: string | null }) | null;
+  history: (RecordHolder & { untilYear: number | null })[];
+  top: (RecordHolder & { rank: number })[];
+}
+export interface RecordsBook {
+  generatedAt: string;
+  nameFormat: 'FIRST' | 'FIRST_INITIAL' | 'FULL';
+  pageLayout: 'SCOREBOARD' | 'REGISTER' | 'CABINET' | 'PROGRESSION';
+  showTopFive: boolean;
+  lines: RecordLine[];
+  /** Line keys the homepage band shows, in order. */
+  home: string[];
+}
+
+/** The book for a school host; null when the school has not switched it on (the API answers 404). */
+export async function fetchPublicRecords(host: string): Promise<RecordsBook | null> {
+  const raw = process.env.API_INTERNAL_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:3001';
+  const base = raw.replace('localhost', '127.0.0.1');
+  try {
+    const res = await fetch(`${base}/public/records`, {
+      headers: { 'X-Forwarded-Host': host, 'X-Skoolos-Host': host },
+      next: { revalidate: 60, tags: [`site:${host}`] },
+    });
+    if (!res.ok) return null;
+    return res.json() as Promise<RecordsBook>;
+  } catch {
+    return null;
   }
 }

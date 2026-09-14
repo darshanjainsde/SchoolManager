@@ -356,3 +356,333 @@ platform client; every downstream lookup is then explicitly scoped by the exam's
 - **Hard cap of 200 exams per run** (the function has `maxDuration: 60`). Hitting the cap logs a loud
   warning rather than silently dropping reminders.
 - Concurrency 10; one school's failure is logged and never aborts the run for the rest.
+
+## 15. Person lifecycle — the Active Roster (students, teachers, staff)
+
+Student also carries `dob` (date input on the console form, optional), `showOnWebsite` (default true) and
+`photoConsent` (default false) — the birthday wall's per-child switches (portals-and-sites §5). Only the
+update DTO accepts the two booleans; create leaves them at their defaults.
+
+Every person carries a `status` and an `isActive` mirror (`isActive === (status === 'ACTIVE')`), written
+**only** by lifecycle code: `student-lifecycle.service.ts` (`leave` / `readmit`), `teachers.service.ts`
+(`release` / `reactivate`), `staff.service.ts` (same). The update DTOs no longer accept `isActive`.
+
+- Students: `ACTIVE` · `ALUMNI` · `TRANSFERRED` · `LEFT`. Teachers and staff: `ACTIVE` · `LEFT`.
+- **Every roster and recipient query lists `ACTIVE` students only** through
+  `common/roster/active-students.ts#activeStudentsWhere` — attendance, the attendance bar, diary,
+  result sheets, push and inbox recipients, and the student-code school lookup. A source-reading guard
+  (`common/roster/roster-filter.spec.ts`) fails the suite when a listed file's `student.findMany` forgets.
+  `GET /manage/students?status=active|left|all` (default `active`; teachers always get `active`).
+- `POST /manage/students/:id/leave` `{ status, leftOn, reason?, note?, alumniBatch? }` — keeps the row
+  and every attendance/result/diary/library row under it, keeps `classSectionId` as "last class", sets
+  `leftOn`/`leftReason`/`leftNote` (`alumniBatch` defaults to the current year's name for `ALUMNI`),
+  **closes the login and revokes every session for every leaving status, alumni included** (the alumni
+  door is the Homecoming wing) — in the SAME tenant transaction as the row (`internal/close-login.ts`),
+  so the row and its login can never disagree. `AuthService.refresh()` checks the account BEFORE the
+  token row, so a closed login is refused as "User no longer active" (the app keys its shelf card on
+  it), never as "reuse detected". 409 `NOT_ACTIVE` when already left. Audit `student.leave`.
+- `POST /manage/students/:id/readmit` `{ classSectionId? }` — same row back to `ACTIVE`, left fields
+  cleared, login reopened and a fresh set-password invite sent (old sessions were revoked). The class id is
+  checked against the school (FK checks bypass RLS). 409 `ALREADY_ACTIVE`.
+- `GET /manage/students/:id/clearance` — `{ libraryIssuesOut, finesDueRupees, feeDuesRupees,
+  unsignedRemarks, hasHistory }`. **Warns, never blocks.** `feeDuesRupees` is DEBIT − CREDIT over the fee
+  ledger, the same balance the Press reads before a TC.
+- `DELETE /manage/students/:id` — refused with 409 `HAS_HISTORY` once the child has any attendance,
+  result, diary, library or message row (Attendance and Result cascade on delete, so this used to wipe a
+  record silently). Delete is for a wrong entry only; the console falls through to "Mark as left".
+- An admission-number clash names the holder: "Admission number 0421 belongs to Aarav Mehta (alumni ·
+  2025-26)".
+- Teachers: `GET /manage/teachers/:id/release-impact` lists what they hold; `POST /:id/release`
+  `{ leftOn, reason?, note?, handover?: { classSections, timetableTeacherId, keepFeatured } }` hands over
+  class-teacher seats (named replacement or emptied), open timetable slots (reassigned — 409
+  `TEACHER_CONFLICT` when the replacement already teaches at one of those times — or ended on `leftOn`),
+  rejects pending leave, drops the website card unless `keepFeatured` (which UNLINKS it into a manual card,
+  since the band never shows a LEFT teacher), then marks `LEFT` and closes the login. Handover ids must
+  be uuids and never the leaving teacher. `POST /:id/reactivate` reopens the same row and runs the
+  one-school guard (409 `ALREADY_AT_SCHOOL` if they were onboarded elsewhere meanwhile). `createLogin` answers 409
+  `ALREADY_HERE_INACTIVE` when the email belongs to a LEFT row at **this** school (reactivate, don't
+  duplicate) and the existing 409 `ALREADY_AT_SCHOOL` when it is ACTIVE elsewhere.
+- Staff: `POST /manage/staff/:id/release` `{ leftOn, reason?, note? }` and `/:id/reactivate`; the
+  librarian guard reads `isActive`, so a released librarian loses `/library` at once.
+- Public site: `FeaturedStaff` rows linked to a `LEFT` teacher are never projected onto the Educators band.
+- Mobile: a refresh refused with "User no longer active" marks that child `closed` on the family shelf
+  (`family-store.ts#markClosed`), the app falls over to the next open sibling, and the spine reads "No
+  longer enrolled at {School}" with one Remove action. A student code the school has marked as left resolves
+  to no school, and the gate answers its usual neutral "check your details" — it never says why, by
+  design (`login.test.tsx` protects that).
+
+## 16. Sessions — the year end (Active Roster, Track C)
+
+`/manage/sessions` (`sessions.service.ts`). **One open plan per school** (DRAFT or SCHEDULED; 409 `PLAN_OPEN`).
+Opening a plan needs a current year (400 `NO_CURRENT_YEAR`) and creates the next `AcademicYear` with
+`isCurrent=false`. The six steps: next session · classes (`POST plan/structure/copy` copies every closing
+section into the next year — same grade, same name, class teacher only if still ACTIVE — and proposes the
+section map: same-named section one grade up, else the first of that grade, top grade → `PASS_OUT`; refused
+400 `GRADE_ORDER` when two grades share an `order`) · decide students · roll numbers · copy the rest · review.
+
+**Decide rows** (`GET plan/students?sectionId=<closing section>|UNPLACED`) show attendance % (present+late
+over marked days of the closing year) and results % (published results of the counted exams; all of the
+class's exams when none of that class's ids are in `countExamIds` — the list is plan-wide and holds ids from
+several classes, each class reads only its own), computed on read, never stored. `review` = results below
+`passMarkPct` — **a flag, never a decision (D10)**. `joinedSincePlan` = admitted after the plan opened.
+Decisions are saved per class (`PUT plan/decisions`, all rows): PROMOTE/STAY need a `toSectionId` in the
+next year (400 `BAD_TARGET`), LEAVE needs `leaveStatus`; unknown or non-ACTIVE students are refused 404.
+Every save bumps `plan.version`; a PATCH to the plan does too. **Promote everyone** (`POST plan/decisions/defaults`)
+gives every undecided child in a mapped closing class the map's default (PROMOTE into the mapped class, PASS_OUT
+from the top grade) in one `createMany` per class with `skipDuplicates` — a decided child is never touched; classes
+without a map entry are named back, not guessed.
+
+**Start** (`POST plan/start { when, version }`): 409 `PLAN_CHANGED` when the version moved; 400
+`UNDECIDED_STUDENTS` while any child in a closing section has no row; 400 `BAD_TARGET` if a chosen section
+was deleted meanwhile. `when: ON_START_DATE` sets SCHEDULED with `scheduledFor` = midnight of the next
+year's first day in the school's timezone; `/internal/cron/session-start` (18:35 UTC) applies due plans as
+the person who scheduled them. `when: NOW` is **one transaction** (`applyPlan`), **batched, never per child**
+(a few dozen statements whatever the school size): the plan is CLAIMED first (a conditional update to
+STARTED — a second click or the cron finds nothing open, 409 `NO_PLAN`), the passing-out CHILDREN (only
+those, never a same-class child who stays) graduate through the Homecoming wing first
+(`AlumniService.graduateBatchIn(tx, …, studentIds)`, only with the `ALUMNI` feature), seats move one
+statement per destination class with roll numbers by `rollPolicy` (KEEP / ALPHABETICAL / ADMISSION_NO),
+PASS_OUT → ALUMNI with `alumniBatch` = closing year name, LEAVE → the chosen status (the same fields Track A's
+`applyStudentLeave` writes), **every leaver's login closes in the same transaction**, the current year
+flips, the timetable copies per classroom (5 B's periods become next year's 5 B; only slots of ACTIVE
+teachers; a period the class or the teacher already has in the new year is skipped, never doubled;
+`effectiveFrom` = the earlier of today and the session's first day, so an early Start shows the timetable at
+once), pending register-change requests on closing sections are REJECTED. After commit, best-effort: leave carry-forward
+(`LeavePolicyService.closeYear`), `SESSION` inbox rows for every moved family and every teacher with a
+copied class, then in the background the "child is in 6 A" mail per family with an address and the alumni
+claim-link mail (`/alumni#claim=<token>`) per new alumnus with an email. Children with no class (unplaced)
+and new admissions already seated in next-year sections are untouched by Start.
+
+**Timetable before Start** (`POST plan/timetable/copy`): the same classroom-keyed copy Start does, run now into
+the next year effective from its first day, collision-safe and idempotent; the Sessions tab then mounts the shared
+`TimetableEditor` (components/timetable) over the next year's classes anchored on that day. Start copies again and
+skips what exists.
+
+**Library at the year end** (`GET plan/library`, `POST plan/library/remind`, `POST plan/library/last-due`; the
+`LibraryYearEndService` the library wing exports): every open student loan with the fine so far
+(`accruedFineRupees` from the school's rules, computed on read); Remind writes one `LIBRARY` bell row and one
+`LIBRARY_NOTICE` push row per family with a login and mails the ones with an address; the last-due-date click
+brings forward ONLY loans due after the chosen day (never a day before today), so the fine clock starts there
+while already-overdue books keep their own due date. Never a condition of Start.
+
+**After Start, who hears what:** moved families get the bell + push (`SESSION_STARTED` outbox row) + mail — "is in
+6 A" for a promotion, "continues in 5 B" for a stay; teachers with a copied class get the bell. Leavers' logins are
+closed, so the mail is their only channel: the alumni claim link when the ALUMNI wing is on, else the passed-out
+letter; transferred/left children get the left letter. No SMS channel exists on the platform.
+
+**Register** (`GET :yearId/register`): every decision of the STARTED plan that closed that year, with the
+from/to class labels and who decided. Empty for a year never closed through a plan.
+
+**Console**: Sessions tab (People group, MANAGEMENT); the Students page offers a Session select in the Add
+form while a plan is open, groups the class filter by session and hides past sessions behind a toggle
+(`GET /manage/students?academicYearId=` keeps unplaced children).
+
+## 17. Sports wing — the desk, tournaments, results, the Book of Records, houses
+
+`/sports/*` (`modules/sports`, feature `SPORTS`, in NO tier — override-only). **Two doors, one desk**: the admin runs
+it from `/app/sports` (console tab, sidebar intact); a STAFF login with the job `Staff.role = SPORTS` lands on
+`/sports` (`homeForRole`) and gets the identical sections minus Teachers. `SportsDeskGuard` passes SCHOOL_ADMIN with
+every permission; STAFF only with the SPORTS job, active, and their `Staff.sportsPerms` (empty = the defaults ENTER,
+VERIFY, CREATE, HOUSES); a route tagged `@SportsPerm` also needs that right (403 `SPORTS_PERM`; any other staff 403
+`NOT_SPORTS_DESK`). One indexed read per request, never cached. `/sports/admin/coaches` (admin only) lists SPORTS-job
+staff and sets their rights; the job itself is set on the Staff page like Librarian, offered only when the school has
+the feature. Students and teachers read `/me/sports`.
+
+**Catalogue** (`packages/types/src/sports/catalogue.ts`, ships with the app): 45 sports in eight groups, each with a
+kind — MATCH (two sides, a scoreline: GAMES best-of-N to a target with win-by and cap, or SINGLE one number with a named
+decider) · MEASURED (a mark: time/distance/height/points, lower- or higher-is-better, precision) · JUDGED — plus slot
+minutes, lanes, venue word, categories and the rules book (summary, sections, diagram key). Team sports (`teamSize > 1`)
+draw **sections** as sides (`c:<std>-<section>`), individual sports draw students (`s:<studentId>`); sides are text
+keys, never FKs, so a result outlives a roster change. A school's own sport is `custom:<preset>:<teamSize>:<slug>`
+(measured/judged presets are individual only).
+
+**Settings** (`/sports/settings`, one row per school, created on first read): grouping BANDS (1–6 bands of classes,
+no class in two bands, 400 `SPORTS_BAD_BANDS`) or AGE (School Games rule: "under N" = born on or after 1 January of
+meetYear − N + 1; needs a date of birth); placing points (default 10-7-5-3-2-1), match win (5), class title (3);
+`publishNeedsAdmin`. A tournament keeps the grouping it was created with. The class number comes from the grade name
+("9", "Class 9", "Grade IX", "STD-10"; Nursery/LKG/UKG have none) with `Grade.order` as the fallback.
+
+**The wizard (v2, 2026-09-11)** — four steps, one POST. **The meet**: name, days, day window, the **rest gap** a child
+gets between two of their own slots (default 15 min), and the venues. A venue's TYPE is read from its name (court,
+table, field, track, pool, hall, board, mat, ring, range; anything else is a hall) and the office can cycle it.
+**Sports & events**: a defaults bar (group · which categories to run · how match sports play) then pressing a sport
+CREATES one line per default category with everything filled in — no per-event form. **Venues bind from the sport**:
+a venue NAMED after it ("Badminton court 3") and only that; else every venue of the sport's type not named after
+another sport; else the fallback type (a board game in a hall); else NONE, and the line is flagged — never every
+venue. Edit opens the line's exceptions as a ROW of the same table directly beneath it (group, structure, minutes, lanes, its own venues), never a panel at the foot of the list; the red "no venue" cell is itself the button that opens it, and the editor can add the missing venue in one press (named after the type, so the line binds by itself). **Players** (rebuilt 2026-09-13 for a whole-school meet): one panel per group × category. Every class of the group is
+a SHUT row, so a roll of 1,800 fits on one screen and the office can see at a glance how many classes there are. A
+chip on the shut row enters or empties that class in one sport without opening it; the bar above enters every
+eligible child in one sport, in every sport of the group, or in every event of the whole meet. Opening a class shows
+only its own children as the old grid (a column per event, All/None per row, a child in more than three events
+badged). The **cost line** sits under the step tabs on EVERY step once a sport is picked, not inside one of them: the days are
+set on step 1 and the cost is only knowable once players are in on step 3, so a warning living on either strands you on
+the other. It reads entries, matches and heats, minutes of venue time, and days needed against days booked, and carries
+the press that books them — clamped to the typo guard, and past that it stops offering days and says the work is more
+than a meet can hold, so add venues instead. **Team sports** say what a team is: SECTIONS (9 A v 9 B), CLASSES (9 v 10)
+or HOUSES, suggested from the entrants (sections only when every class of the group has two or more), with the count
+each basis would give on its chip and a one-press fix when the chosen basis makes fewer than two teams. **Review**
+lists every line and every remaining problem in words; Create stays off until the list is empty.
+
+**Create** (`POST /sports/tournaments`, CREATE): name, first/last day (≤ 14 days), day window (default 09:00–16:00,
+≥ 1 h), venues (unique names), events — each a sport, group, category (Boys/Girls/Mixed), structure CLASS (a blind
+draw per class, lone entrant walks over, then a band final of the class champions; one class present → a plain draw)
+or DRAW, venue indexes, entrants, optional slot minutes and lanes. **Everything is checked before the first write**:
+entrants must be on the active roll, in a numbered class, and in the event's group (400 with the child's name); a
+match event needs two sides (400 `SPORTS_NEED_TWO`). Then **one transaction** writes the tournament (DRAFT), venues,
+events (with `structure` as it degenerated: CLASS/DRAW/HEATS/PANEL), entries, draws (standard seeding, byes to the top
+of the draw, a bye's winner already placed in round 2), balanced heats by lane count (one heat = the final), and a
+venue schedule: each match takes the earliest free venue, a round never starts before the previous round ends, a slot
+that would overrun the day rolls to the next day's start (`atMin` = dayIdx × 1440 + minute). The reply says how many
+days the plan needs; more than the meet has is a warning, not a refusal. The draw is repeatable from the meet name.
+
+**Scheduling is person-aware**: the meet keeps ONE diary of when each child is next free, so a slot is placed only
+when its venue is free AND nobody in it is still busy, plus the rest gap — a child in the 100 m and the badminton draw
+is never on the track and a court at the same minute, and events interleave instead of running end to end. Team sides
+carry every entered child of that section, class or house into the diary. `SportsEvent.teamBasis` and
+`SportsTournament.restMin` (migration `20260915_000000_sports_team_basis`) hold the two new choices; a class-rounds
+event whose classes ALL walk over has its band final built at creation rather than waiting for a champion that will
+never be played for.
+
+**A big field reaches a final through stages** (migration `20260916_000000_sports_stages`). A measured event carries
+`stageShape` — CLASS_QUAL (each class races its own heats, the best of each meet in a band final), OPEN_QUAL (mixed
+heats, fastest marks through) or STRAIGHT (heats, then a final) — plus `advancePerClass` and `finalists`. The wizard
+shows the funnel it would run from the children ticked so far (`planStages`), and only the FIRST round is timetabled
+at creation: each later round is drawn the moment the one before it is ranked (`ensureHeatFinal` reads the marks,
+takes the leaders per group in HEAT order — never alphabetically — and builds the SEMI or the FINAL). A heat carries
+`kind` (HEAT/SEMI/FINAL) and `groupLabel`.
+
+**A meet can grow after it was created.** `PATCH :id` adds days (allowed while LIVE) and changes the hours or the rest
+gap (DRAFT only); `POST :id/venues` adds a court, which every event of that venue's type gains; `DELETE
+:id/venues/:venueId` removes one (DRAFT only, never the last, never one an event depends on); `PATCH
+:id/events/:eventId/day` holds an event to a day of the meet or frees it (`SportsEvent.dayIdx`); `POST :id/refit`
+lays the plan out again. All five re-lay the timetable and all five refuse on a DONE meet (409 `TOURNAMENT_STATE`).
+**A refit moves only what has not been played** — every played slot keeps its time and its place in each child's
+diary, and the cursor and the diary are seeded from those before anything unplayed is placed. The **Days & courts**
+view shows how full each court is on each day, which events run when, and the day the plan spills onto: `fitInDay`
+rolls an overrunning slot to the next morning, so a one-day meet can hold slots on day 2 — the day strip shows every
+day a slot reached, marks the ones the meet is not booked for, and offers to book them.
+
+**Running a meet** (2026-09-13). The plan is not read-only once it is made; five
+things the office says out loud each land on a control. **Drag a block** on the
+Timetable moves one slot (`PATCH …/matches|heats/:id/slot`). **Move…** on a
+class row moves that class's unplayed slots together (`POST …/move-group`,
+eventId + groupLabel + deltaMin). **Runs on…** on a branch holds every event
+under it to one day or frees them (`PATCH …/events/day`, eventIds + dayIdx).
+**Clear** on a venue heading takes everything unplayed off it and re-lays it on
+the others (`POST …/venues/:venueId/clear`; refused when an event has nowhere
+else). **Running late** is the existing rain-delay shift. One step of **undo**
+issues the inverse move.
+
+**Two gaps, and they are not the same thing.** `SportsTournament.gapMin`
+(migration `20260917_000000_sports_gap`) is the **break left on the venue** after
+each slot — the umpire changing ends, the rake over the pit. `restMin` is the
+rest ONE CHILD gets between two of their own slots. A court can run back to
+back all morning while no single athlete does. The break counts against the
+day's capacity, so the cost line and the day bars do not pretend the day holds
+more than it does.
+
+**Where this meet is** is the panel above the views: what is done, what is next,
+and what is in the way, in order, each line naming the move and the view that
+makes it — an event with nowhere to play, a plan that outruns its days, clashes
+to clear, venues booked and never used, then Publish. Publishing shows as
+waiting while anything is blocked. **How long a meet runs is configured where it is planned** — first day and
+last day, in step 1 and in Days & courts. There is no policy cap behind that:
+`MAX_MEET_DAYS` (366, in `@skoolos/types`) is a TYPO GUARD so a mistyped year
+cannot ask for a century-long plan, and a ceiling for `atMin` and the day
+controls to size against. Every other day limit derives from it (`dayIdx` max,
+`atMin` max, the date input's max) so they cannot drift apart, and the refusal
+reads "check the year on the last day", not "a meet runs for at most N days".
+Because a meet may be long, **Days & courts lists only the days that hold
+something**, with one line for the booked days that hold nothing and a control
+to show them all. The overrun notice shows the ARITHMETIC rather than a
+verdict: hours on the busiest venue, hours a day holds, therefore the days that
+venue alone needs, and which venues hold nothing — because a number of days is
+a symptom and only the arithmetic says what to change.
+
+**The bracket draws its lines.** Every position keeps its cell and a cell
+doubles in height each round, so a card sits exactly between the two that feed
+it and the connectors are pure CSS. A bye is one muted line, not a card, and
+the round label counts them.
+
+**A move is refused, not repaired.** `whyNot` in `@skoolos/types` is the single
+rule: never a played slot, never a double-booked venue, never a child in two
+places, never a round before the one that feeds it, never outside the day's
+hours. `sayProblem` is the single wording, so the browser and the API never
+explain the same drop two ways. The browser runs both before it asks — a bad
+drag is refused under the finger with a sentence and no round trip — and the
+API runs them again before it writes, because the browser is not the only
+client (409 `SLOT_REFUSED`). A group move is all-or-nothing: if one slot of the
+class will not fit, none of them move.
+
+**Reading a meet** (rebuilt 2026-09-13). Three views, because a teacher asks
+two different questions and a flat list of every slot in start-time order
+answers neither. **Programme** (the default) hangs the same rows three ways —
+by SPORT, by CATEGORY or by DAY, because the badminton teacher, the office
+printing the programme and the ground staff are each looking for a different
+branch. Inside the spine it is the event, then the class or round — shut rows carrying their own counts, dates and
+venues, opening to the individual slots; that is "when is the 100 m for class
+9". **Timetable** is one day on a proportional time axis — a column per venue
+that holds something that day (the idle ones are named, not given a column),
+the hours ruled down the side, and every match or heat a block whose height IS
+its length, coloured by sport; a block too short for three lines reads as one.
+**Days** are a strip of chips up to seven and a stepper with a list beyond it —
+a meet whose plan has spilled over fifty days must never render fifty chips.
+The overrun is stated ONCE, above the views, with the button that fixes it.
+
+**Board** (`GET /sports/tournaments/:id`): one payload — venues, events with scoring, entries, matches, heats with
+lane marks, `sideNames` — and the web derives the day board, brackets, heat sheets and the clash list with the shared
+maths; while LIVE the page refetches every 15 s. **Clashes** = a student in two slots at once, or a venue holding two.
+**Publish** (PUBLISH; 403 `SPORTS_PERM` when settings reserve it for the admin): DRAFT → LIVE, `published`, one
+`SPORTS` bell + one `SPORTS_NOTICE` push per entered child with a login naming their earliest slot; a re-publish tells
+nobody twice. **Finish** (CREATE) LIVE → DONE; **delete** DRAFT only (409 `TOURNAMENT_STATE`); **rain delay**
+(`POST :id/shift`) moves every unplayed scheduled slot from a minute by a delta in one statement per table; a single
+slot moves with `PATCH :id/matches/:m/slot` / `heats/:h/slot` (venue must belong to the meet).
+
+**Results** (`POST /sports/matches/:id/score`, ENTER, LIVE only — 409 `TOURNAMENT_STATE` on a draft or a finished
+meet): the body carries the match `version` the desk loaded; a stale version or a lost race on the conditional update
+is 409 `MATCH_CHANGED` and the desk reloads — **never a silent overwrite**. A bye has no score (409 `MATCH_LOCKED`);
+both sides must be known. Scores are judged by the sport: GAMES — each listed game complete except the last, win by
+the margin, the cap ends a game, a game after the match is decided is `EXTRA_GAME`; SINGLE — one number a side, a tie
+needs the decider as the second number (`TIE_DECIDER`); illegal scores 400 `BAD_SCORE` with the sport's rule in the
+message. An incomplete sheet saves as it stands with no winner. A winner moves into the next slot at once; changing a
+decided result is refused once the winner has played on (409 `MATCH_LOCKED`), otherwise the next slot is replaced.
+Walkover names the side that turned up and clears the sheet. When the last class champion is known the **band final
+builds itself** (placed after the last booked slot on the event's venues); when every heat is ranked the **final heat
+builds itself** with the best `lanes` marks (a tie at the cut comes along). **Marks** (`POST /sports/heats/:id/marks`):
+lane rows keep their lanes; `done` ranks the heat (ties share a rank, no mark ranks last), sends every mark that beats
+the book to the record queue, tells each runner their time and place, and pays final placings.
+
+**House points are a ledger** (`HousePoint` rows, never a total): a match win pays the winner's house, a class title
+pays the champion's house, a band-stage loss pays joint third the moment the semi is saved, the final pays 1st/2nd, a
+final heat pays placings; a re-scored match or re-ranked heat writes the per-house **difference** ("… (correction)")
+so the table is always the sum of its rows. A section side has no house and pays nothing. Manual rows need a non-zero
+number and a reason; a house with points cannot be deleted (409 `HOUSE_IN_USE`); names are unique (409 `HOUSE_EXISTS`).
+
+**Book of Records** (`/sports/records`): a line is sport × group × category; STANDING is the holder, BROKEN rows are
+history (`untilYear`), VOID rows were withdrawn with a note. **Nothing becomes a record on its own**: a meet mark that
+beats the book, or a claim from practice/trial (`POST records/attempts`, ENTER), is a PENDING attempt until someone
+with VERIFY approves it — the standing record becomes BROKEN, the attempt becomes the record (holder = the child's
+name today), the child gets a bell + push + the reward letter by mail in the background, an audit row is written; an
+attempt already decided is 409 `ATTEMPT_DECIDED`; an attempt overtaken by a better approval is rejected, never applied
+backwards. Typing in the old register (`POST records`, VERIFY): with `untilYear` it is history; without, it must beat
+the standing record (400 with both values) and retires it. Void restores the most recent broken holder. Comparison is
+strict at the sport's precision (12.30 does not beat 12.30).
+
+**Notifications**: kind `SPORTS` (bell), outbox kind `SPORTS_NOTICE` (push); student deep link `/portal/sports`,
+teacher none. No SMS.
+
+**The Book of Records on the website** (`GET /site/records`, `PUT /site/records`, `GET /site/records/lines` in cms;
+`GET /public/records` on the school host; `SchoolProfile.recordsConfig`): the Website builder's Records tab holds the
+switch, the consent tick (children's names go public — switching on without it is 400 `CONSENT_REQUIRED`; without the
+SPORTS feature 400), the name format (first + initial default / first / full, applied server-side — no ids, classes or
+dates of birth ever leave), the page room (Medal cabinet default · Scoreboard · Register · Progression), whether the
+all-time top five shows, which groups show, and which lines the homepage picks (newest N of 4/6/8 · pinned lines in the
+office's order · every record). The homepage BAND's look is a Studio band (`sectionVariants.records.layout`: Podium
+tiles default · Stadium board · Trophy cabinet · Honours strip, which sits under the menu like the birthday ribbon)
+and it moves in the band order like every other band. Data is the desk's, never typed twice: `SportsBookService`
+(exported by the sports module) builds a line per sport × group × category from STANDING/BROKEN records (VOID never)
+plus every mark from a ranked heat — one entry per person, ties share a rank, the record marked apart from the
+"all-time bests" in every room. `/public/records` is 404 unless the feature, the switch and consent all hold; cached a
+minute in shared caches and served stale for an hour while refreshing. The homepage shows only lines WITH a record;
+the page shows every line (a line with marks but no record says so). Nav gets "Records" under Our school; `/records`
+is host-routed and cache-headed like `/birthdays`.

@@ -18,7 +18,7 @@ import type { SchoolJwtPayload } from '../../common/auth/jwt-payload';
 import { RequireFeature, RequireFeatureGuard } from '../features';
 import { TenantContextService } from '../tenancy';
 import { TeachersService } from './teachers.service';
-import { CreateLoginDto, CreateTeacherDto, UpdateTeacherDto } from './management.dto';
+import { CreateLoginDto, CreateTeacherDto, ReleaseTeacherDto, UpdateTeacherDto } from './management.dto';
 
 @Controller('manage/teachers')
 @UseGuards(SchoolJwtGuard, RequireFeatureGuard, RolesGuard)
@@ -89,13 +89,31 @@ export class TeachersController {
     return this.teachers.resendInvite(this.sid(), id);
   }
 
+  /** What the teacher still holds — the handover sheet before "Remove from this school". */
+  @Get(':id/release-impact')
+  @Roles('SCHOOL_ADMIN')
+  releaseImpact(@Param('id', ParseUUIDPipe) id: string) {
+    return this.teachers.releaseImpact(this.sid(), id);
+  }
+
   /**
-   * Phase 5·1 — "remove from this school": deactivate + disable the login
-   * (never a hard delete), freeing the teacher for onboarding elsewhere.
+   * Phase 5·1 — "remove from this school": hand over seats and periods, mark
+   * LEFT, disable the login (never a hard delete), freeing the teacher for
+   * onboarding elsewhere.
    */
   @Post(':id/release')
   @Roles('SCHOOL_ADMIN')
-  release(@Param('id', ParseUUIDPipe) id: string) {
-    return this.teachers.release(this.sid(), id);
+  release(
+    @CurrentUser() u: SchoolJwtPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReleaseTeacherDto,
+  ) {
+    return this.teachers.release(this.sid(), u.sub, id, dto);
+  }
+
+  @Post(':id/reactivate')
+  @Roles('SCHOOL_ADMIN')
+  reactivate(@CurrentUser() u: SchoolJwtPayload, @Param('id', ParseUUIDPipe) id: string) {
+    return this.teachers.reactivate(this.sid(), u.sub, id);
   }
 }

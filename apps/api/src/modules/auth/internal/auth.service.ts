@@ -90,6 +90,16 @@ export class AuthService {
       throw new UnauthorizedException('Refresh token belongs to another school');
     }
 
+    // A login the school has closed (a child marked as left, a teacher removed)
+    // is refused as exactly that. It has to come BEFORE reuse detection:
+    // closing a login also revokes every refresh token, so the token-row check
+    // below would otherwise report "reuse detected" and the app could never
+    // tell "the school closed this" from "somebody replayed a token".
+    const account = await withTenant(payload.schoolId, (tx) =>
+      tx.user.findUnique({ where: { id: payload.sub }, select: { isActive: true } }),
+    );
+    if (!account || !account.isActive) throw new UnauthorizedException('User no longer active');
+
     const tokenHash = sha256(rawToken);
 
     // Reuse detection runs in its own committed transaction so a throw can't

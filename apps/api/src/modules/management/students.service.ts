@@ -6,11 +6,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { withTenant, type TenantTx } from '@skoolos/db';
+import { activeStudentsWhere, LEFT_STATUSES } from '../../common/roster/active-students';
 import type { RosterStudent } from '@skoolos/types';
 import { PasswordService } from '../auth';
 import { ApiError } from '../../common/errors/api-error';
 import { isP2002, isP2003, isP2025, p2002Target } from '../../common/errors/prisma-errors';
 import { LoginInviteService } from './internal/login-invite.service';
+import { studentHistoryCounts } from './internal/student-transitions';
 import type { CreateLoginDto, CreateStudentDto, UpdateStudentDto } from './management.dto';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
@@ -53,9 +55,19 @@ export const ROSTER_SELECT = {
 
 export type { RosterStudent };
 
+/**
+ * Which slice of the roll to list. `active` (default) is the school as it is
+ * today; `left` is everyone who passed out, transferred or left; `all` is the
+ * whole register. Teachers only ever get `active`.
+ */
+export type StudentListStatus = 'active' | 'left' | 'all';
+
 interface ListFilters {
   classSectionId?: string;
+  /** Only children seated in this academic year's sections (Sessions tab, past-year view). */
+  academicYearId?: string;
   projection?: StudentProjection;
+  status?: StudentListStatus;
 }
 
 @Injectable()
@@ -66,10 +78,17 @@ export class StudentsService {
   ) {}
 
   async list(schoolId: string, filters: ListFilters = {}) {
-    const where = {
-      schoolId,
+    const extra = {
       ...(filters.classSectionId ? { classSectionId: filters.classSectionId } : {}),
+      // A year filter keeps the unplaced (no class yet) — they belong to every year until seated.
+      ...(filters.academicYearId ? { OR: [{ classSection: { academicYearId: filters.academicYearId } }, { classSectionId: null }] } : {}),
     };
+    const where =
+      filters.status === 'all'
+        ? { schoolId, ...extra }
+        : filters.status === 'left'
+          ? { schoolId, status: { in: [...LEFT_STATUSES] }, ...extra }
+          : activeStudentsWhere(schoolId, extra);
     const orderBy = [{ admissionNo: 'asc' as const }];
 
     if (filters.projection === 'roster') {
@@ -135,10 +154,32 @@ export class StudentsService {
         if (p2002Target(e).includes('code')) {
           throw new ConflictException('That student code was just taken — please try again');
         }
-        throw new ConflictException('A student with that admission number already exists');
+        throw new ConflictException(await this.admissionClashMessage(schoolId, dto.admissionNo));
       }
       throw e;
     }
+  }
+
+  /**
+   * (schoolId, admissionNo) is unique across the whole register — alumni and
+   * left children included. When the office reuses a number, the error names
+   * who holds it, so "already exists" never sends them hunting.
+   */
+  private async admissionClashMessage(schoolId: string, admissionNo: string | undefined): Promise<string> {
+    const generic = 'A student with that admission number already exists';
+    if (!admissionNo) return generic;
+    const holder = await withTenant(schoolId, (tx) =>
+      tx.student.findFirst({
+        where: { schoolId, admissionNo },
+        select: { firstName: true, lastName: true, status: true, alumniBatch: true },
+      }),
+    );
+    if (!holder) return generic;
+    const tag =
+      holder.status === 'ACTIVE'
+        ? 'active'
+        : `${holder.status.toLowerCase()}${holder.alumniBatch ? ` · ${holder.alumniBatch}` : ''}`;
+    return `Admission number ${admissionNo} belongs to ${holder.firstName} ${holder.lastName} (${tag})`;
   }
 
   async update(schoolId: string, id: string, dto: UpdateStudentDto) {
@@ -159,8 +200,7 @@ export class StudentsService {
       );
     } catch (e) {
       if (isP2025(e)) throw new NotFoundException('Student not found');
-      if (isP2002(e))
-        throw new ConflictException('A student with that admission number already exists');
+      if (isP2002(e)) throw new ConflictException(await this.admissionClashMessage(schoolId, dto.admissionNo));
       throw e;
     }
   }
@@ -177,8 +217,15 @@ export class StudentsService {
         });
         if (inRegister) {
           throw new ConflictException(
-            'This student has documents in the Press register, which is permanent. Mark them inactive instead of deleting.',
+            'This student has documents in the Press register, which is permanent. Mark them as left instead of deleting.',
           );
+        }
+        // Attendance and Result cascade on delete, so "Remove" used to wipe a
+        // child's whole record silently. Delete is for a wrong entry only;
+        // anyone with history is marked as left (Active Roster, Track A).
+        const history = await studentHistoryCounts(tx, id);
+        if (history.hasHistory) {
+          throw new ApiError('HAS_HISTORY', 'This student has history. Mark them as left instead.', 409);
         }
         await tx.student.delete({ where: { id } });
       });

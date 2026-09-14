@@ -201,6 +201,77 @@ export type ErrorCode =
   | 'CONCESSION_BASIS'
   /** No fee structure has been set up for the year being billed — pair with 409. */
   | 'FEE_SETUP_INCOMPLETE'
+  // ─── Person lifecycle (Active Roster) ──────────────────────────────────────
+  /** A leave transition on a student who is not ACTIVE — pair with 409. */
+  | 'NOT_ACTIVE'
+  /** Re-admit / reactivate on someone who is already ACTIVE — 409. */
+  | 'ALREADY_ACTIVE'
+  /** Delete refused: the student has attendance, results, diary, library or
+   *  message rows. The office marks them as left instead. Pair with 409. */
+  | 'HAS_HISTORY'
+  /** Onboarding a teacher whose email already belongs to a LEFT row at THIS
+   *  school — reactivate that row instead of making a duplicate. 409. */
+  | 'ALREADY_HERE_INACTIVE'
+  /** Turning the birthday wall public without the parental-consent confirmation. 400. */
+  | 'CONSENT_REQUIRED'
+  // ── Sessions / year end (Active Roster, Track C) ──
+  /** A DRAFT or SCHEDULED plan already exists — finish or cancel it. 409. */
+  | 'PLAN_OPEN'
+  /** No academic year is marked current, so there is nothing to close. 400. */
+  | 'NO_CURRENT_YEAR'
+  /** The next year's name is already taken. 409. */
+  | 'YEAR_EXISTS'
+  /** The next session resolves to the closing year itself. 400. */
+  | 'SAME_YEAR'
+  /** No open (editable) plan. 404. */
+  | 'NO_PLAN'
+  /** A SCHEDULED plan cannot be edited until the schedule is cancelled. 409. */
+  | 'PLAN_LOCKED'
+  /** Two grades share an order, so promotion is ambiguous. 400. */
+  | 'GRADE_ORDER'
+  /** A PROMOTE/STAY target is not a section of the next year. 400. */
+  | 'BAD_TARGET'
+  /** The plan's version moved since the review was loaded. 409. */
+  | 'PLAN_CHANGED'
+  /** Start refused: some children in the closing classes have no decision. 400. */
+  | 'UNDECIDED_STUDENTS'
+  // ── Sports wing ──
+  /** Not the sports teacher (Staff.role SPORTS) nor a school admin. 403. */
+  | 'NOT_SPORTS_DESK'
+  /** The sports teacher's permission list does not include this action. 403. */
+  | 'SPORTS_PERM'
+  /** Bands overlap, are empty or malformed. 400. */
+  | 'SPORTS_BAD_BANDS'
+  | 'HOUSE_EXISTS'
+  /** Points have been awarded to the house; keep it or correct the points. 409. */
+  | 'HOUSE_IN_USE'
+  | 'HOUSE_NOT_FOUND'
+  | 'TOURNAMENT_NOT_FOUND'
+  /** The tournament is not in the state the action needs (e.g. scoring a DRAFT). 409. */
+  | 'TOURNAMENT_STATE'
+  /** The slot may not go there — a played slot, a double-booked court, a child
+      in two places, or a round jumping the one that feeds it. The message says
+      which, in words the office can act on. 409. */
+  | 'SLOT_REFUSED'
+  | 'EVENT_NOT_FOUND'
+  | 'MATCH_NOT_FOUND'
+  /** Someone else saved this match first — reload and enter again. 409. */
+  | 'MATCH_CHANGED'
+  /** The winner already played the next round; that result must be cleared first. 409. */
+  | 'MATCH_LOCKED'
+  /** The scoresheet is not a legal score for this sport. 400. */
+  | 'BAD_SCORE'
+  /** Fewer than two sides in a draw, or no entrant in a heat. 400. */
+  | 'SPORTS_NEED_TWO'
+  | 'HEAT_NOT_FOUND'
+  | 'RECORD_NOT_FOUND'
+  /** The record attempt was already approved or rejected. 409. */
+  | 'ATTEMPT_DECIDED'
+  | 'UNKNOWN_SPORT'
+  /** An event needs at least one venue to be scheduled. 400. */
+  | 'NEED_VENUE'
+  /** No active staff row with the SPORTS job by that id. 404. */
+  | 'COACH_NOT_FOUND'
   | 'INTERNAL';
 
 export interface ApiErrorBody {

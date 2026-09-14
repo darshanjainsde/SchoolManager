@@ -182,7 +182,7 @@ describe('ExamRemindersService', () => {
     await svc.run();
 
     expect(dbMock.student.findMany).toHaveBeenCalledWith({
-      where: { schoolId: SCHOOL_1, classSectionId: 'cs-1', userId: { not: null } },
+      where: { schoolId: SCHOOL_1, status: 'ACTIVE', classSectionId: 'cs-1', userId: { not: null } },
       select: { userId: true },
     });
     expect(dbMock.user.findMany.mock.calls[0][0].where.schoolId).toBe(SCHOOL_1);

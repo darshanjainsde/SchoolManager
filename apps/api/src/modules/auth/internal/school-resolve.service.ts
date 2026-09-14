@@ -50,7 +50,7 @@ export class SchoolResolveService {
     let slugs: string[] = [];
     if (STUDENT_CODE_RE.test(id)) {
       const students = await platform.student.findMany({
-        where: { code: id.toUpperCase(), school: { status: { not: 'SUSPENDED' } } },
+        where: { code: id.toUpperCase(), status: 'ACTIVE', school: { status: { not: 'SUSPENDED' } } },
         select: { school: { select: { slug: true } } },
         take: MAX_CANDIDATES,
       });

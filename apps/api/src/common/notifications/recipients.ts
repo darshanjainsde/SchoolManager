@@ -1,4 +1,5 @@
 import type { TenantTx } from '@skoolos/db';
+import { activeStudentsWhere } from '../roster/active-students';
 
 /**
  * Recipient resolution — LIMITATION: `Student` has `guardianName` /
@@ -64,7 +65,7 @@ export async function resolveSectionRecipients(
   classSectionId: string,
 ): Promise<string[]> {
   const students = await db.student.findMany({
-    where: { schoolId, classSectionId, userId: { not: null } },
+    where: activeStudentsWhere(schoolId, { classSectionId, userId: { not: null } }),
     select: { userId: true },
   });
   const userIds = students.map((s) => s.userId).filter((id): id is string => Boolean(id));
@@ -85,7 +86,7 @@ export async function resolveSchoolRecipients(
   schoolId: string,
 ): Promise<string[]> {
   const students = await db.student.findMany({
-    where: { schoolId, userId: { not: null } },
+    where: activeStudentsWhere(schoolId, { userId: { not: null } }),
     select: { userId: true },
   });
   const userIds = students.map((s) => s.userId).filter((id): id is string => Boolean(id));
@@ -105,7 +106,7 @@ export async function resolveStudentRecipients(
 ): Promise<StudentRecipient[]> {
   if (studentIds.length === 0) return [];
   const students = await db.student.findMany({
-    where: { schoolId, id: { in: studentIds }, userId: { not: null } },
+    where: activeStudentsWhere(schoolId, { id: { in: studentIds }, userId: { not: null } }),
     select: { userId: true, firstName: true, lastName: true },
   });
 
