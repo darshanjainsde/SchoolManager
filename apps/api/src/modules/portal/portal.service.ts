@@ -5,6 +5,7 @@ import type {
   AttendanceDay,
   AttendanceSummary,
   Holiday,
+  PortalHome,
   Profile,
   DiarySignResult,
   PublishedResult,
@@ -39,6 +40,7 @@ const IST_DAY_FORMATTER = new Intl.DateTimeFormat('en-CA', {
 
 export type {
   Announcement,
+  PortalHome,
   AttendanceDay,
   AttendanceSummary,
   Profile,
@@ -206,24 +208,97 @@ export class PortalService {
     }
   }
 
-  private async myStudent(schoolId: string, userId: string) {
-    return withTenant(schoolId, (tx) =>
-      tx.student.findFirst({
+  /**
+   * Join the caller's transaction if there is one, otherwise open our own.
+   *
+   * Every read below used to open at least two transactions of its own — one
+   * to resolve the student, one for the data — and the portal home screen
+   * called seven of them, so opening it cost about fourteen. A transaction
+   * holds a pooled connection for its whole life, and concurrent connections
+   * are throughput multiplied by hold time, so that count is the thing that
+   * decides how many schools the platform carries.
+   *
+   * Passing `tx` is what lets `home()` below do all of it inside ONE. Called
+   * without it — which is every existing route, and the mobile app — the
+   * behaviour is exactly what it was.
+   */
+  private run<T>(schoolId: string, tx: TenantTx | undefined, fn: (tx: TenantTx) => Promise<T>): Promise<T> {
+    return tx ? fn(tx) : withTenant(schoolId, fn);
+  }
+
+  private async myStudent(schoolId: string, userId: string, tx?: TenantTx) {
+    return this.run(schoolId, tx, (t) =>
+      t.student.findFirst({
         where: { schoolId, userId },
         include: { classSection: { select: { id: true, name: true, grade: { select: { name: true } } } } },
       }),
     );
   }
 
-  async profile(userId: string): Promise<Profile> {
+  /**
+   * Everything the portal home screen shows, in one answer.
+   *
+   * The screen used to open with seven requests — profile, timetable,
+   * announcements, attendance, exams, results, diary — fired together the
+   * moment it mounted. Seven sets of guards, seven tenant resolutions, and
+   * about FOURTEEN tenant transactions, because each read resolved the
+   * student in one transaction and then fetched its data in another. This is
+   * the highest-traffic screen in the product: every family, every day.
+   *
+   * Now it is one request, and the five reads this service owns share a single
+   * transaction. Timetable and diary still open their own — they are
+   * delegated to TimetableService and DiaryService, which is where their rules
+   * live, and reaching into them to thread a transaction through would move
+   * those rules for a smaller gain.
+   *
+   * It composes the SAME methods the individual routes call, rather than
+   * reimplementing them: nothing here can drift from what
+   * GET /me/profile answers, because it is that method.
+   *
+   * The seven routes stay exactly as they were. The mobile app still uses
+   * them, and a client that wants one section should not have to ask for all
+   * seven.
+   */
+  async home(userId: string, month?: string): Promise<PortalHome> {
     const { schoolId } = this.tenant.requireTenant();
-    const s = await this.myStudent(schoolId, userId);
+
+    // Sequential, not Promise.all: inside one interactive transaction Prisma
+    // serialises on the single connection regardless, so concurrency here buys
+    // nothing and only makes the failure order harder to read.
+    const core = await withTenant(schoolId, async (tx) => {
+      // Resolved once, and kept — `timetable()` would otherwise open a second
+      // transaction purely to look the same student up again.
+      const s = await this.myStudent(schoolId, userId, tx);
+      if (!s) throw new NotFoundException('No student record for this login');
+      return {
+        classSectionId: s.classSectionId,
+        profile: await this.profile(userId, tx),
+        announcements: await this.announcements(userId, tx),
+        attendance: await this.attendance(userId, month, tx),
+        exams: await this.exams(userId, tx),
+        results: await this.results(userId, tx),
+      };
+    });
+
+    const { classSectionId, ...sections } = core;
+    const [timetable, diary] = await Promise.all([
+      // Same rule as timetable(): no section means no timetable, not an error.
+      classSectionId ? this.timetableSvc.listForClass(schoolId, classSectionId) : Promise.resolve([]),
+      this.diary(userId),
+    ]);
+
+    return { ...sections, timetable, diary };
+  }
+
+  async profile(userId: string, tx?: TenantTx): Promise<Profile> {
+    const { schoolId } = this.tenant.requireTenant();
+    const s = await this.myStudent(schoolId, userId, tx);
     if (!s) throw new NotFoundException('No student record for this login');
     // Resolve photo URL if present (mirror how public-site resolves asset ids).
     let photoUrl: string | null = null;
     if (s.photoAssetId) {
-      photoUrl = await withTenant(schoolId, async (tx) => {
-        const a = await tx.mediaAsset.findFirst({ where: { id: s.photoAssetId! }, select: { url: true } });
+      photoUrl = await this.run(schoolId, tx, async (t) => {
+        const a = await t.mediaAsset.findFirst({ where: { id: s.photoAssetId! }, select: { url: true } });
         return a?.url ?? null;
       });
     }
@@ -250,12 +325,12 @@ export class PortalService {
     return this.timetableSvc.listForClass(schoolId, s.classSectionId);
   }
 
-  async announcements(userId: string): Promise<Announcement[]> {
+  async announcements(userId: string, tx?: TenantTx): Promise<Announcement[]> {
     const { schoolId } = this.tenant.requireTenant();
-    const s = await this.myStudent(schoolId, userId);
+    const s = await this.myStudent(schoolId, userId, tx);
     if (!s) throw new NotFoundException('No student record for this login');
-    const rows = await withTenant(schoolId, (tx) =>
-      tx.announcement.findMany({
+    const rows = await this.run(schoolId, tx, (t) =>
+      t.announcement.findMany({
         where: {
           schoolId,
           OR: [{ classSectionId: null }, ...(s.classSectionId ? [{ classSectionId: s.classSectionId }] : [])],
@@ -290,7 +365,7 @@ export class PortalService {
    * carries no RLS of its own, so both `schoolId` and `studentId` here are
    * load-bearing, not defensive.
    */
-  async attendance(userId: string, month?: string): Promise<AttendanceSummary> {
+  async attendance(userId: string, month?: string, tx?: TenantTx): Promise<AttendanceSummary> {
     const { schoolId } = this.tenant.requireTenant();
 
     const trimmedMonth = month?.trim();
@@ -306,17 +381,17 @@ export class PortalService {
     const start = new Date(Date.UTC(year, monthIndex, 1));
     const end = new Date(Date.UTC(year, monthIndex + 1, 1));
 
-    const s = await this.myStudent(schoolId, userId);
+    const s = await this.myStudent(schoolId, userId, tx);
     if (!s) throw new NotFoundException('No student record for this login');
 
-    const [rows, firstMark] = await withTenant(schoolId, (tx) =>
+    const [rows, firstMark] = await this.run(schoolId, tx, (t) =>
       Promise.all([
-        tx.attendance.findMany({ take: LIST_CEILING.ACTIVITY,
+        t.attendance.findMany({ take: LIST_CEILING.ACTIVITY,
           where: { schoolId, studentId: s.id, date: { gte: start, lt: end } },
           orderBy: { date: 'asc' },
           select: { date: true, status: true },
         }),
-        tx.attendance.aggregate({
+        t.attendance.aggregate({
           where: { schoolId, studentId: s.id },
           _min: { date: true },
         }),
@@ -362,16 +437,16 @@ export class PortalService {
    * `classSectionId` (itself read off the caller's own Student row, never
    * supplied by the client).
    */
-  async exams(userId: string): Promise<UpcomingExam[]> {
+  async exams(userId: string, tx?: TenantTx): Promise<UpcomingExam[]> {
     const { schoolId } = this.tenant.requireTenant();
-    const s = await this.myStudent(schoolId, userId);
+    const s = await this.myStudent(schoolId, userId, tx);
     if (!s) throw new NotFoundException('No student record for this login');
     if (!s.classSectionId) return [];
 
     const classSectionId = s.classSectionId;
     const now = new Date();
 
-    return withTenant(schoolId, async (tx) => {
+    return this.run(schoolId, tx, async (tx) => {
       const exams = await tx.exam.findMany({ take: LIST_CEILING.ACTIVITY,
         where: { schoolId, classSectionId, scheduledAt: { gte: now } },
         orderBy: [{ scheduledAt: 'asc' }],
@@ -413,12 +488,12 @@ export class PortalService {
    * student's own rows and the average — an in-progress marking run must not
    * leak through the average either.
    */
-  async results(userId: string): Promise<PublishedResult[]> {
+  async results(userId: string, tx?: TenantTx): Promise<PublishedResult[]> {
     const { schoolId } = this.tenant.requireTenant();
-    const s = await this.myStudent(schoolId, userId);
+    const s = await this.myStudent(schoolId, userId, tx);
     if (!s) throw new NotFoundException('No student record for this login');
 
-    return withTenant(schoolId, async (tx) => {
+    return this.run(schoolId, tx, async (tx) => {
       const mine = await tx.result.findMany({ take: LIST_CEILING.ACTIVITY,
         where: { schoolId, studentId: s.id, publishedAt: { not: null } },
         select: { examId: true, marks: true },

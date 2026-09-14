@@ -1,11 +1,12 @@
 'use client';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarCheck, GraduationCap, ClipboardList, Percent } from 'lucide-react';
 import type {
   Announcement,
   AttendanceStatusValue,
   AttendanceSummary,
+  PortalHome,
   Profile,
   PublishedResult,
   StudentDiaryResult,
@@ -141,72 +142,63 @@ export default function PortalDashboardPage() {
   const host = useHost();
   const api = useApi({ audience: 'school', hostHeader: host });
 
-  const profileQuery = useQuery({
-    queryKey: ['portal-profile'],
-    queryFn: () => api.get<Profile>('/me/profile'),
-    enabled: !!host,
-    staleTime: 60_000,
-  });
-
-  const timetableQuery = useQuery({
-    queryKey: ['portal-timetable'],
-    queryFn: () => api.get<TimetableSlot[]>('/me/timetable'),
-    enabled: !!host,
-    staleTime: 60_000,
-  });
-
-  const announcementsQuery = useQuery({
-    queryKey: ['portal-announcements'],
-    queryFn: () => api.get<Announcement[]>('/me/announcements'),
-    enabled: !!host,
-    staleTime: 60_000,
-  });
-
   const thisMonth = monthKey(new Date());
+  const queryClient = useQueryClient();
 
-  const attendanceQuery = useQuery({
-    queryKey: ['portal-attendance', thisMonth],
-    queryFn: () => api.get<AttendanceSummary>(`/me/attendance?month=${thisMonth}`),
+  /**
+   * One request for the whole home screen.
+   *
+   * This page used to open with SEVEN — profile, timetable, announcements,
+   * attendance, exams, results, diary — fired together the moment it mounted.
+   * On the API each of those resolved the student in one tenant transaction
+   * and fetched its data in another, so opening the portal cost about fourteen,
+   * and a transaction holds a pooled connection for its whole life. This is the
+   * highest-traffic screen in the product: every family, every day.
+   *
+   * GET /me/home composes the same seven service methods — it IS those methods,
+   * so nothing here can drift from what the individual routes answer — and the
+   * five the portal service owns now share a single transaction.
+   *
+   * The answer is written back into the seven original cache keys. They are the
+   * keys the sub-pages use (/portal/timetable, /portal/results, and the rest),
+   * so walking into one of those from here is now free rather than another
+   * request. Seeding from inside queryFn rather than an effect is deliberate:
+   * it happens once per fetch, with the data in hand, and cannot race a render.
+   */
+  const homeQuery = useQuery({
+    queryKey: ['portal-home', thisMonth],
+    queryFn: async () => {
+      const home = await api.get<PortalHome>(`/me/home?month=${thisMonth}`);
+      queryClient.setQueryData(['portal-profile'], home.profile);
+      queryClient.setQueryData(['portal-timetable'], home.timetable);
+      queryClient.setQueryData(['portal-announcements'], home.announcements);
+      queryClient.setQueryData(['portal-attendance', thisMonth], home.attendance);
+      queryClient.setQueryData(['portal-exams'], home.exams);
+      queryClient.setQueryData(['portal-results'], home.results);
+      queryClient.setQueryData(['portal-diary'], home.diary);
+      return home;
+    },
     enabled: !!host,
     staleTime: 60_000,
   });
 
-  const examsQuery = useQuery({
-    queryKey: ['portal-exams'],
-    queryFn: () => api.get<UpcomingExam[]>('/me/exams'),
-    enabled: !!host,
-    staleTime: 60_000,
-  });
+  const home = homeQuery.data;
+  // Every section arrives together now, so they share one loading and one error
+  // state — which is also the honest reading of what is happening.
+  const loading = homeQuery.isLoading;
+  const loadError = homeQuery.error;
 
-  const resultsQuery = useQuery({
-    queryKey: ['portal-results'],
-    queryFn: () => api.get<PublishedResult[]>('/me/results'),
-    enabled: !!host,
-    staleTime: 60_000,
-  });
+  const unsignedCount = home?.diary?.unsignedCount ?? 0;
 
-  // A remark waiting for a signature is the one thing on this portal that is
-  // ASKED OF the family rather than reported to them, and the app has always
-  // said so on its home screen. On the web it was visible only after opening
-  // Diary — so the same family, on the same account, learned about it on the
-  // phone and not on the laptop.
-  const diaryQuery = useQuery({
-    queryKey: ['portal-diary'],
-    queryFn: () => api.get<StudentDiaryResult>('/me/diary'),
-    enabled: !!host,
-    staleTime: 60_000,
-  });
-  const unsignedCount = diaryQuery.data?.unsignedCount ?? 0;
-
-  const profile = profileQuery.data;
-  const todaySlots = (timetableQuery.data ?? [])
+  const profile = home?.profile;
+  const todaySlots = (home?.timetable ?? [])
     .filter((s) => s.dayOfWeek === todayDayOfWeek())
     .sort((a, b) => a.period.order - b.period.order);
-  const latestAnnouncements = (announcementsQuery.data ?? []).slice(0, 3);
+  const latestAnnouncements = (home?.announcements ?? []).slice(0, 3);
 
   // `/me/attendance` returns only the days that were actually marked, so a
   // missing entry means "not marked yet today" — not "absent".
-  const attendance = attendanceQuery.data;
+  const attendance = home?.attendance;
   const todayStatus = attendance?.days.find((d) => d.date === dayKey(new Date()))?.status;
   const attendanceMarked = attendance
     ? attendance.present + attendance.absent + attendance.late
@@ -214,8 +206,8 @@ export default function PortalDashboardPage() {
 
   // Both lists arrive pre-ordered by the API: exams ascending (soonest first),
   // results descending (most recent first).
-  const nextExam = examsQuery.data?.[0];
-  const latestResult = resultsQuery.data?.[0];
+  const nextExam = home?.exams?.[0];
+  const latestResult = home?.results?.[0];
 
   // ── "Right now" hero state, derived from today's timetable + attendance ──
   const nowMin = nowMinutes();
@@ -241,13 +233,11 @@ export default function PortalDashboardPage() {
     todayStatus === 'PRESENT' ? '✓' : todayStatus === 'LATE' ? '⏱' : todayStatus === 'ABSENT' ? '✕' : '—';
 
   /** Loading/error/empty all collapse to one short string per tile. */
-  const tileText = (
-    query: { isLoading: boolean; error: unknown },
-    value: string | undefined,
-    empty: string,
-  ): string => {
-    if (query.isLoading) return '…';
-    if (query.error) return 'Unavailable';
+  // Every tile is fed by the one request now, so they share its state rather
+  // than each being handed a query of its own.
+  const tileText = (value: string | undefined, empty: string): string => {
+    if (loading) return '…';
+    if (loadError) return 'Unavailable';
     return value ?? empty;
   };
 
@@ -301,8 +291,8 @@ export default function PortalDashboardPage() {
 
       {/* State-aware "right now" hero — mirrors the mobile StudentHero. Shown
           once the timetable resolves; the schedule card below surfaces any error. */}
-      {!timetableQuery.error &&
-        (timetableQuery.isLoading ? (
+      {!loadError &&
+        (loading ? (
           <div className="sk-hero">
             <div className="eyebrow">Today</div>
             <h2>Loading your day…</h2>
@@ -388,7 +378,7 @@ export default function PortalDashboardPage() {
           label="Today"
           href="/portal/attendance"
           tone={todayStatus ? ATTENDANCE_TONES[todayStatus] : undefined}
-          value={tileText(attendanceQuery, todayStatus ? ATTENDANCE_LABELS[todayStatus] : undefined, 'Not marked')}
+          value={tileText(todayStatus ? ATTENDANCE_LABELS[todayStatus] : undefined, 'Not marked')}
           hint="Attendance"
         />
         <StatTile
@@ -396,13 +386,13 @@ export default function PortalDashboardPage() {
           label="This month"
           href="/portal/attendance"
           tone={attendance && attendanceMarked > 0 && attendance.percent < 75 ? 'warn' : undefined}
-          value={tileText(attendanceQuery, attendanceMarked > 0 ? `${attendance?.percent}%` : undefined, 'No records')}
+          value={tileText(attendanceMarked > 0 ? `${attendance?.percent}%` : undefined, 'No records')}
           hint={attendanceMarked > 0 ? `${attendance?.present} of ${attendanceMarked} days present` : 'Nothing recorded yet'}
         />
         <StatTile
           icon={ClipboardList}
           label="Next test"
-          value={tileText(examsQuery, nextExam?.subjectName, 'None scheduled')}
+          value={tileText(nextExam?.subjectName, 'None scheduled')}
           hint={nextExam ? `${nextExam.title} — ${daysUntilLabel(nextExam.scheduledAt).toLowerCase()}` : 'No upcoming tests'}
         />
         <StatTile
@@ -416,9 +406,7 @@ export default function PortalDashboardPage() {
                 : 'good'
               : undefined
           }
-          value={tileText(
-            resultsQuery,
-            latestResult ? `${latestResult.marks}/${latestResult.maxMarks}` : undefined,
+          value={tileText(latestResult ? `${latestResult.marks}/${latestResult.maxMarks}` : undefined,
             'None yet',
           )}
           hint={latestResult ? `${latestResult.subjectName} · class avg ${latestResult.classAverage}` : 'None published yet'}
@@ -436,9 +424,9 @@ export default function PortalDashboardPage() {
             <h3>Today&apos;s schedule</h3>
           </div>
           <div className="sk-card-b">
-            {timetableQuery.isLoading && <p className="sk-state">Loading…</p>}
-            {timetableQuery.error && <p className="sk-state err">{(timetableQuery.error as Error).message}</p>}
-            {!timetableQuery.isLoading && !timetableQuery.error && todaySlots.length === 0 && (
+            {loading && <p className="sk-state">Loading…</p>}
+            {loadError && <p className="sk-state err">{(loadError as Error).message}</p>}
+            {!loading && !loadError && todaySlots.length === 0 && (
               <p className="sk-state">No classes scheduled for today.</p>
             )}
             {todaySlots.length > 0 && (
@@ -491,9 +479,9 @@ export default function PortalDashboardPage() {
             <h3>Latest announcements</h3>
           </div>
           <div className="sk-card-b">
-            {announcementsQuery.isLoading && <p className="sk-state">Loading…</p>}
-            {announcementsQuery.error && <p className="sk-state err">{(announcementsQuery.error as Error).message}</p>}
-            {!announcementsQuery.isLoading && !announcementsQuery.error && latestAnnouncements.length === 0 && (
+            {loading && <p className="sk-state">Loading…</p>}
+            {loadError && <p className="sk-state err">{(loadError as Error).message}</p>}
+            {!loading && !loadError && latestAnnouncements.length === 0 && (
               <p className="sk-state">No announcements yet.</p>
             )}
             {/* Announcements arrive as pinned slips, not as list rows: THE PIN

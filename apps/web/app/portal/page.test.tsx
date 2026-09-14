@@ -9,22 +9,30 @@ vi.mock('@/lib/use-api', () => ({ useApi: vi.fn() }));
 vi.mock('@/components/use-host', () => ({ useHost: vi.fn() }));
 
 /**
- * The portal home fires six or seven independent queries. These tests care
- * about exactly one of them, so everything else answers with the empty shape
- * its card expects — a stub that threw for unlisted paths would make this
- * file fail every time an unrelated card is added.
+ * The portal home asks ONE question now — GET /me/home — where it used to fire
+ * seven. These tests care about one field of that answer, so the rest comes
+ * back in the empty shape its card expects; a stub that threw for anything
+ * unlisted would fail this file every time an unrelated card was added.
+ *
+ * Every key below is a field of the shared `PortalHome` contract, and the
+ * shapes match the ones the individual routes return — `entries` for the diary,
+ * not `days`. A stub that disagrees with the contract still passes today and
+ * lies to whoever extends it tomorrow.
  */
 function stubWithDiary(unsignedCount: number): ApiStub {
   return {
     get: vi.fn((path: string) => {
-      // `entries`, matching StudentDiaryResult. The stub said `days`, which the
-      // banner happened not to read — a stub that disagrees with the contract
-      // still passes today and lies to whoever extends it tomorrow.
-      if (path.startsWith('/me/diary')) return Promise.resolve({ entries: [], unsignedCount });
-      if (path.startsWith('/me/profile'))
-        return Promise.resolve({ firstName: 'Asha', lastName: 'Rao', className: '8-A', rollNo: 3 });
-      if (path.startsWith('/me/attendance'))
-        return Promise.resolve({ month: '2026-08', present: 0, absent: 0, late: 0, percent: 0, days: [] });
+      if (path.startsWith('/me/home')) {
+        return Promise.resolve({
+          profile: { firstName: 'Asha', lastName: 'Rao', className: '8-A', rollNo: 3 },
+          timetable: [],
+          announcements: [],
+          attendance: { month: '2026-08', present: 0, absent: 0, late: 0, percent: 0, days: [] },
+          exams: [],
+          results: [],
+          diary: { entries: [], unsignedCount },
+        });
+      }
       return Promise.resolve([]);
     }),
     post: vi.fn(),
@@ -66,5 +74,38 @@ describe('the unsigned-remark banner', () => {
     // rather than an assertion that ran before the query resolved.
     await screen.findByText(/Asha/);
     expect(screen.queryByTestId('diary-banner')).not.toBeInTheDocument();
+  });
+});
+
+describe('the home screen costs one request', () => {
+  /**
+   * It used to fire seven — profile, timetable, announcements, attendance,
+   * exams, results, diary — every time a family opened the portal. On the API
+   * each resolved the student in one tenant transaction and fetched its data in
+   * another, so one page view cost about fourteen, on the highest-traffic
+   * screen in the product.
+   */
+  it('asks /me/home and nothing else', async () => {
+    const stub = stubWithDiary(0);
+    vi.mocked(useApi).mockReturnValue(stub as never);
+    renderWithProviders(<PortalHome />);
+    await screen.findByText(/Asha/);
+
+    const paths = vi.mocked(stub.get).mock.calls.map((c) => String(c[0]));
+    expect(paths.filter((p) => p.startsWith('/me/home'))).toHaveLength(1);
+    // None of the seven it replaced.
+    for (const gone of ['/me/profile', '/me/timetable', '/me/announcements', '/me/attendance', '/me/exams', '/me/results', '/me/diary']) {
+      expect(paths.filter((p) => p.startsWith(gone))).toHaveLength(0);
+    }
+  });
+
+  it('carries the month, so attendance means the month on screen', async () => {
+    const stub = stubWithDiary(0);
+    vi.mocked(useApi).mockReturnValue(stub as never);
+    renderWithProviders(<PortalHome />);
+    await screen.findByText(/Asha/);
+
+    const home = vi.mocked(stub.get).mock.calls.map((c) => String(c[0])).find((p) => p.startsWith('/me/home'));
+    expect(home).toMatch(/\/me\/home\?month=\d{4}-\d{2}$/);
   });
 });
