@@ -1,5 +1,3 @@
-'use client';
-
 import { optimised } from '@/lib/img';
 import type { PublicSiteData } from '@/lib/public-api';
 import { formatEventDate, safeHttpUrl } from '../site-utils';

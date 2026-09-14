@@ -1,5 +1,3 @@
-'use client';
-
 import Link from 'next/link';
 import type { PublicSiteData } from '@/lib/public-api';
 import { footerClasses, normalizeFooterConfig } from '../site-variants';

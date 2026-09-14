@@ -1,5 +1,3 @@
-'use client';
-
 import { normalizePageBlocks } from '../site-variants';
 
 /**

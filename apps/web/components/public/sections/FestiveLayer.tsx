@@ -1,5 +1,3 @@
-'use client';
-
 import type { FestiveTheme } from '../site-variants';
 import { festivalDef, festiveDecorations } from '../site-variants';
 

@@ -1,4 +1,3 @@
-'use client';
 import Link from 'next/link';
 import type { BirthdaysResult } from '@/lib/public-api';
 import type { CelebrationsTeaser } from '../celebrations-config';

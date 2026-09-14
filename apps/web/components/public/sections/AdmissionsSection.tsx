@@ -1,5 +1,3 @@
-'use client';
-
 import type { PublicCourse, PublicSiteData } from '@/lib/public-api';
 import { admissionsHasContent } from '../site-utils';
 

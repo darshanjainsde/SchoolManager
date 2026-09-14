@@ -1,5 +1,3 @@
-'use client';
-
 import { optimised } from '@/lib/img';
 import type { PublicCourse } from '@/lib/public-api';
 import ProgrammeMark from '../ProgrammeMark';
