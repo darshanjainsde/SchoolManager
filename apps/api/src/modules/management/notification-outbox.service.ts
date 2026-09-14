@@ -220,12 +220,24 @@ export class NotificationOutboxService {
    */
   drainSoon(): void {
     runInBackground(
-      () => this.drain(),
+      () => this.drain({ purge: false }),
       (e) => this.logger.warn(`opportunistic outbox drain failed: ${(e as Error)?.message}`),
     );
   }
 
-  async drain(): Promise<NotificationOutboxDrainResult> {
+  /**
+   * `purge` is ON for the nightly cron and OFF for `drainSoon()`.
+   *
+   * The retention sweep filters on `sentAt < cutoff`, and the only index here
+   * is `[schoolId, sentAt]` — `sentAt` is not its leading column, so the
+   * predicate cannot use it and the delete scans the table. Once a night that
+   * costs nothing. On `drainSoon()` it ran on EVERY message sent and every exam
+   * created, which is the hot path: a table scan attached to an ordinary
+   * request, to reclaim rows that are thirty days old. Delivery is urgent and
+   * retention is not, so only the cron sweeps.
+   */
+  async drain(opts: { purge?: boolean } = {}): Promise<NotificationOutboxDrainResult> {
+    const { purge = true } = opts;
     const db = getPlatformPrisma();
 
     // Claim the batch in ONE statement. `FOR UPDATE SKIP LOCKED` makes a second
@@ -310,7 +322,7 @@ export class NotificationOutboxService {
       }
     }
 
-    const purged = await this.purgeDelivered(db);
+    const purged = purge ? await this.purgeDelivered(db) : 0;
 
     return { processed: rows.length, sent, failed, purged };
   }

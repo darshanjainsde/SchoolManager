@@ -83,5 +83,5 @@ and reverting the code needs no coordination with it.
 |---|---|
 | No load test of authenticated paths | Cannot sign in from CI. Public SSR held 0% errors at 35 VUs. Mitigated by the one-school pilot in step 4. |
 | Rate limit is 100 req/min per IP | A school behind one NAT IP could trip it. Not new in this release; watch it during the pilot. |
-| Outbox drains daily at 02:00 | Notifications lag up to 24h. Not new; fix separately — it is a one-line schedule change. |
+| Some notification kinds wait for the nightly cron | Messages and exams deliver in seconds via `drainSoon()` (`waitUntil`). Assignments, sessions, library and sports enqueue WITHOUT calling it, so those wait for 02:00. Pre-existing, not a regression. The fix is to call `drainSoon()` from those services, which needs `NotificationOutboxService` exported and four module graphs touched — after the promotion, not an hour before it. **The cron cannot be made more frequent:** Vercel Hobby rejects the entire deployment for a sub-daily cron, and `scripts/check-tsconfig-scope.mjs` guards it. |
 | The Sports wing has never run a real meet | Step 4 is exactly that, on one school, before anyone else sees it. |
