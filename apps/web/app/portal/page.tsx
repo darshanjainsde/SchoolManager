@@ -14,6 +14,7 @@ import type {
   UpcomingExam,
 } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
+import { ApiError, type ApiClient } from '@/lib/api';
 import { useHost } from '@/components/use-host';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -136,6 +137,40 @@ function StatTile({
   );
 }
 
+/**
+ * The home payload, from /me/home — or from the seven routes it replaced.
+ *
+ * The web and the API deploy from the same push but not at the same speed, and
+ * the web is usually first. For the minutes in between, a page that REQUIRED
+ * /me/home would show every family an error on the one screen they open daily —
+ * and on production that window is not a staging inconvenience.
+ *
+ * So a 404 here means exactly one thing: an API older than this build, which
+ * still has all seven routes. Asking them is the old behaviour, unchanged, and
+ * it costs one slow load rather than a broken one. Any other failure is a real
+ * failure and is rethrown.
+ *
+ * Deliberately narrow — only 404, never a 5xx or a network error. A fallback
+ * that swallowed those would turn an outage into seven outages and hide it.
+ */
+async function fetchHome(api: ApiClient, month: string): Promise<PortalHome> {
+  try {
+    return await api.get<PortalHome>(`/me/home?month=${month}`);
+  } catch (err) {
+    if (!(err instanceof ApiError) || err.status !== 404) throw err;
+    const [profile, timetable, announcements, attendance, exams, results, diary] = await Promise.all([
+      api.get<Profile>('/me/profile'),
+      api.get<TimetableSlot[]>('/me/timetable'),
+      api.get<Announcement[]>('/me/announcements'),
+      api.get<AttendanceSummary>(`/me/attendance?month=${month}`),
+      api.get<UpcomingExam[]>('/me/exams'),
+      api.get<PublishedResult[]>('/me/results'),
+      api.get<StudentDiaryResult>('/me/diary'),
+    ]);
+    return { profile, timetable, announcements, attendance, exams, results, diary };
+  }
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function PortalDashboardPage() {
@@ -168,7 +203,7 @@ export default function PortalDashboardPage() {
   const homeQuery = useQuery({
     queryKey: ['portal-home', thisMonth],
     queryFn: async () => {
-      const home = await api.get<PortalHome>(`/me/home?month=${thisMonth}`);
+      const home = await fetchHome(api, thisMonth);
       queryClient.setQueryData(['portal-profile'], home.profile);
       queryClient.setQueryData(['portal-timetable'], home.timetable);
       queryClient.setQueryData(['portal-announcements'], home.announcements);

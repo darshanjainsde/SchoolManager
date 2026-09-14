@@ -3,6 +3,7 @@ import { screen } from '@testing-library/react';
 import { renderWithProviders, type ApiStub } from '@/test/render';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
+import { ApiError } from '@/lib/api';
 import PortalHome from './page';
 
 vi.mock('@/lib/use-api', () => ({ useApi: vi.fn() }));
@@ -107,5 +108,61 @@ describe('the home screen costs one request', () => {
 
     const home = vi.mocked(stub.get).mock.calls.map((c) => String(c[0])).find((p) => p.startsWith('/me/home'));
     expect(home).toMatch(/\/me\/home\?month=\d{4}-\d{2}$/);
+  });
+});
+
+describe('an API older than this build still works', () => {
+  /**
+   * Web and API deploy from the same push but not at the same speed, and the
+   * web is usually first. Observed on staging: /portal was live and calling
+   * /me/home while the API still answered 404 to it. On production that window
+   * would be every family's home screen showing an error.
+   */
+  function stubWithout404Home(): ApiStub {
+    const get = vi.fn((path: string) => {
+      if (path.startsWith('/me/home')) {
+        return Promise.reject(new ApiError(404, 'Cannot GET /me/home', null));
+      }
+      if (path.startsWith('/me/profile'))
+        return Promise.resolve({ firstName: 'Asha', lastName: 'Rao', className: '8-A', rollNo: 3 });
+      if (path.startsWith('/me/attendance'))
+        return Promise.resolve({ month: '2026-08', present: 0, absent: 0, late: 0, percent: 0, days: [] });
+      if (path.startsWith('/me/diary')) return Promise.resolve({ entries: [], unsignedCount: 4 });
+      return Promise.resolve([]);
+    });
+    return { get, post: vi.fn(), put: vi.fn(), patch: vi.fn(), del: vi.fn() } as unknown as ApiStub;
+  }
+
+  it('falls back to the seven routes when /me/home is not there yet', async () => {
+    const stub = stubWithout404Home();
+    vi.mocked(useApi).mockReturnValue(stub as never);
+    renderWithProviders(<PortalHome />);
+
+    // The page renders normally — the family never sees the difference.
+    expect(await screen.findByTestId('diary-banner')).toHaveTextContent('4 diary remarks to sign');
+    await screen.findByText(/Asha/);
+
+    const paths = vi.mocked(stub.get).mock.calls.map((c) => String(c[0]));
+    for (const route of ['/me/profile', '/me/timetable', '/me/announcements', '/me/attendance', '/me/exams', '/me/results', '/me/diary']) {
+      expect(paths.some((p) => p.startsWith(route)), `should have asked ${route}`).toBe(true);
+    }
+  });
+
+  it('does NOT swallow a real failure', async () => {
+    // A 500 or a network error must stay an error. A fallback that caught those
+    // would turn one outage into seven and hide it.
+    const get = vi.fn((path: string) =>
+      path.startsWith('/me/home')
+        ? Promise.reject(new ApiError(500, 'Internal Server Error', null))
+        : Promise.resolve([]),
+    );
+    vi.mocked(useApi).mockReturnValue({ get, post: vi.fn(), put: vi.fn(), patch: vi.fn(), del: vi.fn() } as unknown as ApiStub);
+    renderWithProviders(<PortalHome />);
+
+    // Surfaced — in both sections, which now share one error state.
+    expect(await screen.findAllByText(/Internal Server Error/)).not.toHaveLength(0);
+    // None of the seven were tried.
+    const paths = get.mock.calls.map((c) => String(c[0]));
+    expect(paths.filter((p) => p.startsWith('/me/profile'))).toHaveLength(0);
   });
 });
