@@ -514,8 +514,11 @@ a SHUT row, so a roll of 1,800 fits on one screen and the office can see at a gl
 chip on the shut row enters or empties that class in one sport without opening it; the bar above enters every
 eligible child in one sport, in every sport of the group, or in every event of the whole meet. Opening a class shows
 only its own children as the old grid (a column per event, All/None per row, a child in more than three events
-badged). A **cost line** under the bar answers what mass entry raises — entries, matches and heats, minutes of venue
-time, days needed against days booked — and offers the one press that books the days it needs. **Team sports** say what a team is: SECTIONS (9 A v 9 B), CLASSES (9 v 10)
+badged). The **cost line** sits under the step tabs on EVERY step once a sport is picked, not inside one of them: the days are
+set on step 1 and the cost is only knowable once players are in on step 3, so a warning living on either strands you on
+the other. It reads entries, matches and heats, minutes of venue time, and days needed against days booked, and carries
+the press that books them — clamped to the typo guard, and past that it stops offering days and says the work is more
+than a meet can hold, so add venues instead. **Team sports** say what a team is: SECTIONS (9 A v 9 B), CLASSES (9 v 10)
 or HOUSES, suggested from the entrants (sections only when every class of the group has two or more), with the count
 each basis would give on its chip and a one-press fix when the chosen basis makes fewer than two teams. **Review**
 lists every line and every remaining problem in words; Create stays off until the list is empty.
