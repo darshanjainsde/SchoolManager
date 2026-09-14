@@ -85,7 +85,7 @@ export class SportsTournamentsService {
   async create(schoolId: string, actorId: string, dto: CreateTournamentDto): Promise<{ id: string; days: number; daysNeeded: number; warnings: string[] }> {
     const days = Math.round((dateOf(dto.endsOn).getTime() - dateOf(dto.startsOn).getTime()) / 86_400_000) + 1;
     if (!(days >= 1)) throw new ApiError('VALIDATION', 'The last day cannot be before the first.', 400, 'endsOn');
-    if (days > MAX_DAYS) throw new ApiError('VALIDATION', `A meet runs for at most ${MAX_DAYS} days.`, 400, 'endsOn');
+    if (days > MAX_DAYS) throw new ApiError('VALIDATION', `That is over ${MAX_DAYS} days long — check the year on the last day.`, 400, 'endsOn');
     const dayStartMin = dto.dayStartMin ?? 540;
     const dayEndMin = dto.dayEndMin ?? 960;
     if (dayEndMin - dayStartMin < 60) throw new ApiError('VALIDATION', 'A day needs at least an hour.', 400, 'dayEndMin');
@@ -618,7 +618,7 @@ export class SportsTournamentsService {
         endsOn = dateOf(dto.endsOn);
         if (endsOn.getTime() < t.startsOn.getTime()) throw new ApiError('VALIDATION', 'The last day cannot be before the first.', 400, 'endsOn');
         const days = Math.round((endsOn.getTime() - t.startsOn.getTime()) / 86_400_000) + 1;
-        if (days > MAX_DAYS) throw new ApiError('VALIDATION', `A meet runs for at most ${MAX_DAYS} days.`, 400, 'endsOn');
+        if (days > MAX_DAYS) throw new ApiError('VALIDATION', `That is over ${MAX_DAYS} days long — check the year on the last day.`, 400, 'endsOn');
       }
       await tx.sportsTournament.update({ where: { id }, data: { endsOn, dayStartMin, dayEndMin, restMin: dto.restMin ?? t.restMin, gapMin: dto.gapMin ?? t.gapMin, version: { increment: 1 } } });
       return this.refitIn(tx, schoolId, id);

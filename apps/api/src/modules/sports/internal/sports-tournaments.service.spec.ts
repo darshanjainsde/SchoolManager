@@ -63,10 +63,10 @@ beforeEach(() => {
 });
 
 describe('create — what the wizard may not do', () => {
-  it('dates in the wrong order, a two-week meet, duplicate venues, an unknown sport and a venue index off the list are refused before any write', async () => {
+  it('dates in the wrong order, a mistyped year, duplicate venues, an unknown sport and a venue index off the list are refused before any write', async () => {
     const s = svc();
     await expect(s.create(SCHOOL, ACTOR, { ...baseDto(), endsOn: '2026-09-14' })).rejects.toMatchObject({ response: { code: 'VALIDATION', field: 'endsOn' } });
-    await expect(s.create(SCHOOL, ACTOR, { ...baseDto(), endsOn: '2026-10-15' })).rejects.toMatchObject({ response: { field: 'endsOn' } });
+    await expect(s.create(SCHOOL, ACTOR, { ...baseDto(), endsOn: '2126-09-15' })).rejects.toMatchObject({ response: { field: 'endsOn' } });
     await expect(s.create(SCHOOL, ACTOR, { ...baseDto(), venues: [{ name: 'Court' }, { name: ' court ' }] })).rejects.toMatchObject({ response: { field: 'venues' } });
     await expect(s.create(SCHOOL, ACTOR, { ...baseDto(), events: [{ ...baseDto().events[0], sportKey: 'quidditch' }] })).rejects.toMatchObject({ response: { code: 'UNKNOWN_SPORT' } });
     await expect(s.create(SCHOOL, ACTOR, { ...baseDto(), events: [{ ...baseDto().events[0], venueIdx: [5] }] })).rejects.toMatchObject({ response: { field: 'events.0.venueIdx' } });
@@ -551,6 +551,14 @@ describe('growing a meet after it was created', () => {
     await svc().pinEvent(SCHOOL, T, E, { dayIdx: 2 });
     expect(txMock.sportsEvent.updateMany.mock.calls[0][0]).toMatchObject({ where: { id: E, schoolId: SCHOOL, tournamentId: T }, data: { dayIdx: 2 } });
     expect(txMock.sportsHeat.update.mock.calls[0][0].data.atMin).toBe(2 * 1440 + 540);
+  });
+
+  it('a meet is as long as the office says, and only a mistyped year is refused', async () => {
+    txMock.sportsTournament.findFirst.mockResolvedValue(tournamentRow());
+    await svc().update(SCHOOL, T, { endsOn: '2026-12-15' }); // a league across a whole term
+    expect(txMock.sportsTournament.update.mock.calls[0][0].data).toMatchObject({ endsOn: new Date('2026-12-15T00:00:00Z') });
+    txMock.sportsTournament.findFirst.mockResolvedValue(tournamentRow());
+    await expect(svc().update(SCHOOL, T, { endsOn: '2126-09-15' })).rejects.toMatchObject({ response: { field: 'endsOn' } });
   });
 
   it('a finished meet has a timetable nobody may re-lay', async () => {

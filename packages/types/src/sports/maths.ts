@@ -294,8 +294,15 @@ export function finalists(marks: { side: SideKey; mark: number | null }[], lanes
 
 // ── time on the day board ─────────────────────────────────────
 export const MIN_PER_DAY = 1440;
-/** The longest a meet may run. Shared, so no button offers what the API refuses. */
-export const MAX_MEET_DAYS = 14;
+/**
+ * A typo guard, not a policy. How long a meet runs is already configured by
+ * the person planning it — first day and last day — so a second number behind
+ * that would only refuse dates the office had deliberately chosen. This exists
+ * so a mistyped year cannot ask for a plan a century long, and so `atMin` and
+ * the day controls have a ceiling to size themselves against. Every other day
+ * limit derives from it, so they cannot drift apart.
+ */
+export const MAX_MEET_DAYS = 366;
 export const dayOf = (atMin: number) => Math.floor(atMin / MIN_PER_DAY);
 export const minuteOfDay = (atMin: number) => atMin - dayOf(atMin) * MIN_PER_DAY;
 export function hhmm(atMin: number): string {

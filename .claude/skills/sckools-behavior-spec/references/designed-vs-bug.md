@@ -203,7 +203,8 @@ No design rationale covers any of these. Escalate immediately:
 | "12.30 did not beat the record of 12.30" | Records are beaten strictly at the sport's precision | 12.29 not queued |
 | "The final heat has five runners on four lanes" | A tie at the cut brings everyone on that mark | More runners than lanes without a tie |
 | "The break and the rest gap do different things" | Correct: the break is left on the COURT after each slot; the rest is what one CHILD gets between two of their own | Either one having no effect on the plan |
-| "It will not let me book 20 days" | A meet runs for at most 14 days; past that the fix is more courts or shorter slots | A button offering more than 14 and the API refusing it |
+| "It will not let me book 20 days" | It will — the meet is as long as the dates you set. What the notice says is WHY the plan wants 20: the hours on the busiest venue against the hours in a day | A date the office chose being refused for anything but a mistyped year |
+| "Days & courts is missing days I booked" | Only days holding something are listed; the empty booked days are one line with a control to show them | A day with slots missing from the list |
 | "Most of the first round is byes" | A padded draw; byes are drawn as one muted line, not a card | A bye rendered as a full card, or a real match shown as a bye |
 | "It would not let me drag a heat there" | A drop is refused when it double-books a court, puts a child in two places, moves a played slot or jumps a round; the message says which | A refusal naming a conflict that is not there, or a clashing drop being accepted |
 | "I moved a class and nothing happened" | A group move is all-or-nothing — if one slot will not fit, none move and the reason says why | Some of a class moving and some not |

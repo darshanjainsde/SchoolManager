@@ -45,7 +45,7 @@ export function stepsOf(t: TournamentDetail, clashes: number): Step[] {
     what: `The plan needs ${span.used} days and ${span.booked} ${span.booked === 1 ? 'is' : 'are'} booked`,
     how: span.used <= MAX_MEET_DAYS
       ? `Book the extra day${span.used - span.booked === 1 ? '' : 's'}, or add a court so the same work fits into fewer.`
-      : `A meet runs for at most ${MAX_MEET_DAYS} days, so this needs more courts or shorter slots, not more days.`,
+      : `A meet runs for at most ${MAX_MEET_DAYS} days. Add venues of the kind the busy one is, or shorten the slots — see Days & courts for the arithmetic.`,
     state: 'blocked', go: { label: 'Days & courts', to: 'plan' },
   });
   if (clashes) out.push({

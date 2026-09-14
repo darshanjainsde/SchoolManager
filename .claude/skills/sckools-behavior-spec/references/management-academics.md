@@ -582,10 +582,19 @@ more than it does.
 and what is in the way, in order, each line naming the move and the view that
 makes it — an event with nowhere to play, a plan that outruns its days, clashes
 to clear, venues booked and never used, then Publish. Publishing shows as
-waiting while anything is blocked. **A meet runs for at most `MAX_MEET_DAYS`
-(14) days**, exported from `@skoolos/types` so no button ever offers to book
-more than the API will accept; past that the advice changes from "book the
-days" to "add courts or shorten the slots", naming the busiest venue.
+waiting while anything is blocked. **How long a meet runs is configured where it is planned** — first day and
+last day, in step 1 and in Days & courts. There is no policy cap behind that:
+`MAX_MEET_DAYS` (366, in `@skoolos/types`) is a TYPO GUARD so a mistyped year
+cannot ask for a century-long plan, and a ceiling for `atMin` and the day
+controls to size against. Every other day limit derives from it (`dayIdx` max,
+`atMin` max, the date input's max) so they cannot drift apart, and the refusal
+reads "check the year on the last day", not "a meet runs for at most N days".
+Because a meet may be long, **Days & courts lists only the days that hold
+something**, with one line for the booked days that hold nothing and a control
+to show them all. The overrun notice shows the ARITHMETIC rather than a
+verdict: hours on the busiest venue, hours a day holds, therefore the days that
+venue alone needs, and which venues hold nothing — because a number of days is
+a symptom and only the arithmetic says what to change.
 
 **The bracket draws its lines.** Every position keeps its cell and a cell
 doubles in height each round, so a card sits exactly between the two that feed

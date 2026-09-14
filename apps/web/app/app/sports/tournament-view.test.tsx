@@ -296,16 +296,29 @@ describe('Tournament view — where the meet is', () => {
     expect(panel.getByText(/Every entered child with a login is told their first slot/)).toBeInTheDocument();
   });
 
-  it('never offers to book more days than a meet may have', async () => {
-    const many = Array.from({ length: 40 }, (_, i) => match({ id: `m${i}`, atMin: i * 1440 + 540 }));
+  it('offers the days a long meet really needs, and shows the arithmetic behind the number', async () => {
+    // a fortnight-long league is a real school thing, not an error
+    const many = Array.from({ length: 20 }, (_, i) => match({ id: `m${i}`, atMin: i * 1440 + 540 }));
     mockApi(detail({ events: [event({ matches: many })] }));
     const u = userEvent.setup();
     renderWithProviders(<TournamentView base="/app/sports" id="t1" />);
     await u.click(await screen.findByRole('tab', { name: /Days & courts/ }));
-    expect(screen.getByRole('button', { name: 'Book 14 days' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Book 40 days' })).toBeNull();
-    expect(screen.getByText(/a meet runs for at most 14 days/)).toBeInTheDocument();
-    expect(screen.getByText(/Court 1 is the bottleneck/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Book 20 days' })).toBeInTheDocument();
+    // and it says WHY twenty, not just that it is twenty
+    expect(screen.getByText(/8 h of it is on Court 1 alone, and a day holds 1 h/)).toBeInTheDocument();
+  });
+
+  it('lists the days that hold something, so length never becomes a wall of empty rows', async () => {
+    const many = [match({ id: 'm0', atMin: 540 }), match({ id: 'm1', atMin: 30 * 1440 + 540 })];
+    mockApi(detail({ endsOn: '2026-10-15', events: [event({ matches: many })] }));
+    const u = userEvent.setup();
+    renderWithProviders(<TournamentView base="/app/sports" id="t1" />);
+    await u.click(await screen.findByRole('tab', { name: /Days & courts/ }));
+    const grid = () => within(screen.getByRole('region', { name: 'Each day of the meet' }));
+    expect(grid().getAllByTitle('Open this day on the board')).toHaveLength(2);
+    expect(screen.getByText(/29 booked days hold nothing and are not listed/)).toBeInTheDocument();
+    await u.click(screen.getByRole('button', { name: 'Show all 31 days' }));
+    expect(grid().getAllByTitle('Open this day on the board')).toHaveLength(31);
   });
 
   it('a break between slots on a court is set with the hours, and is not the child rest gap', async () => {

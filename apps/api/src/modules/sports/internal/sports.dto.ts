@@ -1,4 +1,5 @@
 import { Type } from 'class-transformer';
+import { MAX_MEET_DAYS } from '@skoolos/types';
 import {
   ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, ValidateIf, ValidateNested,
 } from 'class-validator';
@@ -65,7 +66,7 @@ export class EventInDto {
   @IsOptional() @IsInt() @Min(1) @Max(8) advancePerClass?: number;
   @IsOptional() @IsInt() @Min(2) @Max(16) finalists?: number;
   /** Pin this event to a day of the meet (0-based). */
-  @IsOptional() @IsInt() @Min(0) @Max(13) dayIdx?: number;
+  @IsOptional() @IsInt() @Min(0) @Max(MAX_MEET_DAYS - 1) dayIdx?: number;
   @IsString() @IsNotEmpty() @MaxLength(20) groupKey!: string;
   @IsIn(['Boys', 'Girls', 'Mixed']) category!: 'Boys' | 'Girls' | 'Mixed';
   @IsIn(['CLASS', 'DRAW']) structure!: 'CLASS' | 'DRAW';
@@ -106,7 +107,7 @@ export class AddVenueDto {
 
 /** Pin an event to a day, or unpin it with null. */
 export class PinEventDto {
-  @ValidateIf((o) => o.dayIdx !== null) @IsInt() @Min(0) @Max(13) dayIdx!: number | null;
+  @ValidateIf((o) => o.dayIdx !== null) @IsInt() @Min(0) @Max(MAX_MEET_DAYS - 1) dayIdx!: number | null;
 }
 
 /** Move one class's unplayed slots together. */
@@ -119,12 +120,12 @@ export class MoveGroupDto {
 /** Hold several events — a whole category — to one day, or free them all. */
 export class HoldDto {
   @IsArray() @ArrayMaxSize(200) @IsUUID('4', { each: true }) eventIds!: string[];
-  @ValidateIf((o) => o.dayIdx !== null) @IsInt() @Min(0) @Max(13) dayIdx!: number | null;
+  @ValidateIf((o) => o.dayIdx !== null) @IsInt() @Min(0) @Max(MAX_MEET_DAYS - 1) dayIdx!: number | null;
 }
 
 export class MoveSlotDto {
   @IsOptional() @IsUUID() venueId?: string;
-  @IsInt() @Min(0) @Max(1440 * 14) atMin!: number;
+  @IsInt() @Min(0) @Max(1440 * MAX_MEET_DAYS) atMin!: number;
 }
 
 export class ShiftDto {
