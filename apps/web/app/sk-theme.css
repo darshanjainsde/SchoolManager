@@ -3837,3 +3837,13 @@ html[data-theme='light'] .skosx { color-scheme: light; }
 @media (max-width: 560px) { .sk-sp-next li { flex-wrap: wrap; } }
 /* A number of days is a symptom; the arithmetic behind it is what you act on. */
 .sk-sp-why { display: block; margin-bottom: 8px; }
+
+/* The Website Studio's tabs load one at a time (next/dynamic), so the body has
+   a moment with nothing in it. This holds the height so the tab bar above does
+   not jump up and then back down while the chunk arrives. */
+.sk-tabskel {
+  min-height: 320px;
+  border-radius: 14px;
+  background: var(--sk-card);
+  border: 1px solid var(--sk-line);
+}

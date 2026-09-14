@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useApi } from '@/lib/use-api';
@@ -91,11 +91,28 @@ export default function JobsPage() {
   });
 
   const all = jobs ?? [];
-  const shown = filter === 'ALL' ? all : all.filter((j) => j.status === filter);
-  const live = all.filter((j) => j.status === 'APPROVED').length;
-  const inReview = all.filter((j) => j.status === 'PENDING').length;
-  const drafts = all.filter((j) => j.status === 'DRAFT' || j.status === 'REJECTED').length;
-  const unread = all.reduce((n, j) => n + (j.newApplicationCount ?? 0), 0);
+  // One pass for every count the page shows, instead of one pass each — plus
+  // another per chip inside the render, which made nine walks of the list on
+  // every keystroke and every dialog open. `byStatus` is what the chips read.
+  const { byStatus, live, inReview, drafts, unread } = useMemo(() => {
+    const counts: Record<string, number> = {};
+    let unreadTotal = 0;
+    for (const j of all) {
+      counts[j.status] = (counts[j.status] ?? 0) + 1;
+      unreadTotal += j.newApplicationCount ?? 0;
+    }
+    return {
+      byStatus: counts,
+      live: counts.APPROVED ?? 0,
+      inReview: counts.PENDING ?? 0,
+      drafts: (counts.DRAFT ?? 0) + (counts.REJECTED ?? 0),
+      unread: unreadTotal,
+    };
+  }, [all]);
+  const shown = useMemo(
+    () => (filter === 'ALL' ? all : all.filter((j) => j.status === filter)),
+    [all, filter],
+  );
 
   return (
     <div className="skosx">
@@ -164,7 +181,7 @@ export default function JobsPage() {
                 aria-pressed={filter === f.key}
                 onClick={() => setFilter(f.key)}
               >
-                {f.label} {f.key === 'ALL' ? all.length : all.filter((j) => j.status === f.key).length}
+                {f.label} {f.key === 'ALL' ? all.length : byStatus[f.key] ?? 0}
               </button>
             ))}
           </div>
