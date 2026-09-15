@@ -1,4 +1,3 @@
-'use client';
 import type { BirthdayRow, BirthdaysResult } from '@/lib/public-api';
 import type { CelebrationsPage } from '../celebrations-config';
 import { fillWish } from '../celebrations-config';

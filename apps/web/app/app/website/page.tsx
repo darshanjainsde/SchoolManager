@@ -1,17 +1,39 @@
 'use client';
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useSiteForm } from './site-form';
-import HomepageTab from './homepage-tab';
-import AboutTab from './about-tab';
-import ContactTab from './contact-tab';
-import GalleryTab from './gallery-tab';
-import StaffTab from './staff-tab';
-import CoursesTab from './courses-tab';
-import AdmissionsTab from './admissions-tab';
-import HallOfFameTab from './hof-tab';
-import StudioTab from './studio-tab';
-import CelebrationsTab from './celebrations-tab';
-import RecordsTab from './records-tab';
+/**
+ * Eleven tabs, loaded one at a time.
+ *
+ * They were static imports, so opening the Website console downloaded all
+ * eleven — 40.5 kB of route chunk and 187 kB of first-load JavaScript, the
+ * heaviest page in the product — to show the one tab that opens by default.
+ * Only one is ever mounted (the switch below unmounts the rest), so only one
+ * ever needed to be fetched.
+ *
+ * `ssr: false` because nothing here renders without a session anyway: the
+ * console layout shows its skeleton until the API says who you are, so there
+ * is no server render of a tab body to preserve.
+ *
+ * dynamic() is called once per tab, with its options written out in full each
+ * time. Two separate reasons, and both bite: a generic helper widens the
+ * loader's type and erases each tab's props (several take callbacks), and
+ * Next's compiler rejects a shared options object outright — it reads them at
+ * build time and requires an object literal.
+ */
+const loading = () => <div className="sk-tabskel" aria-busy="true" />;
+
+const StudioTab = dynamic(() => import('./studio-tab'), { ssr: false, loading });
+const HomepageTab = dynamic(() => import('./homepage-tab'), { ssr: false, loading });
+const AboutTab = dynamic(() => import('./about-tab'), { ssr: false, loading });
+const ContactTab = dynamic(() => import('./contact-tab'), { ssr: false, loading });
+const GalleryTab = dynamic(() => import('./gallery-tab'), { ssr: false, loading });
+const StaffTab = dynamic(() => import('./staff-tab'), { ssr: false, loading });
+const CoursesTab = dynamic(() => import('./courses-tab'), { ssr: false, loading });
+const AdmissionsTab = dynamic(() => import('./admissions-tab'), { ssr: false, loading });
+const HallOfFameTab = dynamic(() => import('./hof-tab'), { ssr: false, loading });
+const CelebrationsTab = dynamic(() => import('./celebrations-tab'), { ssr: false, loading });
+const RecordsTab = dynamic(() => import('./records-tab'), { ssr: false, loading });
 
 /**
  * Website console shell: the tab bar, plus the one shared settings form the

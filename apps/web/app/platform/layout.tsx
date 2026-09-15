@@ -17,6 +17,7 @@ import '../sk-theme.css';
 import { cn } from '@/lib/cn';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { ConsoleSkeleton } from '@/components/console-skeleton';
 
 /**
  * Owner-portal shell. Two responsibilities:
@@ -171,9 +172,13 @@ export default function PlatformLayout({ children }: { children: ReactNode }) {
   // Render login page without sidebar/guard wrapper
   if (isLogin) return <>{children}</>;
   // Until hydrated, render nothing so the first client paint matches the server.
-  if (!hydrated) return null;
+  if (!hydrated) return <ConsoleSkeleton chrome="side" label="Owner console" />;
   // `unknown` = the probe is still in flight; rendering either the console or
   // a redirect here would flash the wrong thing.
+  // Still asking the API who this is — keep the shell on screen rather than
+  // blanking it. `anon` falls through to null below, where the effect above
+  // is already on its way to /login.
+  if (status === 'unknown') return <ConsoleSkeleton chrome="side" label="Owner console" />;
   if (status !== 'authed') return null;
 
   function handleLogout() {

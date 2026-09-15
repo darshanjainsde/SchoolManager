@@ -26,6 +26,18 @@ export class PortalController {
     return this.birthdays.forAudience(this.tenant.requireTenant().schoolId, 'FAMILIES', window);
   }
 
+  /**
+   * The portal home screen, in one request instead of seven.
+   *
+   * Same data, same rules, same guard — it composes the seven methods the
+   * individual routes below call. Those routes stay: the mobile app uses them,
+   * and a client that wants one section should not have to ask for all seven.
+   */
+  @Get('home')
+  home(@CurrentUser() u: SchoolJwtPayload, @Query('month') month?: string) {
+    return this.portal.home(u.sub, month);
+  }
+
   @Get('profile') profile(@CurrentUser() u: SchoolJwtPayload) { return this.portal.profile(u.sub); }
   @Get('timetable') timetable(@CurrentUser() u: SchoolJwtPayload) { return this.portal.timetable(u.sub); }
   @Get('announcements') announcements(@CurrentUser() u: SchoolJwtPayload) { return this.portal.announcements(u.sub); }

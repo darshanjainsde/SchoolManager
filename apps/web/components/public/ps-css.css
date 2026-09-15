@@ -1,15 +1,30 @@
-/**
- * The public site's entire stylesheet, themed per school through CSS variables
- * set on the root element by `themeRootProps`.
+/*
+ * The public site's entire stylesheet, themed per school through CSS custom
+ * properties set on the root element by `themeRootProps`.
  *
- * It lives in its own module so that every surface wearing a school's identity
- * — the site itself and the school's blog — injects the SAME stylesheet rather
- * than a copy that can drift. The CSS guard tests read this file directly.
+ * One file so that every surface wearing a school's identity — the site, the
+ * school's blog chrome, the portal birthday wall — gets the SAME stylesheet
+ * rather than a copy that can drift. The CSS guard tests read this file directly.
  *
- * NOTE: this is a template literal. Never use backticks inside its comments —
- * one closes the string and the compiler reads the rest of the CSS as JS.
+ * WHY IT IS A .css FILE AND NOT A TEMPLATE LITERAL.
+ * It used to be `export const PS_CSS` in ps-css.ts, injected with
+ * `dangerouslySetInnerHTML` by three client components. That shipped it TWICE
+ * on every school page: 23.2 KB brotli inlined into the HTML — 55% of a 42.5 KB
+ * homepage, and uncacheable because it lives inside the document — plus a
+ * 23.4 KB brotli JavaScript chunk that existed for nothing else, because a
+ * client component's imports are bundled for the browser.
+ *
+ * As a stylesheet the browser fetches it once, caches it immutably by content
+ * hash, and reuses it across every page of the site and across schools. It is
+ * also no longer parsed as JavaScript.
+ *
+ * ORDER MATTERS: this must load AFTER Tailwind. `.ps-head` sets an ink colour
+ * that silently beat Tailwind's `.text-white` (invisible headings on the dark
+ * Hall of Fame and Events bands) — the `.ps-head.text-white` rule below only
+ * works because this sheet wins on source order. Tailwind comes from
+ * app/globals.css in the ROOT layout; this is imported from components inside
+ * child routes, so Next emits it after. `ps-css-order.test.ts` guards that.
  */
-export const PS_CSS = `
   /* color-scheme: a school site is single-theme light by design, and without
      this the BROWSER paints every unstyled form control (inputs, selects,
      number spinners, date pickers, scrollbars) in the visitor's OS dark theme
@@ -1567,4 +1582,4 @@ export const PS_CSS = `
   @keyframes ps-rec-ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }
   .ps-motion-off .ps-rec-strip-track { animation: none; }
   @media (prefers-reduced-motion: reduce) { .ps-rec-strip-track { animation: none; } }
-`;
+

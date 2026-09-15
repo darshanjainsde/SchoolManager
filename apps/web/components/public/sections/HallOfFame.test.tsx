@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import HallOfFame, { HOF_LAYOUTS, hofHasEntries } from './HallOfFame';
+import HallOfFame, { HOF_LAYOUTS } from './HallOfFame';
+import { hofHasEntries } from './hof-model';
 import type { PublicHallOfFame } from '@/lib/public-api';
 
 const entry = (batchYear: number, rank: number, name: string, achievement: string | null = null) => ({

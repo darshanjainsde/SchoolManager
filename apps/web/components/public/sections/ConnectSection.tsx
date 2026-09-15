@@ -1,5 +1,6 @@
 'use client';
 
+import { optimised } from '@/lib/img';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { PublicSiteData } from '@/lib/public-api';
@@ -75,7 +76,7 @@ function EventCard({
       data-testid={`event-card-${event.id}`}
       className="reveal ps-lift ps-panel overflow-hidden flex flex-col"
     >
-      {cover && <div className="h-36 bg-cover bg-center" style={{ backgroundImage: `url('${cover}')` }} />}
+      {cover && <div className="h-36 bg-cover bg-center" style={{ backgroundImage: `url('${optimised(cover, 828)}')` }} />}
       <div className="p-5 flex-1 flex flex-col">
         <div className="flex items-start gap-4">
           {/* The date is an object, not a substring of a grey sentence: WHEN is

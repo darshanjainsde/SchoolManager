@@ -14,6 +14,7 @@ import { SckoolsLogo } from '@/components/brand/sckools-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { SportsShell } from '@/app/app/sports/shell';
 import '../sk-theme.css';
+import { ConsoleSkeleton } from '@/components/console-skeleton';
 
 /**
  * THE SPORTS TEACHER'S DOOR — the library's door, one wing over.
@@ -33,7 +34,7 @@ export default function SportsLayout({ children }: { children: ReactNode }) {
   const status = useAuthStore((s) => s.status);
   const audience = useAuthStore((s) => s.audience);
   const api = useApi({ audience: 'school', hostHeader: host });
-  useSessionProbe(api, 'school', !!host);
+  useSessionProbe(api, 'school', !!host, host);
   const clear = useAuthStore((s) => s.clear);
 
   const me = useQuery({
@@ -55,7 +56,7 @@ export default function SportsLayout({ children }: { children: ReactNode }) {
     }
   }, [hydrated, status, audience, me.data, pathname, router]);
 
-  if (!hydrated) return null;
+  if (!hydrated) return <ConsoleSkeleton chrome="side" label="Sports desk" />;
 
   if (!isSchoolHost(host)) {
     return (
@@ -72,6 +73,10 @@ export default function SportsLayout({ children }: { children: ReactNode }) {
     );
   }
 
+  // Still asking the API who this is — keep the shell on screen rather than
+  // blanking it. `anon` falls through to null below, where the effect above
+  // is already on its way to /login.
+  if (status === 'unknown') return <ConsoleSkeleton chrome="side" label="Sports desk" />;
   if (status !== 'authed' || audience !== 'school') return null;
 
   async function handleLogout() {

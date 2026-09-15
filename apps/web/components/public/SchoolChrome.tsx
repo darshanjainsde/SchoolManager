@@ -2,10 +2,10 @@
 
 import { useEffect } from 'react';
 import type { PublicSiteData } from '@/lib/public-api';
-import { PS_CSS } from './ps-css';
+import './ps-css.css';
 import { themeRootProps, navFlagsFor } from './site-theme';
 import { admissionsHasContent } from './sections/AdmissionsSection';
-import { hofHasEntries } from './sections/HallOfFame';
+import { hofHasEntries } from './sections/hof-model';
 import SiteNav from './sections/SiteNav';
 
 /**
@@ -37,7 +37,7 @@ export default function SchoolChrome({
 
   // The nav elevates on scroll on every other page; without this the blog's
   // bar would be the one that never does. The same pass reveals `.reveal`
-  // content — PS_CSS hides it until the `.in` class arrives, and this chrome
+  // content — ps-css.css hides it until the `.in` class arrives, and this chrome
   // had no revealer at all, so anything marked reveal stayed invisible
   // forever (the blog index header shipped blank). Position-based, exactly
   // like PublicSite: no IntersectionObserver, so a background tab still shows
@@ -74,7 +74,6 @@ export default function SchoolChrome({
 
   return (
     <div className={className} style={style}>
-      <style dangerouslySetInnerHTML={{ __html: PS_CSS }} />
       {/* base="/" because nothing here is the homepage: section anchors have to
           travel back to it rather than pointing at this page. */}
       <SiteNav

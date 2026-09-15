@@ -21,6 +21,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { NotificationBell } from '@/components/notifications/notification-bell';
 import { NAV_ITEMS } from './nav-items';
 import '../sk-theme.css';
+import { ConsoleSkeleton } from '@/components/console-skeleton';
 
 /** Moves focus back inside the drawer when Tab would otherwise leave it. */
 function trapFocus(e: React.KeyboardEvent<HTMLDivElement>, container: HTMLDivElement | null) {
@@ -69,7 +70,7 @@ export default function TeacherLayout({ children }: { children: ReactNode }) {
   const clear = useAuthStore((s) => s.clear);
   const host = useHost();
   const api = useApi({ audience: 'school', hostHeader: host });
-  useSessionProbe(api, 'school', !!host);
+  useSessionProbe(api, 'school', !!host, host);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerPanelRef = useRef<HTMLDivElement>(null);
 
@@ -126,8 +127,12 @@ export default function TeacherLayout({ children }: { children: ReactNode }) {
     if (drawerOpen) drawerPanelRef.current?.focus();
   }, [drawerOpen]);
 
-  if (!hydrated) return null;
+  if (!hydrated) return <ConsoleSkeleton chrome="side" label="Teacher portal" />;
   // `unknown` = the session probe is still in flight.
+  // Still asking the API who this is — keep the shell on screen rather than
+  // blanking it. `anon` falls through to null below, where the effect above
+  // is already on its way to /login.
+  if (status === 'unknown') return <ConsoleSkeleton chrome="side" label="Teacher portal" />;
   if (status !== 'authed') return null;
 
   const isActive = (href: string) => pathname === href || (href !== '/teacher' && pathname.startsWith(href));

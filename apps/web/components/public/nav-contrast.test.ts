@@ -11,7 +11,7 @@ import { join } from 'node:path';
  * control. It was never a colour a school configured badly; it was a selector
  * that did not reach.
  */
-const CSS = readFileSync(join(__dirname, 'ps-css.ts'), 'utf8');
+const CSS = readFileSync(join(__dirname, 'ps-css.css'), 'utf8');
 
 describe('the dark-bar ink reaches the actions', () => {
   it('colours .ps-nav-link itself, not only links inside <nav>', () => {

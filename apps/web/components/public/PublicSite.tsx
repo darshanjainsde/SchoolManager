@@ -1,16 +1,16 @@
-'use client';
-
 import Link from 'next/link';
 import { optimised } from '@/lib/img';
-import { Fragment, useEffect, type ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import type { BirthdaysResult, PublicSiteData, RecordsBook } from '@/lib/public-api';
 import { isNearWhite, lighten, mix } from './site-utils';
-import HeroSection, { heroImagesOf, heroIsPhotoLayout } from './sections/HeroSection';
+import HeroSection from './sections/HeroSection';
+import { heroImagesOf, heroIsPhotoLayout } from './sections/hero-model';
 import SiteNav from './sections/SiteNav';
 import CoursesFeatured from './sections/CoursesFeatured';
 import AcademicsSection from './sections/AcademicsSection';
 import AdmissionsSection, { admissionsHasContent } from './sections/AdmissionsSection';
-import HallOfFame, { hofHasEntries } from './sections/HallOfFame';
+import HallOfFame from './sections/HallOfFame';
+import { hofHasEntries } from './sections/hof-model';
 import GallerySection from './sections/GallerySection';
 import EventsSection from './sections/EventsSection';
 import ConnectSection from './sections/ConnectSection';
@@ -20,7 +20,8 @@ import BirthdayTeaser from './sections/BirthdayTeaser';
 import RecordsSection from './sections/RecordsSection';
 import RecordsTeaser, { type RecordsHomeLayout } from './sections/RecordsTeaser';
 import { SUBPAGES } from './subpages';
-import { PS_CSS } from './ps-css';
+import './ps-css.css';
+import SiteMotion from './site-motion';
 import { themeRootProps } from './site-theme';
 import ContactSection from './sections/ContactSection';
 import FooterSection from './sections/FooterSection';
@@ -141,119 +142,9 @@ export default function PublicSite({ data, view = 'home', page, birthdays = null
   const principalPhotoUrl = data.homepage?.principalPhotoUrl;
   const aboutImageUrl = data.homepage?.aboutImageUrl;
 
-  useEffect(() => {
-    const nav = document.getElementById('ps-nav');
-
-    // Reveal-on-scroll and the count-up are POSITION-based, not driven by an
-    // IntersectionObserver. Content is hidden until it gets `.in`, so a starved
-    // observer — the page opened in a BACKGROUND tab (rAF + IO callbacks are
-    // paused until it's shown), an engine that defers the first frame — left the
-    // ENTIRE page permanently blank. A synchronous rect sweep on mount, plus on
-    // scroll/resize/visibility, can never do that: whatever is on screen reveals
-    // at once, the rest as it scrolls in, and nothing depends on an async frame.
-    const reveals = Array.from(document.querySelectorAll<HTMLElement>('.reveal'));
-    const counts = Array.from(document.querySelectorAll<HTMLElement>('.count'));
-    const runCount = (el: HTMLElement) => {
-      const to = Number(el.dataset.to);
-      if (isNaN(to)) return;
-      const suffix = el.dataset.suffix ?? '';
-      let n = 0;
-      const step = Math.max(1, Math.round(to / 60));
-      const timer = setInterval(() => {
-        n += step;
-        if (n >= to) { n = to; clearInterval(timer); }
-        el.textContent = (to >= 1000 ? n.toLocaleString() : String(n)) + suffix;
-      }, 18);
-    };
-    const sweep = () => {
-      const vh = window.innerHeight || 800;
-      if (nav) nav.classList.toggle('ps-nav-scrolled', window.scrollY > 30);
-      for (let i = reveals.length - 1; i >= 0; i--) {
-        if (reveals[i].getBoundingClientRect().top < vh * 0.92) {
-          reveals[i].classList.add('in');
-          reveals.splice(i, 1);
-        }
-      }
-      for (let i = counts.length - 1; i >= 0; i--) {
-        if (counts[i].getBoundingClientRect().top < vh * 0.85) {
-          runCount(counts[i]);
-          counts.splice(i, 1);
-        }
-      }
-    };
-    let raf = 0;
-    const onScroll = () => {
-      if (!raf) raf = requestAnimationFrame(() => { raf = 0; sweep(); });
-    };
-    sweep(); // reveal whatever is already on screen, synchronously
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll);
-    // Opened in a background tab? Sweep again the moment it becomes visible.
-    const onVis = () => { if (!document.hidden) sweep(); };
-    document.addEventListener('visibilitychange', onVis);
-
-    // Magnetic glow buttons
-    const handleMouseMove = (e: MouseEvent) => {
-      const b = e.currentTarget as HTMLElement;
-      const r = b.getBoundingClientRect();
-      b.style.setProperty('--x', `${e.clientX - r.left}px`);
-      b.style.setProperty('--y', `${e.clientY - r.top}px`);
-    };
-    const btns = document.querySelectorAll<HTMLElement>('.btn-glow');
-    btns.forEach((b) => b.addEventListener('mousemove', handleMouseMove));
-
-    return () => {
-      window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onScroll);
-      document.removeEventListener('visibilitychange', onVis);
-      if (raf) cancelAnimationFrame(raf);
-      btns.forEach((b) => b.removeEventListener('mousemove', handleMouseMove));
-    };
-  }, []);
-
-  // ── Scroll feel: GLIDE ──
-  // A weighted wheel: input moves a target, the page eases toward it. Wheel
-  // only (trackpads and touch keep their native inertia — hijacking those
-  // fights the OS), and never under reduced-motion or Animation=Off.
-  useEffect(() => {
-    if (!glideOn) return;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    let target = window.scrollY;
-    let raf = 0;
-    let animating = false;
-    const maxY = () => document.documentElement.scrollHeight - window.innerHeight;
-    const loop = () => {
-      const cur = window.scrollY;
-      const next = cur + (target - cur) * 0.12;
-      if (Math.abs(target - next) < 1) {
-        window.scrollTo(0, target);
-        animating = false;
-        raf = 0;
-        return;
-      }
-      window.scrollTo(0, next);
-      raf = requestAnimationFrame(loop);
-    };
-    const onWheel = (e: WheelEvent) => {
-      // Pinch-zoom (ctrl+wheel) and horizontal scrolling stay native.
-      if (e.ctrlKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
-      e.preventDefault();
-      target = Math.max(0, Math.min(maxY(), target + e.deltaY));
-      animating = true;
-      if (!raf) raf = requestAnimationFrame(loop);
-    };
-    const onScroll = () => {
-      // Scrollbar drags and keyboard scrolling re-anchor the target.
-      if (!animating) target = window.scrollY;
-    };
-    window.addEventListener('wheel', onWheel, { passive: false });
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => {
-      window.removeEventListener('wheel', onWheel);
-      window.removeEventListener('scroll', onScroll);
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, [glideOn]);
+  // Reveal-on-scroll, the count-up and the Glide scroll feel all live in
+  // SiteMotion — a client leaf mounted in the root below. Keeping them out of
+  // here is what lets this component render on the server.
 
   // (Scroll feel HORIZONTAL/"Side-scroll" is retired — see SCROLL_FEELS in
   // site-variants.ts. Saved configs still validate and render as Classic.)
@@ -481,8 +372,7 @@ export default function PublicSite({ data, view = 'home', page, birthdays = null
 
   return (
     <div className={themeRoot.className} style={themeRoot.style}>
-      {/* Injected theme CSS */}
-      <style dangerouslySetInnerHTML={{ __html: PS_CSS }} />
+      <SiteMotion glideOn={glideOn} />
       {/* Per-section overrides: sanitized on write, scoped here on render. */}
       {customCss && <style dangerouslySetInnerHTML={{ __html: customCss }} />}
       {/* Festive decoration layer + greeting strip (palette work lives in

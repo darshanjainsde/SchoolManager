@@ -792,6 +792,28 @@ export interface StudentDiaryResult {
   unsignedCount: number;
 }
 
+/**
+ * `GET /me/home` — everything the portal home screen shows, in one answer.
+ *
+ * The screen used to open with seven requests. On the API each of those
+ * resolved the student in one tenant transaction and then fetched its data in
+ * another, so a single page view cost about fourteen — on the highest-traffic
+ * screen in the product, opened by every family every day.
+ *
+ * Each field is the SAME shape its own route returns, because the composed
+ * endpoint calls those same service methods. The seven routes are unchanged
+ * and still serve the mobile app and anything wanting one section.
+ */
+export interface PortalHome {
+  profile: Profile;
+  timetable: TimetableSlot[];
+  announcements: Announcement[];
+  attendance: AttendanceSummary;
+  exams: UpcomingExam[];
+  results: PublishedResult[];
+  diary: StudentDiaryResult;
+}
+
 /** `POST /me/diary/:id/sign` — the signature a parent types in the margin. */
 export interface DiarySignResult {
   id: string;

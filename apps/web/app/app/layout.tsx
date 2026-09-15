@@ -19,6 +19,7 @@ import { Z } from '@/lib/z-layers';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
 import '../sk-theme.css';
+import { ConsoleSkeleton } from '@/components/console-skeleton';
 
 
 /** Moves focus back inside the drawer when Tab would otherwise leave it. */
@@ -182,7 +183,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const audience = useAuthStore((s) => s.audience);
   const clear = useAuthStore((s) => s.clear);
   const api = useApi({ audience: 'school', hostHeader: host });
-  useSessionProbe(api, 'school', !!host);
+  useSessionProbe(api, 'school', !!host, host);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerPanelRef = useRef<HTMLDivElement>(null);
   // Collapse the desktop sidebar to an icons-only rail, so the main editor gets
@@ -295,8 +296,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     if (drawerOpen) drawerPanelRef.current?.focus();
   }, [drawerOpen]);
 
-  // Until hydrated, render nothing so the first client paint matches the server.
-  if (!hydrated) return null;
+  // Not blank while we work out who you are: the shell paints from the
+  // prerendered HTML, and the skeleton holds the same geometry as the real one.
+  if (!hydrated) return <ConsoleSkeleton chrome="side" label="School admin" />;
 
   // The admin portal resolves its school from the host. On the platform host
   // (localhost / owner.localhost) there is no tenant, so every API call would
@@ -323,7 +325,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  if (status === 'unknown' && !accessToken) return null;
+  if (status === 'unknown' && !accessToken) return <ConsoleSkeleton chrome="side" label="School admin" />;
   if (!hasSession || audience !== 'school') return null;
 
   function handleLogout() {

@@ -17,6 +17,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { NotificationBell } from '@/components/notifications/notification-bell';
 import { MobileNavButton, MobileNavDrawer } from '@/components/MobileNavDrawer';
 import '../sk-theme.css';
+import { ConsoleSkeleton } from '@/components/console-skeleton';
 
 
 export default function PortalLayout({ children }: { children: ReactNode }) {
@@ -30,7 +31,7 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
   const probeApi = useApi({ audience: 'school', hostHeader: host });
   // Waits for the tenant host: a school refresh without it cannot resolve
   // which school the session belongs to.
-  useSessionProbe(probeApi, 'school', !!host);
+  useSessionProbe(probeApi, 'school', !!host, host);
   const clear = useAuthStore((s) => s.clear);
 
   // Same role guard as /teacher and /app: this portal is student-only. The
@@ -81,8 +82,9 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
     }
   }, [hydrated, status, audience, me.data, router]);
 
-  // Until hydrated, render nothing so the first client paint matches the server.
-  if (!hydrated) return null;
+  // Not blank while we work out who you are: the shell paints from the
+  // prerendered HTML, and the skeleton holds the same geometry as the real one.
+  if (!hydrated) return <ConsoleSkeleton chrome="top" label="Student portal" />;
 
   // The portal resolves its school from the host — only works on a school subdomain.
   if (!isSchoolHost(host)) {
@@ -101,6 +103,10 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
     );
   }
 
+  // Still asking the API who this is — keep the shell on screen rather than
+  // blanking it. `anon` falls through to null below, where the effect above
+  // is already on its way to /login.
+  if (status === 'unknown') return <ConsoleSkeleton chrome="top" label="Student portal" />;
   if (status !== 'authed' || audience !== 'school') return null;
 
   const isActive = (href: string) =>

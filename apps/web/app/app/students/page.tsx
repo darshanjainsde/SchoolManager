@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { useState, type CSSProperties, type FocusEvent, type ReactNode } from 'react';
+import { useMemo, useState, type CSSProperties, type FocusEvent, type ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Plus, Trash2, Pencil, X, KeyRound, CheckCircle2, Send, UserMinus, Undo2 } from 'lucide-react';
@@ -816,21 +816,43 @@ export default function StudentsPage() {
    * counter is holding when they need to find a child — an admission slip, a
    * parent on the phone, or a name.
    */
-  const students = allStudents.filter((st) => {
+  // Memoised because this runs on EVERY render, and the renders that matter are
+  // the ones where none of it changed: a keystroke in the search box, a
+  // checkbox, opening a dialog. Unmemoised this was four full passes over the
+  // roster per render — the filter, then two counts, then the selection — plus
+  // a `trim().toLowerCase()` rebuilt inside the callback for every child. The
+  // server ceiling on this list is 20,000.
+  const students = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return true;
-    return (
-      `${st.firstName} ${st.lastName}`.toLowerCase().includes(q) ||
-      st.admissionNo.toLowerCase().includes(q) ||
-      (st.guardianName ?? '').toLowerCase().includes(q)
+    if (!q) return allStudents;
+    return allStudents.filter(
+      (st) =>
+        `${st.firstName} ${st.lastName}`.toLowerCase().includes(q) ||
+        st.admissionNo.toLowerCase().includes(q) ||
+        (st.guardianName ?? '').toLowerCase().includes(q),
     );
-  });
-  const unassignedCount = students.filter((s) => !s.classSectionId).length;
-  const loginCount = students.filter((s) => s.userId).length;
+  }, [allStudents, search]);
+
+  // One pass for both counts rather than one each.
+  const { unassignedCount, loginCount } = useMemo(() => {
+    let unassigned = 0;
+    let logins = 0;
+    for (const s of students) {
+      if (!s.classSectionId) unassigned += 1;
+      if (s.userId) logins += 1;
+    }
+    return { unassignedCount: unassigned, loginCount: logins };
+  }, [students]);
+
   // Only active children can be marked as left, and only the ones on screen.
   const selectable = statusTab === 'active';
-  const selectedShown = selectable ? students.filter((s) => selected.has(s.id)) : [];
-  const allShownSelected = selectable && students.length > 0 && students.every((s) => selected.has(s.id));
+  const selectedShown = useMemo(
+    () => (selectable ? students.filter((s) => selected.has(s.id)) : []),
+    [selectable, students, selected],
+  );
+  // Same answer as `students.every(s => selected.has(s.id))` — selectedShown is
+  // exactly that filter — without walking the roster a second time.
+  const allShownSelected = selectable && students.length > 0 && selectedShown.length === students.length;
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
