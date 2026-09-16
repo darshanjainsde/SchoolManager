@@ -2,7 +2,7 @@ import 'reflect-metadata';
 
 const txMock = {
   academicYear: { findMany: jest.fn(), findFirst: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
-  classSection: { findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn() },
+  classSection: { findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn(), createMany: jest.fn() },
   student: { groupBy: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn(), updateMany: jest.fn(), count: jest.fn() },
   sessionPlan: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn(), updateMany: jest.fn(), findUnique: jest.fn() },
   sessionDecision: { findMany: jest.fn(), upsert: jest.fn(), update: jest.fn(), updateMany: jest.fn(), createMany: jest.fn() },
@@ -126,10 +126,20 @@ describe('copyStructure', () => {
       ])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{ id: 't5a', gradeId: 'g5', name: 'A', classTeacherId: null }, { id: 't6a', gradeId: 'g6', name: 'A', classTeacherId: 'T2' }]);
-    txMock.classSection.create.mockResolvedValue({});
+    txMock.classSection.createMany.mockImplementation(({ data }: { data: unknown[] }) => Promise.resolve({ count: data.length }));
     const r = await service().copyStructure(SCHOOL);
-    expect(txMock.classSection.create).toHaveBeenCalledWith({ data: { schoolId: SCHOOL, gradeId: 'g5', name: 'A', academicYearId: 'y2', classTeacherId: null } });
-    expect(txMock.classSection.create).toHaveBeenCalledWith({ data: { schoolId: SCHOOL, gradeId: 'g6', name: 'A', academicYearId: 'y2', classTeacherId: 'T2' } });
+    // ONE statement for every class. This used to create() inside the loop, so a
+    // school with thirty sections spent thirty sequential round trips here, each
+    // holding the tenant transaction — and its pooled connection — open.
+    expect(txMock.classSection.createMany).toHaveBeenCalledTimes(1);
+    expect(txMock.classSection.create).not.toHaveBeenCalled();
+    const made = txMock.classSection.createMany.mock.calls[0][0];
+    expect(made.skipDuplicates).toBe(true);
+    expect(made.data).toEqual([
+      // The LEFT class teacher is dropped; the ACTIVE one is carried over.
+      { schoolId: SCHOOL, gradeId: 'g5', name: 'A', academicYearId: 'y2', classTeacherId: null },
+      { schoolId: SCHOOL, gradeId: 'g6', name: 'A', academicYearId: 'y2', classTeacherId: 'T2' },
+    ]);
     expect(r.sectionMap).toEqual({ f5a: 't6a', f6a: 'PASS_OUT' });
     expect(r.sectionsWithoutClassTeacher).toEqual(['t5a']);
     expect(r.created).toBe(2);
@@ -472,10 +482,16 @@ describe('applyDefaults — the master Promote button', () => {
   it('promotes every undecided child by the class map, passes out the top grade, never touches a decided child, and names the unmapped classes', async () => {
     const r = await service().applyDefaults(SCHOOL, ACTOR);
     expect(r).toEqual({ decided: 2, alreadyDecided: 1, unmapped: ['7 C'], version: 3 });
-    const calls = txMock.sessionDecision.createMany.mock.calls.map((c) => c[0]);
-    expect(calls[0].data).toEqual([expect.objectContaining({ studentId: 's1', decision: 'PROMOTE', toSectionId: 't6b', decidedById: ACTOR })]);
-    expect(calls[0].skipDuplicates).toBe(true);
-    expect(calls[1].data).toEqual([expect.objectContaining({ studentId: 's3', decision: 'PASS_OUT', toSectionId: null })]);
+    // ONE statement for the whole roll, not one per closing class.
+    expect(txMock.sessionDecision.createMany).toHaveBeenCalledTimes(1);
+    const call = txMock.sessionDecision.createMany.mock.calls[0][0];
+    expect(call.skipDuplicates).toBe(true);
+    expect(call.data).toEqual([
+      expect.objectContaining({ studentId: 's1', decision: 'PROMOTE', toSectionId: 't6b', decidedById: ACTOR }),
+      expect.objectContaining({ studentId: 's3', decision: 'PASS_OUT', toSectionId: null }),
+    ]);
+    // s2 already had a decision and s4's class ('7 C') is unmapped — neither is touched.
+    expect(call.data).toHaveLength(2);
   });
 });
 

@@ -1004,6 +1004,12 @@ model ClassSection {
 
   @@unique([schoolId, gradeId, name, academicYearId])
   @@index([schoolId])
+  // The Sessions wizard asks "which classes belong to this year?" six times in
+  // one pass, and `@@index([schoolId])` alone could not answer it: the year
+  // filter fell to a Seq Scan over EVERY school's sections. Measured on a
+  // 200-school database that discarded 5,970 rows to find 30, and it grows with
+  // the number of schools on the platform rather than with the school asking.
+  @@index([schoolId, academicYearId])
 }
 
 model Subject {

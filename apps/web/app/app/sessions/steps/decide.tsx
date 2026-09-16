@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
@@ -35,6 +35,13 @@ export default function DecideStep({ plan, onNext }: { plan: PlanView; onNext: (
     queryKey: ['session-rows', host, current, plan.version],
     queryFn: () => api.get(`/manage/sessions/plan/students?sectionId=${current}`),
     enabled: !!host && !!current,
+    // `plan.version` is in the key and nearly every action here increments it —
+    // changing the pass mark, ticking an exam, promoting a class. Each of those
+    // asked for a key React Query had never seen, so the whole table of children
+    // vanished and came back a round trip later. It now stays on screen and the
+    // numbers change under it. Switching CLASS still shows a fresh load, which
+    // is right: that genuinely is a different list.
+    placeholderData: keepPreviousData,
   });
 
   const [passMark, setPassMark] = useState(String(plan.passMarkPct));
