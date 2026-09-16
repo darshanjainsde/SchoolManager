@@ -12,6 +12,7 @@ import {
   FREQUENCY_LABEL, rupees, toMinor, toRupeeInput,
   type Concession, type FeeCategory, type FeeGrid, type FeeSettings, type FeeTerm, type LateFeeMode,
 } from '@/lib/fees';
+import { QueryError } from '@/components/ui/query-state';
 
 interface Year { id: string; name: string; isCurrent: boolean }
 
@@ -568,6 +569,8 @@ function GridStep({ api, qc, host, yearId }: { api: Api; qc: Qc; host: Host; yea
     setEdits(next); setDirty(true);
   };
 
+  // The fee grid is money. A failed load must say so, not sit on "Loading…".
+  if (grid.isError) return <QueryError error={grid.error} onRetry={grid.refetch} className="" />;
   if (grid.isLoading || !d) return <p className="sk-state">Loading the fee grid…</p>;
   if (d.grades.length === 0) return <p className="sk-state err">Add classes before setting fee amounts.</p>;
   if (d.categories.length === 0) return <p className="sk-state err">Add fee categories in step 1 first.</p>;

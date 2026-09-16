@@ -7,6 +7,7 @@ import { useApi } from '@/lib/use-api';
 import { BackToFees } from '@/components/fees/back-to-fees';
 import { useHost } from '@/components/use-host';
 import type { PaymentSetup } from '@/lib/fees';
+import { QueryError } from '@/components/ui/query-state';
 
 /**
  * How parents can pay.
@@ -56,6 +57,7 @@ export default function PaymentSetupPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  if (setup.isError) return <QueryError error={setup.error} onRetry={setup.refetch} className="" />;
   if (setup.isLoading || !setup.data) return <p className="sk-state">Loading payment settings…</p>;
 
   return (

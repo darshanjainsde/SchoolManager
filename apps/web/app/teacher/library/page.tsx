@@ -4,6 +4,7 @@ import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { ApiError } from '@/lib/api';
 import type { MeLibraryPayload } from '@/lib/library-types';
+import { QueryError } from '@/components/ui/query-state';
 
 function fmtDay(iso: string): string {
   return new Date(`${iso}T00:00:00+05:30`).toLocaleDateString('en-IN', {
@@ -56,6 +57,10 @@ export default function TeacherLibraryPage() {
       </div>
     );
   }
+  // The 403/404 answers above are designed refusals. Anything else — a 500,
+  // a dropped connection, an expired session — used to fall through to the
+  // loading line below and sit there for good.
+  if (shelf.isError) return <QueryError error={shelf.error} onRetry={shelf.refetch} className="py-10" />;
   if (shelf.isLoading || !shelf.data) {
     return <p className="py-10 text-center text-sm text-[var(--sk-ink-3)]">Fetching your books…</p>;
   }

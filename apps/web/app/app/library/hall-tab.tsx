@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { Card, EmptyRow, Pill, type HallPayload } from './ui';
+import { QueryError } from '@/components/ui/query-state';
 
 type Status = 'PRESENT' | 'ABSENT' | 'LATE';
 const NEXT_STATUS: Record<Status, Status> = { PRESENT: 'ABSENT', ABSENT: 'LATE', LATE: 'PRESENT' };
@@ -51,6 +52,7 @@ export default function HallTab() {
     onError: (e) => toast.error((e as Error).message),
   });
 
+  if (hall.isError) return <QueryError error={hall.error} onRetry={hall.refetch} className="" />;
   if (hall.isLoading || !hall.data) {
     return <p className="sk-state">Checking the hall…</p>;
   }

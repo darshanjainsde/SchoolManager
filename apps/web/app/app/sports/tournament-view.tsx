@@ -15,6 +15,7 @@ import { ScoreBox } from '@/components/sports/score-box';
 import { clashesOf, dayIndexOf, daySpanOf, eventLabel, slotsOf, type Slot } from '@/components/sports/model';
 import { hhmm } from '@skoolos/types';
 import { Card, CardBody, CardHead, EmptyRow, Pill, STATUS_LABEL, TONE, fmtDay, useDesk, type MatchRow, type TournamentDetail } from './ui';
+import { QueryError } from '@/components/ui/query-state';
 
 type View = 'schedule' | 'day' | 'plan' | 'events' | 'clashes';
 
@@ -153,6 +154,7 @@ export default function TournamentView({ base, id }: { base: string; id: string 
     refit: () => plan.mutate({ kind: 'refit' }),
   };
 
+  if (q.isError) return <QueryError error={q.error} onRetry={q.refetch} className="" />;
   if (q.isLoading || !t) return <p className="sk-state">Opening the tournament…</p>;
   const live = t.status === 'LIVE';
   const event = t.events.find((e) => e.id === eventId) ?? t.events[0];

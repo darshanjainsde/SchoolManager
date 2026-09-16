@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
+import { QueryError } from '@/components/ui/query-state';
 
 /**
  * The school's letterhead, and optionally its own sender.
@@ -204,6 +205,14 @@ export function EmailSettingsCard() {
     onError: (e) => toast.error((e as Error).message),
   });
 
+  if (q.isError) {
+    return (
+      <div className="sk-card">
+        <div className="sk-card-h"><h3>Email</h3></div>
+        <QueryError error={q.error} onRetry={q.refetch} />
+      </div>
+    );
+  }
   if (q.isLoading || !q.data) {
     return (
       <div className="sk-card">
