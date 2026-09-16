@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { withTenant, type TenantTx } from '@skoolos/db';
+import { randomUUID } from 'node:crypto';
+import { Prisma, withTenant, type TenantTx } from '@skoolos/db';
+import { createInBatches } from '../../common/db/chunk';
 import { ApiError } from '../../common/errors/api-error';
 import { applyBps, clampConcession } from './money';
 
@@ -282,17 +284,48 @@ export class FeeBillingService {
       });
       const series = `INV/${year.name}`;
 
+      /**
+       * Four statements for the whole term, not three round trips per child.
+       *
+       * This loop used to ask fee_next_number() once per student, then insert
+       * the invoice, then insert the ledger debit — all inside ONE withTenant
+       * transaction whose timeout is 10 seconds and which holds a pgbouncer
+       * client for its entire life.
+       *
+       * Measured on production (2026-09-16): /public/site does 13 queries in
+       * one withTenant and costs 92 ms more than /health, which does none —
+       * 5.8 ms per round trip including query execution. At a conservative 3 ms
+       * for a small write, 1,500 children x 3 round trips is 13.5 seconds. The
+       * transaction would abort and the school could not bill at all, with no
+       * code change to blame it on. Billing is seasonal too: every school does
+       * it in the same few days, and the pooler tops out near 200 clients.
+       *
+       * The numbers are reserved as one block (see the fee_next_block
+       * migration) and the rows written with createMany, so the work is
+       * O(rows / 1000) statements instead of O(rows) round trips.
+       *
+       * Ids are generated here rather than by the database because the ledger
+       * debit has to point at its invoice, and createMany does not return the
+       * rows it wrote.
+       */
+      const pending = summary.invoices.filter((inv) => !inv.alreadyBilled);
       let created = 0;
-      for (const inv of summary.invoices) {
-        if (inv.alreadyBilled) continue;
 
-        const [{ fee_next_number: seq }] = await tx.$queryRaw<{ fee_next_number: number }[]>`
-          SELECT fee_next_number(${schoolId}::uuid, ${series}::text)
+      if (pending.length > 0) {
+        const [{ fee_next_block: firstNumber }] = await tx.$queryRaw<{ fee_next_block: number }[]>`
+          SELECT fee_next_block(${schoolId}::uuid, ${series}::text, ${pending.length}::int)
         `;
-        const number = `${series}/${String(seq).padStart(5, '0')}`;
 
-        const invoice = await tx.feeInvoice.create({
-          data: {
+        const invoices: Prisma.FeeInvoiceCreateManyInput[] = [];
+        const lines: Prisma.FeeInvoiceLineCreateManyInput[] = [];
+        const ledger: Prisma.FeeLedgerEntryCreateManyInput[] = [];
+
+        pending.forEach((inv, i) => {
+          const invoiceId = randomUUID();
+          const number = `${series}/${String(firstNumber + i).padStart(5, '0')}`;
+
+          invoices.push({
+            id: invoiceId,
             schoolId,
             studentId: inv.studentId,
             termId,
@@ -300,37 +333,45 @@ export class FeeBillingService {
             number,
             dueDate: term.dueDate,
             totalMinor: inv.totalMinor,
-            lines: {
-              create: inv.lines.map((l) => ({
-                schoolId,
-                categoryId: l.categoryId,
-                categoryName: l.categoryName,
-                categoryDescription: l.categoryDescription,
-                grossMinor: l.grossMinor,
-                concessionMinor: l.concessionMinor,
-                netMinor: l.netMinor,
-                concessionReason: l.concessionReason,
-                isCollectible: l.isCollectible,
-                order: l.order,
-              })),
-            },
-          },
-        });
+          });
 
-        if (inv.totalMinor > 0) {
-          await tx.feeLedgerEntry.create({
-            data: {
+          for (const l of inv.lines) {
+            lines.push({
+              schoolId,
+              invoiceId,
+              categoryId: l.categoryId,
+              categoryName: l.categoryName,
+              categoryDescription: l.categoryDescription,
+              grossMinor: l.grossMinor,
+              concessionMinor: l.concessionMinor,
+              netMinor: l.netMinor,
+              concessionReason: l.concessionReason,
+              isCollectible: l.isCollectible,
+              order: l.order,
+            });
+          }
+
+          // A bill for nothing gets no debit — same rule as before.
+          if (inv.totalMinor > 0) {
+            ledger.push({
               schoolId,
               studentId: inv.studentId,
               kind: 'DEBIT',
               amountMinor: inv.totalMinor,
               refType: 'INVOICE',
-              refId: invoice.id,
+              refId: invoiceId,
               narration: `${term.name} fees — ${number}`,
-            },
-          });
-        }
-        created++;
+            });
+          }
+        });
+
+        // No skipDuplicates: the unique on (studentId, termId) is what makes
+        // this idempotent, and a collision here means the summary and the table
+        // disagree. That must still abort the run rather than bill a partial
+        // term quietly — exactly what create() did before.
+        created = await createInBatches(invoices, (data) => tx.feeInvoice.createMany({ data }));
+        await createInBatches(lines, (data) => tx.feeInvoiceLine.createMany({ data }));
+        await createInBatches(ledger, (data) => tx.feeLedgerEntry.createMany({ data }));
       }
 
       this.logger.log({ schoolId, termId, created }, 'fee bills generated');
