@@ -10,6 +10,7 @@ import {
   METHOD_LABEL, fmtDate, rupees, toMinor,
   type BankInstructions, type FeePaymentMethod, type HowToPay, type StudentFees,
 } from '@/lib/fees';
+import { QueryError } from '@/components/ui/query-state';
 
 /**
  * The parent's fees page.
@@ -41,6 +42,10 @@ export default function PortalFeesPage() {
       Fees are not part of your school&rsquo;s plan yet.
     </p>;
   }
+  // The 403/404 answers above are designed refusals. Anything else — a 500,
+  // a dropped connection, an expired session — used to fall through to the
+  // loading line below and sit there for good.
+  if (fees.isError) return <QueryError error={fees.error} onRetry={fees.refetch} className="py-10" />;
   if (fees.isLoading || !fees.data) {
     return <p className="py-10 text-center text-sm" style={{ color: 'var(--sk-ink-3)' }}>Loading your fees…</p>;
   }

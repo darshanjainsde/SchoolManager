@@ -630,6 +630,23 @@ export class ReportCardService {
     const issued: IssueReportCardsResponse['issued'] = [];
     const skipped: IssueReportCardsResponse['skipped'] = [];
 
+    /**
+     * ONE TRANSACTION PER CHILD — deliberate, and not the N+1 it resembles.
+     *
+     * Under a transaction pooler the scarce thing is how LONG a client is held,
+     * not how often one is taken. A class of forty here is forty short holds of
+     * roughly 27 ms each; folding it into a single transaction would be one hold
+     * of about 700 ms. Fee billing is the cautionary tale in the other
+     * direction: one transaction, 4,500 round trips, past the 10-second timeout.
+     *
+     * It also buys two things that matter more than the round trips:
+     *   - one child's refusal is recorded as "skipped" without rolling back
+     *     everybody else's paper, which is the whole point of a bulk button;
+     *   - the serial collision retry below is per child, and cannot be if a
+     *     sibling's failure has already poisoned the transaction.
+     *
+     * Do not "fix" this by merging the loop into one withTenant.
+     */
     for (const s of wanted) {
       if (s.issued) {
         skipped.push({ studentId: s.studentId, reason: `Already issued (${s.issued.serial}).` });

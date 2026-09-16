@@ -19,6 +19,7 @@ import {
   rupees,
   type DashboardPayload,
 } from './ui';
+import { QueryError } from '@/components/ui/query-state';
 
 /**
  * The library at a glance. Every figure is a door: pressing one either opens
@@ -36,6 +37,7 @@ export default function DashboardTab({ base }: { base: string }) {
     queryFn: () => api.get<DashboardPayload>('/library/dashboard'),
   });
 
+  if (dash.isError) return <QueryError error={dash.error} onRetry={dash.refetch} className="" />;
   if (dash.isLoading || !dash.data) {
     return <p className="sk-state">Opening the register…</p>;
   }

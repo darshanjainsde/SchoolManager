@@ -280,18 +280,25 @@ export class SessionsService {
         select: { gradeId: true, name: true },
       });
       const have = new Set(existing.map((e) => `${e.gradeId}|${e.name.toLowerCase()}`));
-      let created = 0;
+      // One statement, not one per class. This used to `create()` inside the
+      // loop, so a school with thirty sections spent thirty sequential round
+      // trips here — each one holding the tenant transaction, and therefore a
+      // pooled connection, open while it waited.
+      const toCreate: Prisma.ClassSectionCreateManyInput[] = [];
       for (const f of from) {
-        if (have.has(`${f.gradeId}|${f.name.toLowerCase()}`)) continue;
-        await tx.classSection.create({
-          data: {
-            schoolId, gradeId: f.gradeId, name: f.name, academicYearId: plan.toYearId,
-            classTeacherId: f.classTeacher?.status === 'ACTIVE' ? f.classTeacherId : null,
-          },
+        const key = `${f.gradeId}|${f.name.toLowerCase()}`;
+        if (have.has(key)) continue;
+        toCreate.push({
+          schoolId, gradeId: f.gradeId, name: f.name, academicYearId: plan.toYearId,
+          classTeacherId: f.classTeacher?.status === 'ACTIVE' ? f.classTeacherId : null,
         });
-        have.add(`${f.gradeId}|${f.name.toLowerCase()}`);
-        created++;
+        // Still tracked as we go: `from` can hold two sections whose names
+        // differ only by case, and the set is what stops the duplicate.
+        have.add(key);
       }
+      const created = toCreate.length
+        ? (await tx.classSection.createMany({ data: toCreate, skipDuplicates: true })).count
+        : 0;
       const to = await tx.classSection.findMany({
         take: LIST_CEILING.STRUCTURE,
         where: { schoolId, academicYearId: plan.toYearId },
@@ -848,26 +855,40 @@ export class SessionsService {
       ]);
       const already = new Set(decided.map((d) => d.studentId));
       const unmapped: string[] = [];
-      let decidedNow = 0;
+
+      // Bucket the roll by class ONCE. This used to run `students.filter(...)`
+      // inside the loop below, which is sections x students — thirty passes
+      // over two thousand children, all of it inside the tenant transaction.
+      const pendingBySection = new Map<string, typeof students>();
+      for (const s of students) {
+        if (!s.classSectionId || already.has(s.id)) continue;
+        const group = pendingBySection.get(s.classSectionId);
+        if (group) group.push(s);
+        else pendingBySection.set(s.classSectionId, [s]);
+      }
+
+      // One statement for every class, not one per class.
+      const rows: Prisma.SessionDecisionCreateManyInput[] = [];
       for (const c of closing) {
+        const pending = pendingBySection.get(c.id);
+        if (!pending?.length) continue;
         const target = map[c.id];
-        const pending = students.filter((s) => s.classSectionId === c.id && !already.has(s.id));
-        if (!pending.length) continue;
         if (!target || (target !== PASS_OUT && !nextIds.has(target))) {
           unmapped.push(`${c.grade.name} ${c.name}`);
           continue;
         }
-        const r = await tx.sessionDecision.createMany({
-          data: pending.map((s) => ({
+        for (const s of pending) {
+          rows.push({
             schoolId, planId: plan.id, studentId: s.id,
             decision: target === PASS_OUT ? ('PASS_OUT' as const) : ('PROMOTE' as const),
             toSectionId: target === PASS_OUT ? null : target,
             decidedById: actorUserId,
-          })),
-          skipDuplicates: true,
-        });
-        decidedNow += r.count;
+          });
+        }
       }
+      const decidedNow = rows.length
+        ? (await tx.sessionDecision.createMany({ data: rows, skipDuplicates: true })).count
+        : 0;
       const updated = await tx.sessionPlan.update({ where: { id: plan.id }, data: { version: { increment: 1 } }, select: { version: true } });
       return { decided: decidedNow, alreadyDecided: already.size, unmapped, version: updated.version };
     });

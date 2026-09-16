@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useApi } from '@/lib/use-api';
 import { OWNER_HOST } from '@/lib/hosts';
+import { QueryError } from '@/components/ui/query-state';
 
 /**
  * Putting a school on its own address, end to end.
@@ -80,6 +81,14 @@ export function DomainsCard({ schoolId }: { schoolId: string }) {
     onSuccess: (d) => qc.setQueryData(key, d),
   });
 
+  if (q.isError) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-5">
+        <h3 className="text-base font-bold text-slate-900">Domains</h3>
+        <QueryError error={q.error} onRetry={q.refetch} className="" />
+      </div>
+    );
+  }
   if (q.isLoading || !q.data) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-5">

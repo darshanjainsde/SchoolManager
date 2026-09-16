@@ -5,6 +5,7 @@ import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { ApiError } from '@/lib/api';
 import type { MeSportsEvent, MeSportsPayload, MeSportsTournament } from '@/lib/sports-me-types';
+import { QueryError } from '@/components/ui/query-state';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -45,6 +46,10 @@ export default function PortalSportsPage() {
   if (q.error instanceof ApiError && q.error.status === 403) {
     return <div className="mx-auto max-w-md py-12 text-center text-sm text-[var(--sk-ink-3)]">🏅 Sports isn&rsquo;t part of your school&rsquo;s plan yet.</div>;
   }
+  // The 403/404 answers above are designed refusals. Anything else — a 500,
+  // a dropped connection, an expired session — used to fall through to the
+  // loading line below and sit there for good.
+  if (q.isError) return <QueryError error={q.error} onRetry={q.refetch} className="py-10" />;
   if (q.isLoading || !q.data) return <p className="py-10 text-center text-sm text-[var(--sk-ink-3)]">Checking the day board…</p>;
   const d = q.data;
 

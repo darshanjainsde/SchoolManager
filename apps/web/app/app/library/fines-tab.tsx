@@ -14,6 +14,7 @@ import {
   rupees,
   type FinesPayload,
 } from './ui';
+import { QueryError } from '@/components/ui/query-state';
 
 /**
  * What is owed, grouped by class so the office can chase a whole section at
@@ -68,6 +69,7 @@ export default function FinesTab() {
     onError: (e) => toast.error((e as Error).message),
   });
 
+  if (fines.isError) return <QueryError error={fines.error} onRetry={fines.refetch} className="" />;
   if (fines.isLoading || !fines.data) {
     return <p className="sk-state">Adding up the fines…</p>;
   }

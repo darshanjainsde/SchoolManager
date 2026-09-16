@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
@@ -32,6 +32,13 @@ export default function ReviewStep({ plan, features, onCancel, onStarted }: { pl
     queryKey: ['session-review', host, plan.version],
     queryFn: () => api.get('/manage/sessions/plan/review'),
     enabled: !!host,
+    // The plan's version is part of the key, and almost every action in the
+    // wizard increments it — so each edit asks for a NEW key, which React Query
+    // treats as a query it has never run. Without this the whole step blanked to
+    // "Adding it up…" every time somebody changed a pass mark or promoted a
+    // class, and the numbers arrived a round trip later. Keeping the previous
+    // answer on screen means the figures update in place instead.
+    placeholderData: keepPreviousData,
   });
   const [when, setWhen] = useState<'NOW' | 'ON_START_DATE'>('NOW');
   const applyDefaults = useMutation({
@@ -64,7 +71,29 @@ export default function ReviewStep({ plan, features, onCancel, onStarted }: { pl
   });
 
   const r = review.data;
-  if (review.isLoading || !r) return <div className="sk-card-b"><p className="sk-muted">Adding it up…</p></div>;
+
+  /**
+   * A failed request used to render as "Adding it up…" — FOREVER.
+   *
+   * `if (review.isLoading || !r)` catches the error case too: on a 404, a 500,
+   * a dropped connection or an expired session, `data` is undefined and
+   * `isLoading` is false, so the screen sat there claiming to be working while
+   * nothing was happening and nothing would. Every other step in this wizard
+   * already showed its error; this one did not.
+   */
+  if (review.isError) {
+    return (
+      <div className="sk-card-b">
+        <p className="text-sm text-rose-600">
+          Could not add up the review: {(review.error as Error).message}
+        </p>
+        <button type="button" className="sk-btn sk-press" style={{ marginTop: 10 }} onClick={() => void review.refetch()}>
+          Try again
+        </button>
+      </div>
+    );
+  }
+  if (!r) return <div className="sk-card-b"><p className="sk-muted">Adding it up…</p></div>;
 
   const warnings: { text: string; tone: 'warn' | 'info' }[] = [];
   if (r.counts.undecided > 0) warnings.push({ text: `${r.counts.undecided} children have no decision yet — go back to step 3.`, tone: 'warn' });
