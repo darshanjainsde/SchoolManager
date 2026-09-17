@@ -89,6 +89,16 @@ describe('the student library shelf', () => {
     expect(screen.getByText('you can borrow 1 more')).toBeInTheDocument();
   });
 
+  it('survives an API older than this build (no `rules`): limit and loan, no money', async () => {
+    const { rules: _drop, ...older } = SHELF;
+    vi.mocked(useApi).mockReturnValue(stub(older as MeLibraryPayload) as never);
+    renderWithProviders(<PortalLibraryPage />);
+    expect(await screen.findByText('Holding 2 of 2')).toBeInTheDocument();
+    expect(screen.getByTestId('library-rules')).toHaveTextContent('2 books at a time · 14 days each');
+    expect(screen.getByTestId('library-rules')).not.toHaveTextContent('₹');
+    expect(screen.getByText(/Late and lost books carry a fine, paid at the counter/)).toBeInTheDocument();
+  });
+
   it('says so quietly when the plan has no library (403), instead of erroring', async () => {
     vi.mocked(useApi).mockReturnValue(
       stub(new ApiError(403, 'forbidden', { code: 'FORBIDDEN_FEATURE' })) as never,

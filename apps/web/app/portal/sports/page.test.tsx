@@ -67,6 +67,15 @@ describe('PortalSportsPage', () => {
     expect(screen.getByTestId('sport-100 m sprint')).toHaveTextContent('2nd');
   });
 
+  it('survives an API older than this build (no `houses`): the house pill, no table, no standing', async () => {
+    const { houses: _drop, ...older } = student as Extract<MeSportsPayload, { role: 'STUDENT' }>;
+    mockApi(older as MeSportsPayload);
+    renderWithProviders(<PortalSportsPage />);
+    expect(await screen.findByText('Red house')).toBeInTheDocument();
+    expect(screen.getByTestId('sports-standing')).toHaveTextContent('Red house · 1 meet');
+    expect(screen.queryByTestId('sports-houses')).not.toBeInTheDocument();
+  });
+
   it('a teacher sees the published meets and the house table', async () => {
     mockApi({ role: 'TEACHER', tournaments: [{ id: 't', name: 'Annual meet', startsOn: '2026-09-15', endsOn: '2026-09-15', status: 'LIVE' }], houses: [{ id: 'h', name: 'Blue', color: '#00f', points: 42, members: 120 }] });
     renderWithProviders(<PortalSportsPage />);

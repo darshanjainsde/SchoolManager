@@ -22,5 +22,5 @@ export interface MeSportsAttempt { id: string; sportName: string; groupKey: stri
 export interface MeSportsHouse { id: string; name: string; color: string; points: number; members: number }
 
 export type MeSportsPayload =
-  | { role: 'STUDENT'; house: { id: string; name: string; color: string } | null; tournaments: MeSportsTournament[]; records: { records: MeSportsRecord[]; attempts: MeSportsAttempt[] }; houses: MeSportsHouse[] }
+  | { role: 'STUDENT'; house: { id: string; name: string; color: string } | null; tournaments: MeSportsTournament[]; records: { records: MeSportsRecord[]; attempts: MeSportsAttempt[] }; /** Absent on an older API. */ houses?: MeSportsHouse[] }
   | { role: 'TEACHER'; tournaments: { id: string; name: string; startsOn: string; endsOn: string; status: string }[]; houses: { id: string; name: string; color: string; points: number; members: number }[] };

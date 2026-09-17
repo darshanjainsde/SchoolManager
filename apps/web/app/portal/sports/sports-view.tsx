@@ -79,8 +79,11 @@ export function SportsView({ d }: { d: MeSportsPayload }) {
     .flatMap((t) => t.events.map((e) => ({ t, e, n: nextOf(e) })).filter((x): x is { t: MeSportsTournament; e: MeSportsEvent; n: Next } => !!x.n))
     .sort((a, b) => (slotMin(a.n) ?? Infinity) - (slotMin(b.n) ?? Infinity));
   const first = nexts[0] ?? null;
-  const standing = d.house ? standingOf(d.houses, d.house.id) : null;
-  const mine = d.house ? d.houses.find((h) => h.id === d.house!.id) : null;
+  // `houses` arrived with this build's API; an older API (the web deploys
+  // first) or a cached answer has none — the page then simply has no table.
+  const houses = d.houses ?? [];
+  const standing = d.house ? standingOf(houses, d.house.id) : null;
+  const mine = d.house ? houses.find((h) => h.id === d.house!.id) : null;
 
   // Group by sport across meets; keep the meet's name on each row.
   const bySport = new Map<string, { t: MeSportsTournament; e: MeSportsEvent }[]>();
@@ -219,7 +222,7 @@ export function SportsView({ d }: { d: MeSportsPayload }) {
         </div>
 
         <aside className="ps-side">
-          {d.houses.length ? <HouseTable houses={d.houses} mineId={d.house?.id ?? null} /> : null}
+          {houses.length ? <HouseTable houses={houses} mineId={d.house?.id ?? null} /> : null}
 
           {hasRecords ? (
             <section className="sk-card" data-testid="sports-records">
@@ -337,7 +340,7 @@ function TeacherView({ d }: { d: Extract<MeSportsPayload, { role: 'TEACHER' }> }
             )}
           </div>
         </section>
-        {d.houses.length ? <HouseTable houses={d.houses} mineId={null} /> : (
+        {d.houses?.length ? <HouseTable houses={d.houses} mineId={null} /> : (
           <section className="sk-card"><div className="sk-card-b"><p className="sk-state">No houses yet.</p></div></section>
         )}
       </div>

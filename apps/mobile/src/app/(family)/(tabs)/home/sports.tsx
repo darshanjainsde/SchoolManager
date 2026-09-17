@@ -38,8 +38,9 @@ export default function Sports() {
     .sort((a, b) => (slotMin(a.n) ?? Infinity) - (slotMin(b.n) ?? Infinity));
   const first = nexts[0] ?? null;
   // "Red house" means little until it says 2nd with 42 points.
-  const standing = d?.house ? standingOf(d.houses, d.house.id) : null;
-  const mine = d?.house ? d.houses.find((h) => h.id === d.house!.id) : null;
+  const houses = d?.houses ?? []; // an older API sends none
+  const standing = d?.house ? standingOf(houses, d.house.id) : null;
+  const mine = d?.house ? houses.find((h) => h.id === d.house!.id) : null;
 
   // Group by sport across meets; keep the meet's name on each row.
   const bySport = new Map<string, { t: MeSportsTournament; e: MeSportsEvent }[]>();
@@ -128,10 +129,10 @@ export default function Sports() {
           )}
 
           {/* The house table — every house, points to date, mine in bold. */}
-          {d.houses.length > 0 && (
+          {houses.length > 0 && (
             <Page testID="sports-houses">
               <PageHeader title="House table" />
-              {[...d.houses].sort((a, b) => b.points - a.points).map((h, i) => {
+              {[...houses].sort((a, b) => b.points - a.points).map((h, i) => {
                 const own = h.id === d.house?.id;
                 return (
                   <View key={h.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, paddingHorizontal: 12, borderTopWidth: i ? 1 : 0, borderTopColor: tokens.color.line }}>

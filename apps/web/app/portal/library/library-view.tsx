@@ -51,7 +51,10 @@ export function dueWords(h: MeLibraryHolding): string {
 /** "2 books at a time · 14 days each · ₹5 a day late after 1 day's grace · lost book ₹120". */
 export function rulesSentence(d: MeLibraryPayload): string {
   const parts = [`${plural(d.limit, 'book')} at a time`, `${d.loanDays} days each`];
-  if (d.finesEnabled) {
+  // `rules` arrived with this build's API. The web deploys before the API
+  // (observed on the staging push), so for a minute — or a cached answer —
+  // it is absent: say the limit and the loan, leave the money out.
+  if (d.finesEnabled && d.rules) {
     const grace = d.rules.graceDays > 0 ? ` after ${d.rules.graceDays === 1 ? "1 day's" : `${d.rules.graceDays} days'`} grace` : '';
     parts.push(`${rupees(d.rules.finePerDayRupees)} a day late${grace}`, `lost book ${rupees(d.rules.lostFeeRupees)}`);
   }
@@ -203,13 +206,15 @@ export function LibraryView({ d }: { d: MeLibraryPayload }) {
             <div className="sk-card-b">
               <p className="pl-rules">
                 Borrow up to <b>{plural(d.limit, 'book')}</b> at a time, for <b>{d.loanDays} days</b> each.
-                {d.finesEnabled ? (
+                {d.finesEnabled && d.rules ? (
                   <>
                     {' '}
                     A late book costs <b>{rupees(d.rules.finePerDayRupees)} a day</b>
                     {d.rules.graceDays > 0 ? ` after ${d.rules.graceDays === 1 ? 'one day' : `${d.rules.graceDays} days`} of grace` : ''}; a lost book is{' '}
                     <b>{rupees(d.rules.lostFeeRupees)}</b>. Fines are paid at the counter, never here.
                   </>
+                ) : d.finesEnabled ? (
+                  ' Late and lost books carry a fine, paid at the counter.'
                 ) : (
                   ' No fines apply to you.'
                 )}

@@ -71,7 +71,7 @@ const sports: MeSportsPayload = {
   },
 };
 const noEntries: MeSportsPayload = { role: 'STUDENT', house: null, houses: [], tournaments: [], records: { records: [], attempts: [] } };
-const teacher: MeSportsPayload = { role: 'TEACHER', tournaments: [{ id: 't1', name: 'Annual Athletics & Games Meet 2026', startsOn: '2026-09-19', endsOn: '2026-09-21', status: 'LIVE' }], houses: sports.role === 'STUDENT' ? sports.houses : [] };
+const teacher: MeSportsPayload = { role: 'TEACHER', tournaments: [{ id: 't1', name: 'Annual Athletics & Games Meet 2026', startsOn: '2026-09-19', endsOn: '2026-09-21', status: 'LIVE' }], houses: (sports.role === 'STUDENT' ? sports.houses : undefined) ?? [] };
 
 it('writes the real student-portal screens for a browser to measure', () => {
   const panels: [string, React.ReactNode][] = [
