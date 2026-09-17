@@ -121,7 +121,7 @@ function toNotificationMessage(kind: NotificationOutboxKind, payload: unknown): 
       },
     };
   }
-  if (kind === 'FEE_VERIFIED' || kind === 'FEE_REJECTED') {
+  if (kind === 'FEE_VERIFIED' || kind === 'FEE_REJECTED' || kind === 'FEE_DUE') {
     // The fee desk's decision to one family, composed at write time by
     // FeePaymentService. Renders through the ANNOUNCEMENT shape like the
     // other single-reader kinds; the class slot names the desk.

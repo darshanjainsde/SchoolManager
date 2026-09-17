@@ -56,6 +56,7 @@ export const HIDDEN_ROUTES = [
   '(tabs)/home/birthdays',
   '(tabs)/home/report-cards',
   '(tabs)/home/report-cards/[id]',
+  '(tabs)/home/receipt/[paymentId]',
 ];
 
 /** Icon-tile colour family for a drawer tool — mirrors staff-nav's `MoreTone`. */

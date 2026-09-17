@@ -143,9 +143,10 @@ export interface LibraryNoticeOutboxPayload {
 
 /**
  * Payload STORED in a `NotificationOutbox` row for `FEE_VERIFIED` /
- * `FEE_REJECTED` — the fee desk's decision on ONE family's claim, composed
- * at write time inside the verify/reject transaction. Always a single-reader
- * row (targetUserId = the student's login).
+ * `FEE_REJECTED` / `FEE_DUE` — the fee desk speaking to ONE family: its
+ * decision on a claim (composed inside the verify/reject transaction), or an
+ * instalment falling due (the daily fee-due-soon cron). Always a
+ * single-reader row (targetUserId = the student's login).
  */
 export interface FeeDecisionOutboxPayload {
   schoolName: string;

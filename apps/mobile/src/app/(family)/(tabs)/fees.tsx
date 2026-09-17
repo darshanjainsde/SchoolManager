@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import { Animated, Text, View } from 'react-native';
+import { router } from 'expo-router';
 import { ApiError } from '@/lib/api';
 import { useQuery } from '@/lib/query';
 import { rupees } from '@/lib/money';
 import { formatDate } from '@/lib/portal';
 import {
-  METHOD_LABEL, STATUS_LABEL, STATUS_TONE, nextDue, totalDueMinor,
-  type FeeInvoice, type FeePaymentRow, type HowToPay, type StudentFees,
+  METHOD_LABEL, STATUS_LABEL, STATUS_TONE, totalDueMinor,
+  type FeeInvoice, type FeePaymentRow, type HowToPay, type ScheduleStatus, type ScheduleTerm, type StudentFees,
 } from '@/lib/fees';
-import { Card, Empty, ErrorState, Figure, Page, PageHeader, Pill, Screen, SectionTitle, Toast } from '@/components/ui';
+import { Card, Empty, ErrorState, Figure, Page, PageHeader, Pill, RailRow, Screen, SectionTitle, Toast } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { PaySheet } from '@/components/PaySheet';
 import { Touchable } from '@/components/Touchable';
@@ -63,8 +64,9 @@ export default function Fees() {
   const unpaid = d ? d.invoices.filter((i) => !i.isPaid) : [];
   const pending = d?.payments.find((p) => p.status === 'SUBMITTED') ?? null;
   const owed = d ? totalDueMinor(d) : 0;
-  const next = d ? nextDue(d) : null;
+  const next = d ? unpaid.reduce<FeeInvoice | null>((a, b) => (a && a.dueDate <= b.dueDate ? a : b), null) : null;
   const anyLate = unpaid.some((i) => i.isOverdue);
+  const lastPaid = d ? [...d.schedule].reverse().find((t) => t.status === 'PAID') ?? null : null;
 
   return (
     <Screen onRefresh={fees.refresh} refreshing={fees.refreshing}>
@@ -73,8 +75,11 @@ export default function Fees() {
           Fees
         </Text>
         {d && (
-          <Text style={{ fontSize: 12, color: tokens.color.sub, marginTop: 1 }}>
+          <Text testID="fees-account" style={{ fontSize: 12, color: tokens.color.sub, marginTop: 1 }}>
             {d.student.name} · {d.student.className ?? d.student.admissionNo}
+            {d.student.className ? ` · Adm. ${d.account.admissionNo}` : ''}
+            {d.account.admittedOn ? ` · admitted ${formatDate(d.account.admittedOn)}` : ''}
+            {d.account.isRte ? ' · RTE' : ''}
           </Text>
         )}
       </View>
@@ -97,7 +102,7 @@ export default function Fees() {
           {/* Where the last claim has got to — the thing a parent opens this tab to check. */}
           {pending && <PendingCard p={pending} />}
 
-          {/* The figure. Red margin only when something is late. */}
+          {/* Who owes what, and what the year costs. Red margin only when something is late. */}
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <View style={{ flex: 1, minWidth: 0 }}>
               <View style={{ position: 'relative' }}>
@@ -111,13 +116,60 @@ export default function Fees() {
                   testID="fees-owed"
                   label={owed > 0 ? 'You owe' : d.balanceMinor < 0 ? 'In credit' : 'Nothing due'}
                   value={owed > 0 ? rupees(owed) : d.balanceMinor < 0 ? rupees(-d.balanceMinor) : rupees(0)}
-                  hint={owed > 0 && next ? dueHint(next) : owed > 0 ? undefined : 'Every bill is paid'}
+                  hint={owed > 0 && next ? dueHint(next) : lastPaid ? `${lastPaid.name} paid` : undefined}
                   tone={anyLate ? 'bad' : owed > 0 ? 'warn' : 'good'}
                 />
               </View>
             </View>
-            <Figure label="Paid this year" value={rupees(d.paidMinor)} hint={`of ${rupees(d.billedMinor)} billed`} />
+            <Figure
+              testID="fees-year"
+              label={d.year ? `This year · ${d.year.name}` : 'This year'}
+              value={rupees(d.yearTotalMinor)}
+              hint={d.planReady ? `${rupees(d.yearPaidMinor)} paid` : 'not set up yet'}
+            />
           </View>
+
+          {/* What's next — the one card that exists before a bill does. */}
+          {d.nextDue ? (
+            <NextCard
+              n={d.nextDue}
+              onPay={d.nextDue.billed && d.nextDue.status !== 'PAID' && how.data?.canPayByTransfer
+                ? () => setPaying({ invoiceId: d.nextDue!.invoiceId, dueMinor: d.nextDue!.amountMinor })
+                : undefined}
+            />
+          ) : (
+            <Page>
+              <Empty icon="fees">
+                {!d.planReady
+                  ? `The school hasn’t set up fees for ${d.student.className ?? 'this class'} this year yet. There’s nothing to pay.`
+                  : d.balanceMinor < 0
+                    ? `Nothing due — and ${rupees(-d.balanceMinor)} is in credit on this account.`
+                    : 'Nothing due. Every bill for this year is paid.'}
+              </Empty>
+            </Page>
+          )}
+
+          {/* The year — every term as a ruled diary row: the day in the margin, the term in the body. */}
+          {d.planReady && d.schedule.length > 0 && (
+            <Page testID="fees-schedule">
+              <PageHeader title="This year" icon="fees" />
+              {d.invoices.length === 0 && d.nextDue && (
+                <Text style={{ fontFamily: font.serif, fontStyle: 'italic', fontSize: 12.5, color: tokens.color.sub, paddingHorizontal: 12, paddingBottom: 6 }}>
+                  No bill has been issued yet. The office issues each one about two weeks before it is due.
+                </Text>
+              )}
+              {d.schedule.map((t, i) => <TermRow key={t.termId} t={t} first={i === 0} />)}
+              {d.concessions.length > 0 && (
+                <View style={{ paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: 1, borderTopColor: tokens.color.line }}>
+                  {d.concessions.map((c, i) => (
+                    <Text key={i} style={{ fontSize: 11.5, color: tokens.color.green }}>
+                      {c.reason} · {c.percentBps != null ? `${c.percentBps / 100}% off` : c.amountMinor != null ? `${rupees(c.amountMinor)} off` : ''} {c.scope}
+                    </Text>
+                  ))}
+                </View>
+              )}
+            </Page>
+          )}
 
           {unpaid.map((inv) => (
             <InvoicePage
@@ -138,6 +190,7 @@ export default function Fees() {
                   p={p}
                   first={i === 0}
                   onSendAgain={() => setPaying({ invoiceId: null, dueMinor: p.amountMinor })}
+                  onReceipt={() => router.push(`/(family)/(tabs)/home/receipt/${p.id}` as never)}
                 />
               ))}
             </Page>
@@ -277,10 +330,10 @@ function InvoicePage({ inv, lateFeeRule, how, onPay }: { inv: FeeInvoice; lateFe
 }
 
 /** One payment in the history; the confirmed ones carry the stamp. */
-function PaymentRow({ p, first, onSendAgain }: { p: FeePaymentRow; first: boolean; onSendAgain: () => void }) {
+function PaymentRow({ p, first, onSendAgain, onReceipt }: { p: FeePaymentRow; first: boolean; onSendAgain: () => void; onReceipt: () => void }) {
   const tokens = useTokens();
   const verified = p.status === 'VERIFIED';
-  return (
+  const row = (
     <View testID={`payment-${p.id}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 12, borderTopWidth: first ? 0 : 1, borderTopColor: tokens.color.line }}>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={{ fontFamily: font.mono, fontSize: 14, fontWeight: '700', color: tokens.color.ink }}>
@@ -301,6 +354,13 @@ function PaymentRow({ p, first, onSendAgain }: { p: FeePaymentRow; first: boolea
       </View>
       {verified ? <PaidStamp receipt={p.receiptNumber} /> : <Pill tone={STATUS_TONE[p.status]}>{STATUS_LABEL[p.status]}</Pill>}
     </View>
+  );
+  // A confirmed payment opens its receipt; the others are rows, not buttons.
+  if (!verified) return row;
+  return (
+    <Touchable testID={`payment-${p.id}-receipt`} onPress={onReceipt} haptic="none" accessibilityLabel={`Receipt ${p.receiptNumber ?? ''} for ${rupees(p.amountMinor)}`}>
+      {row}
+    </Touchable>
   );
 }
 
@@ -330,5 +390,56 @@ function PaidStamp({ receipt }: { receipt: string | null }) {
       <Text style={{ fontFamily: font.serif, fontSize: 13, fontWeight: '700', letterSpacing: 1.5, color: tokens.color.green }}>PAID</Text>
       {receipt ? <Text style={{ fontFamily: font.mono, fontSize: 8, letterSpacing: 0.5, color: tokens.color.green, opacity: 0.85 }}>{receipt}</Text> : null}
     </Animated.View>
+  );
+}
+
+const STATUS_WORD: Record<ScheduleStatus, string> = { PAID: 'Paid', PART_PAID: 'Part paid', DUE: 'Due', OVERDUE: 'Late', UPCOMING: 'Later' };
+const STATUS_PILL: Record<ScheduleStatus, 'green' | 'amber' | 'red' | 'neutral'> = { PAID: 'green', PART_PAID: 'amber', DUE: 'amber', OVERDUE: 'red', UPCOMING: 'neutral' };
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** The next instalment — amber; red when overdue; the Pay button rides on it once a bill exists. */
+function NextCard({ n, onPay }: { n: NonNullable<StudentFees['nextDue']>; onPay?: () => void }) {
+  const tokens = useTokens();
+  const overdue = n.status === 'OVERDUE';
+  const d = daysUntil(n.dueDate);
+  const when = overdue ? `was due ${formatDate(n.dueDate)} · ${-d} day${d === -1 ? '' : 's'} late` : d === 0 ? 'due today' : `due ${formatDate(n.dueDate)} · in ${d} day${d === 1 ? '' : 's'}`;
+  return (
+    <Card testID="fees-next" style={{ borderLeftWidth: 3, borderLeftColor: overdue ? tokens.color.marginRed : tokens.color.amber, gap: 4 }}>
+      <Text style={{ fontSize: 10.5, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', color: tokens.color.sub }}>
+        {overdue ? 'Overdue' : n.billed ? 'Due' : 'Next instalment'}
+      </Text>
+      <Text style={{ fontFamily: font.serif, fontSize: 17, fontWeight: '600', color: tokens.color.ink }}>{n.name}</Text>
+      <Text style={{ fontFamily: font.mono, fontSize: 22, fontWeight: '700', color: overdue ? tokens.color.red : tokens.color.ink }}>{rupees(n.amountMinor)}</Text>
+      <Text style={{ fontSize: 11.5, color: tokens.color.ink2 }}>{when}{n.billed ? '' : ' · bill not issued yet'}</Text>
+      {onPay ? (
+        <Touchable testID="fees-next-pay" onPress={onPay} accessibilityLabel={`Pay ${rupees(n.amountMinor)} by bank transfer`}
+          style={{ marginTop: 6, minHeight: 42, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: tokens.color.indigo }}>
+          <Text style={{ color: tokens.color.onBrand, fontWeight: '700', fontSize: 13 }}>Pay by bank transfer</Text>
+        </Touchable>
+      ) : !n.billed ? (
+        <Text style={{ fontFamily: font.serif, fontStyle: 'italic', fontSize: 11, color: tokens.color.sub, marginTop: 2 }}>The office issues this bill about two weeks before. You’ll be told here.</Text>
+      ) : null}
+    </Card>
+  );
+}
+
+/** One term of the year as a diary row: the due day in the margin, the term and its state in the body. */
+function TermRow({ t, first }: { t: ScheduleTerm; first: boolean }) {
+  const due = new Date(t.dueDate);
+  const sub =
+    t.status === 'PAID' ? (t.receiptNumber ? `Paid · ${t.receiptNumber}` : 'Paid')
+    : t.status === 'PART_PAID' ? `${rupees(t.paidMinor)} paid · ${rupees(t.dueMinor)} to go`
+    : t.lines.length ? t.lines.map((l) => l.categoryName).join(', ') : undefined;
+  return (
+    <RailRow
+      testID={`term-${t.termId}`}
+      startTime={String(due.getUTCDate())}
+      endTime={MONTHS[due.getUTCMonth()]}
+      title={`${t.name} · ${rupees(t.expectedMinor)}`}
+      subtitle={sub}
+      state={t.status === 'PAID' ? 'done' : t.status === 'UPCOMING' ? 'upcoming' : 'now'}
+      first={first}
+      right={<Pill tone={STATUS_PILL[t.status]}>{STATUS_WORD[t.status]}</Pill>}
+    />
   );
 }

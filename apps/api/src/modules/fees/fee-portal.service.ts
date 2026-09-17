@@ -99,6 +99,46 @@ export class FeePortalService {
     return this.providers.get('MANUAL').start(ctx);
   }
 
+  /**
+   * One confirmed payment as a receipt — the document both clients print.
+   * Only VERIFIED payments have one; anything else is a 404, never a 403,
+   * because a parent asking about a payment that is not theirs is told it
+   * does not exist.
+   */
+  async myReceipt(userId: string, paymentId: string) {
+    const schoolId = this.sid();
+    const studentId = await this.myStudentId(userId);
+    return withTenant(schoolId, async (tx) => {
+      const p = await tx.feePayment.findFirst({
+        where: { id: paymentId, schoolId, studentId, status: 'VERIFIED' },
+        include: {
+          receipt: true,
+          invoice: { select: { number: true, term: { select: { name: true } } } },
+          student: { select: { firstName: true, lastName: true, admissionNo: true, classSection: { select: { name: true, grade: { select: { name: true } } } } } },
+        },
+      });
+      if (!p || !p.receipt) throw new ApiError('NOT_FOUND', 'That receipt was not found.', 404);
+      const school = await tx.school.findFirstOrThrow({ where: { id: schoolId }, select: { name: true } });
+      return {
+        number: p.receipt.number,
+        issuedAt: p.receipt.issuedAt.toISOString(),
+        amountMinor: p.receipt.amountMinor,
+        method: p.method,
+        providerRef: p.providerRef,
+        paidOn: p.paidOn.toISOString().slice(0, 10),
+        verifiedAt: p.verifiedAt ? p.verifiedAt.toISOString() : null,
+        termName: p.invoice?.term.name ?? null,
+        invoiceNumber: p.invoice?.number ?? null,
+        student: {
+          name: `${p.student.firstName} ${p.student.lastName}`.trim(),
+          admissionNo: p.student.admissionNo,
+          className: p.student.classSection ? `${p.student.classSection.grade.name}-${p.student.classSection.name}` : null,
+        },
+        school: { name: school.name },
+      };
+    });
+  }
+
   /** "I have paid" — writes a SUBMITTED claim and nothing else. */
   async submit(
     userId: string,

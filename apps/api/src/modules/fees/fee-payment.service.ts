@@ -8,16 +8,8 @@ import { computeLateFee, ruleFromSettings } from './late-fee';
 import { PaymentProviderRegistry } from './providers/payment-provider.registry';
 import type { RejectPaymentDto, SubmitPaymentDto } from './fees.dto';
 import type { FeeDecisionOutboxPayload } from '../../common/notifications/notification.types';
+import { formatRupees as rupees } from './money';
 
-/** ₹24,500 — Indian grouping, paise only when there are any. Mirrors the clients' `rupees`. */
-function rupees(amountMinor: number): string {
-  const abs = Math.abs(amountMinor);
-  const whole = Math.floor(abs / 100);
-  const paise = abs % 100;
-  const s = String(whole);
-  const grouped = s.length <= 3 ? s : `${s.slice(0, -3).replace(/\B(?=(\d{2})+(?!\d))/g, ',')},${s.slice(-3)}`;
-  return `${amountMinor < 0 ? '−' : ''}₹${paise === 0 ? grouped : `${grouped}.${String(paise).padStart(2, '0')}`}`;
-}
 
 /**
  * Everything that happens to money after a provider has done its part.

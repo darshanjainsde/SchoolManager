@@ -176,7 +176,8 @@ describe('shared portal contracts', () => {
     expect([...NOTIFICATION_OUTBOX_KINDS].sort()).toEqual([
       'ASSIGNMENT_POSTED',
       'EXAM_SCHEDULED',
-      // The fee desk telling one family the office's decision on their claim.
+      // The fee desk: an instalment falling due, and the office's decision on a claim.
+      'FEE_DUE',
       'FEE_REJECTED',
       'FEE_VERIFIED',
       'LIBRARY_NOTICE',

@@ -27,6 +27,10 @@
       "schedule": "0 2 * * *"
     },
     {
+      "path": "/internal/cron/fee-due-soon",
+      "schedule": "30 1 * * *"
+    },
+    {
       "path": "/internal/cron/library-due-soon",
       "schedule": "30 2 * * *"
     },

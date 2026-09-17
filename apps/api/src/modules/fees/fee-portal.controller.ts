@@ -1,5 +1,5 @@
 import {
-  Body, Controller, Get, HttpCode, Post, Query, UploadedFile, UseGuards, UseInterceptors,
+  Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query, UploadedFile, UseGuards, UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { SchoolJwtGuard } from '../../common/auth/school-jwt.guard';
@@ -30,6 +30,12 @@ export class FeePortalController {
   @Get() myFees(@CurrentUser() u: SchoolJwtPayload) { return this.portal.myFees(u.sub); }
 
   @Get('how-to-pay') howToPay(@CurrentUser() u: SchoolJwtPayload) { return this.portal.howToPay(u.sub); }
+
+  /** The receipt for one confirmed payment — printed on the web, shared as a PDF from the app. */
+  @Get('receipts/:paymentId')
+  receipt(@CurrentUser() u: SchoolJwtPayload, @Param('paymentId', ParseUUIDPipe) paymentId: string) {
+    return this.portal.myReceipt(u.sub, paymentId);
+  }
 
   @Get('bank-instructions')
   bankInstructions(@CurrentUser() u: SchoolJwtPayload, @Query('invoiceId') invoiceId?: string) {

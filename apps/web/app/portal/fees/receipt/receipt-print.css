@@ -1,0 +1,10 @@
+/* The receipt's print rules — same three iron rules as press-print.css.
+   `#receipt-print` is a DIRECT child of <body> (BodyPrintPortal) and is hidden
+   on screen; `body.receipt-printing` is set for the length of the print only. */
+#receipt-print { display: none; }
+@media print {
+  @page { size: A5; margin: 14mm; }
+  body.receipt-printing > * { display: none !important; }
+  body.receipt-printing > #receipt-print { display: block !important; }
+  html, body { background: #fff !important; }
+}

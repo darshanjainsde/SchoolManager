@@ -29,6 +29,7 @@ const TITLES: Record<string, string> = {
   notifications: 'Notifications',
   password: 'Change password',
   post: 'Announcements',
+  receipt: 'Receipt',
   'report-cards': 'Report cards',
   requests: 'Requests',
   results: 'Results',

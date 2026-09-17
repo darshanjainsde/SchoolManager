@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { withTenant, type TenantTx } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
+import { buildCells, linesFor } from './fee-lines';
 import { StorageService } from '../../common/storage/storage.service';
 import { computeLateFee, describeLateFeeRule, ruleFromSettings } from './late-fee';
 
@@ -16,6 +17,22 @@ import { computeLateFee, describeLateFeeRule, ruleFromSettings } from './late-fe
 const EMPTY_TOTALS = {
   students: 0, owing: 0, billedMinor: 0, paidMinor: 0, lateFeeMinor: 0, dueMinor: 0,
 };
+
+/** One term on the family's schedule — see `scheduleFor`. */
+export interface ScheduleTerm {
+  termId: string;
+  name: string;
+  /** YYYY-MM-DD */
+  dueDate: string;
+  /** The bill's total where billed; the plan's figure for this child where not. */
+  expectedMinor: number;
+  paidMinor: number;
+  dueMinor: number;
+  status: 'PAID' | 'PART_PAID' | 'DUE' | 'OVERDUE' | 'UPCOMING';
+  invoiceId: string | null;
+  receiptNumber: string | null;
+  lines: { categoryName: string; categoryDescription: string; grossMinor: number; concessionMinor: number; netMinor: number; concessionReason: string | null; isCollectible: boolean }[];
+}
 
 @Injectable()
 export class FeeQueryService {
@@ -175,6 +192,79 @@ export class FeeQueryService {
   }
 
   /**
+   * Every term of the session for one child: what it costs (from the plan, via
+   * `linesFor`), and where it stands. Terms already billed take the bill's
+   * own figures; terms not yet billed are UPCOMING with the computed lines.
+   * ONE_TIME categories land on the first bill this child will ever get —
+   * exactly when billing would put them — and never again.
+   */
+  private async scheduleFor(
+    tx: TenantTx,
+    schoolId: string,
+    ctx: {
+      studentId: string;
+      gradeId: string | null;
+      yearId: string;
+      assignment: { optInCategoryIds: string[]; isRte: boolean } | null;
+      concessions: { categoryId: string | null; termId: string | null; percentBps: number | null; amountMinor: number | null; reason: string }[];
+      invoices: {
+        id: string; termId: string; totalMinor: number; dueDate: Date;
+        allocations: { amountMinor: number }[];
+        lines: { categoryName: string; categoryDescription: string; grossMinor: number; concessionMinor: number; netMinor: number; concessionReason: string | null; isCollectible: boolean }[];
+        payments: { receipt: { number: string } | null }[];
+        term: { order: number; academicYearId: string };
+      }[];
+      now: Date;
+    },
+  ): Promise<ScheduleTerm[]> {
+    if (!ctx.gradeId) return [];
+    const [terms, plan, categories] = await Promise.all([
+      tx.feeTerm.findMany({ where: { schoolId, academicYearId: ctx.yearId }, orderBy: { order: 'asc' }, select: { id: true, name: true, dueDate: true, order: true } }),
+      tx.feePlan.findFirst({ where: { schoolId, academicYearId: ctx.yearId, isActive: true }, orderBy: { version: 'desc' }, select: { id: true } }),
+      tx.feeCategory.findMany({ where: { schoolId, archivedAt: null }, orderBy: { order: 'asc' } }),
+    ]);
+    if (!plan || terms.length === 0) return [];
+    const items = await tx.feePlanItem.findMany({ where: { schoolId, planId: plan.id }, select: { gradeId: true, categoryId: true, termId: true, amountMinor: true } });
+    const cells = buildCells(items);
+    const optIns = new Set(ctx.assignment?.optInCategoryIds ?? []);
+    const isRte = ctx.assignment?.isRte ?? false;
+    const byTerm = new Map(ctx.invoices.map((i) => [i.termId, i]));
+    // Billed before this term? Any bill from an earlier year, or an earlier term of this one.
+    const billedBefore = (order: number) =>
+      ctx.invoices.some((i) => i.term.academicYearId !== ctx.yearId || i.term.order < order);
+
+    const out: ScheduleTerm[] = [];
+    for (const [idx, term] of terms.entries()) {
+      const inv = byTerm.get(term.id);
+      if (inv) {
+        const allocated = inv.allocations.reduce((a, x) => a + x.amountMinor, 0);
+        const outstanding = inv.totalMinor - allocated;
+        out.push({
+          termId: term.id, name: term.name, dueDate: inv.dueDate.toISOString().slice(0, 10),
+          expectedMinor: inv.totalMinor, paidMinor: allocated, dueMinor: outstanding,
+          status: outstanding <= 0 ? 'PAID' : allocated > 0 ? 'PART_PAID' : inv.dueDate < ctx.now ? 'OVERDUE' : 'DUE',
+          invoiceId: inv.id, receiptNumber: inv.payments[0]?.receipt?.number ?? null,
+          lines: inv.lines.map((l) => ({ categoryName: l.categoryName, categoryDescription: l.categoryDescription, grossMinor: l.grossMinor, concessionMinor: l.concessionMinor, netMinor: l.netMinor, concessionReason: l.concessionReason, isCollectible: l.isCollectible })),
+        });
+        continue;
+      }
+      const lines = linesFor({
+        categories, cells, gradeId: ctx.gradeId, termId: term.id, isFirstTerm: idx === 0,
+        everBilled: billedBefore(term.order), optIns, isRte,
+        concessions: ctx.concessions.filter((c) => c.termId === null || c.termId === term.id),
+      });
+      if (lines.length === 0) continue; // nothing on the plan for this class this term
+      const expected = lines.reduce((a, l) => a + l.netMinor, 0);
+      out.push({
+        termId: term.id, name: term.name, dueDate: term.dueDate.toISOString().slice(0, 10),
+        expectedMinor: expected, paidMinor: 0, dueMinor: expected, status: 'UPCOMING', invoiceId: null, receiptNumber: null,
+        lines: lines.map(({ categoryName, categoryDescription, grossMinor, concessionMinor, netMinor, concessionReason, isCollectible }) => ({ categoryName, categoryDescription, grossMinor, concessionMinor, netMinor, concessionReason, isCollectible })),
+      });
+    }
+    return out;
+  }
+
+  /**
    * One student's complete fee position — the screen a parent opens and the
    * one the office opens during a dispute. Same data, same query.
    */
@@ -183,20 +273,21 @@ export class FeeQueryService {
       const student = await tx.student.findFirst({
         where: { id: studentId, schoolId },
         select: {
-          id: true, firstName: true, lastName: true, admissionNo: true,
-          classSection: { select: { name: true, grade: { select: { name: true } } } },
+          id: true, firstName: true, lastName: true, admissionNo: true, firstAdmissionDate: true,
+          classSection: { select: { name: true, gradeId: true, grade: { select: { name: true } } } },
         },
       });
       if (!student) throw new ApiError('NOT_FOUND', 'Student not found', 404);
 
-      const [rule, invoices, payments, ledger] = await Promise.all([
+      const [rule, invoices, payments, ledger, year, assignment, concessionRows] = await Promise.all([
         this.lateFeeRule(tx, schoolId),
         tx.feeInvoice.findMany({
           where: { schoolId, studentId, cancelledAt: null },
           include: {
             lines: { orderBy: { order: 'asc' } },
-            term: { select: { name: true } },
+            term: { select: { id: true, name: true, order: true, academicYearId: true } },
             allocations: { select: { amountMinor: true } },
+            payments: { where: { status: 'VERIFIED' }, select: { receipt: { select: { number: true } } }, take: 1, orderBy: { verifiedAt: 'desc' } },
           },
           orderBy: { dueDate: 'asc' },
         }),
@@ -210,21 +301,55 @@ export class FeeQueryService {
           orderBy: { occurredAt: 'desc' },
           take: 200,
         }),
+        tx.academicYear.findFirst({ where: { schoolId, isCurrent: true }, select: { id: true, name: true, startDate: true, endDate: true } }),
+        tx.feeAssignment.findFirst({ where: { schoolId, studentId }, select: { optInCategoryIds: true, isRte: true } }),
+        tx.feeConcession.findMany({ where: { schoolId, studentId }, select: { categoryId: true, termId: true, percentBps: true, amountMinor: true, reason: true, category: { select: { name: true } }, term: { select: { name: true } } } }),
       ]);
 
       const billed = ledger.filter((l) => l.kind === 'DEBIT').reduce((a, l) => a + l.amountMinor, 0);
       const paid = ledger.filter((l) => l.kind === 'CREDIT').reduce((a, l) => a + l.amountMinor, 0);
       const now = new Date();
 
+      // THE YEAR, AS THE FAMILY WILL BE BILLED IT. Every term of the current
+      // session with what this child's class costs, netted for their
+      // concessions — from the same linesFor() billing uses, so the figure a
+      // family sees before the bill is the figure on the bill. Joined to the
+      // term's invoice where one exists.
+      const schedule = year ? await this.scheduleFor(tx, schoolId, {
+        studentId, gradeId: student.classSection?.gradeId ?? null, yearId: year.id, assignment, concessions: concessionRows, invoices, now,
+      }) : [];
+      const nextDueTerm = schedule.find((t) => t.status !== 'PAID') ?? null;
+
+      const className = student.classSection ? `${student.classSection.grade.name}-${student.classSection.name}` : null;
       return {
         student: {
           id: student.id,
           name: `${student.firstName} ${student.lastName}`.trim(),
           admissionNo: student.admissionNo,
-          className: student.classSection
-            ? `${student.classSection.grade.name}-${student.classSection.name}`
-            : null,
+          className,
         },
+        /** The facts the office quotes when a family rings. */
+        account: {
+          admissionNo: student.admissionNo,
+          className,
+          admittedOn: student.firstAdmissionDate ? student.firstAdmissionDate.toISOString().slice(0, 10) : null,
+          isRte: assignment?.isRte ?? false,
+        },
+        year: year ? { id: year.id, name: year.name, startDate: year.startDate.toISOString().slice(0, 10), endDate: year.endDate.toISOString().slice(0, 10) } : null,
+        /** True once the school has a fee plan this child's class is on — false is "not set up yet", not "free". */
+        planReady: schedule.length > 0,
+        schedule,
+        nextDue: nextDueTerm
+          ? { termId: nextDueTerm.termId, name: nextDueTerm.name, dueDate: nextDueTerm.dueDate, amountMinor: nextDueTerm.dueMinor, billed: nextDueTerm.invoiceId !== null, invoiceId: nextDueTerm.invoiceId, status: nextDueTerm.status }
+          : null,
+        yearTotalMinor: schedule.reduce((a, t) => a + t.expectedMinor, 0),
+        yearPaidMinor: schedule.reduce((a, t) => a + t.paidMinor, 0),
+        concessions: concessionRows.map((c) => ({
+          reason: c.reason,
+          scope: c.category ? c.category.name : c.term ? c.term.name : 'Every bill',
+          percentBps: c.percentBps,
+          amountMinor: c.amountMinor,
+        })),
         /** Positive means owed. Negative is an advance credit sitting with the school. */
         balanceMinor: billed - paid,
         billedMinor: billed,
