@@ -26,6 +26,7 @@ const BASE: MeLibraryPayload = {
   fines: [],
   finesDueRupees: 0,
   today: '2026-08-16',
+  rules: { finePerDayRupees: 5, graceDays: 1, lostFeeRupees: 120 },
 };
 
 function stub(payload: MeLibraryPayload): ApiStub {

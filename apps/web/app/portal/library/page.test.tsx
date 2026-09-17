@@ -31,6 +31,7 @@ const SHELF: MeLibraryPayload = {
   fines: [{ id: 'f1', title: 'Hatchet', reason: 'LOST', amountRupees: 120 }],
   finesDueRupees: 130,
   today: '2026-08-16',
+  rules: { finePerDayRupees: 5, graceDays: 1, lostFeeRupees: 120 },
 };
 
 function stub(payload: MeLibraryPayload | Error): ApiStub {
@@ -58,6 +59,24 @@ describe('the student library shelf', () => {
     expect(screen.getByTestId('fine-banner')).toHaveTextContent('₹130 to clear at the counter');
     // History names the returned book.
     expect(screen.getByText('The BFG')).toBeInTheDocument();
+    // The fines are LISTED, not just counted — the lost book and the one still accruing.
+    expect(screen.getByTestId('fine-banner')).toHaveTextContent('Hatchet');
+    expect(screen.getByTestId('fine-banner')).toHaveTextContent('Marked lost');
+    expect(screen.getByTestId('fine-banner')).toHaveTextContent('Wonder');
+    // The rules are said in words, before a fine teaches them.
+    expect(screen.getByTestId('library-rules')).toHaveTextContent("2 books at a time · 14 days each · ₹5 a day late after 1 day's grace · lost book ₹120");
+    expect(screen.getByTestId('library-next-due')).toHaveTextContent('2 days');
+    expect(screen.getByTestId('library-returned-count')).toHaveTextContent('1');
+  });
+
+  it('an empty shelf says what you may take, and a reader without fines sees no fine figure', async () => {
+    vi.mocked(useApi).mockReturnValue(stub({ ...SHELF, kind: 'TEACHER', limit: 5, finesEnabled: false, finesDueRupees: 0, fines: [], holdings: [], history: [] }) as never);
+    renderWithProviders(<PortalLibraryPage />);
+    expect(await screen.findByTestId('library-empty')).toHaveTextContent('Nothing out right now. You can take 5 books for 14 days each — ask at the counter.');
+    expect(screen.queryByTestId('library-fine')).not.toBeInTheDocument();
+    expect(screen.getByTestId('library-rules')).toHaveTextContent('5 books at a time · 14 days each');
+    expect(screen.getByTestId('library-rules')).not.toHaveTextContent('₹');
+    expect(screen.getByText('Nothing returned yet. Books you bring back are listed here.')).toBeInTheDocument();
   });
 
   it('hides the fine banner entirely when nothing is owed', async () => {

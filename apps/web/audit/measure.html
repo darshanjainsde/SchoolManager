@@ -4,6 +4,8 @@
 </head><body><div id="out">measuring…</div>
 <script>
 const WIDTHS=[390,414,768,1024,1280];
+// ?file=./screens-portal.html measures a different rendered set (default: the sports desk).
+const FILE=new URLSearchParams(location.search).get('file')||'./screens.html';
 const log=[];
 function audit(doc,win,w){
   const R=[];const vw=win.innerWidth;
@@ -33,7 +35,7 @@ function audit(doc,win,w){
 (async()=>{
   for(const w of WIDTHS){
     const f=document.createElement('iframe');
-    f.width=w;f.height=900;f.src='./screens.html';document.body.appendChild(f);
+    f.width=w;f.height=900;f.src=FILE;document.body.appendChild(f);
     await new Promise(r=>f.onload=r);
     await new Promise(r=>setTimeout(r,250));
     const R=audit(f.contentDocument,f.contentWindow,w);

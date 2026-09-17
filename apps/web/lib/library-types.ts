@@ -26,4 +26,6 @@ export interface MeLibraryPayload {
   fines: { id: string; title: string; reason: 'LATE' | 'LOST'; amountRupees: number }[];
   finesDueRupees: number;
   today: string;
+  /** The school's rules, so the page can state them rather than let a fine teach them. */
+  rules: { finePerDayRupees: number; graceDays: number; lostFeeRupees: number };
 }

@@ -29,6 +29,8 @@ export interface LibraryMe {
   finesDueRupees: number;
   /** The school's "today", YYYY-MM-DD. */
   today: string;
+  /** The school's rules, so the shelf can state them rather than let a fine teach them. */
+  rules: { finePerDayRupees: number; graceDays: number; lostFeeRupees: number };
 }
 
 /** Fines are whole rupees on this endpoint (not paise) — see LibraryMeService. */
@@ -81,7 +83,7 @@ export function LibraryShelf() {
               tone={soonest ? (soonest.daysLeft < 0 ? 'bad' : soonest.daysLeft <= 3 ? 'warn' : undefined) : undefined}
             />
             {d.finesEnabled ? (
-              <Figure testID="library-fine" label="Fine" value={fine(d.finesDueRupees)} hint={d.finesDueRupees > 0 ? 'pay at the counter' : 'nothing owed'} tone={d.finesDueRupees > 0 ? 'bad' : undefined} />
+              <Figure testID="library-fine" label="Fine" value={fine(d.finesDueRupees)} hint={d.finesDueRupees > 0 ? 'pay at the counter' : `nothing owed · ${fine(d.rules.finePerDayRupees)} a day late`} tone={d.finesDueRupees > 0 ? 'bad' : undefined} />
             ) : (
               <Figure label="Can borrow" value={String(free)} hint={`of ${d.limit} · ${d.loanDays} days each`} />
             )}
@@ -90,7 +92,7 @@ export function LibraryShelf() {
           <Page>
             <PageHeader title="On my shelf" actionLabel={d.holdings.length ? `${d.holdings.length} of ${d.limit}` : undefined} />
             {d.holdings.length === 0 ? (
-              <Empty icon="library">Nothing out right now. Ask at the counter.</Empty>
+              <Empty icon="library">{`Nothing out right now. You can take ${d.limit} book${d.limit === 1 ? '' : 's'} for ${d.loanDays} days each — ask at the counter.`}</Empty>
             ) : (
               d.holdings.map((h, i) => {
                 const w = dueWord(h);
@@ -124,6 +126,17 @@ export function LibraryShelf() {
               ))}
             </Page>
           )}
+
+          {/* The rules in words, so a fine is never how a family learns them. */}
+          <Page testID="library-rules">
+            <PageHeader title="How the library works" />
+            <Text style={{ paddingHorizontal: 12, paddingVertical: 10, fontSize: 12.5, lineHeight: 19, color: tokens.color.ink2 }}>
+              {`Borrow up to ${d.limit} book${d.limit === 1 ? '' : 's'} at a time, for ${d.loanDays} days each.`}
+              {d.finesEnabled
+                ? ` A late book costs ${fine(d.rules.finePerDayRupees)} a day${d.rules.graceDays > 0 ? ` after ${d.rules.graceDays === 1 ? 'one day' : `${d.rules.graceDays} days`} of grace` : ''}; a lost book is ${fine(d.rules.lostFeeRupees)}. Fines are paid at the counter, never here.`
+                : ' No fines apply to you.'}
+            </Text>
+          </Page>
 
           {d.history.length > 0 && (
             <Page>

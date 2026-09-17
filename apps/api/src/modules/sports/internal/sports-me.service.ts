@@ -25,6 +25,19 @@ export class SportsMeService {
       const [tournaments, houses] = await Promise.all([this.published(schoolId), this.houses.list(schoolId)]);
       return { role: 'TEACHER' as const, tournaments, houses };
     }
+    // The house table rides along for a child too: "Red house" means little
+    // until it says 2nd with 42 points. Fetched beside the tenant transaction,
+    // not inside it — `houses.list` opens its own, and nesting would hold two
+    // pooled connections for the life of the outer one.
+    const [houses, mine] = await Promise.all([this.houses.list(schoolId), this.forStudent(schoolId, userId)]);
+    // Every house gets a name, not just mine: a house final used to render its
+    // opponent as the raw side key ("v h:h2") because only the child's own
+    // house was looked up inside the transaction.
+    for (const t of mine.tournaments) for (const h of houses) t.sideNames[`h:${h.id}`] ??= h.name;
+    return { ...mine, houses };
+  }
+
+  private forStudent(schoolId: string, userId: string) {
     return withTenant(schoolId, async (tx) => {
       const me = await tx.student.findFirst({ where: { schoolId, userId }, select: { id: true, houseId: true } });
       if (!me) return { role: 'STUDENT' as const, house: null, tournaments: [] as MyTournament[], records: { records: [], attempts: [] } };

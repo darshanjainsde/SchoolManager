@@ -2,7 +2,7 @@ import { Text, View } from 'react-native';
 import { formatMark } from '@skoolos/types';
 import { ApiError } from '@/lib/api';
 import { useQuery } from '@/lib/query';
-import { nameOf, nextOf, ordinal, scoreline, slotMin, when, type MeSportsEvent, type MeSportsPayload, type MeSportsTournament } from '@/lib/sports';
+import { nameOf, nextOf, ordinal, scoreline, slotMin, standingOf, when, type MeSportsEvent, type MeSportsPayload, type MeSportsTournament } from '@/lib/sports';
 import { Empty, ErrorState, Figure, Page, PageHeader, Pill, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
@@ -37,6 +37,9 @@ export default function Sports() {
     .flatMap((t) => t.events.map((e) => ({ t, e, n: nextOf(e) })).filter((x) => x.n))
     .sort((a, b) => (slotMin(a.n) ?? Infinity) - (slotMin(b.n) ?? Infinity));
   const first = nexts[0] ?? null;
+  // "Red house" means little until it says 2nd with 42 points.
+  const standing = d?.house ? standingOf(d.houses, d.house.id) : null;
+  const mine = d?.house ? d.houses.find((h) => h.id === d.house!.id) : null;
 
   // Group by sport across meets; keep the meet's name on each row.
   const bySport = new Map<string, { t: MeSportsTournament; e: MeSportsEvent }[]>();
@@ -119,9 +122,28 @@ export default function Sports() {
 
           {(d.house || d.records.records.length > 0) && (
             <View style={{ flexDirection: 'row', gap: 8 }}>
-              {d.house && <Figure testID="sports-house" label="House" value={d.house.name} />}
+              {d.house && <Figure testID="sports-house" label="House" value={d.house.name} hint={standing && mine ? `${ordinal(standing.place)} of ${standing.of} · ${mine.points} pts` : undefined} />}
               {d.records.records.length > 0 && <Figure label="Records held" value={String(d.records.records.length)} hint="in the Book of Records" />}
             </View>
+          )}
+
+          {/* The house table — every house, points to date, mine in bold. */}
+          {d.houses.length > 0 && (
+            <Page testID="sports-houses">
+              <PageHeader title="House table" />
+              {[...d.houses].sort((a, b) => b.points - a.points).map((h, i) => {
+                const own = h.id === d.house?.id;
+                return (
+                  <View key={h.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, paddingHorizontal: 12, borderTopWidth: i ? 1 : 0, borderTopColor: tokens.color.line }}>
+                    <Text style={{ width: 26, fontFamily: font.mono, fontSize: 11.5, color: tokens.color.sub }}>{ordinal(i + 1)}</Text>
+                    <View style={{ width: 10, height: 10, borderRadius: 999, backgroundColor: h.color }} />
+                    <Text numberOfLines={1} style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: own ? '700' : '500', color: tokens.color.ink }}>{h.name}</Text>
+                    <Text style={{ fontSize: 11, color: tokens.color.sub }}>{h.members} members</Text>
+                    <Text style={{ fontFamily: font.mono, fontSize: 13, fontWeight: '700', color: own ? tokens.color.indigo : tokens.color.ink }}>{h.points}</Text>
+                  </View>
+                );
+              })}
+            </Page>
           )}
 
           {/* The Book of Records — every record this child holds, as the web lists them. */}

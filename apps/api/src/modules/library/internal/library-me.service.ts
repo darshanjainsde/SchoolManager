@@ -109,6 +109,11 @@ export class LibraryMeService {
           fines.reduce((n, f) => n + f.amountRupees, 0) +
           holdings.reduce((n, h) => n + h.accruedFineRupees, 0),
         today: todayISO,
+        // The school's own rules, so the page can SAY them ("14 days each,
+        // ₹5 a day after one day's grace") instead of a family discovering
+        // them from a fine. Sent even when fines are off for this reader —
+        // `finesEnabled` is the switch the client reads.
+        rules: { finePerDayRupees: rules.finePerDayRupees, graceDays: rules.graceDays, lostFeeRupees: rules.lostFeeRupees },
       };
     });
   }
