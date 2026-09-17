@@ -1,6 +1,6 @@
 import { Pressable, Text, View } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { router } from 'expo-router';
+import { Icon } from './icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
@@ -52,7 +52,7 @@ export function BackChipHeader({ title }: { title: string }) {
           opacity: pressed ? 0.6 : 1,
         })}
       >
-        <Ionicons name="chevron-back" size={19} color={tokens.color.ink} />
+        <Icon name="chevron" size={20} color={tokens.color.ink} />
       </Pressable>
       {/* A title beside a 38px tile is fixed-geometry chrome — capped, like
           the tab labels (see text-scaling.test.ts). */}

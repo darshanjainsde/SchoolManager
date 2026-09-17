@@ -37,10 +37,10 @@
 export const VISIBLE_TABS = [
   // 'home' is a DIRECTORY tab (its own Stack) since pitch №5 — the
   // route file moved from (tabs)/today.tsx to (tabs)/home/index.tsx.
-  { name: 'home', title: 'Home', icon: 'today-outline' as const },
-  { name: 'attendance', title: 'Attendance', icon: 'checkbox-outline' as const },
-  { name: 'timetable', title: 'Timetable', icon: 'calendar-outline' as const },
-  { name: 'profile', title: 'Profile', icon: 'person-outline' as const },
+  { name: 'home', title: 'Home', icon: 'home' as const },
+  { name: 'attendance', title: 'Attendance', icon: 'take' as const },
+  { name: 'timetable', title: 'Timetable', icon: 'timetable' as const },
+  { name: 'profile', title: 'Profile', icon: 'person' as const },
 ];
 
 /** Detail/utility routes — reachable via navigation (More rows, row taps), hidden from the tab bar. */

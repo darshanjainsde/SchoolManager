@@ -527,7 +527,7 @@ export function NowCard({
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9, marginTop: 10, flexWrap: 'wrap' }}>
         {register?.taken ? (
           <>
-            <HeroChip on={on}>{`✓ ${register.present}/${register.total} present`}</HeroChip>
+            <HeroChip on={on}>{`${register.present}/${register.total} present`}</HeroChip>
             {register.markedBy && (
               <Text style={hero.meta}>{`Marked by ${register.markedBy}`}</Text>
             )}

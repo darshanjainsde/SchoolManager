@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { useSegments } from 'expo-router';
+import { ApiError } from '@/lib/api';
 import { useTokens } from '@/theme/theme-context';
 import { font, type ColorPalette } from '@/theme/tokens';
 import { DASH, DUR, inkWidth, strokeDashoffset, useGesture } from '@/theme/motion';
@@ -559,6 +560,164 @@ export function Toast({
           <Text style={{ color: tone.fg, fontWeight: '700', fontSize: 13 }}>{actionLabel}</Text>
         </Pressable>
       )}
+    </View>
+  );
+}
+
+/**
+ * WHAT FAILURE LOOKS LIKE — written in the diary's own italic, like `Empty`,
+ * so a page that could not load still reads as a page and not as a fault.
+ *
+ * Three sentences, decided by what actually went wrong: no signal (status 0
+ * from `safeFetch`), a record that is not there (404), or the server having
+ * a bad moment (everything else). The button is not optional: a screen that
+ * says "something went wrong" and offers nothing is the screen a parent
+ * gives up on. Every red-sentence Card this app used to render is this now.
+ */
+export function ErrorState({
+  error,
+  onRetry,
+  testID = 'error-state',
+}: {
+  error: Error | string;
+  onRetry?: () => void;
+  testID?: string;
+}) {
+  const tokens = useTokens();
+  const status = error instanceof ApiError ? error.status : -1;
+  const message = typeof error === 'string' ? error : error.message;
+  const offline = status === 0;
+  const missing = status === 404;
+  const headline = offline
+    ? 'No signal right now.'
+    : missing
+      ? 'That isn’t here.'
+      : 'The school server had a problem.';
+  const detail = offline
+    ? 'Nothing you have done is lost.'
+    : missing
+      ? 'It may have been taken down by the school.'
+      : message;
+  return (
+    <Card testID={testID} style={{ alignItems: 'center', gap: 7, paddingVertical: 18 }}>
+      <Icon name={offline ? 'offline' : 'notices'} size={26} color={tokens.color.line2} fillOpacity={0.5} />
+      <Text
+        style={{
+          color: tokens.color.ink2,
+          fontSize: 14,
+          lineHeight: 20,
+          fontStyle: 'italic',
+          fontFamily: font.serif,
+          textAlign: 'center',
+        }}
+      >
+        {headline}
+      </Text>
+      {detail ? (
+        <Text style={{ color: tokens.color.sub, fontSize: 12, textAlign: 'center', lineHeight: 17 }}>{detail}</Text>
+      ) : null}
+      {onRetry && (
+        <Pressable
+          testID={`${testID}-retry`}
+          accessibilityRole="button"
+          onPress={onRetry}
+          hitSlop={6}
+          style={({ pressed }) => ({
+            marginTop: 6,
+            paddingVertical: 8,
+            paddingHorizontal: 18,
+            minHeight: 36,
+            borderRadius: tokens.radius.chip,
+            borderWidth: 1,
+            borderColor: tokens.color.indigo,
+            opacity: pressed ? 0.6 : 1,
+          })}
+        >
+          <Text style={{ color: tokens.color.indigo, fontWeight: '700', fontSize: 13 }}>Try again</Text>
+        </Pressable>
+      )}
+    </Card>
+  );
+}
+
+/**
+ * A FIGURE — the mono big-number tile, shared. Was Home's private KpiTile;
+ * fees ("You owe"), sports ("Best mark") and library ("Due in 3 days") all
+ * wanted it. Figures are set in the mono face so a percentage and a mark out
+ * of fifty line up as numbers, not as words.
+ *
+ * The number WRAPS. ₹2,25,77,600 at 17px is wider than a half-row on a
+ * 390px phone; a figure that cannot wrap pushes the row sideways, which the
+ * ledger names as a mistake we have shipped before.
+ */
+export function Figure({
+  label,
+  value,
+  hint,
+  tone,
+  onPress,
+  testID,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  tone?: 'good' | 'warn' | 'bad';
+  onPress?: () => void;
+  testID?: string;
+}) {
+  const tokens = useTokens();
+  const toneColor: Record<'good' | 'warn' | 'bad', string> = {
+    good: tokens.color.green,
+    warn: tokens.color.late,
+    bad: tokens.color.red,
+  };
+  const tile = {
+    flex: 1,
+    minWidth: 0,
+    backgroundColor: tokens.color.surface,
+    borderColor: tokens.color.line,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+  } as const;
+  const body = (
+    <>
+      <Text style={{ fontSize: 10.5, fontWeight: '600', color: tokens.color.sub }}>{label}</Text>
+      <Text
+        style={{
+          fontFamily: font.mono,
+          fontSize: 17,
+          fontWeight: '700',
+          color: tone ? toneColor[tone] : tokens.color.ink,
+          marginTop: 2,
+        }}
+      >
+        {value}
+      </Text>
+      {hint && (
+        <Text style={{ fontSize: 10, color: tokens.color.sub, marginTop: 1 }} numberOfLines={1}>
+          {hint}
+        </Text>
+      )}
+    </>
+  );
+  // A figure you cannot open is a figure, not a button.
+  if (!onPress) return <View testID={testID} style={tile}>{body}</View>;
+  // LAYOUT (`flex: 1`) on a plain wrapper, PAINT on the Pressable — its style
+  // lands on an inner view, where flex would leave the row laying out a
+  // content-sized Pressable (ledger: wrapper-style-prop-lands-on-inner-node).
+  const { flex, minWidth, ...paint } = tile;
+  return (
+    <View style={{ flex, minWidth }}>
+      <Pressable
+        testID={testID}
+        accessibilityRole="button"
+        accessibilityLabel={hint ? `${label}, ${value}, ${hint}` : `${label}, ${value}`}
+        onPress={onPress}
+        style={({ pressed }) => [paint, { opacity: pressed ? 0.7 : 1 }]}
+      >
+        {body}
+      </Pressable>
     </View>
   );
 }

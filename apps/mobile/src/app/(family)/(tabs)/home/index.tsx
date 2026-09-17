@@ -355,7 +355,7 @@ export default function Home() {
             flex: 1,
           }}
         >
-          {profile ? `Hi, ${profile.firstName} 👋` : 'Home'}
+          {profile ? `Hi, ${profile.firstName}` : 'Home'}
         </Text>
         <NotificationBell group="(family)" />
         {profile && (

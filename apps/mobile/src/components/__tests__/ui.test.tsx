@@ -1,6 +1,6 @@
 import { fireEvent, render } from '@testing-library/react-native';
 import { Text } from 'react-native';
-import { Card, Pill, Screen, SectionTitle } from '../ui';
+import { Card, ErrorState, Figure, Pill, Screen, SectionTitle } from '../ui';
 
 it('Screen applies the 11px rhythm gap', () => {
   const { getByTestId } = render(<Screen><Text>x</Text></Screen>);
@@ -61,5 +61,40 @@ describe('pull to refresh', () => {
     );
     fireEvent(getByTestId('screen-scroll'), 'refresh');
     expect(onRefresh).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ErrorState', () => {
+  const { ApiError } = jest.requireActual('@/lib/api');
+  it('names no-signal as no-signal and offers a retry', () => {
+    const onRetry = jest.fn();
+    const { getByText, getByTestId } = render(
+      <ErrorState error={new ApiError(0, 'Could not reach the school server.')} onRetry={onRetry} />,
+    );
+    expect(getByText('No signal right now.')).toBeTruthy();
+    fireEvent.press(getByTestId('error-state-retry'));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+  it('a 404 reads as "not here", anything else shows the server message', () => {
+    expect(render(<ErrorState error={new ApiError(404, 'Bill not found')} />).getByText('That isn’t here.')).toBeTruthy();
+    const { getByText } = render(<ErrorState error={new ApiError(500, 'Internal')} />);
+    expect(getByText('The school server had a problem.')).toBeTruthy();
+    expect(getByText('Internal')).toBeTruthy();
+  });
+  it('offers no retry when the caller has none', () => {
+    expect(render(<ErrorState error="x" />).queryByTestId('error-state-retry')).toBeNull();
+  });
+});
+
+describe('Figure', () => {
+  it('renders label, value and hint; only a pressable one is a button', () => {
+    const { getByText, queryByRole } = render(<Figure label="You owe" value="₹2,25,77,600" hint="3 bills late" tone="bad" />);
+    expect(getByText('₹2,25,77,600')).toBeTruthy();
+    expect(getByText('3 bills late')).toBeTruthy();
+    expect(queryByRole('button')).toBeNull();
+    const onPress = jest.fn();
+    const pressable = render(<Figure label="This month" value="92%" onPress={onPress} testID="fig" />);
+    fireEvent.press(pressable.getByTestId('fig'));
+    expect(onPress).toHaveBeenCalled();
   });
 });

@@ -186,6 +186,9 @@ it('login() falls back to the identifier only when nobody has a name on file', a
     role: 'TEACHER',
     schoolHost: 'raffles.sckools.com',
     displayName: 'rao@raffles.sckools.com',
+    // Second edition: the school's switched-on modules ride on the session,
+    // so the app can decide which doors to draw without another round trip.
+    features: [],
   });
 
   const [loginUrl, loginInit] = mockFetch.mock.calls[0];

@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Text, View, type TextStyle } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { useTokens } from '@/theme/theme-context';
-import { brand } from '@/theme/tokens';
+import { brand, font } from '@/theme/tokens';
 
 /** The class a student is in right now. */
 export interface StudentHeroCurrent {
@@ -36,11 +36,13 @@ export interface StudentHeroProps {
   monthPercent: number | null;
 }
 
-// On-hero text takes the hero's own on-fill ink. Since pitch №4 the live /
-// next / done gradients are the CHOSEN accent (same fix as the teacher's
-// NowCard — accents.ts always said its fill paints the Now card); only the
-// no-school hero keeps a fixed green + white, because there green MEANS
-// "no school today".
+/**
+ * On-hero text takes the hero's own on-fill ink. SECOND EDITION: the title is
+ * the diary SERIF — the same anatomy as the teacher's NowCard, which had the
+ * repaint while this card kept the sans-800 title and six emoji from before
+ * it. The eyebrow stays a small tracked sans (chrome), the title is the
+ * page's own voice, the meta is a sans note under it.
+ */
 function heroText(on: string): { eyebrow: TextStyle; title: TextStyle; meta: TextStyle } {
   return {
     eyebrow: {
@@ -51,8 +53,16 @@ function heroText(on: string): { eyebrow: TextStyle; title: TextStyle; meta: Tex
       color: on,
       opacity: 0.94,
     },
-    title: { fontSize: 22, fontWeight: '800', letterSpacing: -0.4, color: on, marginTop: 7 },
-    meta: { fontSize: 12.5, color: on, opacity: 0.93, marginTop: 2 },
+    title: {
+      fontFamily: font.serif,
+      fontSize: 24,
+      lineHeight: 29,
+      fontWeight: '600',
+      letterSpacing: -0.3,
+      color: on,
+      marginTop: 6,
+    },
+    meta: { fontSize: 12.5, color: on, opacity: 0.93, marginTop: 3 },
   };
 }
 
@@ -105,16 +115,18 @@ function Gradient({
   );
 }
 
-function Chip({ on, children }: { on: string; children: ReactNode }) {
+/** The status word on the hero — a Pill in the hero's own ink, words only. */
+function Chip({ on, children, testID }: { on: string; children: ReactNode; testID?: string }) {
   return (
     <View
+      testID={testID}
       style={{
         backgroundColor: `${on}2E`,
         borderWidth: 1,
         borderColor: `${on}52`,
-        borderRadius: 12,
+        borderRadius: 999,
         paddingHorizontal: 12,
-        paddingVertical: 8,
+        paddingVertical: 6,
         alignSelf: 'flex-start',
         marginTop: 12,
       }}
@@ -129,6 +141,7 @@ function Cell({ on, value, label }: { on: string; value: string; label: string }
     <View
       style={{
         flex: 1,
+        minWidth: 0,
         backgroundColor: `${on}29`,
         borderWidth: 1,
         borderColor: `${on}3D`,
@@ -137,7 +150,8 @@ function Cell({ on, value, label }: { on: string; value: string; label: string }
         paddingVertical: 9,
       }}
     >
-      <Text style={{ color: on, fontSize: 19, fontWeight: '800' }}>{value}</Text>
+      {/* Figures in the mono face, like every figure in the app. */}
+      <Text style={{ color: on, fontFamily: font.mono, fontSize: 18, fontWeight: '700' }}>{value}</Text>
       <Text style={{ color: on, opacity: 0.9, fontSize: 10.5, fontWeight: '600', marginTop: 1 }}>{label}</Text>
     </View>
   );
@@ -151,17 +165,18 @@ function LiveDot({ on }: { on: string }) {
   );
 }
 
-function statusChip(status: TodayStatus): string | null {
-  if (status === 'PRESENT') return '✓ Present today';
-  if (status === 'LATE') return '⏱ Late today';
-  if (status === 'ABSENT') return '✕ Absent today';
+/** Words, not glyphs: a chip that says "Present today" is read the same by a screen reader and a parent. */
+function statusWord(status: TodayStatus): string | null {
+  if (status === 'PRESENT') return 'Present today';
+  if (status === 'LATE') return 'Late today';
+  if (status === 'ABSENT') return 'Absent today';
   return null;
 }
 
-function attendanceGlyph(status: TodayStatus): string {
-  if (status === 'PRESENT') return '✓';
-  if (status === 'LATE') return '⏱';
-  if (status === 'ABSENT') return '✕';
+function statusShort(status: TodayStatus): string {
+  if (status === 'PRESENT') return 'Present';
+  if (status === 'LATE') return 'Late';
+  if (status === 'ABSENT') return 'Absent';
   return '—';
 }
 
@@ -185,13 +200,13 @@ export function StudentHero(props: StudentHeroProps) {
   const accentColors = [tokens.color.indigo, tokens.color.indigoDeep] as const;
   const on = tokens.color.onBrand;
   const t = heroText(on);
-  const chip = statusChip(todayStatus);
+  const word = statusWord(todayStatus);
 
   if (!hasSchoolToday) {
     const holi = heroText(brand.onHero);
     return (
       <Gradient id="shero-holi" colors={brand.hero.green}>
-        <Text style={holi.eyebrow}>🌴 No school today</Text>
+        <Text style={holi.eyebrow}>No school today</Text>
         <Text style={holi.title}>Enjoy the day off</Text>
         <Text style={holi.meta}>No classes are scheduled for today.</Text>
       </Gradient>
@@ -221,7 +236,7 @@ export function StudentHero(props: StudentHeroProps) {
           <Text style={t.meta}>{`Started ${current.startTime}`}</Text>
           <Text style={t.meta}>{`${remaining} min left`}</Text>
         </View>
-        {chip && <Chip on={on}>{chip}</Chip>}
+        {word && <Chip on={on} testID="shero-status">{word}</Chip>}
       </Gradient>
     );
   }
@@ -229,12 +244,12 @@ export function StudentHero(props: StudentHeroProps) {
   if (!next) {
     return (
       <Gradient id="shero-done" colors={accentColors}>
-        <Text style={t.eyebrow}>🎒 That&apos;s a wrap</Text>
-        <Text style={t.title}>School&apos;s done for today</Text>
+        <Text style={t.eyebrow}>That’s a wrap</Text>
+        <Text style={t.title}>School’s done for today</Text>
         <Text style={t.meta}>{`${classesToday} ${classesToday === 1 ? 'class' : 'classes'} today`}</Text>
         <View testID="shero-summary" style={{ flexDirection: 'row', gap: 8, marginTop: 13 }}>
           <Cell on={on} value={String(classesToday)} label="classes today" />
-          <Cell on={on} value={attendanceGlyph(todayStatus)} label="attendance" />
+          <Cell on={on} value={statusShort(todayStatus)} label="attendance" />
           <Cell on={on} value={monthPercent != null ? `${monthPercent}%` : '—'} label="this month" />
         </View>
       </Gradient>
@@ -246,7 +261,7 @@ export function StudentHero(props: StudentHeroProps) {
       <Text style={t.eyebrow}>Up next</Text>
       <Text style={t.title}>{next.subjectName}</Text>
       <Text style={t.meta}>{`${next.teacherName} · at ${next.startTime}`}</Text>
-      {chip && <Chip on={on}>{chip}</Chip>}
+      {word && <Chip on={on} testID="shero-status">{word}</Chip>}
     </Gradient>
   );
 }

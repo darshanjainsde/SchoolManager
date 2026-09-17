@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { Icon } from './icons';
 import { router, useFocusEffect } from 'expo-router';
 import { fetchUnreadCount } from '@/lib/notifications';
 import type { NotificationGroup } from '@/lib/notification-links';
@@ -63,7 +63,7 @@ export function NotificationBell({ group }: { group: NotificationGroup }) {
         opacity: pressed ? 0.6 : 1,
       })}
     >
-      <Ionicons name="notifications-outline" size={19} color={tokens.color.ink} />
+      <Icon name="bell" size={20} color={tokens.color.ink} />
       {count > 0 && (
         <View
           testID="notification-bell-badge"

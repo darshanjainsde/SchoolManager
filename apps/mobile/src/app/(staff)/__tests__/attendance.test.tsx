@@ -428,6 +428,6 @@ describe('offline save queue', () => {
     });
 
     await waitFor(() => expect(queryByText('Saved on device · syncing')).toBeNull());
-    expect(await findByText('✓ 1/1 present')).toBeTruthy();
+    expect(await findByText('1/1 present')).toBeTruthy();
   });
 });

@@ -17,10 +17,10 @@
  */
 
 export const VISIBLE_TABS = [
-  { name: 'home', title: 'Home', icon: 'home-outline' as const },
-  { name: 'attendance', title: 'Attendance', icon: 'checkbox-outline' as const },
-  { name: 'results', title: 'Results', icon: 'stats-chart-outline' as const },
-  { name: 'profile', title: 'Profile', icon: 'person-outline' as const },
+  { name: 'home', title: 'Home', icon: 'home' as const },
+  { name: 'attendance', title: 'Attendance', icon: 'take' as const },
+  { name: 'results', title: 'Results', icon: 'results' as const },
+  { name: 'profile', title: 'Profile', icon: 'person' as const },
 ];
 
 /** Detail/utility routes — reachable via navigation (drawer tiles, row taps), hidden from the tab bar. */

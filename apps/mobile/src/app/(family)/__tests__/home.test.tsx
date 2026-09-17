@@ -85,7 +85,7 @@ describe('identity card — role-neutral copy', () => {
     mockEndpoints();
     const { findByText } = render(<Home />);
 
-    expect(await findByText('Hi, Aarav 👋')).toBeTruthy();
+    expect(await findByText('Hi, Aarav')).toBeTruthy();
     expect(await findByText(/Grade 5-B/)).toBeTruthy();
     expect(await findByText(/Roll 12/)).toBeTruthy();
   });
@@ -98,7 +98,7 @@ describe('identity card — role-neutral copy', () => {
     mockEndpoints();
     const { findByText, queryByText } = render(<Home />);
 
-    await findByText('Hi, Aarav 👋'); // let the screen settle first
+    await findByText('Hi, Aarav'); // let the screen settle first
     expect(queryByText('Your child')).toBeNull();
   });
 
@@ -115,7 +115,7 @@ describe('identity card — role-neutral copy', () => {
       '/me/timetable': [allDaySlot()],
     });
     const { findByText } = render(<Home />);
-    expect(await findByText('✓ Present today')).toBeTruthy();
+    expect(await findByText('Present today')).toBeTruthy();
   });
 });
 
@@ -143,7 +143,7 @@ describe('next test', () => {
   it('the badge is absent when there are no upcoming exams', async () => {
     mockEndpoints();
     const { findByText, queryByTestId } = render(<Home />);
-    await findByText('Hi, Aarav 👋');
+    await findByText('Hi, Aarav');
     expect(queryByTestId('hometool-badge-Results')).toBeNull();
   });
 

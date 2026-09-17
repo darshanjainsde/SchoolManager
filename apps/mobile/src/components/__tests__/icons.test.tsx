@@ -7,10 +7,10 @@ import { MORE_ITEMS as FAMILY_MORE, VISIBLE_TABS as FAMILY_TABS } from '@/lib/fa
 /**
  * TWO ICON VOCABULARIES, AND THEY MUST NOT BE CONFUSED.
  *
- * Drawer tools use our duotone set; the tab bar still uses Ionicons. A rename
- * once put a duotone name ('timetable') into VISIBLE_TABS, where Ionicons
- * silently rendered nothing — no test noticed, because a missing glyph throws
- * no error. These pin both directions.
+ * ONE icon vocabulary now: the tab bar draws the same duotone set the drawer
+ * tools do (second edition — Ionicons is gone, and its runtime font with it).
+ * A tab icon that names a glyph we do not ship draws nothing, which is
+ * invisible in tests and obvious on a device; this pins every tab to the set.
  */
 describe('the icon vocabularies', () => {
   it.each([
@@ -25,12 +25,11 @@ describe('the icon vocabularies', () => {
   it.each([
     ['staff', STAFF_TABS],
     ['family', FAMILY_TABS],
-  ])('every %s TAB icon stays an Ionicons name, never a duotone one', (_p, tabs) => {
-    // The tab bar renders through Ionicons. A duotone name here draws nothing
-    // at all, which is invisible in tests and obvious on a device.
+  ])('every %s TAB icon names a duotone glyph we actually ship', (_p, tabs) => {
     for (const tab of tabs) {
-      expect(`${tab.title}: ${tab.icon.endsWith('-outline')}`).toBe(`${tab.title}: true`);
-      expect(`${tab.title} is duotone: ${isIconName(tab.icon)}`).toBe(`${tab.title} is duotone: false`);
+      expect(`${tab.title}: ${isIconName(tab.icon)}`).toBe(`${tab.title}: true`);
+      // Nothing left over from the Ionicons era.
+      expect(`${tab.title} ionicon: ${tab.icon.endsWith('-outline')}`).toBe(`${tab.title} ionicon: false`);
     }
   });
 
