@@ -81,6 +81,7 @@ const ALLOWED: Record<string, string> = {
   'modules/management/notification-outbox.service.ts': 'outbox drain across all schools',
   'modules/management/sessions.service.ts': 'scheduled session-start cron scans SCHEDULED plans across all schools; every write then runs under withTenant per school',
   'modules/library/internal/library-due-soon.service.ts': 'daily cron across all schools',
+  'modules/fees/fee-due-soon.service.ts': 'daily cron across all schools — every write carries the invoice row\'s own schoolId, and FEES is checked per school before anything is written',
 
   // ── Delivery: dispatched post-commit, outside any tenant transaction ──────
   'common/mail/mail.service.ts': 'mail is sent after the tenant transaction commits',
