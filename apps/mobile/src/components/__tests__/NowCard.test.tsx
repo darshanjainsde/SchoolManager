@@ -77,7 +77,7 @@ describe('NowCard', () => {
         onTakeAttendance={jest.fn()}
       />,
     );
-    expect(screen.getByText('✓ 27/28 present')).toBeTruthy();
+    expect(screen.getByText('27/28 present')).toBeTruthy();
     expect(screen.getByText('Marked by Priya Sharma')).toBeTruthy();
     expect(screen.queryByText('Take attendance')).toBeNull();
   });

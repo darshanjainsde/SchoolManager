@@ -29,12 +29,12 @@ export const KIND_ICON: Record<string, string> = {
   REQUEST_DECISION: 'requests',
   DIARY: 'diary',
   ATTENDANCE: 'take',
-  // The app has no library screen yet, so this falls through to the notices
-  // glyph's neighbourhood rather than inventing one — see the mobile library
-  // tab task.
-  LIBRARY: 'assignments',
-  // No sports screen in the app yet; the notice reads in the list.
-  SPORTS: 'notices',
+  LIBRARY: 'library',
+  SPORTS: 'sports',
+  // The office confirmed, turned down, or is reminding about a payment.
+  FEE_VERIFIED: 'fees',
+  FEE_REJECTED: 'fees',
+  FEE_DUE: 'fees',
 };
 
 /**
@@ -61,11 +61,20 @@ export function routeFor(group: NotificationGroup, n: NotificationRow): Href | n
         return '/(family)/(tabs)/home/diary';
       case 'ATTENDANCE':
         return '/(family)/attendance';
+      case 'LIBRARY':
+        return '/(family)/(tabs)/home/library';
+      case 'SPORTS':
+        return '/(family)/(tabs)/home/sports';
+      case 'FEE_VERIFIED':
+      case 'FEE_REJECTED':
+      case 'FEE_DUE':
+        return '/(family)/(tabs)/fees';
       default:
         return null;
     }
   }
   // staff
+  if (n.kind === 'LIBRARY') return '/(staff)/(tabs)/home/library';
   if (n.kind === 'REQUEST_DECISION') return '/(staff)/(tabs)/home/requests';
   if (n.kind === 'DIARY') return '/(staff)/(tabs)/home/diary';
   return null;

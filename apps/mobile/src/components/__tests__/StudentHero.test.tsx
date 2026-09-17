@@ -40,7 +40,7 @@ describe('StudentHero', () => {
     );
     expect(getByText('Science')).toBeTruthy();
     expect(getByText(/Ms Iyer · Period 3 · ends 10:40/)).toBeTruthy();
-    expect(getByText('✓ Present today')).toBeTruthy();
+    expect(getByText('Present today')).toBeTruthy();
     expect(getByTestId('shero-progress').props.accessibilityValue).toEqual({ min: 0, max: 100, now: 44 });
   });
 
@@ -59,7 +59,7 @@ describe('StudentHero', () => {
         {...props({ current: null, next: null, classesToday: 6, todayStatus: 'PRESENT', monthPercent: 92 })}
       />,
     );
-    expect(getByText("School's done for today")).toBeTruthy();
+    expect(getByText('School’s done for today')).toBeTruthy();
     expect(getByTestId('shero-summary')).toBeTruthy();
     expect(getByText('92%')).toBeTruthy();
   });

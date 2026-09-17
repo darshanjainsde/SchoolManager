@@ -228,7 +228,7 @@ it('once the register is taken, the hero shows counts and no Take button', async
   });
   render(<Today />);
 
-  expect(await screen.findByText('✓ 26/28 present')).toBeTruthy();
+  expect(await screen.findByText('26/28 present')).toBeTruthy();
   expect(screen.getByText('Marked by Mr. Rao')).toBeTruthy();
   expect(screen.queryByText('Take attendance')).toBeNull();
 });
@@ -444,5 +444,5 @@ it('refetches on focus so a colleague marking the register elsewhere shows up wi
     mockFocusEffects[0]?.();
   });
 
-  expect(await screen.findByText('✓ 28/28 present')).toBeTruthy();
+  expect(await screen.findByText('28/28 present')).toBeTruthy();
 });

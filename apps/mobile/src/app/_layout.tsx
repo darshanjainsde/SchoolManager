@@ -2,8 +2,6 @@ import { Stack } from 'expo-router';
 import { ScrollView, Text, View, Pressable } from 'react-native';
 import type { ErrorBoundaryProps } from 'expo-router';
 import Constants from 'expo-constants';
-import { useFonts } from 'expo-font';
-import { Ionicons } from '@expo/vector-icons';
 import * as Sentry from '@sentry/react-native';
 import { ThemeProvider } from '@/theme/theme-context';
 import { emergency } from '@/theme/tokens';
@@ -59,11 +57,10 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
 }
 
 function RootLayout() {
-  // Bundle + load the Ionicons glyph font used by the tab bars. Without this,
-  // release builds render tab icons as missing-glyph "tofu" boxes. Render once
-  // loaded (or if loading errors — never block the app on a font).
-  const [fontsLoaded, fontError] = useFonts(Ionicons.font);
-  if (!fontsLoaded && !fontError) return null;
+  // No font to load: every glyph in the app is a drawn SVG path
+  // (components/icons.tsx). The Ionicons font this once waited on was the
+  // only runtime asset, and the one that failed to copy on a real Android
+  // 14 handset — icons as boxes for that family, on every launch.
   return (
     <ThemeProvider>
       {/* The pitch moves between screens the way a diary turns a page: the

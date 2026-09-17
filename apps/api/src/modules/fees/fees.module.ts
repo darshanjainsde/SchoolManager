@@ -4,6 +4,8 @@ import { FeaturesModule } from '../features';
 import { TenancyModule } from '../tenancy';
 import { FeeBillingService } from './fee-billing.service';
 import { FeeConfigService } from './fee-config.service';
+import { FeeDueSoonController } from './fee-due-soon.controller';
+import { FeeDueSoonService } from './fee-due-soon.service';
 import { FeePaymentService } from './fee-payment.service';
 import { FeePortalController } from './fee-portal.controller';
 import { FeePortalService } from './fee-portal.service';
@@ -28,8 +30,9 @@ import { RazorpayProvider } from './providers/razorpay.provider';
  */
 @Module({
   imports: [AuthModule, FeaturesModule, TenancyModule],
-  controllers: [FeesController, FeePortalController],
+  controllers: [FeesController, FeePortalController, FeeDueSoonController],
   providers: [
+    FeeDueSoonService,
     ManualBankTransferProvider,
     PhonePeProvider,
     RazorpayProvider,

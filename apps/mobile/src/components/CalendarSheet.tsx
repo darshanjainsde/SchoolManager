@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { AccessibilityInfo, Modal, Pressable, Text, View } from 'react-native';
-import { currentMonthKey, monthKeyLabel, shiftMonthKey } from '@/lib/attendance-grid';
+import { Pressable, Text, View } from 'react-native';
+import { Sheet } from './Sheet';
+import { monthKeyLabel, shiftMonthKey } from '@/lib/attendance-grid';
 import { todayISO } from '@/lib/attendance';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
@@ -50,23 +51,11 @@ function dayKey(monthKey: string, day: number): string {
  */
 export function CalendarSheet({ open, title, value, minDate, onPick, onClose }: CalendarSheetProps) {
   const tokens = useTokens();
-  const [reduced, setReduced] = useState(false);
   // The month being looked at — reset to the chosen date's month each open.
   const [month, setMonth] = useState(() => value.slice(0, 7));
   useEffect(() => {
     if (open) setMonth(value.slice(0, 7));
   }, [open, value]);
-  useEffect(() => {
-    let cancelled = false;
-    AccessibilityInfo.isReduceMotionEnabled().then((v) => {
-      if (!cancelled) setReduced(v);
-    });
-    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', (v) => setReduced(v));
-    return () => {
-      cancelled = true;
-      sub.remove();
-    };
-  }, []);
 
   const today = todayISO();
   // No point paging into months that end before the floor.
@@ -78,54 +67,15 @@ export function CalendarSheet({ open, title, value, minDate, onPick, onClose }: 
   ];
 
   return (
-    <Modal visible={open} transparent animationType={reduced ? 'fade' : 'slide'} onRequestClose={onClose}>
-      <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-        <Pressable
-          testID="calendar-backdrop"
-          accessibilityRole="button"
-          accessibilityLabel="Close the calendar"
-          onPress={onClose}
-          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: `${tokens.color.ink}73` }}
-        />
-        <View
-          testID="calendar-sheet"
-          style={{
-            backgroundColor: tokens.color.appBg,
-            borderTopLeftRadius: 18,
-            borderTopRightRadius: 18,
-            paddingHorizontal: 16,
-            paddingTop: 8,
-            paddingBottom: 22,
-            shadowColor: tokens.color.ink,
-            shadowOpacity: 0.3,
-            shadowRadius: 30,
-            shadowOffset: { width: 0, height: -8 },
-            elevation: 16,
-          }}
-        >
-          <View
-            style={{
-              width: 34,
-              height: 4,
-              borderRadius: 99,
-              backgroundColor: tokens.color.line,
-              alignSelf: 'center',
-              marginBottom: 9,
-            }}
-          />
-          <Text
-            style={{
-              fontFamily: font.serif,
-              fontSize: 17,
-              fontWeight: '600',
-              letterSpacing: -0.2,
-              color: tokens.color.ink,
-              marginBottom: 8,
-            }}
-          >
-            {title}
-          </Text>
-
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title={title}
+      testID="calendar-sheet"
+      backdropTestID="calendar-backdrop"
+      backdropLabel="Close the calendar"
+    >
+      <View>
           {/* Month header */}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
             <Pressable
@@ -228,8 +178,7 @@ export function CalendarSheet({ open, title, value, minDate, onPick, onClose }: 
               );
             })}
           </View>
-        </View>
       </View>
-    </Modal>
+    </Sheet>
   );
 }

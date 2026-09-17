@@ -52,9 +52,9 @@ it('lists each class with its role label and counts', async () => {
   expect(getByText('9-B · Science')).toBeTruthy();
   expect(getByText('Subject teacher')).toBeTruthy();
   // Counts, singular/plural aware.
-  expect(getByText('📌 3 notes')).toBeTruthy();
+  expect(getByText('3 notes')).toBeTruthy();
   expect(getByText('✓ 2 open to-dos')).toBeTruthy();
-  expect(getByText('📌 1 note')).toBeTruthy();
+  expect(getByText('1 note')).toBeTruthy();
   expect(getByText('✓ 0 open to-dos')).toBeTruthy();
 });
 

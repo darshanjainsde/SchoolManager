@@ -1,14 +1,8 @@
 import { useEffect } from 'react';
 import { Tabs } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon } from '@/components/icons';
 import { useTokens } from '@/theme/theme-context';
 import { registerForPush } from '@/lib/push';
-
-type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
-const icon =
-  (name: IoniconName) =>
-  ({ color, size }: { color: string; size: number }) =>
-    <Ionicons name={name} size={size} color={color} />;
 
 /**
  * The non-teaching STAFF portal — deliberately one tab. "currently minimal"
@@ -38,7 +32,13 @@ export default function WorkerTabs() {
         tabBarInactiveTintColor: tokens.color.sub,
       }}
     >
-      <Tabs.Screen name="today" options={{ title: 'Today', tabBarIcon: icon('today-outline') }} />
+      <Tabs.Screen
+        name="today"
+        options={{
+          title: 'Today',
+          tabBarIcon: ({ color, size }) => <Icon name="home" size={size} color={color} />,
+        }}
+      />
     </Tabs>
   );
 }

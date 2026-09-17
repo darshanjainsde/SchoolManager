@@ -85,7 +85,7 @@ function TodoRow({
               {a.attachments.map((att) => (
                 <Pressable key={att.url} testID={`attachment-${att.name}`} onPress={() => void Linking.openURL(att.url)}>
                   <Text style={{ fontFamily: font.mono, fontSize: 11.5, fontWeight: '700', color: tokens.color.indigo }}>
-                    📎 {att.name}
+                    {att.name}
                   </Text>
                 </Pressable>
               ))}

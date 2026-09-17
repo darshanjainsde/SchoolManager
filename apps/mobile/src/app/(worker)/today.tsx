@@ -168,7 +168,7 @@ export default function Today() {
         // A month nobody has marked yet is a clean page, not a failure — so it
         // is said in the diary's own italic hand rather than in system grey.
         <Page>
-          <PageHeader title="This month" icon="🗓" />
+          <PageHeader title="This month" icon="timetable" />
           <Empty icon="take">No attendance has been recorded for you yet this month.</Empty>
         </Page>
       )}
@@ -188,7 +188,7 @@ export default function Today() {
               teacher's attendance screens use, so PRESENT is the same green
               everywhere in the app. */}
           <Page testID="recent-days">
-            <PageHeader title="Recent" icon="📋" />
+            <PageHeader title="Recent" icon="report" />
             {recent.map((d, i) => (
               <View
                 key={d.date}
@@ -216,7 +216,7 @@ export default function Today() {
           to bolt on alongside an attendance view. Drawn as a page with nothing
           written on it, which is exactly what it is. */}
       <Page>
-        <PageHeader title="Leave" icon="✉️" />
+        <PageHeader title="Leave" icon="requests" />
         <Empty>
           Applying for leave isn&rsquo;t available here yet — ask your school admin in the meantime. It&rsquo;s
           planned for a future update.

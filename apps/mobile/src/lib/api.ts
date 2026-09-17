@@ -280,6 +280,7 @@ export const api = {
       // the fallback for an account no role record claims yet, where the
       // identifier is at least something they recognise.
       displayName: me.name?.trim() || identifier,
+      features: me.features ?? [],
     };
     await session.set(s);
     await session.setSchoolHost(host);

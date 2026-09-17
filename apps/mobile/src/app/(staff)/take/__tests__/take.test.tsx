@@ -300,7 +300,7 @@ it('loads a LATE student as LATE, not as present', async () => {
   const cell = await findByTestId('cell-body-s1');
   expect(cell.props.style).toMatchObject({ backgroundColor: LATE_TINT });
   expect(cell.props.style).not.toMatchObject({ backgroundColor: PRESENT_TINT });
-  expect(within(cell).getByText('⏱')).toBeTruthy();
+  expect(within(cell).getByText('L')).toBeTruthy();
   expect(getByLabelText('Asha Rao, roll 1, late')).toBeTruthy();
 });
 

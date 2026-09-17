@@ -194,8 +194,50 @@ export interface PaymentSetup {
   } | null;
 }
 
+export type ScheduleStatus = 'PAID' | 'PART_PAID' | 'DUE' | 'OVERDUE' | 'UPCOMING';
+
+/** One term of the session — what it costs this child and where it stands. */
+export interface ScheduleTerm {
+  termId: string;
+  name: string;
+  dueDate: string;
+  /** The bill's total where billed; the plan's figure for this child where not. */
+  expectedMinor: number;
+  paidMinor: number;
+  dueMinor: number;
+  status: ScheduleStatus;
+  invoiceId: string | null;
+  receiptNumber: string | null;
+  lines: PreviewLine[];
+}
+
+/** `GET /me/fees/receipts/:paymentId` — one confirmed payment as a document. */
+export interface FeeReceipt {
+  number: string;
+  issuedAt: string;
+  amountMinor: number;
+  method: FeePaymentMethod;
+  providerRef: string | null;
+  paidOn: string;
+  verifiedAt: string | null;
+  termName: string | null;
+  invoiceNumber: string | null;
+  student: { name: string; admissionNo: string; className: string | null };
+  school: { name: string };
+}
+
 export interface StudentFees {
   student: { id: string; name: string; admissionNo: string; className: string | null };
+  /** The facts the office quotes when a family rings. */
+  account: { admissionNo: string; className: string | null; admittedOn: string | null; isRte: boolean };
+  year: { id: string; name: string; startDate: string; endDate: string } | null;
+  /** True once the school has a fee plan this child's class is on — false is "not set up yet", not "free". */
+  planReady: boolean;
+  schedule: ScheduleTerm[];
+  nextDue: { termId: string; name: string; dueDate: string; amountMinor: number; billed: boolean; invoiceId: string | null; status: ScheduleStatus } | null;
+  yearTotalMinor: number;
+  yearPaidMinor: number;
+  concessions: { reason: string; scope: string; percentBps: number | null; amountMinor: number | null }[];
   balanceMinor: number;
   billedMinor: number;
   paidMinor: number;

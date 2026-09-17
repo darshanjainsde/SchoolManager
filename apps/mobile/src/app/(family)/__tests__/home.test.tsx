@@ -24,6 +24,13 @@ jest.mock('@/lib/api', () => {
   const actual = jest.requireActual('@/lib/api');
   return { ...actual, api: { ...actual.api, request: jest.fn() } };
 });
+// The persisted session `useSession` reads: a STUDENT at a school with every
+// module on, so the Fees dome and the four new tools have a reason to render.
+jest.mock('expo-secure-store', () => {
+  const s = JSON.stringify({ accessToken: 'a', refreshToken: 'r', role: 'STUDENT', schoolHost: 'raffles.sckools.com', displayName: 'Aarav Sharma', features: ['FEES', 'LIBRARY', 'SPORTS', 'PRESS'] });
+  return { getItemAsync: jest.fn(async (k: string) => (k === 'sckools.session' ? s : null)), setItemAsync: jest.fn(), deleteItemAsync: jest.fn() };
+});
+import { clearCache } from '@/lib/query';
 
 const PROFILE = {
   firstName: 'Aarav',
@@ -51,31 +58,58 @@ function allDaySlot() {
 }
 
 beforeEach(() => {
+  clearCache();
   mockPush.mockReset();
   (api.request as jest.Mock).mockReset();
   mockFocusEffects.length = 0;
 });
 
 /**
- * `overrides` lets a test replace just the endpoints it cares about; every
- * other endpoint resolves to an empty/neutral default so tests stay focused.
+ * `overrides` lets a test replace just the SECTIONS it cares about, by the
+ * path each section used to be fetched from. Home now asks for them in ONE
+ * request (`/me/home`, second edition D1), so the per-section keys are
+ * composed into that one answer here — every existing override keeps its
+ * meaning. Anything else (badges, fees, the birthday wall) resolves to a
+ * quiet default so tests stay focused.
  */
+const SECTION_KEYS = ['/me/profile', '/me/announcements', '/me/attendance', '/me/exams', '/me/results', '/me/timetable', '/me/diary'] as const;
+
 function mockEndpoints(overrides: Partial<Record<string, unknown>> = {}) {
-  const defaults: Record<string, unknown> = {
+  const sections: Record<string, unknown> = {
     '/me/profile': PROFILE,
     '/me/announcements': [],
     '/me/attendance': EMPTY_ATTENDANCE,
     '/me/exams': [],
     '/me/results': [],
     '/me/timetable': [],
-    '/me/notifications/unread-count': { count: 0 },
     '/me/diary': { entries: [], unsignedCount: 0 },
+  };
+  const rest: Record<string, unknown> = {
+    '/me/notifications/unread-count': { count: 0 },
     // The Messages dome's badge (pitch №4); quiet by default.
     '/me/messages/unread-count': { count: 0 },
-    ...overrides,
   };
+  for (const [k, v] of Object.entries(overrides)) {
+    if ((SECTION_KEYS as readonly string[]).includes(k)) sections[k] = v;
+    else rest[k] = v;
+  }
+  const home = {
+    profile: sections['/me/profile'],
+    announcements: sections['/me/announcements'],
+    attendance: sections['/me/attendance'],
+    exams: sections['/me/exams'],
+    results: sections['/me/results'],
+    timetable: sections['/me/timetable'],
+    diary: sections['/me/diary'],
+  };
+  const defaults: Record<string, unknown> = { '/me/home': home, ...rest };
   (api.request as jest.Mock).mockImplementation((path: string) => {
-    if (path in defaults) return Promise.resolve(defaults[path]);
+    if (path in defaults) {
+      const v = defaults[path];
+      return v instanceof Error ? Promise.reject(v) : Promise.resolve(v);
+    }
+    // A school without the module, or a wall that is switched off — quiet.
+    if (path === '/me/fees' || path.startsWith('/me/birthdays')) return Promise.reject(new ApiError(404, 'off'));
     throw new Error(`unexpected path: ${path}`);
   });
 }
@@ -85,7 +119,7 @@ describe('identity card — role-neutral copy', () => {
     mockEndpoints();
     const { findByText } = render(<Home />);
 
-    expect(await findByText('Hi, Aarav 👋')).toBeTruthy();
+    expect(await findByText('Hi, Aarav')).toBeTruthy();
     expect(await findByText(/Grade 5-B/)).toBeTruthy();
     expect(await findByText(/Roll 12/)).toBeTruthy();
   });
@@ -98,7 +132,7 @@ describe('identity card — role-neutral copy', () => {
     mockEndpoints();
     const { findByText, queryByText } = render(<Home />);
 
-    await findByText('Hi, Aarav 👋'); // let the screen settle first
+    await findByText('Hi, Aarav'); // let the screen settle first
     expect(queryByText('Your child')).toBeNull();
   });
 
@@ -115,7 +149,7 @@ describe('identity card — role-neutral copy', () => {
       '/me/timetable': [allDaySlot()],
     });
     const { findByText } = render(<Home />);
-    expect(await findByText('✓ Present today')).toBeTruthy();
+    expect(await findByText('Present today')).toBeTruthy();
   });
 });
 
@@ -143,7 +177,7 @@ describe('next test', () => {
   it('the badge is absent when there are no upcoming exams', async () => {
     mockEndpoints();
     const { findByText, queryByTestId } = render(<Home />);
-    await findByText('Hi, Aarav 👋');
+    await findByText('Hi, Aarav');
     expect(queryByTestId('hometool-badge-Results')).toBeNull();
   });
 
@@ -326,5 +360,57 @@ describe('diary remarks', () => {
     mockEndpoints({ '/me/messages/unread-count': { count: 3 } });
     const { findByTestId } = render(<Home />);
     expect(await findByTestId('hometool-badge-Messages')).toBeTruthy();
+  });
+});
+
+describe('second edition — the doors the web portal had first', () => {
+  it('the Fees dome joins "Needs you today" and badges the count of LATE bills', async () => {
+    mockEndpoints({
+      '/me/fees': {
+        student: { id: 's', name: 'Aarav Sharma', admissionNo: 'A123', className: 'Grade 5-B' },
+        balanceMinor: 100, billedMinor: 100, paidMinor: 0, lateFeeRule: null, ledger: [], payments: [],
+        invoices: [
+          { id: 'i1', number: '1', termName: 'T1', dueDate: '2026-01-01', totalMinor: 100, paidMinor: 0, principalDueMinor: 100, lateFeeMinor: 0, dueMinor: 100, isPaid: false, isOverdue: true, lines: [] },
+          { id: 'i2', number: '2', termName: 'T2', dueDate: '2099-01-01', totalMinor: 100, paidMinor: 0, principalDueMinor: 100, lateFeeMinor: 0, dueMinor: 100, isPaid: false, isOverdue: false, lines: [] },
+        ],
+      },
+    });
+    const { findByTestId } = render(<Home />);
+    expect(await findByTestId('hometool-Fees')).toBeTruthy();
+    const badge = await findByTestId('hometool-badge-Fees');
+    expect(badge).toBeTruthy();
+    expect(badge.props.children.props.children).toBe(1);
+  });
+
+  it('the four new tools sit in "Go to" for a school that has the modules', async () => {
+    mockEndpoints();
+    const { findByTestId } = render(<Home />);
+    for (const label of ['Sports', 'Library', 'Report cards', 'Birthdays']) {
+      expect(await findByTestId(`hometool-${label}`)).toBeTruthy();
+    }
+  });
+
+  it("on the child's birthday the dateline becomes the banner", async () => {
+    mockEndpoints({
+      '/me/birthdays': {
+        generatedFor: '2026-09-17', window: 'TODAY', maxAge: 3600, next: null, upcoming: [],
+        today: [{ day: 17, month: 9, name: 'Aarav Sharma', classLabel: 'Grade 5-B', photoUrl: null, key: 'k1' }],
+      },
+    });
+    const { findByTestId, findByText } = render(<Home />);
+    expect(await findByTestId('birthday-banner')).toBeTruthy();
+    expect(await findByText('Happy birthday, Aarav')).toBeTruthy();
+  });
+
+  it('a wall that names someone ELSE today leaves the dateline alone', async () => {
+    mockEndpoints({
+      '/me/birthdays': {
+        generatedFor: '2026-09-17', window: 'TODAY', maxAge: 3600, next: null, upcoming: [],
+        today: [{ day: 17, month: 9, name: 'Meera Nair', classLabel: 'Grade 5-B', photoUrl: null, key: 'k2' }],
+      },
+    });
+    const { findByText, queryByTestId } = render(<Home />);
+    await findByText('Hi, Aarav');
+    expect(queryByTestId('birthday-banner')).toBeNull();
   });
 });

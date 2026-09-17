@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { Icon } from './icons';
 import { router, useFocusEffect } from 'expo-router';
 import { fetchUnreadCount } from '@/lib/notifications';
 import type { NotificationGroup } from '@/lib/notification-links';
@@ -18,7 +18,7 @@ import { brand } from '@/theme/tokens';
  * broken chrome rather than an inbox. One screen, reached one way — this route
  * is also where a tapped push notification lands, so the two entrances agree.
  *
- * 38px with a DRAWN glyph, not the 🔔 emoji: the emoji renders differently on
+ * 38px with a DRAWN glyph, not the bell emoji: the emoji renders differently on
  * every Android vendor and cannot take the theme's ink colour. `alignSelf:
  * 'center'` seats the tile on the optical centre of the two-line name block
  * beside it instead of hanging from the row's top edge.
@@ -63,7 +63,7 @@ export function NotificationBell({ group }: { group: NotificationGroup }) {
         opacity: pressed ? 0.6 : 1,
       })}
     >
-      <Ionicons name="notifications-outline" size={19} color={tokens.color.ink} />
+      <Icon name="bell" size={20} color={tokens.color.ink} />
       {count > 0 && (
         <View
           testID="notification-bell-badge"

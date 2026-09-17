@@ -431,7 +431,7 @@ export function NowCard({
       const s = summary ?? { classesTaught: 0, studentsMarked: 0 };
       return (
         <GradientHero id="hero-done" colors={accentColors} testID="now-card">
-          <Text style={hero.eyebrow}>🎉 That&apos;s a wrap</Text>
+          <Text style={hero.eyebrow}>That&apos;s a wrap</Text>
           <Text style={hero.title}>Day complete</Text>
           <Text style={hero.meta}>
             {`${s.classesTaught} ${s.classesTaught === 1 ? 'class' : 'classes'} taught`}
@@ -495,7 +495,7 @@ export function NowCard({
             : `${entry.startTime}–${entry.endTime}`}
         </Text>
         <View style={{ marginTop: 12 }}>
-          <HeroChip on={brand.onHero}>☕ Use it to prep or catch up</HeroChip>
+          <HeroChip on={brand.onHero}>Use it to prep or catch up</HeroChip>
         </View>
       </GradientHero>
     );
@@ -527,7 +527,7 @@ export function NowCard({
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9, marginTop: 10, flexWrap: 'wrap' }}>
         {register?.taken ? (
           <>
-            <HeroChip on={on}>{`✓ ${register.present}/${register.total} present`}</HeroChip>
+            <HeroChip on={on}>{`${register.present}/${register.total} present`}</HeroChip>
             {register.markedBy && (
               <Text style={hero.meta}>{`Marked by ${register.markedBy}`}</Text>
             )}

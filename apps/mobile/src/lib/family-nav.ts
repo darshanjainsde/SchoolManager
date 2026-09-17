@@ -17,11 +17,27 @@
  */
 
 export const VISIBLE_TABS = [
-  { name: 'home', title: 'Home', icon: 'home-outline' as const },
-  { name: 'attendance', title: 'Attendance', icon: 'checkbox-outline' as const },
-  { name: 'results', title: 'Results', icon: 'stats-chart-outline' as const },
-  { name: 'profile', title: 'Profile', icon: 'person-outline' as const },
+  { name: 'home', title: 'Home', icon: 'home' as const },
+  { name: 'attendance', title: 'Attendance', icon: 'take' as const },
+  { name: 'results', title: 'Results', icon: 'results' as const },
+  { name: 'profile', title: 'Profile', icon: 'person' as const },
 ];
+
+/**
+ * THE FIFTH TAB (second edition). Fees is money and, after attendance, the
+ * thing a family opens most — it belongs in the bar. But it is a paid
+ * module, so the bar reads the school's feature list and draws it only when
+ * FEES is on. It sits in the middle: the two most-opened tabs either side.
+ */
+export const FEES_TAB = { name: 'fees', title: 'Fees', icon: 'fees' as const };
+
+/** Every tab file the navigator registers, whether or not the bar draws it. */
+export const ALL_TABS = [VISIBLE_TABS[0], VISIBLE_TABS[1], FEES_TAB, VISIBLE_TABS[2], VISIBLE_TABS[3]];
+
+/** The tabs the bar draws for THIS school — five with fees, four without. */
+export function visibleTabs(features: readonly string[] | undefined): typeof ALL_TABS {
+  return features?.includes('FEES') ? ALL_TABS : VISIBLE_TABS;
+}
 
 /** Detail/utility routes — reachable via navigation (drawer tiles, row taps), hidden from the tab bar. */
 export const HIDDEN_ROUTES = [
@@ -34,6 +50,13 @@ export const HIDDEN_ROUTES = [
   '(tabs)/home/holidays',
   '(tabs)/home/notifications',
   '(tabs)/home/shelf',
+  // Second edition — the four screens the web portal had and the app did not.
+  '(tabs)/home/sports',
+  '(tabs)/home/library',
+  '(tabs)/home/birthdays',
+  '(tabs)/home/report-cards',
+  '(tabs)/home/report-cards/[id]',
+  '(tabs)/home/receipt/[paymentId]',
 ];
 
 /** Icon-tile colour family for a drawer tool — mirrors staff-nav's `MoreTone`. */
@@ -54,9 +77,18 @@ export interface MoreItem {
     | '/(family)/(tabs)/home/assignments'
     | '/(family)/(tabs)/home/messages'
     | '/(family)/(tabs)/home/notices'
-    | '/(family)/(tabs)/home/holidays';
+    | '/(family)/(tabs)/home/holidays'
+    | '/(family)/(tabs)/home/sports'
+    | '/(family)/(tabs)/home/library'
+    | '/(family)/(tabs)/home/birthdays'
+    | '/(family)/(tabs)/home/report-cards';
   /** Icon-tile tint. Defaults to indigo when omitted. */
   tone?: MoreTone;
+  /**
+   * The paid module this tool belongs to. Home draws the tile only when the
+   * school has it on (lib/features.ts); a tool with no key is always drawn.
+   */
+  feature?: 'FEES' | 'LIBRARY' | 'SPORTS' | 'PRESS';
 }
 
 export const MORE_ITEMS: readonly MoreItem[] = [
@@ -66,4 +98,8 @@ export const MORE_ITEMS: readonly MoreItem[] = [
   { label: 'Messages', icon: 'messages', route: '/(family)/(tabs)/home/messages', tone: 'amber' },
   { label: 'Notices', icon: 'notices', route: '/(family)/(tabs)/home/notices', tone: 'amber' },
   { label: 'Holidays', icon: 'holidays', route: '/(family)/(tabs)/home/holidays', tone: 'green' },
+  { label: 'Sports', icon: 'sports', route: '/(family)/(tabs)/home/sports', tone: 'indigo', feature: 'SPORTS' },
+  { label: 'Library', icon: 'library', route: '/(family)/(tabs)/home/library', tone: 'indigo', feature: 'LIBRARY' },
+  { label: 'Report cards', icon: 'report', route: '/(family)/(tabs)/home/report-cards', tone: 'indigo', feature: 'PRESS' },
+  { label: 'Birthdays', icon: 'cake', route: '/(family)/(tabs)/home/birthdays', tone: 'amber' },
 ];

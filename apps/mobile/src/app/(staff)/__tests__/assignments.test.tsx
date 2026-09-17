@@ -20,8 +20,10 @@ jest.mock('expo-router', () => ({
 
 jest.mock('@/lib/api', () => {
   const actual = jest.requireActual('@/lib/api');
-  return { ...actual, api: { ...actual.api, request: jest.fn() } };
+  return { ...actual, api: { ...actual.api, request: jest.fn(), upload: jest.fn() } };
 });
+jest.mock('expo-document-picker', () => ({ getDocumentAsync: jest.fn() }));
+import * as DocumentPicker from 'expo-document-picker';
 
 const CLASSES = [
   { classSectionId: 'cs1', name: 'Grade 5-B', studentCount: 28, covering: false },
@@ -72,6 +74,7 @@ function mockApi(opts: {
 
 beforeEach(() => {
   (api.request as jest.Mock).mockReset();
+  (api.upload as jest.Mock).mockReset();
   mockPush.mockReset();
 });
 
@@ -113,7 +116,7 @@ it('blocks submit until subject, title, instructions and due date are all set, a
   expect(postCalls.length).toBe(0);
 });
 
-it('posts an assignment with no attachments field (mobile v1 has no file picker) and shows a success toast', async () => {
+it('posts an assignment with no attachments key when nothing was attached, and shows a success toast', async () => {
   mockApi({});
   const { findByText, findByTestId } = render(<Assignments />);
 
@@ -137,11 +140,40 @@ it('posts an assignment with no attachments field (mobile v1 has no file picker)
   expect(await findByTestId('post-success')).toBeTruthy();
 });
 
-it('shows the note that attachments come from the web portal', async () => {
+it('attaches a PDF: uploads it first, then sends it with the post — the web page’s flow', async () => {
   mockApi({});
-  const { findByText } = render(<Assignments />);
-  fireEvent.press(await findByText('Grade 5-B'));
-  expect(await findByText(/attach files from the web portal/i)).toBeTruthy();
+  (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
+    canceled: false,
+    assets: [{ uri: 'file:///tmp/ws3.pdf', name: 'worksheet-3.pdf', mimeType: 'application/pdf', size: 120_000 }],
+  });
+  (api.upload as jest.Mock).mockResolvedValue({ url: 'https://files/ws3.pdf', name: 'worksheet-3.pdf', kind: 'pdf' });
+  const { findByTestId, getByTestId } = render(<Assignments />);
+  fireEvent.press(await findByTestId('class-cs1'));
+  fireEvent.press(await findByTestId('assign-attach'));
+  expect(await findByTestId('attached-worksheet-3.pdf')).toBeTruthy();
+  expect((api.upload as jest.Mock).mock.calls[0][0]).toBe('/manage/assignments/upload');
+  fireEvent.press(getByTestId('subject-sub1'));
+  fireEvent.changeText(getByTestId('assign-title'), 'Worksheet 3');
+  fireEvent.changeText(getByTestId('assign-instructions'), 'Q1-10');
+  fireEvent.press(getByTestId('assign-submit'));
+  await waitFor(() => {
+    const call = (api.request as jest.Mock).mock.calls.find(([p, i]: [string, { method?: string }]) => p === '/manage/assignments' && i?.method === 'POST');
+    expect(call).toBeDefined();
+    expect(call[1].body.attachments).toEqual([{ url: 'https://files/ws3.pdf', name: 'worksheet-3.pdf', kind: 'pdf' }]);
+  });
+});
+
+it('refuses a file over 4 MB before any upload, with a sentence', async () => {
+  mockApi({});
+  (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
+    canceled: false,
+    assets: [{ uri: 'file:///tmp/big.pdf', name: 'big.pdf', mimeType: 'application/pdf', size: 9 * 1024 * 1024 }],
+  });
+  const { findByTestId, findByText } = render(<Assignments />);
+  fireEvent.press(await findByTestId('class-cs1'));
+  fireEvent.press(await findByTestId('assign-attach'));
+  expect(await findByText(/too large/)).toBeTruthy();
+  expect(api.upload).not.toHaveBeenCalled();
 });
 
 it('shows the server error message verbatim on a failed post', async () => {

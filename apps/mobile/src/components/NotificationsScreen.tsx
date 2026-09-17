@@ -247,7 +247,7 @@ export function NotificationsScreen({ group }: { group: Group }) {
               paddingHorizontal: 14,
             }}
           >
-            You&apos;re all caught up. 🎉
+            You&apos;re all caught up.
           </Text>
         </Page>
       )}

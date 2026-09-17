@@ -1,6 +1,5 @@
 import { Pressable, Text, View } from 'react-native';
-import { useEffect, useRef } from 'react';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon, type IconName } from './icons';
 import { useTokens } from '@/theme/theme-context';
 
 /**
@@ -28,27 +27,28 @@ interface EdgeInsets {
   right: number;
 }
 
-/** One visible tab — the shape of staff-nav's / family-nav's `VISIBLE_TABS` entries. */
+/** One visible tab — the shape of staff-nav's / family-nav's tab entries. */
 export interface TabSpec {
   name: string;
   title: string;
-  icon: React.ComponentProps<typeof Ionicons>['name'];
+  /** A duotone glyph from components/icons.tsx — the same set the tool domes draw. */
+  icon: IconName;
 }
 
 /**
  * Custom portal tab bar (pitch: Phone 3), shared by the staff and family
  * portals — see `StaffTabBar` / `FamilyTabBar` for the thin per-portal
- * wrappers that supply `tabs`. Four core tabs with a central round chevron
- * four tabs of equal width. The tools FAB that used to sit between the middle
- * pair is gone: it opened a drawer, and the drawer's tools now live on Home.
- * Removing it also gave every tab an equal share of the bar — the two either
- * side of the FAB had been squeezed toward the edges. See `_layout.tsx` for the
- * chevron while the sheet is up.
+ * wrappers that supply `tabs`. Every tab gets an equal share of the bar.
  *
- * Driven off `tabs` (not `state.routes`) so the four labelled tabs render in
- * a fixed order regardless of how expo-router registers the hidden
- * (drawer-reachable) routes; `state` is only read to decide which tab is
- * focused and to look up each route's key for `tabPress`.
+ * SECOND EDITION: the bar draws the app's own duotone glyphs. It drew
+ * Ionicons until now — a second icon language two inches under the domes,
+ * and the only runtime font the app loaded, which is the asset that failed
+ * on a real Android 14 handset and left a family looking at boxes.
+ *
+ * Driven off `tabs` (not `state.routes`) so the labelled tabs render in a
+ * fixed order regardless of how expo-router registers the hidden routes;
+ * `state` is only read to decide which tab is focused and to look up each
+ * route's key for `tabPress`.
  */
 export type PortalTabBarProps = {
   tabs: readonly TabSpec[];
@@ -66,7 +66,7 @@ function TabButton({
 }: {
   name: string;
   title: string;
-  icon: React.ComponentProps<typeof Ionicons>['name'];
+  icon: IconName;
   focused: boolean;
   onPress: () => void;
 }) {
@@ -82,7 +82,7 @@ function TabButton({
       accessibilityState={{ selected: focused }}
       accessibilityLabel={title}
       onPress={onPress}
-      style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3, paddingVertical: 6 }}
+      style={{ flex: 1, minWidth: 0, alignItems: 'center', justifyContent: 'center', gap: 3, paddingVertical: 6 }}
     >
       <View
         testID={focused ? `tab-indicator-${name}` : undefined}
@@ -95,10 +95,11 @@ function TabButton({
           backgroundColor: focused ? tokens.color.barIndicator : 'transparent',
         }}
       />
-      <Ionicons name={icon} size={22} color={color} />
+      {/* The focused glyph fills a little more, the way the live dome does. */}
+      <Icon name={icon} size={22} color={color} fillOpacity={focused ? 0.34 : 0.18} />
       {/* Capped: this label lives under an icon in a fixed-height bar. Content
           elsewhere scales freely — see theme/__tests__/text-scaling.test.ts. */}
-      <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 10, fontWeight: '700', color }}>
+      <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ fontSize: 10, fontWeight: '700', color }}>
         {title}
       </Text>
     </Pressable>
@@ -109,7 +110,6 @@ export function PortalTabBar({ tabs, state, navigation, insets }: PortalTabBarPr
   const tokens = useTokens();
   const activeName = state.routes[state.index]?.name;
 
-
   function go(name: string) {
     const route = state.routes.find((r) => r.name === name);
     const isFocused = activeName === name;
@@ -118,7 +118,6 @@ export function PortalTabBar({ tabs, state, navigation, insets }: PortalTabBarPr
       navigation.navigate(name);
     }
   }
-
 
   return (
     <View
@@ -131,7 +130,7 @@ export function PortalTabBar({ tabs, state, navigation, insets }: PortalTabBarPr
         backgroundColor: tokens.color.barBg,
         borderTopColor: tokens.color.barBg,
         borderTopWidth: 1,
-        paddingHorizontal: 8,
+        paddingHorizontal: 4,
         paddingTop: 6,
         paddingBottom: Math.max(insets.bottom, 8),
       }}
@@ -146,8 +145,6 @@ export function PortalTabBar({ tabs, state, navigation, insets }: PortalTabBarPr
           onPress={() => go(t.name)}
         />
       ))}
-
-
     </View>
   );
 }

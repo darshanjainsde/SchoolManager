@@ -3,7 +3,9 @@ import { randomUUID } from 'node:crypto';
 import { Prisma, withTenant, type TenantTx } from '@skoolos/db';
 import { createInBatches } from '../../common/db/chunk';
 import { ApiError } from '../../common/errors/api-error';
-import { applyBps, clampConcession } from './money';
+import { buildCells, linesFor, type PreviewLine } from './fee-lines';
+
+export type { PreviewLine } from './fee-lines';
 
 /**
  * Step 5: turning the grid into bills.
@@ -19,18 +21,6 @@ import { applyBps, clampConcession } from './money';
  *   affected students — before committing. They are the same code path, not
  *   two implementations that can drift.
  */
-
-export interface PreviewLine {
-  categoryId: string;
-  categoryName: string;
-  categoryDescription: string;
-  grossMinor: number;
-  concessionMinor: number;
-  netMinor: number;
-  concessionReason: string | null;
-  isCollectible: boolean;
-  order: number;
-}
 
 export interface PreviewInvoice {
   studentId: string;
@@ -134,11 +124,7 @@ export class FeeBillingService {
       concByStudent.set(c.studentId, list);
     }
 
-    // A term-specific amount wins over the "same every term" row for the same cell.
-    const cellKey = (gradeId: string, categoryId: string, t: string | null) =>
-      `${gradeId}|${categoryId}|${t ?? '*'}`;
-    const cells = new Map<string, number>();
-    for (const i of items) cells.set(cellKey(i.gradeId, i.categoryId, i.termId), i.amountMinor);
+    const cells = buildCells(items);
 
     // ONE_TIME categories are billed only on a student's very first bill;
     // ANNUAL only on the first term of the session.
@@ -173,53 +159,20 @@ export class FeeBillingService {
       const isRte = assign?.isRte ?? false;
       if (isRte) rteStudents++;
 
-      const lines: PreviewLine[] = [];
-      let order = 0;
-
-      for (const cat of categories) {
-        if (cat.isOptional && !optIns.has(cat.id)) continue;
-        if (cat.frequency === 'ONE_TIME' && everBilled.has(s.id)) continue;
-        if (cat.frequency === 'ANNUAL' && !isFirstTerm) continue;
-
-        const gross =
-          cells.get(cellKey(section.gradeId, cat.id, termId)) ??
-          cells.get(cellKey(section.gradeId, cat.id, null));
-        if (!gross || gross <= 0) continue;
-
-        // Concessions scoped to this category, plus whole-bill ones. Applied
-        // in order, each against what is left, and clamped so a stack of
-        // waivers can never take a line negative.
-        const applicable = (concByStudent.get(s.id) ?? []).filter(
-          (c) => c.categoryId === cat.id || c.categoryId === null,
-        );
-        let concession = 0;
-        const reasons: string[] = [];
-        for (const c of applicable) {
-          const remaining = gross - concession;
-          if (remaining <= 0) break;
-          const amount =
-            c.percentBps != null ? applyBps(remaining, c.percentBps) : (c.amountMinor ?? 0);
-          const applied = clampConcession(remaining, amount);
-          if (applied > 0) {
-            concession += applied;
-            reasons.push(c.reason);
-          }
-        }
-        concession = clampConcession(gross, concession);
-
-        lines.push({
-          categoryId: cat.id,
-          categoryName: cat.name,
-          categoryDescription: cat.description,
-          grossMinor: gross,
-          concessionMinor: concession,
-          netMinor: gross - concession,
-          concessionReason: reasons.length ? reasons.join(' · ') : null,
-          // An RTE student's collectible lines are recorded but never chased.
-          isCollectible: cat.isCollectible && !isRte,
-          order: order++,
-        });
-      }
+      // The lines themselves come from ONE function shared with the family
+      // page's schedule (fee-lines.ts) — what a family is shown for a term is
+      // exactly what this writes on the bill.
+      const lines: PreviewLine[] = linesFor({
+        categories,
+        cells,
+        gradeId: section.gradeId,
+        termId,
+        isFirstTerm,
+        everBilled: everBilled.has(s.id),
+        optIns,
+        isRte,
+        concessions: concByStudent.get(s.id) ?? [],
+      });
 
       if (lines.length === 0) {
         skippedNoPlan++;

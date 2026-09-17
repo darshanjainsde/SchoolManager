@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { VISIBLE_TABS, HIDDEN_ROUTES, MORE_ITEMS } from '@/lib/family-nav';
+import { ALL_TABS, VISIBLE_TABS, HIDDEN_ROUTES, MORE_ITEMS, visibleTabs } from '@/lib/family-nav';
 
 /**
  * Family twin of `(staff)/__tests__/route-honesty.test.ts` (itself a mirror
@@ -34,8 +34,8 @@ function tabFileExists(routeName: string): boolean {
 }
 
 describe('family route honesty', () => {
-  it('every visible tab points at a screen file that exists', () => {
-    for (const { name } of VISIBLE_TABS) {
+  it('every tab file the navigator registers exists — including the fees tab the bar draws only with FEES on', () => {
+    for (const { name } of ALL_TABS) {
       expect(`${name}: ${tabFileExists(name)}`).toBe(`${name}: true`);
     }
   });
@@ -46,12 +46,12 @@ describe('family route honesty', () => {
     }
   });
 
-  it('shows exactly the four core tabs — no "More" tab (it became the tools drawer)', () => {
+  it('shows the four core tabs, five with fees — never a "More" tab (it became the tools grid)', () => {
     // Menu-drawer revision: the "More" tab is gone; its contents moved into
-    // the chevron-FAB bottom sheet (FamilyToolsDrawer), driven by MORE_ITEMS.
-    // Profile replaced Notices in the bar — Notices lives in the drawer now
-    // (which also kills the two-line "Notices/Announcements" tab-label bug).
+    // the tools grid on Home, driven by MORE_ITEMS. Second edition: Fees
+    // joins the bar in the middle, only when the school has the module.
     expect(VISIBLE_TABS.map((t) => t.name)).toEqual(['home', 'attendance', 'results', 'profile']);
+    expect(visibleTabs(['FEES']).map((t) => t.name)).toEqual(['home', 'attendance', 'fees', 'results', 'profile']);
     expect(VISIBLE_TABS.some((t) => t.name === 'more')).toBe(false);
     expect(routeFileExists('more')).toBe(false);
   });
@@ -70,7 +70,7 @@ describe('family route honesty', () => {
     }
   });
 
-  it('lists every off-bar tool — Diary, Timetable, Assignments, Messages, Notices, Holidays', () => {
+  it('lists every off-bar tool — the six from before, and the four the web portal had first', () => {
     const labels = MORE_ITEMS.map((i) => i.label);
     expect(labels).toEqual([
       'Diary',
@@ -79,7 +79,17 @@ describe('family route honesty', () => {
       'Messages',
       'Notices',
       'Holidays',
+      'Sports',
+      'Library',
+      'Report cards',
+      'Birthdays',
     ]);
+    // The paid modules carry their feature key so Home can leave them off
+    // for a school that does not have them.
+    expect(MORE_ITEMS.find((i) => i.label === 'Sports')?.feature).toBe('SPORTS');
+    expect(MORE_ITEMS.find((i) => i.label === 'Library')?.feature).toBe('LIBRARY');
+    expect(MORE_ITEMS.find((i) => i.label === 'Report cards')?.feature).toBe('PRESS');
+    expect(MORE_ITEMS.find((i) => i.label === 'Birthdays')?.feature).toBeUndefined();
     // Profile is a core tab now, so it must NOT double up as a drawer tile.
     expect(labels).not.toContain('Profile');
   });
@@ -98,7 +108,7 @@ describe('family route honesty', () => {
     // The layout registers exactly VISIBLE_TABS + HIDDEN_ROUTES. A screen file
     // in neither list would be an unregistered orphan expo-router still
     // auto-adds to the navigator — fail loudly instead.
-    const registered = new Set([...VISIBLE_TABS.map((t) => t.name), ...HIDDEN_ROUTES]);
+    const registered = new Set([...ALL_TABS.map((t) => t.name), ...HIDDEN_ROUTES]);
     const screens: string[] = [];
     for (const entry of fs.readdirSync(FAMILY_DIR, { withFileTypes: true })) {
       if (entry.isFile() && entry.name.endsWith('.tsx') && entry.name !== '_layout.tsx') {

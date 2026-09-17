@@ -63,3 +63,13 @@ export function formatMinor(amountMinor: number): string {
   const body = paise === 0 ? grouped : `${grouped}.${String(paise).padStart(2, '0')}`;
   return `${neg ? '-' : ''}₹${body}`;
 }
+
+/** ₹24,500 — Indian grouping, paise only when there are any. The clients' `rupees`, for server-composed copy. */
+export function formatRupees(amountMinor: number): string {
+  const abs = Math.abs(amountMinor);
+  const whole = Math.floor(abs / 100);
+  const paise = abs % 100;
+  const s = String(whole);
+  const grouped = s.length <= 3 ? s : `${s.slice(0, -3).replace(/\B(?=(\d{2})+(?!\d))/g, ',')},${s.slice(-3)}`;
+  return `${amountMinor < 0 ? '−' : ''}₹${paise === 0 ? grouped : `${grouped}.${String(paise).padStart(2, '0')}`}`;
+}

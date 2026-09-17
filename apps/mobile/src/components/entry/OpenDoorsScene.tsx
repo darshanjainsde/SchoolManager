@@ -9,7 +9,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
-import { Ionicons } from '@expo/vector-icons';
+import { Icon, type IconName } from '../icons';
 import { brand, font, type GatePalette } from '@/theme/tokens';
 import { useTheme } from '@/theme/theme-context';
 
@@ -33,7 +33,7 @@ import { useTheme } from '@/theme/theme-context';
 const CYCLE_MS = 27_000;
 
 interface Door {
-  icon: keyof typeof Ionicons.glyphMap;
+  icon: IconName;
   name: string;
   line: string;
   stat: string;
@@ -42,12 +42,12 @@ interface Door {
 
 /** One feature per room, each with its own accent — from the approved pitch. */
 const DOORS: Door[] = [
-  { icon: 'checkmark-done', name: 'Attendance', line: 'Roll call in ten seconds, synced to every family.', stat: '24/26 PRESENT', accent: brand.gate.accents.attendance },
-  { icon: 'book', name: 'Daily Diary', line: 'What happened in class today, signed by home.', stat: '2 TO SIGN', accent: brand.gate.accents.diary },
-  { icon: 'star', name: 'Results', line: 'Marks entered once, report cards everywhere.', stat: 'TERM 2 OUT', accent: brand.gate.accents.results },
-  { icon: 'calendar', name: 'Timetable', line: 'Every period, every room, every substitution.', stat: '8 PERIODS TODAY', accent: brand.gate.accents.timetable },
-  { icon: 'megaphone', name: 'Notices', line: 'One post reaches every family, instantly.', stat: 'SPORTS DAY FRI', accent: brand.gate.accents.notices },
-  { icon: 'chatbubbles', name: 'Messages', line: 'School and home, one quiet thread.', stat: '3 NEW', accent: brand.gate.accents.messages },
+  { icon: 'take', name: 'Attendance', line: 'Roll call in ten seconds, synced to every family.', stat: '24/26 PRESENT', accent: brand.gate.accents.attendance },
+  { icon: 'diary', name: 'Daily Diary', line: 'What happened in class today, signed by home.', stat: '2 TO SIGN', accent: brand.gate.accents.diary },
+  { icon: 'results', name: 'Results', line: 'Marks entered once, report cards everywhere.', stat: 'TERM 2 OUT', accent: brand.gate.accents.results },
+  { icon: 'timetable', name: 'Timetable', line: 'Every period, every room, every substitution.', stat: '8 PERIODS TODAY', accent: brand.gate.accents.timetable },
+  { icon: 'notices', name: 'Notices', line: 'One post reaches every family, instantly.', stat: 'SPORTS DAY FRI', accent: brand.gate.accents.notices },
+  { icon: 'messages', name: 'Messages', line: 'School and home, one quiet thread.', stat: '3 NEW', accent: brand.gate.accents.messages },
 ];
 
 const N = DOORS.length;
@@ -100,7 +100,7 @@ function DoorLayer({ door, index, centerY }: { door: Door; index: number; center
         <Text style={[styles.roomTag, { color: g.roomTag }]}>{`ROOM ${index + 1} OF ${N}`}</Text>
         <View style={[styles.knob, { backgroundColor: door.accent }]} />
         <View style={[styles.icoWrap, { backgroundColor: `${door.accent}22` }]}>
-          <Ionicons name={door.icon} size={19} color={door.accent} />
+          <Icon name={door.icon} size={19} color={door.accent} fillOpacity={0.3} />
         </View>
         <Text style={[styles.doorName, { color: g.name }]}>{door.name}</Text>
         <Text style={[styles.doorLine, { color: g.line }]}>{door.line}</Text>

@@ -25,7 +25,24 @@ export type IconName =
   | 'holidays'
   | 'notes'
   | 'home'
-  | 'person';
+  | 'person'
+  // Second edition — the six new screens, and the three glyphs the chrome
+  // drew through Ionicons until the tab bar moved to this set.
+  | 'fees'
+  | 'sports'
+  | 'library'
+  | 'cake'
+  | 'report'
+  | 'bell'
+  | 'chevron'
+  | 'offline'
+  // The glyphs the last emoji were standing in for.
+  | 'pin'
+  | 'send'
+  | 'mail'
+  | 'phone'
+  | 'palette'
+  | 'key';
 
 /** `body` is the filled silhouette; `lines` are the strokes drawn over it. */
 const PATHS: Record<IconName, { body: string; lines: string[] }> = {
@@ -94,6 +111,85 @@ const PATHS: Record<IconName, { body: string; lines: string[] }> = {
       'M12 4.8a3.4 3.4 0 1 1 0 6.8 3.4 3.4 0 0 1 0-6.8Z',
       'M5.6 19.8c.7-3.5 3.2-5.4 6.4-5.4s5.7 1.9 6.4 5.4',
     ],
+  },
+  // A receipt with a torn foot and the rupee sign — a bill, not a coin.
+  fees: {
+    body: 'M6 5h12v14.6l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4-2 1.4Z',
+    lines: [
+      'M6 5h12v14.6l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4-2 1.4Z',
+      'M9 9h6M9 12h6c0 2-1.5 3-3 3H9l4 4',
+    ],
+  },
+  // A trophy — the meet, not a ball, because a ball picks one sport.
+  sports: {
+    body: 'M8 4.5h8v3a4 4 0 0 1-8 0Z',
+    lines: [
+      'M8 4.5h8v3a4 4 0 0 1-8 0Z',
+      'M8 6H5.5a2.5 2.5 0 0 0 2.6 3M16 6h2.5a2.5 2.5 0 0 1-2.6 3M12 11.5v3.5M9 19.5h6M12 15c-1.6 0-2.5 1.5-2.5 4.5h5c0-3-.9-4.5-2.5-4.5Z',
+    ],
+  },
+  // Three spines, one leaning — a shelf with books on it.
+  library: {
+    body: 'M5 5h3.5v14H5ZM10 5h3.5v14H10ZM14.6 6.2l3.3-.9 3.7 13.3-3.3.9Z',
+    lines: ['M5 5h3.5v14H5ZM10 5h3.5v14H10ZM14.6 6.2l3.3-.9 3.7 13.3-3.3.9Z'],
+  },
+  // A cake with one candle — the birthday wall.
+  cake: {
+    body: 'M5 12h14v7.5H5Z',
+    lines: [
+      'M5 12h14v7.5H5Z',
+      'M5 15c1.5 1.4 3 1.4 4.5 0s3 1.4 4.5 0 3 1.4 4.5 0M12 12V8.5M12 5.5c-.8.9-.8 1.9 0 2.6.8-.7.8-1.7 0-2.6Z',
+    ],
+  },
+  // A sheet with a folded corner and ruled lines — the printed card.
+  report: {
+    body: 'M6 4.5h9l3.5 3.5v11.5H6Z',
+    lines: ['M6 4.5h9l3.5 3.5v11.5H6Z', 'M15 4.5V8h3.5M9 12h6M9 15.5h4'],
+  },
+  // The bell the header wore as an Ionicon.
+  bell: {
+    body: 'M7 16V11a5 5 0 0 1 10 0v5l1.5 1.8H5.5Z',
+    lines: ['M7 16V11a5 5 0 0 1 10 0v5l1.5 1.8H5.5Z', 'M10 19.5a2 2 0 0 0 4 0M12 4.2v1.8'],
+  },
+  // The way back. Stroke only — a chevron has no body to fill.
+  chevron: {
+    body: '',
+    lines: ['M14.5 6 8.5 12l6 6'],
+  },
+  // A cloud with a line through it — no signal.
+  offline: {
+    body: 'M7 17.5a3.5 3.5 0 0 1-.4-7 5 5 0 0 1 9.6-1.2A3.4 3.4 0 0 1 17.5 17.5Z',
+    lines: ['M7 17.5a3.5 3.5 0 0 1-.4-7 5 5 0 0 1 9.6-1.2A3.4 3.4 0 0 1 17.5 17.5Z', 'M4 4l16 16'],
+  },
+  // A drawing pin, head and point — a note pinned to the class page.
+  pin: {
+    body: 'M9 4.5h6l-1 5.5 2.5 2.5v1.5H7.5v-1.5L10 10Z',
+    lines: ['M9 4.5h6l-1 5.5 2.5 2.5v1.5H7.5v-1.5L10 10Z', 'M12 14v5.5'],
+  },
+  // A paper plane — send.
+  send: {
+    body: 'M4.5 11.5 19.5 5l-4 14-4.5-5Z',
+    lines: ['M4.5 11.5 19.5 5l-4 14-4.5-5Z', 'M11 14l8.5-9'],
+  },
+  // An envelope.
+  mail: {
+    body: 'M4.5 7A1.5 1.5 0 0 1 6 5.5h12A1.5 1.5 0 0 1 19.5 7v10a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 17Z',
+    lines: ['M4.5 7A1.5 1.5 0 0 1 6 5.5h12A1.5 1.5 0 0 1 19.5 7v10a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 17Z', 'm5 7.5 7 5.5 7-5.5'],
+  },
+  // A handset.
+  phone: {
+    body: 'M6.5 4.5h3l1.5 4-2 1.5a10 10 0 0 0 5 5l1.5-2 4 1.5v3a1.5 1.5 0 0 1-1.5 1.5A14 14 0 0 1 5 6a1.5 1.5 0 0 1 1.5-1.5Z',
+    lines: ['M6.5 4.5h3l1.5 4-2 1.5a10 10 0 0 0 5 5l1.5-2 4 1.5v3a1.5 1.5 0 0 1-1.5 1.5A14 14 0 0 1 5 6a1.5 1.5 0 0 1 1.5-1.5Z'],
+  },
+  // A painter's palette with three wells — appearance.
+  palette: {
+    body: 'M12 4.5a7.5 7.5 0 1 0 0 15c1.2 0 1.6-.8 1.2-1.7-.5-1 .2-2 1.3-2H16a3.5 3.5 0 0 0 3.5-3.5A7.5 7.5 0 0 0 12 4.5Z',
+    lines: ['M12 4.5a7.5 7.5 0 1 0 0 15c1.2 0 1.6-.8 1.2-1.7-.5-1 .2-2 1.3-2H16a3.5 3.5 0 0 0 3.5-3.5A7.5 7.5 0 0 0 12 4.5Z', 'M8.5 12.5h.01M10.5 8.5h.01M14.5 8.5h.01'],
+  },
+  // A key — the password.
+  key: {
+    body: 'M8.5 8.5a4 4 0 1 1 3.4 5.9L10 16.3V18h-2v1.5H6.5v-2L11 13a4 4 0 0 1-2.5-4.5Z',
+    lines: ['M8.5 8.5a4 4 0 1 1 3.4 5.9L10 16.3V18h-2v1.5H6.5v-2L11 13a4 4 0 0 1-2.5-4.5Z', 'M14 8.5h.01'],
   },
 };
 

@@ -7,6 +7,9 @@ import { StorageService } from '../../common/storage/storage.service';
 import { computeLateFee, ruleFromSettings } from './late-fee';
 import { PaymentProviderRegistry } from './providers/payment-provider.registry';
 import type { RejectPaymentDto, SubmitPaymentDto } from './fees.dto';
+import type { FeeDecisionOutboxPayload } from '../../common/notifications/notification.types';
+import { formatRupees as rupees } from './money';
+
 
 /**
  * Everything that happens to money after a provider has done its part.
@@ -26,6 +29,36 @@ export class FeePaymentService {
     private readonly storage: StorageService,
     private readonly providers: PaymentProviderRegistry,
   ) {}
+
+  /**
+   * One in-app row and one outbox row (push) to the student's login, inside
+   * the caller's transaction. A student with no login yet — the school has
+   * not created one — simply gets no notification; the Fees page still shows
+   * the decision the next time anyone opens it.
+   */
+  private async tellFamily(
+    tx: TenantTx,
+    schoolId: string,
+    studentId: string,
+    n: { kind: 'FEE_VERIFIED' | 'FEE_REJECTED'; title: string; body: string; paymentId: string },
+  ): Promise<void> {
+    const [student, school] = await Promise.all([
+      tx.student.findFirst({ where: { id: studentId, schoolId }, select: { userId: true } }),
+      tx.school.findFirst({ where: { id: schoolId }, select: { name: true } }),
+    ]);
+    if (!student?.userId) return;
+    await tx.notification.create({
+      data: { schoolId, userId: student.userId, kind: n.kind, title: n.title, body: n.body, linkType: 'fees', linkId: n.paymentId },
+    });
+    await tx.notificationOutbox.create({
+      data: {
+        schoolId,
+        kind: n.kind,
+        targetUserId: student.userId,
+        payload: { schoolName: school?.name ?? 'Your school', title: n.title, body: n.body } satisfies FeeDecisionOutboxPayload as unknown as Prisma.InputJsonValue,
+      },
+    });
+  }
 
   // ── Parent side ───────────────────────────────────────────────────────────
 
@@ -182,6 +215,15 @@ export class FeePaymentService {
         status: payment.status,
       }, { status: 'VERIFIED', receipt: receipt.number });
 
+      // Tell the family — in the same transaction as the receipt, so a
+      // confirmation is never sent for a verification that rolled back.
+      await this.tellFamily(tx, schoolId, payment.studentId, {
+        kind: 'FEE_VERIFIED',
+        title: `Payment confirmed — ${rupees(payment.amountMinor)}`,
+        body: `Receipt ${receipt.number} is on your Fees page.`,
+        paymentId: payment.id,
+      });
+
       this.logger.log({ schoolId, paymentId, receipt: receipt.number }, 'fee payment verified');
       return { payment: updated, receipt };
     });
@@ -216,6 +258,15 @@ export class FeePaymentService {
 
       await this.audit(tx, schoolId, actorId, 'PAYMENT_REJECTED', 'FeePayment', payment.id,
         { status: payment.status }, { status: 'REJECTED', reason: dto.reason });
+
+      // The reason is shown to the parent verbatim — that is the contract on
+      // `rejectionReason`, and the push carries the same words.
+      await this.tellFamily(tx, schoolId, payment.studentId, {
+        kind: 'FEE_REJECTED',
+        title: `Payment not accepted — ${rupees(payment.amountMinor)}`,
+        body: dto.reason,
+        paymentId: payment.id,
+      });
 
       return updated;
     });

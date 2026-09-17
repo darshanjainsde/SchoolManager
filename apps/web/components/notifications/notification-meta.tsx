@@ -9,6 +9,7 @@ import {
   Megaphone,
   MessageSquare,
   NotebookPen,
+  Receipt,
   Sparkles,
   TrendingDown,
   Trophy,
@@ -35,6 +36,10 @@ export const KIND_ICON: Record<NotificationKind, LucideIcon> = {
   SESSION: Sparkles,
   // The sports desk: a fixture, a result, a record.
   SPORTS: Trophy,
+  // The fee desk: the office confirmed, turned down, or is reminding about a payment.
+  FEE_VERIFIED: Receipt,
+  FEE_REJECTED: Receipt,
+  FEE_DUE: Receipt,
 };
 
 /** Fallback for a kind the client doesn't know yet (server added one later). */
@@ -86,6 +91,11 @@ export function routeForNotification(
       // A teacher has no sports page of their own yet; the row marks read and stays.
       case 'SPORTS':
         return null;
+      // Fees are a family's business; a teacher never receives these.
+      case 'FEE_VERIFIED':
+      case 'FEE_REJECTED':
+      case 'FEE_DUE':
+        return null;
       default:
         return null;
     }
@@ -115,6 +125,11 @@ export function routeForNotification(
     // What is next for me, my results, my records.
     case 'SPORTS':
       return '/portal/sports';
+    // The bill, the receipt, or the reason — all on the one fees page.
+    case 'FEE_VERIFIED':
+    case 'FEE_REJECTED':
+    case 'FEE_DUE':
+      return '/portal/fees';
     // A student has no requests screen — the decision is a teacher-side route.
     case 'REQUEST_DECISION':
       return null;
