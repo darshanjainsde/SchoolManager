@@ -30,6 +30,7 @@ const shelf: MeLibraryPayload = {
   finesDueRupees: 185,
 };
 const emptyShelf: MeLibraryPayload = { ...shelf, holdings: [], history: [], fines: [], finesDueRupees: 0 };
+const teacherShelf: MeLibraryPayload = { ...shelf, kind: 'TEACHER', limit: 5, finesEnabled: false, fines: [], finesDueRupees: 0, holdings: shelf.holdings.map((h) => ({ ...h, accruedFineRupees: 0 })) };
 
 const sideNames = { 's:me': 'Saanvi Krishnamurthy', 's:o': 'Aadhya Venkataraghavan', 's:p': 'Pia Khandelwal', 'c:9-A': '9 A', 'c:9-B': '9 B', 'h:h1': 'Raffles Red', 'h:h2': 'Raffles Blue' };
 const sports: MeSportsPayload = {
@@ -76,6 +77,7 @@ it('writes the real student-portal screens for a browser to measure', () => {
   const panels: [string, React.ReactNode][] = [
     ['Library — two out, one late, a lost fine', <LibraryView d={shelf} />],
     ['Library — nothing out', <LibraryView d={emptyShelf} />],
+    ['Library — teacher, fines off', <LibraryView d={teacherShelf} />],
     ['Sports — a live meet, a finished one, four houses', <SportsView d={sports} />],
     ['Sports — not entered', <SportsView d={noEntries} />],
     ['Sports — teacher', <SportsView d={teacher} />],
