@@ -1,14 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Animated, Pressable, Text, TextInput, View } from 'react-native';
+import { Alert, Animated, Linking, Pressable, Text, TextInput, View } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
 import { useFocusEffect } from 'expo-router';
-import type { Assignment, AssignmentList, MyClassSection, Subject } from '@skoolos/types';
+import type { Assignment, AssignmentAttachment, AssignmentList, MyClassSection, Subject } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { shiftISO, todayISO } from '@/lib/attendance';
 import { Card, Screen, SectionTitle, Toast } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
+import { Icon } from '@/components/icons';
 import { useTokens } from '@/theme/theme-context';
 import { font, type ColorPalette } from '@/theme/tokens';
 import { DUR, inkWidth, useGesture } from '@/theme/motion';
+
+/** Same caps as the web teacher page and the API (Vercel's ~4.5 MB body). */
+const MAX_ATTACHMENT_BYTES = 4 * 1024 * 1024;
+const MAX_ATTACHMENT_MB = 4;
+const MAX_ATTACHMENTS = 5;
 
 /**
  * THE INK LINE (`.seenbar`) — how far a posted assignment has actually
@@ -86,6 +93,12 @@ export default function Assignments() {
   const [title, setTitle] = useState('');
   const [instructions, setInstructions] = useState('');
   const [dueDate, setDueDate] = useState(todayISO());
+  // Attachments (second edition): uploaded one at a time to
+  // /manage/assignments/upload, which answers { url, name, kind }; the create
+  // call then carries the list — the exact flow the web teacher page uses.
+  const [attachments, setAttachments] = useState<AssignmentAttachment[]>([]);
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [posting, setPosting] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
   const [posted, setPosted] = useState(false);
@@ -153,6 +166,42 @@ export default function Assignments() {
     setPostError(null);
   };
 
+  /**
+   * Pick a PDF or an image and upload it. The same gates as the web page,
+   * BEFORE any network call: five files, four megabytes, PDF or image — an
+   * oversized or wrong file never leaves the phone.
+   */
+  const pickAttachment = async () => {
+    setAttachError(null);
+    if (attachments.length >= MAX_ATTACHMENTS) {
+      setAttachError(`You can attach up to ${MAX_ATTACHMENTS} files.`);
+      return;
+    }
+    const res = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'image/*'], multiple: false, copyToCacheDirectory: true });
+    if (res.canceled || !res.assets?.length) return;
+    const f = res.assets[0];
+    if (f.size && f.size > MAX_ATTACHMENT_BYTES) {
+      setAttachError(`"${f.name}" is too large — attachments are limited to ${MAX_ATTACHMENT_MB} MB.`);
+      return;
+    }
+    const mime = f.mimeType ?? '';
+    if (!(mime === 'application/pdf' || mime.startsWith('image/'))) {
+      setAttachError(`"${f.name}" isn’t a PDF or image — only PDF or image files can be attached.`);
+      return;
+    }
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append('file', { uri: f.uri, name: f.name, type: mime } as unknown as Blob);
+      const uploaded = await api.upload<AssignmentAttachment>('/manage/assignments/upload', form);
+      setAttachments((prev) => [...prev, uploaded]);
+    } catch (e) {
+      setAttachError(e instanceof ApiError ? e.message : 'Could not upload — try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const canPost = !!classSectionId && !!subjectId && title.trim().length > 0 && instructions.trim().length > 0 && !!dueDate && !posting;
 
   const post = async () => {
@@ -161,18 +210,22 @@ export default function Assignments() {
     setPostError(null);
     setPosted(false);
     try {
-      // Mobile v1 has no expo-document-picker/expo-image-picker in this
-      // app — attachments can only be added from the web portal (see the
-      // note in the "Post an assignment" card below). `attachments` is
-      // simply omitted, matching CreateAssignmentDto's `@IsOptional`.
+      // `attachments` rides only when there are any — CreateAssignmentDto
+      // marks it @IsOptional, and an empty array says nothing a missing key
+      // does not.
       await api.request<Assignment>('/manage/assignments', {
         method: 'POST',
-        body: { classSectionId, subjectId, title: title.trim(), instructions: instructions.trim(), dueDate },
+        body: {
+          classSectionId, subjectId, title: title.trim(), instructions: instructions.trim(), dueDate,
+          ...(attachments.length ? { attachments } : {}),
+        },
       });
       setSubjectId('');
       setTitle('');
       setInstructions('');
       setDueDate(todayISO());
+      setAttachments([]);
+      setAttachError(null);
       setPosted(true);
       fetchList(classSectionId);
     } catch (e) {
@@ -248,6 +301,16 @@ export default function Assignments() {
           <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>
             {subjectLabel(a.subjectId)} · Due {formatDueDate(a.dueDate)} · {a.seenCount} seen
           </Text>
+          {a.attachments?.length ? (
+            <View style={{ marginTop: 5, gap: 4 }}>
+              {a.attachments.map((att) => (
+                <Pressable key={att.url} testID={`attachment-${att.name}`} accessibilityRole="link" onPress={() => void Linking.openURL(att.url)} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                  <Icon name={att.kind === 'pdf' ? 'report' : 'diary'} size={13} color={tokens.color.indigo} />
+                  <Text numberOfLines={1} style={{ fontFamily: font.mono, fontSize: 11, fontWeight: '700', color: tokens.color.indigo, flexShrink: 1 }}>{att.name}</Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
         </View>
         <Pressable testID={`delete-${a.id}`} onPress={() => confirmDelete(a)} disabled={deletingId === a.id}>
           <Text style={{ color: tokens.color.red, fontWeight: '700', fontSize: 12 }}>
@@ -308,7 +371,7 @@ export default function Assignments() {
           <View>
             <Text style={{ fontFamily: font.serif, fontSize: 16, fontWeight: '700', color: tokens.color.ink }}>Post an assignment</Text>
             <Text style={{ fontSize: 11, color: tokens.color.sub, marginTop: 2 }}>
-              Attach files from the web portal — this app can only post plain-text assignments for now.
+              A title, the instructions, a due date — and up to five PDFs or images.
             </Text>
           </View>
 
@@ -367,6 +430,46 @@ export default function Assignments() {
                 <Text style={{ color: tokens.color.indigo, fontWeight: '700' }}>›</Text>
               </Pressable>
             </View>
+          </View>
+
+          <View>
+            <Text style={labelStyle}>Attachments</Text>
+            {attachments.length > 0 && (
+              <View style={{ gap: 5, marginTop: 6 }}>
+                {attachments.map((att) => (
+                  <View key={att.url} testID={`attached-${att.name}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+                    <Icon name={att.kind === 'pdf' ? 'report' : 'diary'} size={14} color={tokens.color.indigo} />
+                    <Text numberOfLines={1} style={{ flex: 1, fontFamily: font.mono, fontSize: 11.5, color: tokens.color.ink }}>{att.name}</Text>
+                    <Pressable testID={`attached-remove-${att.name}`} accessibilityRole="button" accessibilityLabel={`Remove ${att.name}`} hitSlop={8} onPress={() => setAttachments((prev) => prev.filter((x) => x.url !== att.url))}>
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: tokens.color.red }}>Remove</Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            )}
+            <Pressable
+              testID="assign-attach"
+              accessibilityRole="button"
+              disabled={uploading || attachments.length >= MAX_ATTACHMENTS}
+              onPress={() => void pickAttachment()}
+              style={{
+                marginTop: 6,
+                borderWidth: 1.5,
+                borderStyle: 'dashed',
+                borderColor: tokens.color.line2,
+                borderRadius: 11,
+                paddingVertical: 10,
+                paddingHorizontal: 13,
+                minHeight: 42,
+                justifyContent: 'center',
+                opacity: uploading || attachments.length >= MAX_ATTACHMENTS ? 0.5 : 1,
+              }}
+            >
+              <Text style={{ fontFamily: font.serif, fontStyle: 'italic', fontSize: 13, color: tokens.color.sub }}>
+                {uploading ? 'Uploading…' : attachments.length ? `Add another (${attachments.length} of ${MAX_ATTACHMENTS})` : 'Attach a PDF or image — optional'}
+              </Text>
+            </Pressable>
+            {attachError && <Text testID="attach-error" style={{ color: tokens.color.red, fontSize: 12, marginTop: 4 }}>{attachError}</Text>}
           </View>
 
           {postError && (

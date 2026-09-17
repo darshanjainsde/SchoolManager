@@ -120,8 +120,39 @@ export default function Sports() {
           {(d.house || d.records.records.length > 0) && (
             <View style={{ flexDirection: 'row', gap: 8 }}>
               {d.house && <Figure testID="sports-house" label="House" value={d.house.name} />}
-              {d.records.records.length > 0 && <Figure label="Records held" value={String(d.records.records.length)} hint={d.records.records[0].text} />}
+              {d.records.records.length > 0 && <Figure label="Records held" value={String(d.records.records.length)} hint="in the Book of Records" />}
             </View>
+          )}
+
+          {/* The Book of Records — every record this child holds, as the web lists them. */}
+          {d.records.records.length > 0 && (
+            <Page testID="sports-records">
+              <PageHeader title="Records I hold" />
+              {d.records.records.map((r, i) => (
+                <View key={r.id} style={{ paddingVertical: 9, paddingHorizontal: 12, borderTopWidth: i ? 1 : 0, borderTopColor: tokens.color.line, gap: 2 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ flex: 1, minWidth: 0, fontFamily: font.mono, fontSize: 14, fontWeight: '700', color: tokens.color.ink }}>{r.text}</Text>
+                    <Pill tone={r.status === 'STANDING' || r.status === 'CURRENT' ? 'green' : 'neutral'}>{r.untilYear ? `${r.sinceYear}–${r.untilYear}` : `since ${r.sinceYear}`}</Pill>
+                  </View>
+                  <Text style={{ fontSize: 11.5, color: tokens.color.sub }}>{r.sportName} · {r.category}</Text>
+                </View>
+              ))}
+            </Page>
+          )}
+          {/* Attempts at a record — pending, ratified or not — the desk decides. */}
+          {d.records.attempts.length > 0 && (
+            <Page testID="sports-attempts">
+              <PageHeader title="Record attempts" />
+              {d.records.attempts.map((a, i) => (
+                <View key={a.id} style={{ paddingVertical: 9, paddingHorizontal: 12, borderTopWidth: i ? 1 : 0, borderTopColor: tokens.color.line, gap: 2 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ flex: 1, minWidth: 0, fontFamily: font.mono, fontSize: 13.5, fontWeight: '600', color: tokens.color.ink }}>{a.text}</Text>
+                    <Pill tone={a.status === 'APPROVED' || a.status === 'RATIFIED' ? 'green' : a.status === 'REJECTED' ? 'red' : 'amber'}>{a.status.toLowerCase()}</Pill>
+                  </View>
+                  <Text style={{ fontSize: 11.5, color: tokens.color.sub }}>{a.sportName} · {a.category}</Text>
+                </View>
+              ))}
+            </Page>
           )}
         </>
       )}

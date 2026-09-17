@@ -15,6 +15,18 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 export const dayLabel = (r: Pick<BirthdayRow, 'day' | 'month'>) => `${r.day} ${MONTHS[r.month - 1]}`;
 export const initials = (name: string) => name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? '').join('');
 
+/** The slice of `GET /public/site` the wall needs: the school's name, its wish line and its chosen wall style. */
+export interface PublicSiteLite {
+  school: { name: string };
+  celebrations: { page: 'PARTY_WALL' | 'MONTH_PLANNER' | 'NOTICE_BOARD'; wishLine: string } | null;
+}
+
+/** "Happy birthday, {first name}! From all of us at {school}." → the words for one child. */
+export function fillWish(wish: string, first: string, school: string): string {
+  return wish.replace(/\{first name\}/g, first).replace(/\{school\}/g, school);
+}
+const firstNameOf = (name: string) => name.trim().split(/\s+/)[0] ?? name;
+
 /**
  * THE BIRTHDAY WALL, for a family. Today first, in the amber the day is
  * allowed; then the ones coming, grouped by date. The wall carries no id and
@@ -25,6 +37,12 @@ export default function Birthdays() {
   const tokens = useTokens();
   const q = useQuery<BirthdaysResult>('/me/birthdays?window=MONTH');
   const d = q.data;
+  // The school's own wall settings — its wish line and which wall it chose.
+  // Best-effort: the list stands on its own if the site config is unreachable.
+  const site = useQuery<PublicSiteLite>('/public/site');
+  const wish = site.data?.celebrations?.wishLine ?? null;
+  const schoolName = site.data?.school.name ?? 'your school';
+  const style = site.data?.celebrations?.page ?? 'PARTY_WALL';
 
   if (q.error instanceof ApiError && (q.error.status === 403 || q.error.status === 404) && !d) {
     return (
@@ -45,12 +63,14 @@ export default function Birthdays() {
       {q.error && !d && <ErrorState error={q.error} onRetry={q.reload} />}
       {d && (
         <>
-          <Page testID="birthdays-today" style={{ borderColor: d.today.length ? tokens.color.amber : tokens.color.line }}>
-            <PageHeader title="Today" />
+          <Page testID="birthdays-today" style={{ borderColor: d.today.length ? tokens.color.amber : tokens.color.line, backgroundColor: style === 'PARTY_WALL' && d.today.length ? tokens.color.amber50 : tokens.color.surface }}>
+            <PageHeader title={style === 'NOTICE_BOARD' ? 'On the board today' : 'Today'} icon={style === 'PARTY_WALL' ? 'cake' : undefined} />
             {d.today.length === 0 ? (
               <Empty icon="cake">{d.next ? `Nobody today. Next: ${d.next.name}, ${dayLabel(d.next)}.` : 'Nobody today.'}</Empty>
             ) : (
-              d.today.map((r, i) => <Row key={r.key} r={r} first={i === 0} today />)
+              d.today.map((r, i) => (
+                <Row key={r.key} r={r} first={i === 0} today wish={style === 'PARTY_WALL' && wish ? fillWish(wish, firstNameOf(r.name), schoolName) : null} />
+              ))
             )}
           </Page>
           {[...byDate.entries()].map(([label, rows]) => (
@@ -68,7 +88,7 @@ export default function Birthdays() {
   );
 }
 
-function Row({ r, first, today }: { r: BirthdayRow; first: boolean; today?: boolean }) {
+function Row({ r, first, today, wish }: { r: BirthdayRow; first: boolean; today?: boolean; wish?: string | null }) {
   const tokens = useTokens();
   return (
     <View testID={`birthday-${r.key}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingHorizontal: 12, borderTopWidth: first ? 0 : 1, borderTopColor: tokens.color.line }}>
@@ -78,6 +98,9 @@ function Row({ r, first, today }: { r: BirthdayRow; first: boolean; today?: bool
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text numberOfLines={1} style={{ fontFamily: font.serif, fontSize: 14.5, fontWeight: '600', color: tokens.color.ink }}>{r.name}</Text>
         {r.classLabel ? <Text style={{ fontSize: 11, color: tokens.color.sub }}>{r.classLabel}</Text> : null}
+        {wish ? (
+          <Text testID={`wish-${r.key}`} style={{ fontFamily: font.serif, fontStyle: 'italic', fontSize: 12.5, color: tokens.color.late, marginTop: 3, lineHeight: 17 }}>{wish}</Text>
+        ) : null}
       </View>
     </View>
   );

@@ -5,7 +5,7 @@ import type { Exam, ExamList, MyClassSection, Subject } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { shiftISO, todayISO } from '@/lib/attendance';
 import { DEFAULT_SCHEDULE_TIME, isValidMaxMarks, shiftTime, toScheduledAtISO } from '@/lib/exams';
-import { Card, Screen, SectionTitle, Toast } from '@/components/ui';
+import { Card, Pill, Screen, SectionTitle, Toast } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font, type ColorPalette } from '@/theme/tokens';
@@ -51,6 +51,25 @@ export default function Tests() {
   const [scheduling, setScheduling] = useState(false);
   const [scheduleError, setScheduleError] = useState<string | null>(null);
   const [scheduled, setScheduled] = useState(false);
+  // THE RESULT ROOM'S CLOCK (second edition). The admin sets a result day
+  // per report window; the web renders it where marks are typed, so the app
+  // does too. Best-effort — a countdown must never fail the screen.
+  const [resultDays, setResultDays] = useState<{ id: string; name: string; resultDay: string }[]>([]);
+  useEffect(() => {
+    let alive = true;
+    api
+      .request<{ id: string; name: string; resultDay: string }[]>('/manage/exams/result-days')
+      .then((rows) => {
+        if (alive) setResultDays(Array.isArray(rows) ? rows : []);
+      })
+      .catch(() => {
+        /* a countdown must never surface an error */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const nextDue = resultDays.filter((w) => Date.parse(w.resultDay) >= Date.now() - 86_400_000)[0] ?? null;
 
   useFocusEffect(
     useCallback(() => {
@@ -187,6 +206,7 @@ export default function Tests() {
   return (
     <Screen>
       <SectionTitle title="Tests" />
+      {nextDue && <ResultDayCard window={nextDue} />}
       <Text style={{ fontSize: 11, color: tokens.color.sub, marginHorizontal: 4, marginTop: -6 }}>
         Schedule a test and the class&apos;s students and guardians get an email straight away.
       </Text>
@@ -386,5 +406,34 @@ export default function Tests() {
         </Card>
       )}
     </Screen>
+  );
+}
+
+/** Whole days from today to an ISO date (UTC-safe, calendar boundaries). */
+function daysTo(iso: string): number {
+  const t = new Date(iso);
+  const target = Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate());
+  const n = new Date();
+  const today = Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate());
+  return Math.round((target - today) / 86_400_000);
+}
+
+/** "Term 1 marks due · Fri 26 Sep · 9 days" — the deadline, where the marks are typed. */
+function ResultDayCard({ window }: { window: { id: string; name: string; resultDay: string } }) {
+  const tokens = useTokens();
+  const d = daysTo(window.resultDay);
+  const when = new Date(window.resultDay).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const tone = d < 0 ? 'red' : d <= 3 ? 'amber' : 'indigo';
+  const word = d < 0 ? `${-d} day${d === -1 ? '' : 's'} over` : d === 0 ? 'Today' : `${d} day${d === 1 ? '' : 's'}`;
+  return (
+    <Card testID="result-day" style={{ flexDirection: 'row', alignItems: 'center', gap: 10, borderColor: d <= 3 ? tokens.color.amber : tokens.color.line }}>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ fontSize: 10.5, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', color: tokens.color.sub }}>Marks due</Text>
+        <Text style={{ fontFamily: font.serif, fontSize: 15, fontWeight: '600', color: tokens.color.ink, marginTop: 1 }} numberOfLines={1}>
+          {window.name} · {when}
+        </Text>
+      </View>
+      <Pill tone={tone}>{word}</Pill>
+    </Card>
   );
 }

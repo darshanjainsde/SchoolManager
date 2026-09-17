@@ -53,8 +53,10 @@ function mockApi(opts: {
   subjects?: unknown;
   examList?: { upcoming: unknown[]; past: unknown[] };
   createResult?: unknown;
+  resultDays?: unknown;
 }) {
   (api.request as jest.Mock).mockImplementation((path: string) => {
+    if (path === '/manage/exams/result-days') return Promise.resolve(opts.resultDays ?? []);
     if (path === '/manage/attendance/my-classes') return Promise.resolve(opts.classes ?? CLASSES);
     if (path === '/manage/subjects') return Promise.resolve(opts.subjects ?? SUBJECTS);
     if (path.startsWith('/manage/exams?classSectionId=')) {
@@ -239,4 +241,22 @@ it('tapping a scheduled test navigates to its results screen with the class sect
   fireEvent.press(await findByTestId(`exam-${EXAM.id}`));
 
   expect(mockPush).toHaveBeenCalledWith(`/(staff)/(tabs)/home/results/${EXAM.id}?classSectionId=cs1`);
+});
+
+describe('the Result Room’s clock (second edition)', () => {
+  it('shows the next result day as a countdown where marks are typed', async () => {
+    const soon = new Date(Date.now() + 9 * 86_400_000).toISOString().slice(0, 10);
+    mockApi({ resultDays: [{ id: 'w1', name: 'Term 1', resultDay: soon }] });
+    const { findByTestId, getByText } = render(<Tests />);
+    expect(await findByTestId('result-day')).toBeTruthy();
+    expect(getByText(/Term 1 ·/)).toBeTruthy();
+    expect(getByText('9 days')).toBeTruthy();
+  });
+
+  it('draws nothing when no window has a result day', async () => {
+    mockApi({});
+    const { findByText, queryByTestId } = render(<Tests />);
+    await findByText('Tests');
+    expect(queryByTestId('result-day')).toBeNull();
+  });
 });

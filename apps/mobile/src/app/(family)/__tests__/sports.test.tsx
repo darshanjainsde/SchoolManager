@@ -17,7 +17,10 @@ jest.mock('@/lib/api', () => {
 const ME = {
   role: 'STUDENT',
   house: { id: 'h1', name: 'Raffles Red', color: '#c00' },
-  records: { records: [], attempts: [] },
+  records: {
+    records: [{ id: 'r1', sportName: 'Athletics', groupKey: 'senior', category: 'Girls', text: '100 m · 12.84 s', holderName: 'Saanvi', sinceYear: 2025, untilYear: null, status: 'STANDING' }],
+    attempts: [{ id: 'a1', sportName: 'Athletics', groupKey: 'senior', category: 'Girls', text: 'Long jump · 4.62 m', status: 'PENDING', source: 'MEET', createdAt: '2026-09-18T00:00:00Z' }],
+  },
   tournaments: [{
     id: 't1', name: 'Annual Athletic Meet', startsOn: '2026-09-18', endsOn: '2026-09-20', status: 'LIVE', dayStartMin: 480,
     sideNames: { 's:me': 'Saanvi', 's:aditi': 'Aditi Rao' },
@@ -53,5 +56,16 @@ describe('Sports', () => {
     expect(getByText('Won')).toBeTruthy();
     expect(getByText(/Quarter-final v Aditi Rao 21-17/)).toBeTruthy();
     expect(getByText('Raffles Red')).toBeTruthy();
+  });
+
+  it('lists every record held and every attempt, as the web does', async () => {
+    (api.request as jest.Mock).mockResolvedValue(ME);
+    const { findByTestId, getByText } = render(<Sports />);
+    expect(await findByTestId('sports-records')).toBeTruthy();
+    expect(getByText('100 m · 12.84 s')).toBeTruthy();
+    expect(getByText('since 2025')).toBeTruthy();
+    expect(await findByTestId('sports-attempts')).toBeTruthy();
+    expect(getByText('Long jump · 4.62 m')).toBeTruthy();
+    expect(getByText('pending')).toBeTruthy();
   });
 });

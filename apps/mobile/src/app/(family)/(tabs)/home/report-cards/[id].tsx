@@ -1,8 +1,13 @@
-import { Text, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, Text, View } from 'react-native';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import { useLocalSearchParams } from 'expo-router';
 import type { PressSnapshot, ReportCardSnapshot } from '@skoolos/types';
 import { useQuery } from '@/lib/query';
 import { formatDate } from '@/lib/portal';
+import { reportCardHtml } from '@/lib/report-card-html';
+import { Toast } from '@/components/ui';
 import { ErrorState, Figure, Page, Screen } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
@@ -21,6 +26,32 @@ export default function ReportCard() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const q = useQuery<MyReportCardDetail>(id ? `/me/report-cards/${id}` : null);
   const snap = q.data && q.data.snapshot.kind === 'REPORT_CARD' ? (q.data.snapshot as ReportCardSnapshot) : null;
+  const [sharing, setSharing] = useState(false);
+  const [shareProblem, setShareProblem] = useState<string | null>(null);
+
+  /**
+   * SHARE AS PDF — the one screen where "download" is the whole point. The
+   * card's own HTML is printed to a file on the phone and handed to the
+   * share sheet; nothing goes to a server. The same snapshot the screen
+   * draws, so what is shared is what was issued.
+   */
+  async function share() {
+    if (!snap || !q.data) return;
+    setSharing(true);
+    setShareProblem(null);
+    try {
+      const { uri } = await Print.printToFileAsync({ html: reportCardHtml(snap, q.data.serial, q.data.issuedAt) });
+      if (!(await Sharing.isAvailableAsync())) {
+        setShareProblem('Sharing isn’t available on this phone.');
+        return;
+      }
+      await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: `${snap.windowName} — ${snap.student.name}`, UTI: 'com.adobe.pdf' });
+    } catch {
+      setShareProblem('Could not make the PDF — try again.');
+    } finally {
+      setSharing(false);
+    }
+  }
 
   return (
     <Screen onRefresh={q.refresh} refreshing={q.refreshing}>
@@ -77,6 +108,17 @@ export default function ReportCard() {
               {q.data.serial} · issued {formatDate(q.data.issuedAt)}
             </Text>
           </Page>
+          <Pressable
+            testID="report-card-share"
+            accessibilityRole="button"
+            accessibilityState={{ disabled: sharing }}
+            disabled={sharing}
+            onPress={() => void share()}
+            style={({ pressed }) => ({ minHeight: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: tokens.color.indigo, opacity: sharing ? 0.6 : pressed ? 0.8 : 1 })}
+          >
+            <Text style={{ color: tokens.color.onBrand, fontWeight: '700', fontSize: 14 }}>{sharing ? 'Making the PDF…' : 'Share as PDF'}</Text>
+          </Pressable>
+          {shareProblem && <Toast kind="error" message={shareProblem} testID="report-card-share-error" />}
         </>
       )}
     </Screen>
