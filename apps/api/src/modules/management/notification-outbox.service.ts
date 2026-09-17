@@ -9,6 +9,7 @@ import type {
   AssignmentPostedOutboxPayload,
   ExamScheduledOutboxPayload,
   LibraryNoticeOutboxPayload,
+  FeeDecisionOutboxPayload,
   NotificationMessage,
   ResultPublishedOutboxPayload,
   SessionStartedOutboxPayload,
@@ -118,6 +119,16 @@ function toNotificationMessage(kind: NotificationOutboxKind, payload: unknown): 
         body: p.body,
         className: 'Library',
       },
+    };
+  }
+  if (kind === 'FEE_VERIFIED' || kind === 'FEE_REJECTED') {
+    // The fee desk's decision to one family, composed at write time by
+    // FeePaymentService. Renders through the ANNOUNCEMENT shape like the
+    // other single-reader kinds; the class slot names the desk.
+    const p = payload as FeeDecisionOutboxPayload;
+    return {
+      kind: 'ANNOUNCEMENT',
+      payload: { schoolName: p.schoolName, title: p.title, body: p.body, className: 'Fees' },
     };
   }
   if (kind === 'SESSION_STARTED') {

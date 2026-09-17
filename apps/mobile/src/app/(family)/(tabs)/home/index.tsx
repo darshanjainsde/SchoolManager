@@ -1,20 +1,18 @@
-import { useCallback, useState, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { Animated, Text, View } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
-import type { StudentDiaryResult, TimetableSlot } from '@skoolos/types';
-import { api, ApiError } from '@/lib/api';
+import { router } from 'expo-router';
+import type { PortalHome, TimetableSlot } from '@skoolos/types';
+import { useQuery } from '@/lib/query';
+import { useSession } from '@/lib/use-session';
+import { hasFeature } from '@/lib/features';
+import { MORE_ITEMS } from '@/lib/family-nav';
+import type { StudentFees } from '@/lib/fees';
+import type { BirthdaysResult } from './birthdays';
 import { todayISO } from '@/lib/attendance';
 import { minutesOfDay } from '@/lib/teacher-day';
 import { useNowMinutes } from '@/lib/use-now-minutes';
-import {
-  relativeTime,
-  type Announcement,
-  type AttendanceSummary,
-  type PublishedResult,
-  type StudentProfile,
-  type UpcomingExam,
-} from '@/lib/portal';
-import { Card, Page, PageHeader, RailRow, RailStatus, Screen, SectionTitle } from '@/components/ui';
+import { relativeTime } from '@/lib/portal';
+import { Card, ErrorState, Figure, Page, PageHeader, RailRow, RailStatus, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { NotificationBell } from '@/components/NotificationBell';
 import { HomeToolGrid } from '@/components/HomeToolGrid';
@@ -143,77 +141,6 @@ function Notice({
   );
 }
 
-/** A compact KPI tile — the mobile equivalent of the web portal's `sk-kpi` stat tiles. */
-function KpiTile({
-  label,
-  value,
-  hint,
-  tone,
-  onPress,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-  tone?: 'good' | 'warn' | 'bad';
-  onPress?: () => void;
-}) {
-  const tokens = useTokens();
-  const toneColor: Record<'good' | 'warn' | 'bad', string> = {
-    good: tokens.color.green,
-    warn: tokens.color.late,
-    bad: tokens.color.red,
-  };
-  const tile = {
-    flex: 1,
-    backgroundColor: tokens.color.surface,
-    borderColor: tokens.color.line,
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 12,
-  } as const;
-  const body = (
-    <>
-      <Text style={{ fontSize: 10.5, fontWeight: '600', color: tokens.color.sub }}>{label}</Text>
-      {/* `.attkpi .n` — figures are set in the mono face so a percentage and a
-          mark out of fifty line up as numbers, not as words. */}
-      <Text
-        style={{
-          fontFamily: font.mono,
-          fontSize: 17,
-          fontWeight: '700',
-          color: tone ? toneColor[tone] : tokens.color.ink,
-          marginTop: 2,
-        }}
-      >
-        {value}
-      </Text>
-      {hint && (
-        <Text style={{ fontSize: 10, color: tokens.color.sub, marginTop: 1 }} numberOfLines={1}>
-          {hint}
-        </Text>
-      )}
-    </>
-  );
-  // Same rule as Notice above: a figure you cannot open is a figure, not a
-  // button. Several of these tiles are read-only by design.
-  if (!onPress) return <View style={tile}>{body}</View>;
-  // LAYOUT (`flex: 1`) on a plain wrapper, PAINT on the Touchable — its style
-  // prop lands on an inner view, where flex would leave the row laying out a
-  // content-sized Pressable (ledger: wrapper-style-prop-lands-on-inner-node).
-  const { flex, ...paint } = tile;
-  return (
-    <View style={{ flex }}>
-      <Touchable
-        onPress={onPress}
-        accessibilityLabel={hint ? `${label}, ${value}, ${hint}` : `${label}, ${value}`}
-        style={paint}
-      >
-        {body}
-      </Touchable>
-    </View>
-  );
-}
-
 /** The word in a period row's right-hand `.st` slot. */
 function railStatusFor(state: 'past' | 'now' | 'upcoming', periodLabel: string): ReactNode {
   if (state === 'now') return <RailStatus tone="now">now</RailStatus>;
@@ -223,84 +150,40 @@ function railStatusFor(state: 'past' | 'now' | 'upcoming', periodLabel: string):
 
 export default function Home() {
   const tokens = useTokens();
-  const [profile, setProfile] = useState<StudentProfile | null>(null);
-  const [announcements, setAnnouncements] = useState<Announcement[] | null>(null);
-  const [attendance, setAttendance] = useState<AttendanceSummary | null>(null);
-  const [exams, setExams] = useState<UpcomingExam[] | null>(null);
-  const [results, setResults] = useState<PublishedResult[] | null>(null);
-  const [slots, setSlots] = useState<TimetableSlot[] | null>(null);
-  const [diary, setDiary] = useState<StudentDiaryResult | null>(null);
-  const [unreadMsgs, setUnreadMsgs] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
+  const s = useSession();
+  // ONE request for the page (second edition, D1): /me/home composes the seven
+  // sections the individual routes still serve. The cache shows the last
+  // answer instantly on focus and refetches behind it; a skeleton only ever
+  // appears on a cold start.
+  const home = useQuery<PortalHome>('/me/home');
+  // The Messages dome's badge. Best-effort: a badge must never fail the page.
+  const unread = useQuery<{ count: number }>('/me/messages/unread-count');
+  // The Fees dome's badge — late bills — only for a school on the module.
+  const fees = useQuery<StudentFees>(hasFeature(s, 'FEES') ? '/me/fees' : null);
+  // The wall, for the one day it matters. A 404 (wall off) is a quiet null.
+  const wall = useQuery<BirthdaysResult>('/me/birthdays');
 
-  /**
-   * ONE definition of "load this screen", used by both the focus effect and the
-   * pull gesture — two copies of a seven-request list would drift the moment
-   * one of them gained an eighth.
-   *
-   * Resolves to a function that applies the results, so the CALLER decides
-   * whether to apply them: the focus effect drops them if it has been
-   * cancelled, the pull always applies.
-   */
-  const fetchAll = useCallback(
-    () =>
-      Promise.all([
-        api.request<StudentProfile>('/me/profile'),
-        api.request<Announcement[]>('/me/announcements'),
-        api.request<AttendanceSummary>('/me/attendance'),
-        api.request<UpcomingExam[]>('/me/exams'),
-        api.request<PublishedResult[]>('/me/results'),
-        api.request<TimetableSlot[]>('/me/timetable'),
-        // A remark waiting for a signature is the most time-sensitive thing on
-        // this screen, so the diary is part of the same load, not a lazy tab.
-        api.request<StudentDiaryResult>('/me/diary'),
-        // The Messages dome's badge (pitch №4). catch → 0: a badge must never
-        // fail the whole home load.
-        api.request<{ count: number }>('/me/messages/unread-count').catch(() => ({ count: 0 })),
-      ]).then(([p, a, att, ex, res, tt, d, um]) => () => {
-        setProfile(p);
-        setAnnouncements(a);
-        setAttendance(att);
-        setExams(ex);
-        setResults(res);
-        setSlots(tt);
-        setDiary(d);
-        setUnreadMsgs(um.count);
-      }),
-    [],
-  );
+  const profile = home.data?.profile ?? null;
+  const announcements = home.data?.announcements ?? null;
+  const attendance = home.data?.attendance ?? null;
+  const exams = home.data?.exams ?? null;
+  const results = home.data?.results ?? null;
+  const slots = home.data?.timetable ?? null;
+  const diary = home.data?.diary ?? null;
+  const unreadMsgs = unread.data?.count ?? 0;
+  const error = home.error && !home.data ? home.error : null;
+  const refreshing = home.refreshing;
 
-  /** Pull to refresh. Nothing is cleared first — see the staff twin. */
+  /** Pull to refresh. Nothing is cleared first — the old page stays until the new one lands. */
   function refresh() {
-    setRefreshing(true);
-    setError(null);
-    fetchAll()
-      .then((apply) => apply())
-      .catch((e: unknown) => setError(e instanceof ApiError ? e.message : 'Something went wrong.'))
-      .finally(() => setRefreshing(false));
+    home.refresh();
+    unread.reload();
+    fees.reload();
+    wall.reload();
   }
 
-  // Refetch on focus: a new notice, a fresh attendance mark, a newly scheduled
-  // test/result, or simply time passing (a class ending) should all be
-  // reflected the moment the family tab regains focus, not just on cold start.
-  useFocusEffect(
-    useCallback(() => {
-      let cancelled = false;
-      setError(null);
-      fetchAll()
-        .then((apply) => {
-          if (cancelled) return;
-          apply();
-        })
-        .catch((e: unknown) => {
-          if (!cancelled) setError(e instanceof ApiError ? e.message : 'Something went wrong.');
-        });
-      return () => {
-        cancelled = true;
-      };
-    }, [fetchAll]),
-  );
+  const lateBills = fees.data ? fees.data.invoices.filter((i) => !i.isPaid && i.isOverdue).length : 0;
+  const myBirthday = profile && wall.data ? isMyBirthday(wall.data, profile) : false;
 
   const today = todayISO();
   const todayStatus = attendance?.days.find((d) => d.date === today)?.status ?? null;
@@ -310,7 +193,7 @@ export default function Home() {
   const latestAnnouncements = (announcements ?? []).slice(0, LATEST_ANNOUNCEMENTS_COUNT);
 
   // Today's schedule, derived client-side from the weekly timetable (there is
-  // no per-day endpoint — the whole week comes from /me/timetable).
+  // no per-day endpoint — the whole week comes with /me/home).
   // Ticks on the minute — the "now" rule moves down the day on its own
   // rather than freezing wherever the screen happened to be opened.
   const now = useNowMinutes();
@@ -338,7 +221,9 @@ export default function Home() {
 
   return (
     <Screen onRefresh={refresh} refreshing={refreshing}>
-      <Dateline />
+      {/* On the child's birthday the dateline becomes the banner — the only
+          thing on the page that changes, in the amber the day is allowed. */}
+      {myBirthday && profile ? <BirthdayBanner firstName={profile.firstName} /> : <Dateline />}
 
       {/* `.greet` + `.kidchip` — the greeting in the diary serif, with the
           bell and the student's initial pushed to the right margin. */}
@@ -376,11 +261,7 @@ export default function Home() {
         )}
       </View>
 
-      {error && (
-        <Card>
-          <Text style={{ color: tokens.color.red }}>{error}</Text>
-        </Card>
-      )}
+      {error && <ErrorState error={error} onRetry={home.reload} />}
       {profile === null && !error && (
         <LoadingRows label="Loading your details…" rows={3} />
       )}
@@ -446,6 +327,11 @@ export default function Home() {
               { label: 'Messages', icon: 'messages', route: '/(family)/(tabs)/home/messages', tone: 'amber', badge: unreadMsgs },
               { label: 'Assignments', icon: 'assignments', route: '/(family)/(tabs)/home/assignments' },
               { label: 'Results', icon: 'results', route: '/(family)/results', badge: nextExam ? 1 : 0 },
+              // Fees asks only when a bill is LATE — the badge is the count of
+              // late bills, and the dome's fill stays reserved for the diary.
+              ...(hasFeature(s, 'FEES')
+                ? [{ label: 'Fees', icon: 'fees', route: '/(family)/(tabs)/fees', tone: 'amber' as const, badge: lateBills }]
+                : []),
             ]}
           />
 
@@ -456,14 +342,14 @@ export default function Home() {
               chip and "next test" is the notice above, so repeating them would
               be noise. Both tiles deep-link to their full screen. */}
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <KpiTile
+            <Figure
               label="This month"
               value={attendanceMarked > 0 ? `${attendance?.percent}%` : 'No records'}
               hint={attendanceMarked > 0 ? `${attendance?.present} of ${attendanceMarked} days present` : undefined}
               tone={attendance && attendanceMarked > 0 && attendance.percent < 75 ? 'warn' : undefined}
               onPress={() => router.push('/(family)/attendance')}
             />
-            <KpiTile
+            <Figure
               label="Latest result"
               value={latestResult ? `${latestResult.marks}/${latestResult.maxMarks}` : 'None yet'}
               hint={latestResult ? `${latestResult.subjectName} · class avg ${latestResult.classAverage}` : undefined}
@@ -515,6 +401,11 @@ export default function Home() {
               { label: 'Timetable', icon: 'timetable', route: '/(family)/(tabs)/home/timetable' },
               { label: 'Notices', icon: 'notices', route: '/(family)/(tabs)/home/notices', tone: 'amber' },
               { label: 'Holidays', icon: 'holidays', route: '/(family)/(tabs)/home/holidays', tone: 'green' },
+              // The four the web portal had first (second edition). A paid
+              // module's tool is drawn only for a school that has it.
+              ...MORE_ITEMS.filter((t) => ['Sports', 'Library', 'Report cards', 'Birthdays'].includes(t.label))
+                .filter((t) => !t.feature || hasFeature(s, t.feature))
+                .map((t) => ({ label: t.label, icon: t.icon, route: t.route, tone: t.tone })),
             ]}
           />
 
@@ -553,4 +444,55 @@ function familyEyebrow(tokens: ReturnType<typeof useTokens>) {
     fontWeight: '700' as const,
     color: tokens.color.sub,
   };
+}
+
+/** Does the wall carry a row for THIS child? The wall has no ids by design — match on the name and class the app already knows. */
+export function isMyBirthday(wall: BirthdaysResult, p: { firstName: string; lastName: string; className: string | null }): boolean {
+  const full = `${p.firstName} ${p.lastName}`.trim().toLowerCase();
+  const first = p.firstName.trim().toLowerCase();
+  const initial = p.lastName.trim() ? `${first} ${p.lastName.trim()[0].toLowerCase()}.` : first;
+  return wall.today.some((r) => {
+    const n = r.name.trim().toLowerCase();
+    const nameHit = n === full || n === initial || n === first;
+    const classHit = !r.classLabel || !p.className || r.classLabel.toLowerCase() === p.className.toLowerCase();
+    return nameHit && classHit;
+  });
+}
+
+/**
+ * THE ONE DAY. Bunting in the brand's amber, indigo and margin red; the
+ * greeting in the diary serif. The app's own voice turned up, not a
+ * different product for a day — and no motion, because a birthday is a
+ * day's state, not an event that just happened.
+ */
+function BirthdayBanner({ firstName }: { firstName: string }) {
+  const tokens = useTokens();
+  const flags = [tokens.color.amber, tokens.color.indigo, tokens.color.marginRed, tokens.color.amber, tokens.color.indigo, tokens.color.marginRed, tokens.color.amber];
+  return (
+    <View
+      testID="birthday-banner"
+      accessibilityRole="header"
+      accessibilityLabel={`Happy birthday, ${firstName}`}
+      style={{
+        backgroundColor: tokens.color.amber50,
+        borderColor: tokens.color.amber,
+        borderWidth: 1,
+        borderRadius: 16,
+        paddingVertical: 14,
+        paddingHorizontal: 14,
+        alignItems: 'center',
+        gap: 6,
+      }}
+    >
+      <View style={{ flexDirection: 'row', gap: 6 }}>
+        {flags.map((c, i) => (
+          <View key={i} style={{ width: 0, height: 0, borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 11, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: c }} />
+        ))}
+      </View>
+      <Text style={{ fontFamily: font.serif, fontStyle: 'italic', fontSize: 21, fontWeight: '600', color: tokens.color.ink, textAlign: 'center' }}>
+        Happy birthday, {firstName}
+      </Text>
+      <Text style={{ fontSize: 11.5, color: tokens.color.ink2, textAlign: 'center' }}>Your class can see it on the school’s wall today.</Text>
+    </View>
+  );
 }

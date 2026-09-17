@@ -7,6 +7,7 @@ import { signOut } from '@/lib/sign-out';
 import { ProfileMenu } from '@/components/ProfileMenu';
 import { EditableAvatar } from '@/components/EditableAvatar';
 import { Card, Pill, Screen, SectionTitle } from '@/components/ui';
+import { Icon, type IconName } from '@/components/icons';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
@@ -26,7 +27,7 @@ function ProfileRow({
   label,
   children,
 }: {
-  icon: string;
+  icon: IconName;
   label: string;
   children: ReactNode;
 }) {
@@ -52,7 +53,7 @@ function ProfileRow({
           justifyContent: 'center',
         }}
       >
-        <Text style={{ fontSize: 14 }}>{icon}</Text>
+        <Icon name={icon} size={16} color={tokens.color.ink2} />
       </View>
       <View style={{ flex: 1 }}>
         <Text style={{ fontSize: 10.5, fontWeight: '800', letterSpacing: 0.7, color: tokens.color.sub }}>
@@ -143,21 +144,21 @@ export default function Profile() {
               which is what turns a form-shaped stack of labels into a record
               card. */}
           <Card style={{ paddingVertical: 4 }}>
-            <ProfileRow icon="✉️" label="Email">
+            <ProfileRow icon="mail" label="Email">
               {profile.email ? (
                 <Text style={valueStyle}>{profile.email}</Text>
               ) : (
                 <Text style={mutedStyle}>Not on file</Text>
               )}
             </ProfileRow>
-            <ProfileRow icon="📞" label="Phone">
+            <ProfileRow icon="phone" label="Phone">
               {profile.phone ? (
                 <Text style={valueStyle}>{profile.phone}</Text>
               ) : (
                 <Text style={mutedStyle}>Not on file</Text>
               )}
             </ProfileRow>
-            <ProfileRow icon="📚" label="Subjects taught">
+            <ProfileRow icon="library" label="Subjects taught">
               {profile.subjects.length > 0 ? (
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
                   {profile.subjects.map((s) => (
@@ -170,7 +171,7 @@ export default function Profile() {
                 <Text style={mutedStyle}>No subjects assigned</Text>
               )}
             </ProfileRow>
-            <ProfileRow icon="🏫" label="Class teacher of">
+            <ProfileRow icon="home" label="Class teacher of">
               {profile.classTeacherOf.length > 0 ? (
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
                   {profile.classTeacherOf.map((c) => (
@@ -192,8 +193,8 @@ export default function Profile() {
           which is what finally fits Sign out above the fold. */}
       <ProfileMenu
         rows={[
-          { icon: '🎨', label: 'Appearance', route: '/(staff)/(tabs)/profile/appearance', testID: 'profile-menu-appearance' },
-          { icon: '🔑', label: 'Change password', route: '/(staff)/(tabs)/profile/password', testID: 'profile-menu-password' },
+          { icon: 'palette', label: 'Appearance', route: '/(staff)/(tabs)/profile/appearance', testID: 'profile-menu-appearance' },
+          { icon: 'key', label: 'Change password', route: '/(staff)/(tabs)/profile/password', testID: 'profile-menu-password' },
         ]}
       />
 

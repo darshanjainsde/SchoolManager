@@ -159,7 +159,7 @@ function DiaryItem({
         <Text style={{ color: tokens.color.sub, fontSize: 11, marginTop: 2 }}>
           {entry.teacherName}
           {entry.personal ? ' · for you' : ' · whole class'}
-          {red ? ' · ✉️ emailed home' : ''}
+          {red ? ' · emailed home' : ''}
         </Text>
 
         {children}
@@ -362,7 +362,7 @@ export default function FamilyDiary() {
                               fontSize: 13.5,
                             }}
                           >
-                            {signing === e.id ? 'Signing…' : '✍️ Sign this remark'}
+                            {signing === e.id ? 'Signing…' : 'Sign this remark'}
                           </Text>
                         </Pressable>
                       </View>

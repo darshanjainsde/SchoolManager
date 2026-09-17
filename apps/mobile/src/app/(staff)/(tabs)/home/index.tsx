@@ -17,9 +17,12 @@ import { HomeToolGrid } from '@/components/HomeToolGrid';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 import { salutation } from '@/lib/greeting';
+import { hasFeature } from '@/lib/features';
+import { useSession } from '@/lib/use-session';
 
 export default function Today() {
   const tokens = useTokens();
+  const s = useSession();
   const [name, setName] = useState<string | null>(null);
   const [day, setDay] = useState<TeacherDay | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -316,6 +319,8 @@ export default function Today() {
               { label: 'Tests & Results', icon: 'results', route: '/(staff)/(tabs)/home/tests' },
               { label: 'Announce', icon: 'notices', route: '/(staff)/(tabs)/home/post', tone: 'amber' },
               { label: 'Holidays', icon: 'holidays', route: '/(staff)/(tabs)/home/holidays', tone: 'green' },
+              // The teacher's own shelf (second edition) — only for a school with the library on.
+              ...(hasFeature(s, 'LIBRARY') ? [{ label: 'Library', icon: 'library', route: '/(staff)/(tabs)/home/library' }] : []),
             ]}
           />
 

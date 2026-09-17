@@ -75,7 +75,8 @@ const CYCLE: Record<AttendanceStatusValue, AttendanceStatusValue> = {
 const STATUS_GLYPH: Record<AttendanceStatusValue, string | null> = {
   PRESENT: null,
   ABSENT: '✕',
-  LATE: '⏱',
+  // A letter, not the OS stopwatch emoji — it takes the cell's own late ink.
+  LATE: 'L',
 };
 
 // `.rcell` — tint behind, its own ink on top, one pair per state. `late` (not

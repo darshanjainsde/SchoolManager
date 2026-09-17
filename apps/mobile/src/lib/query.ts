@@ -84,7 +84,10 @@ export function useQuery<T>(path: string | null): QueryState<T> {
         })
         .catch((e: unknown) => {
           if (!alive.current) return;
-          setError(e instanceof ApiError ? e : new ApiError(0, 'Something went wrong.'));
+          // A rejection that is not an ApiError never reached safeFetch's
+          // status-0 path, so it is not "no signal" — it is something we did
+          // not expect, and it reads as a server problem with a Try again.
+          setError(e instanceof ApiError ? e : new ApiError(-1, 'Something went wrong.'));
         })
         .finally(() => {
           if (!alive.current) return;
@@ -102,10 +105,21 @@ export function useQuery<T>(path: string | null): QueryState<T> {
     };
   }, []);
 
+  // A path that CHANGES after mount — a sheet that opens, a route param that
+  // resolves — is a new question. The focus effect covers mount and re-focus;
+  // this covers the change in between, without asking twice on mount.
+  const asked = useRef<string | null>(null);
+  useEffect(() => {
+    if (!path || asked.current === path) return;
+    asked.current = path;
+    run('focus');
+  }, [path, run]);
+
   useFocusEffect(
     useCallback(() => {
       alive.current = true;
       setError(null);
+      if (path) asked.current = path;
       run('focus');
       return () => {
         alive.current = false;

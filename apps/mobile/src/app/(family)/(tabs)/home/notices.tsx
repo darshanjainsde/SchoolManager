@@ -6,6 +6,7 @@ import { relativeTime, type Announcement } from '@/lib/portal';
 import { Card, Empty, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { DUR, pinStyle, useGesture } from '@/theme/motion';
+import { Icon } from '@/components/icons';
 import { useTokens } from '@/theme/theme-context';
 
 /**
@@ -61,7 +62,7 @@ function NoticeRow({ a, index }: { a: Announcement; index: number }) {
               justifyContent: 'center',
             }}
           >
-            <Text style={{ fontSize: 16 }}>📣</Text>
+            <Icon name="notices" size={17} color={tokens.color.indigo} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>{a.title}</Text>

@@ -1,11 +1,12 @@
 import { Pressable, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Card } from './ui';
+import { Icon, type IconName } from './icons';
 import { useTokens } from '@/theme/theme-context';
 
 export interface ProfileMenuRow {
-  /** Emoji glyph on the 30px tile — same voice as the profile's record rows. */
-  icon: string;
+  /** Drawn duotone glyph on the 30px tile — same voice as the profile's record rows. */
+  icon: IconName;
   label: string;
   route: string;
   testID: string;
@@ -55,7 +56,7 @@ export function ProfileMenu({ rows }: { rows: ProfileMenuRow[] }) {
               justifyContent: 'center',
             }}
           >
-            <Text style={{ fontSize: 14 }}>{row.icon}</Text>
+            <Icon name={row.icon} size={16} color={tokens.color.ink2} />
           </View>
           <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: tokens.color.ink }}>
             {row.label}

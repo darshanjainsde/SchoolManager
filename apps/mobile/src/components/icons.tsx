@@ -35,7 +35,14 @@ export type IconName =
   | 'report'
   | 'bell'
   | 'chevron'
-  | 'offline';
+  | 'offline'
+  // The glyphs the last emoji were standing in for.
+  | 'pin'
+  | 'send'
+  | 'mail'
+  | 'phone'
+  | 'palette'
+  | 'key';
 
 /** `body` is the filled silhouette; `lines` are the strokes drawn over it. */
 const PATHS: Record<IconName, { body: string; lines: string[] }> = {
@@ -153,6 +160,36 @@ const PATHS: Record<IconName, { body: string; lines: string[] }> = {
   offline: {
     body: 'M7 17.5a3.5 3.5 0 0 1-.4-7 5 5 0 0 1 9.6-1.2A3.4 3.4 0 0 1 17.5 17.5Z',
     lines: ['M7 17.5a3.5 3.5 0 0 1-.4-7 5 5 0 0 1 9.6-1.2A3.4 3.4 0 0 1 17.5 17.5Z', 'M4 4l16 16'],
+  },
+  // A drawing pin, head and point — a note pinned to the class page.
+  pin: {
+    body: 'M9 4.5h6l-1 5.5 2.5 2.5v1.5H7.5v-1.5L10 10Z',
+    lines: ['M9 4.5h6l-1 5.5 2.5 2.5v1.5H7.5v-1.5L10 10Z', 'M12 14v5.5'],
+  },
+  // A paper plane — send.
+  send: {
+    body: 'M4.5 11.5 19.5 5l-4 14-4.5-5Z',
+    lines: ['M4.5 11.5 19.5 5l-4 14-4.5-5Z', 'M11 14l8.5-9'],
+  },
+  // An envelope.
+  mail: {
+    body: 'M4.5 7A1.5 1.5 0 0 1 6 5.5h12A1.5 1.5 0 0 1 19.5 7v10a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 17Z',
+    lines: ['M4.5 7A1.5 1.5 0 0 1 6 5.5h12A1.5 1.5 0 0 1 19.5 7v10a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 17Z', 'm5 7.5 7 5.5 7-5.5'],
+  },
+  // A handset.
+  phone: {
+    body: 'M6.5 4.5h3l1.5 4-2 1.5a10 10 0 0 0 5 5l1.5-2 4 1.5v3a1.5 1.5 0 0 1-1.5 1.5A14 14 0 0 1 5 6a1.5 1.5 0 0 1 1.5-1.5Z',
+    lines: ['M6.5 4.5h3l1.5 4-2 1.5a10 10 0 0 0 5 5l1.5-2 4 1.5v3a1.5 1.5 0 0 1-1.5 1.5A14 14 0 0 1 5 6a1.5 1.5 0 0 1 1.5-1.5Z'],
+  },
+  // A painter's palette with three wells — appearance.
+  palette: {
+    body: 'M12 4.5a7.5 7.5 0 1 0 0 15c1.2 0 1.6-.8 1.2-1.7-.5-1 .2-2 1.3-2H16a3.5 3.5 0 0 0 3.5-3.5A7.5 7.5 0 0 0 12 4.5Z',
+    lines: ['M12 4.5a7.5 7.5 0 1 0 0 15c1.2 0 1.6-.8 1.2-1.7-.5-1 .2-2 1.3-2H16a3.5 3.5 0 0 0 3.5-3.5A7.5 7.5 0 0 0 12 4.5Z', 'M8.5 12.5h.01M10.5 8.5h.01M14.5 8.5h.01'],
+  },
+  // A key — the password.
+  key: {
+    body: 'M8.5 8.5a4 4 0 1 1 3.4 5.9L10 16.3V18h-2v1.5H6.5v-2L11 13a4 4 0 0 1-2.5-4.5Z',
+    lines: ['M8.5 8.5a4 4 0 1 1 3.4 5.9L10 16.3V18h-2v1.5H6.5v-2L11 13a4 4 0 0 1-2.5-4.5Z', 'M14 8.5h.01'],
   },
 };
 

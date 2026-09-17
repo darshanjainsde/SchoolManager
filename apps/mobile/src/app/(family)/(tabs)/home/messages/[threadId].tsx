@@ -11,6 +11,7 @@ import { Card, Empty, Page } from '@/components/ui';
 import { BackChipHeader } from '@/components/BackChipHeader';
 import { LoadingRows } from '@/components/Loading';
 import { DUR, useGesture } from '@/theme/motion';
+import { Icon } from '@/components/icons';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 
@@ -274,9 +275,11 @@ export default function StudentThread() {
                 opacity: canSend ? 1 : 0.6,
               }}
             >
-              <Text style={{ color: tokens.color.onBrand, fontSize: 13, fontWeight: '700' }}>
-                {sending ? '…' : '➤'}
-              </Text>
+              {sending ? (
+                <Text style={{ color: tokens.color.onBrand, fontSize: 13, fontWeight: '700' }}>…</Text>
+              ) : (
+                <Icon name="send" size={16} color={tokens.color.onBrand} fillOpacity={0.35} />
+              )}
             </Pressable>
           </View>
         </View>

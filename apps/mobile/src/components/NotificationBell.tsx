@@ -18,7 +18,7 @@ import { brand } from '@/theme/tokens';
  * broken chrome rather than an inbox. One screen, reached one way — this route
  * is also where a tapped push notification lands, so the two entrances agree.
  *
- * 38px with a DRAWN glyph, not the 🔔 emoji: the emoji renders differently on
+ * 38px with a DRAWN glyph, not the bell emoji: the emoji renders differently on
  * every Android vendor and cannot take the theme's ink colour. `alignSelf:
  * 'center'` seats the tile on the optical centre of the two-line name block
  * beside it instead of hanging from the row's top edge.

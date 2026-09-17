@@ -575,7 +575,7 @@ export interface TeacherReplyInput {
 // HolidayTypeValue above, both also String columns).
 
 /** The events that write a `NotificationOutbox` row today. */
-export const NOTIFICATION_OUTBOX_KINDS = ['RESULT_PUBLISHED', 'EXAM_SCHEDULED', 'ASSIGNMENT_POSTED', 'MESSAGE_RECEIVED', 'LIBRARY_NOTICE', 'SESSION_STARTED', 'SPORTS_NOTICE'] as const;
+export const NOTIFICATION_OUTBOX_KINDS = ['RESULT_PUBLISHED', 'EXAM_SCHEDULED', 'ASSIGNMENT_POSTED', 'MESSAGE_RECEIVED', 'LIBRARY_NOTICE', 'SESSION_STARTED', 'SPORTS_NOTICE', 'FEE_VERIFIED', 'FEE_REJECTED'] as const;
 export type NotificationOutboxKind = (typeof NOTIFICATION_OUTBOX_KINDS)[number];
 
 /**
@@ -629,6 +629,14 @@ export const NOTIFICATION_KINDS = [
   'SESSION',
   // The sports desk: your next match, a result, a record you set.
   'SPORTS',
+  // The fee desk, to ONE family: the office confirmed the payment they told
+  // us about (receipt attached), or did not accept it (reason attached), or
+  // a bill is falling due. Without these a parent submits and then has to
+  // keep re-opening the app to find out — the one server gap the app-sync
+  // audit found.
+  'FEE_VERIFIED',
+  'FEE_REJECTED',
+  'FEE_DUE',
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 

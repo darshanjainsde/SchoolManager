@@ -166,7 +166,7 @@ function DiaryItem({
           }}
         >
           {red
-            ? `${entry.signedCount}/${entry.recipientCount} signed · ✉️ emailed`
+            ? `${entry.signedCount}/${entry.recipientCount} signed · emailed`
             : `${entry.seenCount}/${entry.recipientCount} opened`}
         </Text>
 
@@ -231,7 +231,7 @@ function EmailPreview({
           color: tokens.color.green,
         }}
       >
-        {`✉️ EMAIL SENT · ${names.length} ${names.length === 1 ? 'family' : 'families'}`}
+        {`EMAIL SENT · ${names.length} ${names.length === 1 ? 'family' : 'families'}`}
       </Text>
       <Text style={{ fontSize: 12.5, fontWeight: '700', marginTop: 5, color: tokens.color.ink }}>
         {`Subject: A remark in ${first}’s diary${subject ? ` — ${subject}` : ''}`}
@@ -523,7 +523,7 @@ export default function StaffDiary() {
                       color: on ? (red ? tokens.color.red : tokens.color.indigo) : tokens.color.sub,
                     }}
                   >
-                    {k === 'ITEM' ? 'Diary entry' : 'Remark ✍️'}
+                    {k === 'ITEM' ? 'Diary entry' : 'Remark'}
                   </Text>
                 </Pressable>
               );

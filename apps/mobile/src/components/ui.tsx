@@ -235,12 +235,13 @@ export function PageHeader({
 }: {
   title: string;
   /**
-   * The pitch writes its page titles as "📔 Today's diary" — the glyph is
-   * part of the heading. It is a SEPARATE node here so the heading's own
-   * words stay one exact, matchable string (an emoji welded onto the title
-   * silently breaks every assertion and every screen reader).
+   * The pitch writes its page titles with a glyph before the words. It is a
+   * SEPARATE node here so the heading's own words stay one exact, matchable
+   * string, and — second edition — it is a DRAWN duotone glyph, never an
+   * emoji: an emoji is painted by the OS in its own colours and read aloud
+   * as part of the sentence.
    */
-  icon?: string;
+  icon?: IconName;
   actionLabel?: string;
   onAction?: () => void;
   actionTestID?: string;
@@ -260,7 +261,7 @@ export function PageHeader({
       {/* The pitch's 650 weight has no RN equivalent (only the 100-900
           ladder), so every serif heading in this app lands on '600'. */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-        {icon ? <Text style={{ fontSize: 14 }}>{icon}</Text> : null}
+        {icon ? <Icon name={icon} size={15} color={tokens.color.ink2} /> : null}
         <Text
           style={{ fontFamily: font.serif, fontSize: 14, fontWeight: '600', color: tokens.color.ink, flex: 1 }}
           numberOfLines={1}

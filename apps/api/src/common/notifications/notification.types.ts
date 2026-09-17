@@ -142,6 +142,18 @@ export interface LibraryNoticeOutboxPayload {
 }
 
 /**
+ * Payload STORED in a `NotificationOutbox` row for `FEE_VERIFIED` /
+ * `FEE_REJECTED` — the fee desk's decision on ONE family's claim, composed
+ * at write time inside the verify/reject transaction. Always a single-reader
+ * row (targetUserId = the student's login).
+ */
+export interface FeeDecisionOutboxPayload {
+  schoolName: string;
+  title: string;
+  body: string;
+}
+
+/**
  * Payload STORED in a `NotificationOutbox` row for kind `SESSION_STARTED`
  * (the year end, Active Roster Track C): one row per family whose child moved
  * or stayed, targeting that family's user via `targetUserId`. Composed at

@@ -7,6 +7,7 @@ import { signOut } from '@/lib/sign-out';
 import { ProfileMenu } from '@/components/ProfileMenu';
 import { EditableAvatar } from '@/components/EditableAvatar';
 import { Card, Page, Screen } from '@/components/ui';
+import { Icon, type IconName } from '@/components/icons';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
@@ -47,7 +48,7 @@ function SettingRow({
   testID,
   first,
 }: {
-  icon: string;
+  icon: IconName;
   label: string;
   onPress: () => void;
   testID?: string;
@@ -79,7 +80,7 @@ function SettingRow({
           justifyContent: 'center',
         }}
       >
-        <Text style={{ fontSize: 14 }}>{icon}</Text>
+        <Icon name={icon} size={16} color={tokens.color.ink2} />
       </View>
       <Text style={{ flex: 1, fontSize: 12.5, fontWeight: '600', color: tokens.color.ink }}>{label}</Text>
       <Text style={{ color: tokens.color.sub }}>›</Text>
@@ -206,7 +207,7 @@ export default function Profile() {
         <SettingRow
           testID="switch-diary"
           first
-          icon="📚"
+          icon="diary"
           label="Switch diary / add a child"
           onPress={() => router.push('/(family)/(tabs)/home/shelf')}
         />
@@ -216,8 +217,8 @@ export default function Profile() {
           their own pushed screen instead of sitting fully unfolded here. */}
       <ProfileMenu
         rows={[
-          { icon: '🎨', label: 'Appearance', route: '/(family)/(tabs)/profile/appearance', testID: 'profile-menu-appearance' },
-          { icon: '🔑', label: 'Change password', route: '/(family)/(tabs)/profile/password', testID: 'profile-menu-password' },
+          { icon: 'palette', label: 'Appearance', route: '/(family)/(tabs)/profile/appearance', testID: 'profile-menu-appearance' },
+          { icon: 'key', label: 'Change password', route: '/(family)/(tabs)/profile/password', testID: 'profile-menu-password' },
         ]}
       />
 

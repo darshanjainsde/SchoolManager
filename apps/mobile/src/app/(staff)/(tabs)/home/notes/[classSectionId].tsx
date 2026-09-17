@@ -7,6 +7,7 @@ import { api, ApiError } from '@/lib/api';
 import { shiftISO, todayISO } from '@/lib/attendance';
 import { Card, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
+import { Icon } from '@/components/icons';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 import { DASH, DUR, strokeDashoffset, useGesture } from '@/theme/motion';
@@ -229,7 +230,7 @@ export default function ClassNotesHistory() {
               testID={`note-${n.id}`}
               style={{ flexDirection: 'row', gap: 8, paddingVertical: 6 }}
             >
-              <Text style={{ fontSize: 13 }}>📌</Text>
+              <Icon name="pin" size={15} color={tokens.color.sub} />
               <Text style={{ fontSize: 13, color: tokens.color.ink, flex: 1 }}>{n.body}</Text>
             </View>
           ))}
@@ -287,7 +288,7 @@ export default function ClassNotesHistory() {
                 color: mode === 'note' ? tokens.color.indigo : tokens.color.sub,
               }}
             >
-              📌 Note
+              Note
             </Text>
           </Pressable>
           <Pressable

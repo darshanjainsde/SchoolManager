@@ -123,7 +123,7 @@ export default function Notes() {
             {/* Counts in mono — figures that must line up row to row. */}
             <View style={{ flexDirection: 'row', gap: 14, marginLeft: 45 }}>
               <Text style={{ fontFamily: font.mono, fontSize: 11, color: tokens.color.sub }}>
-                {`📌 ${c.noteCount} ${c.noteCount === 1 ? 'note' : 'notes'}`}
+                {`${c.noteCount} ${c.noteCount === 1 ? 'note' : 'notes'}`}
               </Text>
               <Text style={{ fontFamily: font.mono, fontSize: 11, color: tokens.color.sub }}>
                 {`✓ ${c.openTodoCount} open ${c.openTodoCount === 1 ? 'to-do' : 'to-dos'}`}
