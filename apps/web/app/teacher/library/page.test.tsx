@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { renderWithProviders, type ApiStub } from '@/test/render';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
@@ -26,6 +26,7 @@ const BASE: MeLibraryPayload = {
   fines: [],
   finesDueRupees: 0,
   today: '2026-08-16',
+  rules: { finePerDayRupees: 5, graceDays: 1, lostFeeRupees: 120 },
 };
 
 function stub(payload: MeLibraryPayload): ApiStub {
@@ -44,11 +45,15 @@ describe('the teacher library tab', () => {
     vi.mocked(useApi).mockReturnValue(stub(BASE) as never);
     renderWithProviders(<TeacherLibraryPage />);
 
-    expect(await screen.findByText(/A Brief History of Time/)).toBeInTheDocument();
-    expect(screen.getByText('Holding now · 1 of 5')).toBeInTheDocument();
-    expect(screen.getByText(/Wings of Fire/)).toBeInTheDocument();
-    // The rule, not just an empty list: the section itself is absent.
-    expect(screen.queryByText('Fines')).not.toBeInTheDocument();
+    // The title is on the shelf card AND in the Next-due figure's hint — scope to the shelf.
+    expect(within(await screen.findByTestId('library-shelf')).getByText(/A Brief History of Time/)).toBeInTheDocument();
+    expect(screen.getByText('Holding 1 of 5')).toBeInTheDocument();
+    expect(within(screen.getByTestId('library-history')).getByText(/Wings of Fire/)).toBeInTheDocument();
+    // The rule, not just an empty list: no fine figure, no fine card, and the rules say so in words.
+    expect(screen.queryByTestId('library-fine')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('fine-banner')).not.toBeInTheDocument();
+    expect(screen.getByText(/No fines apply to you/)).toBeInTheDocument();
+    expect(screen.getByTestId('library-rules')).toHaveTextContent('5 books at a time · 14 days each');
   });
 
   it('grows a fines section — with amounts — the moment the librarian turns teacher fines on', async () => {
@@ -62,9 +67,11 @@ describe('the teacher library tab', () => {
     );
     renderWithProviders(<TeacherLibraryPage />);
 
-    expect(await screen.findByText('Fines')).toBeInTheDocument();
-    expect(screen.getByText('Godaan')).toBeInTheDocument();
-    expect(screen.getByText('₹15')).toBeInTheDocument();
-    expect(screen.getByText(/₹15 due/)).toBeInTheDocument();
+    expect(await screen.findByTestId('fine-banner')).toHaveTextContent('₹15 to clear at the counter');
+    expect(screen.getByTestId('fine-banner')).toHaveTextContent('Godaan');
+    expect(screen.getByTestId('fine-banner')).toHaveTextContent('Returned late');
+    expect(screen.getByTestId('library-fine')).toHaveTextContent('₹15');
+    // Once fines apply, the rules say the rate.
+    expect(screen.getByTestId('library-rules')).toHaveTextContent("₹5 a day late after 1 day's grace");
   });
 });

@@ -1,0 +1,7 @@
+<!doctype html><html><head><meta charset="utf-8"><title>view</title>
+<style>body{margin:0;background:#333;display:flex;justify-content:center}iframe{border:0;background:#fff}</style></head>
+<body><script>
+// ?file=./screens-portal.html&w=390&h=1400 — the rendered screens at an exact viewport width, for looking (measure.html is for measuring).
+const q=new URLSearchParams(location.search);const f=document.createElement('iframe');
+f.src=q.get('file')||'./screens.html';f.width=q.get('w')||390;f.height=q.get('h')||1400;document.body.appendChild(f);
+</script></body></html>

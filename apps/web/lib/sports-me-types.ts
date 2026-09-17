@@ -18,6 +18,9 @@ export interface MeSportsTournament { id: string; name: string; startsOn: string
 export interface MeSportsRecord { id: string; sportName: string; groupKey: string; category: string; text: string; holderName: string; sinceYear: number; untilYear: number | null; status: string }
 export interface MeSportsAttempt { id: string; sportName: string; groupKey: string; category: string; text: string; status: string; source: string; createdAt: string }
 
+/** One row of the house table — the school's standings, every house, points to date. */
+export interface MeSportsHouse { id: string; name: string; color: string; points: number; members: number }
+
 export type MeSportsPayload =
-  | { role: 'STUDENT'; house: { id: string; name: string; color: string } | null; tournaments: MeSportsTournament[]; records: { records: MeSportsRecord[]; attempts: MeSportsAttempt[] } }
+  | { role: 'STUDENT'; house: { id: string; name: string; color: string } | null; tournaments: MeSportsTournament[]; records: { records: MeSportsRecord[]; attempts: MeSportsAttempt[] }; /** Absent on an older API. */ houses?: MeSportsHouse[] }
   | { role: 'TEACHER'; tournaments: { id: string; name: string; startsOn: string; endsOn: string; status: string }[]; houses: { id: string; name: string; color: string; points: number; members: number }[] };

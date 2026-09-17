@@ -15,7 +15,7 @@ jest.mock('@/lib/api', () => {
 });
 
 const SHELF = {
-  kind: 'STUDENT', limit: 3, loanDays: 14, finesEnabled: true,
+  kind: 'STUDENT', limit: 3, loanDays: 14, finesEnabled: true, rules: { finePerDayRupees: 5, graceDays: 1, lostFeeRupees: 120 },
   holdings: [
     { issueId: 'i1', title: 'Malgudi Days', author: 'R. K. Narayan', accessionNo: 'A100', issuedOn: '2026-09-06', dueOn: '2026-09-20', daysLeft: 3, accruedFineRupees: 0 },
     { issueId: 'i2', title: 'Wings of Fire', author: 'A. P. J. Abdul Kalam', accessionNo: 'A101', issuedOn: '2026-08-01', dueOn: '2026-08-15', daysLeft: -33, accruedFineRupees: 66 },

@@ -30,15 +30,24 @@ beforeEach(() => {
   jest.resetAllMocks();
   txMock.sportsSettings.findUnique.mockResolvedValue(settingsRow);
   records.mine.mockResolvedValue({ records: [], attempts: [] });
+  houses.list.mockResolvedValue([]);
 });
 
 describe('SportsMeService', () => {
   it('a login with no student row sees an empty tab, never an error', async () => {
     txMock.student.findFirst.mockResolvedValue(null);
-    expect(await svc().forUser(SCHOOL, 'u1', 'STUDENT')).toEqual({ role: 'STUDENT', house: null, tournaments: [], records: { records: [], attempts: [] } });
+    expect(await svc().forUser(SCHOOL, 'u1', 'STUDENT')).toEqual({ role: 'STUDENT', house: null, tournaments: [], records: { records: [], attempts: [] }, houses: [] });
+  });
+
+  it('the house table rides along for a child, so "Red house" can say where Red stands', async () => {
+    txMock.student.findFirst.mockResolvedValue(null);
+    houses.list.mockResolvedValue([{ id: 'h1', name: 'Red', color: '#f00', order: 0, members: 120, points: 42 }]);
+    const r = await svc().forUser(SCHOOL, 'u1', 'STUDENT');
+    expect(r.role === 'STUDENT' && r.houses).toEqual([{ id: 'h1', name: 'Red', color: '#f00', order: 0, members: 120, points: 42 }]);
   });
 
   it('a student sees only their own matches and lanes in published meets, with names for the sides and their house', async () => {
+    houses.list.mockResolvedValue([{ id: 'h1', name: 'Red', color: '#f00', order: 0, members: 1, points: 0 }, { id: 'h2', name: 'Blue', color: '#00f', order: 1, members: 1, points: 0 }]);
     txMock.student.findFirst.mockResolvedValue({ id: ME, houseId: 'h1' });
     txMock.sportsEntry.findMany
       .mockResolvedValueOnce([
@@ -63,7 +72,8 @@ describe('SportsMeService', () => {
     expect(t.events.map((e) => [e.sportName, e.side, e.groupLabel, e.matches.length, e.heats.length])).toEqual([['Badminton', `s:${ME}`, 'Senior', 1, 0], ['Football', 'c:9-A', 'Senior', 1, 0], ['100 m sprint', `s:${ME}`, 'Senior', 0, 1]]);
     expect(t.events[0].matches[0]).toMatchObject({ roundName: 'Final', venue: 'Court 1', atMin: 600, scoreA: [21] });
     expect(t.events[2].heats[0]).toMatchObject({ lane: 3, mark: 13.2, rank: 2, venue: 'Court 1', done: true });
-    expect(t.sideNames).toEqual({ [`s:${ME}`]: 'Meera I', 'c:9-A': '9 A', 's:o1': 'Zoya R', 'c:9-B': '9 B', 'k:9': 'Class 9', 'h:h1': 'Red' });
+    // Every house is named, not only mine — a house final's opponent must never read "h:h2".
+    expect(t.sideNames).toEqual({ [`s:${ME}`]: 'Meera I', 'c:9-A': '9 A', 's:o1': 'Zoya R', 'c:9-B': '9 B', 'k:9': 'Class 9', 'h:h1': 'Red', 'h:h2': 'Blue' });
     expect(records.mine).toHaveBeenCalledWith(SCHOOL, ME);
   });
 

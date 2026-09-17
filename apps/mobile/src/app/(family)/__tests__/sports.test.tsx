@@ -17,6 +17,12 @@ jest.mock('@/lib/api', () => {
 const ME = {
   role: 'STUDENT',
   house: { id: 'h1', name: 'Raffles Red', color: '#c00' },
+  houses: [
+    { id: 'h1', name: 'Raffles Red', color: '#c00', points: 42, members: 120 },
+    { id: 'h2', name: 'Raffles Blue', color: '#00c', points: 57, members: 118 },
+    { id: 'h3', name: 'Raffles Green', color: '#0a0', points: 42, members: 121 },
+    { id: 'h4', name: 'Raffles Yellow', color: '#fc0', points: 12, members: 119 },
+  ],
   records: {
     records: [{ id: 'r1', sportName: 'Athletics', groupKey: 'senior', category: 'Girls', text: '100 m · 12.84 s', holderName: 'Saanvi', sinceYear: 2025, untilYear: null, status: 'STANDING' }],
     attempts: [{ id: 'a1', sportName: 'Athletics', groupKey: 'senior', category: 'Girls', text: 'Long jump · 4.62 m', status: 'PENDING', source: 'MEET', createdAt: '2026-09-18T00:00:00Z' }],
@@ -55,13 +61,16 @@ describe('Sports', () => {
     expect(getByText('Badminton')).toBeTruthy();
     expect(getByText('Won')).toBeTruthy();
     expect(getByText(/Quarter-final v Aditi Rao 21-17/)).toBeTruthy();
-    expect(getByText('Raffles Red')).toBeTruthy();
+    expect(getAllByText('Raffles Red').length).toBeGreaterThan(0); // the House figure and the table row
   });
 
   it('lists every record held and every attempt, as the web does', async () => {
     (api.request as jest.Mock).mockResolvedValue(ME);
-    const { findByTestId, getByText } = render(<Sports />);
+    const { findByTestId, findByText, getByText } = render(<Sports />);
     expect(await findByTestId('sports-records')).toBeTruthy();
+    // Where Red stands: tied on 42 with Green, behind Blue's 57 → joint 2nd of 4.
+    expect(await findByText('2nd of 4 · 42 pts')).toBeTruthy();
+    expect(await findByTestId('sports-houses')).toBeTruthy();
     expect(getByText('100 m · 12.84 s')).toBeTruthy();
     expect(getByText('since 2025')).toBeTruthy();
     expect(await findByTestId('sports-attempts')).toBeTruthy();

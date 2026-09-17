@@ -3853,12 +3853,12 @@ html[data-theme='light'] .skosx { color-scheme: light; }
    phone gets one or two per row and never a sideways page; twelve monthly
    terms wrap into rows rather than becoming a wall. Every colour is a token
    so the strip reads in both schemes. */
-.pf-head { display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
-.pf-head .who { min-width: 0; flex: 1 1 200px; }
-.pf-head .who h1 { font-family: var(--sk-serif); font-size: 22px; font-weight: 650; letter-spacing: -0.01em; margin: 0; }
-.pf-head .who .meta { font-family: var(--sk-mono); font-size: 11.5px; color: var(--sk-ink-3); margin-top: 3px; overflow-wrap: anywhere; }
-.pf-head .bal { text-align: right; flex: 0 0 auto; }
-.pf-head .bal .n { font-family: var(--sk-mono); font-size: 26px; font-weight: 700; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.pf-head, .sk-pagehead { display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
+.pf-head .who, .sk-pagehead .who { min-width: 0; flex: 1 1 200px; }
+.pf-head .who h1, .sk-pagehead .who h1 { font-family: var(--sk-serif); font-size: 22px; font-weight: 650; letter-spacing: -0.01em; margin: 0; }
+.pf-head .who .meta, .sk-pagehead .who .meta { font-family: var(--sk-mono); font-size: 11.5px; color: var(--sk-ink-3); margin-top: 3px; overflow-wrap: anywhere; }
+.pf-head .bal, .sk-pagehead .bal { text-align: right; flex: 0 0 auto; }
+.pf-head .bal .n, .sk-pagehead .bal .n { font-family: var(--sk-mono); font-size: 26px; font-weight: 700; line-height: 1.05; font-variant-numeric: tabular-nums; }
 .pf-next { border-left: 3px solid var(--sk-amber); }
 .pf-next[data-status="OVERDUE"] { border-left-color: var(--sk-bad); }
 .pf-next[data-status="PAID"] { border-left-color: var(--sk-good); }
@@ -3883,3 +3883,101 @@ html[data-theme='light'] .skosx { color-scheme: light; }
 .pf-statement summary::-webkit-details-marker { display: none; }
 .pf-statement summary::after { content: '›'; float: right; color: var(--sk-ink-3); transition: transform .15s; }
 .pf-statement[open] summary::after { transform: rotate(90deg); }
+
+/* ---- student portal: library & sports ------------------------------------
+   Same bones as the fees page: a page head, mono figures, .sk-card sections.
+   Two columns from 900px — the thing the family reads on the left, the
+   reference (returned books, the rules, the house table) on the right — so a
+   desktop is not a phone column with paper either side. Every grid track is
+   minmax(min(100%, N), 1fr): identical wide, collapses narrow. */
+.sk-pagehead .bal .u { font-size: 13px; font-weight: 700; color: var(--sk-ink-3); font-family: inherit; letter-spacing: 0; }
+.sk-pagehead .bal .hint { font-size: 11.5px; color: var(--sk-ink-3); margin-top: 3px; }
+.pl-page, .ps-page { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.pl-cols, .ps-cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: start; }
+.pl-main, .pl-side, .ps-main, .ps-side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+@media (min-width: 900px) { .pl-cols, .ps-cols { grid-template-columns: minmax(0, 1fr) minmax(0, 340px); } }
+
+/* 108px, not 150: three tiles must share one row on a 390px phone (350px of
+   content), or the third — "Returned" — sits orphaned on a row of its own.
+   The values are a word or a small figure; the hint already ellipsises. */
+.pl-figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 108px), 1fr)); gap: 8px; }
+.pl-fig { background: var(--sk-card); border: 1px solid var(--sk-line); border-radius: var(--sk-r); padding: 10px 12px; min-width: 0; }
+.pl-fig .k { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; color: var(--sk-ink-3); }
+.pl-fig .n { font-family: var(--sk-mono); font-size: 18px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.pl-fig .h { font-size: 11px; color: var(--sk-ink-3); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-fig[data-tone="good"] .n { color: var(--sk-good); }
+.pl-fig[data-tone="warn"] .n { color: var(--sk-amber-ink); }
+.pl-fig[data-tone="bad"] .n { color: var(--sk-bad); }
+
+/* One card per book, two or three across when there is room. The spine on
+   the left is the app's shelf object; the ribbon on the right is the approved
+   countdown — the words in the pill say the same thing. */
+.pl-shelf { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 10px; }
+.pl-book {
+  position: relative; background: var(--sk-card); border: 1px solid var(--sk-line); border-radius: var(--sk-r);
+  border-left: 5px solid var(--sk-brand); padding: 12px 40px 12px 14px; min-width: 0; display: flex; flex-direction: column; gap: 4px;
+}
+.pl-book[data-spine="1"] { border-left-color: var(--sk-good); }
+.pl-book[data-spine="2"] { border-left-color: var(--sk-amber); }
+.pl-book .t { font-family: var(--sk-serif); font-size: 15.5px; font-weight: 650; line-height: 1.25; overflow-wrap: anywhere; }
+.pl-book .m { font-family: var(--sk-mono); font-size: 11px; color: var(--sk-ink-3); overflow-wrap: anywhere; }
+.pl-book .sk-pill { align-self: flex-start; margin-top: 4px; white-space: normal; line-height: 1.35; }
+.pl-ribbon { position: absolute; right: 14px; top: 0; width: 10px; clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 86%, 0 100%); transition: height 1s ease-out; }
+.pl-ribbon[data-tone="ok"] { background: var(--sk-good); }
+.pl-ribbon[data-tone="soon"] { background: var(--sk-amber); }
+.pl-ribbon[data-tone="late"] { background: var(--sk-bad); }
+
+.pl-rows { display: flex; flex-direction: column; }
+.pl-row { display: flex; align-items: baseline; gap: 10px; padding: 8px 0; border-top: 1px dashed var(--sk-line); min-width: 0; }
+.pl-row:first-child { border-top: 0; padding-top: 0; }
+.pl-row:last-child { padding-bottom: 0; }
+.pl-row .b { flex: 1; min-width: 0; }
+.pl-row .t { font-family: var(--sk-serif); font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; }
+.pl-row .m { font-size: 11px; color: var(--sk-ink-3); overflow-wrap: anywhere; }
+.pl-row .r { flex: none; font-family: var(--sk-mono); font-size: 11.5px; color: var(--sk-ink-3); white-space: nowrap; }
+.pl-row .r[data-tone="bad"] { color: var(--sk-bad); font-weight: 700; }
+.pl-rules { font-size: 13px; color: var(--sk-ink-2); line-height: 1.55; margin: 0; }
+.pl-rules b { font-family: var(--sk-mono); font-weight: 700; color: var(--sk-ink); }
+
+.ps-house { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--sk-line); border-radius: 999px; padding: 5px 11px; font-size: 12px; font-weight: 650; color: var(--sk-ink-2); background: var(--sk-card); flex: none; align-self: center; }
+.ps-dot { width: 10px; height: 10px; border-radius: 999px; flex: none; display: inline-block; }
+.ps-next { border-left: 3px solid var(--sk-brand); background: var(--sk-brand-tint); }
+.ps-next .sk-card-b { gap: 4px; }
+.ps-next .t { font-family: var(--sk-serif); font-size: 19px; font-weight: 650; line-height: 1.2; overflow-wrap: anywhere; }
+.ps-next .v { font-size: 13.5px; color: var(--sk-ink); overflow-wrap: anywhere; }
+.ps-next .w, .ps-more .w { font-family: var(--sk-mono); font-size: 12px; color: var(--sk-ink-2); overflow-wrap: anywhere; }
+.ps-more { display: flex; flex-direction: column; gap: 6px; border-top: 1px dashed var(--sk-line); padding-top: 8px; margin-top: 6px; font-size: 12.5px; }
+.ps-more .ps-line { flex-wrap: wrap; }
+.ps-more .w { font-size: 11.5px; color: var(--sk-ink-3); }
+
+.ps-sports { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 12px; align-items: start; }
+.ps-ev { padding: 9px 0; border-top: 1px solid var(--sk-line); display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ps-ev:first-child { border-top: 0; padding-top: 0; }
+.ps-ev:last-child { padding-bottom: 0; }
+.ps-ev .hd { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ps-ev .hd .t { font-size: 13.5px; font-weight: 700; flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.ps-ev .meet { font-size: 11px; color: var(--sk-ink-3); overflow-wrap: anywhere; }
+.ps-ev .when { font-family: var(--sk-mono); font-size: 11.5px; color: var(--sk-ink-2); overflow-wrap: anywhere; }
+.ps-line { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--sk-ink-2); min-width: 0; }
+.ps-line > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.ps-line > .sk-pill { flex: none; }
+/* A score is one figure: "21-15 19-21 21-18" must never break at a hyphen into "21-" / "15". */
+.ps-score { white-space: nowrap; }
+
+.ps-houses .row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px dashed var(--sk-line); min-width: 0; font-size: 13px; }
+.ps-houses .row:first-child { border-top: 0; padding-top: 0; }
+.ps-houses .row:last-child { padding-bottom: 0; }
+.ps-houses .row[data-mine="true"] .nm { font-weight: 700; }
+.ps-houses .row[data-mine="true"] .pts { color: var(--sk-brand-2); }
+.ps-houses .rk { font-family: var(--sk-mono); width: 26px; flex: none; color: var(--sk-ink-3); font-size: 11.5px; }
+.ps-houses .nm { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.ps-houses .mem { font-size: 11px; color: var(--sk-ink-3); white-space: nowrap; }
+.ps-houses .pts { font-family: var(--sk-mono); font-weight: 700; font-variant-numeric: tabular-nums; flex: none; }
+.ps-rec { padding: 8px 0; border-top: 1px dashed var(--sk-line); display: flex; gap: 10px; align-items: center; min-width: 0; }
+.ps-rec:first-child { border-top: 0; padding-top: 0; }
+.ps-rec:last-child { padding-bottom: 0; }
+.ps-rec .b { flex: 1; min-width: 0; }
+.ps-rec .t { font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.ps-rec .m { font-size: 11px; color: var(--sk-ink-3); }
+.ps-rec .n { font-family: var(--sk-mono); font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+@media (max-width: 480px) { .ps-houses .mem { display: none; } }
