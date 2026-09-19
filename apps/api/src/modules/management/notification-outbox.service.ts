@@ -3,6 +3,7 @@ import { runInBackground } from '../../common/notifications/run-in-background';
 import { getPlatformPrisma } from '@skoolos/db';
 import { assertNotificationOutboxKind, type NotificationOutboxKind } from '@skoolos/types';
 import { PushChannel } from '../../common/notifications/push.channel';
+import { WhatsAppChannel } from '../../common/notifications/whatsapp.channel';
 import { resolveSectionRecipients, resolveUserRecipients } from '../../common/notifications/recipients';
 import type {
   MessageReceivedOutboxPayload,
@@ -211,7 +212,13 @@ interface OutboxRow {
 export class NotificationOutboxService {
   private readonly logger = new Logger(NotificationOutboxService.name);
 
-  constructor(private readonly push: PushChannel) {}
+  // WhatsApp rides the outbox for the same reason push does: these kinds are
+  // the guaranteed, at-least-once ones. The channel itself decides per
+  // school whether anything goes out (see WhatsAppChannel).
+  constructor(
+    private readonly push: PushChannel,
+    private readonly whatsapp: WhatsAppChannel,
+  ) {}
 
   /**
    * Drain shortly, without blocking the caller.
@@ -301,6 +308,7 @@ export class NotificationOutboxService {
 
         for (const email of recipients) {
           await this.push.send(email, message, row.schoolId);
+          await this.whatsapp.send(email, message, row.schoolId);
         }
 
         await db.notificationOutbox.update({

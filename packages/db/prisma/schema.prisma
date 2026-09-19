@@ -397,6 +397,8 @@ model School {
   sessionPlans           SessionPlan[]
   sessionDecisions       SessionDecision[]
   sportsSettings         SportsSettings?
+  whatsAppSettings       WhatsAppSettings?
+  whatsAppDeliveries     WhatsAppDelivery[]
   houses                 House[]
   housePoints            HousePoint[]
   sportsTournaments      SportsTournament[]
@@ -4296,4 +4298,42 @@ model SportsRecordAttempt {
   school      School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
   @@index([schoolId, status])
+}
+
+/// Per-school switch for the WhatsApp channel. Off by default: a school turns
+/// it on once it has told families (opt-in is Meta policy and the DPDP Act).
+/// `phoneNumberId` is the Phase-2 override for a school that brings its own
+/// number under our WABA; null means the platform's Sckools number.
+model WhatsAppSettings {
+  schoolId      String   @id @db.Uuid
+  enabled       Boolean  @default(false)
+  phoneNumberId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  school        School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+}
+
+/// The delivery ledger: one row per WhatsApp message we asked Meta to send.
+/// Meta's webhook later moves `status` SENT → DELIVERED → READ (or FAILED)
+/// by `waMessageId`. This is what lets the office say "told on WhatsApp,
+/// read at 10:05" instead of "we sent something".
+model WhatsAppDelivery {
+  id           String    @id @default(uuid()) @db.Uuid
+  schoolId     String    @db.Uuid
+  /// E.164, e.g. +919876543210.
+  phone        String
+  /// NotificationKind, or TEST for the settings page's test send.
+  kind         String
+  templateName String
+  waMessageId  String?   @unique
+  /// QUEUED | SENT | DELIVERED | READ | FAILED
+  status       String    @default("QUEUED")
+  error        String?
+  createdAt    DateTime  @default(now())
+  sentAt       DateTime?
+  deliveredAt  DateTime?
+  readAt       DateTime?
+  school       School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, createdAt])
 }
