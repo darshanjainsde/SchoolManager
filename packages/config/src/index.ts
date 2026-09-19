@@ -78,6 +78,12 @@ const envSchema = z.object({
   // mailbox. It is never a silent downgrade — the API refuses the save and
   // says why, rather than storing a credential in the clear.
   EMAIL_SECRET_KEY: z.string().optional(),
+  // Resend (transactional email over HTTPS). Set → the platform sends through
+  // Resend and gets a provider id per message for the delivery ledger; unset
+  // → SMTP above. Schools' own senders stay SMTP either way.
+  RESEND_API_KEY: z.string().optional(),
+  // Signs Resend's webhook (Svix). Unset → the webhook refuses everything.
+  RESEND_WEBHOOK_SECRET: z.string().optional(),
 
   // Single shared password that unlocks the owner console at /owner.
   // Unset → the gate endpoint answers 503 and only email login works.

@@ -33,6 +33,8 @@ import { MarketingModule } from './modules/marketing';
 import { AdminCredentialsModule } from './modules/admin-credentials';
 import { BlogModule } from './modules/blog';
 import { FeesModule } from './modules/fees';
+import { WhatsAppModule } from './modules/whatsapp';
+import { MailWebhooksModule } from './modules/mail-webhooks/mail-webhooks.module';
 import { PressModule } from './modules/press';
 import { RedisThrottlerModule } from './common/throttler/redis-throttler.module';
 import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storage';
@@ -92,6 +94,8 @@ import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storag
     PortalModule,
     LibraryModule,
     SportsModule,
+    WhatsAppModule,
+    MailWebhooksModule,
     DirectoryModule,
     AlumniModule,
     MarketingModule,

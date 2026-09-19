@@ -3981,3 +3981,40 @@ html[data-theme='light'] .skosx { color-scheme: light; }
 .ps-rec .m { font-size: 11px; color: var(--sk-ink-3); }
 .ps-rec .n { font-family: var(--sk-mono); font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
 @media (max-width: 480px) { .ps-houses .mem { display: none; } }
+
+/* ---- settings: WhatsApp card ---- */
+.wa-figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 108px), 1fr)); gap: 8px; }
+.wa-figs .f { background: var(--sk-bg-2); border: 1px solid var(--sk-line); border-radius: 10px; padding: 9px 12px; min-width: 0; }
+.wa-figs .k { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; color: var(--sk-ink-3); }
+.wa-figs .n { font-family: var(--sk-mono); font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.wa-figs .h { font-size: 11px; color: var(--sk-ink-3); }
+.wa-figs .f[data-tone="good"] .n { color: var(--sk-good); }
+.wa-figs .f[data-tone="bad"] .n { color: var(--sk-bad); }
+.wa-test { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.wa-test label { font-size: 13px; color: var(--sk-ink-2); flex: none; }
+.wa-test .sk-input { flex: 1 1 160px; min-width: 0; box-sizing: border-box; }
+.wa-log { display: flex; flex-direction: column; gap: 4px; }
+.wa-log .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 6px 0; border-top: 1px dashed var(--sk-line); font-size: 12.5px; min-width: 0; }
+.wa-log .row .t { font-family: var(--sk-mono); font-size: 11.5px; color: var(--sk-ink-3); flex: none; }
+.wa-log .row .k { font-weight: 600; }
+.wa-log .row .p { font-family: var(--sk-mono); font-size: 12px; color: var(--sk-ink-2); }
+.wa-log .row .e { flex: 1 0 100%; font-size: 11.5px; color: var(--sk-bad); overflow-wrap: anywhere; }
+.wa-tpl summary { cursor: pointer; font-size: 13px; color: var(--sk-brand-2); font-weight: 600; }
+.wa-tpl .row { display: grid; grid-template-columns: minmax(0, 130px) minmax(0, 1fr); gap: 10px; padding: 7px 0; border-top: 1px dashed var(--sk-line); font-size: 12.5px; }
+.wa-tpl .row span { color: var(--sk-ink-2); overflow-wrap: anywhere; }
+@media (max-width: 480px) { .wa-tpl .row { grid-template-columns: 1fr; gap: 2px; } }
+
+/* ---- email address pre-check hint (under an email input) ---- */
+.sk-email-hint { font-size: 11.5px; margin-top: 4px; color: var(--sk-ink-3); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sk-email-hint[data-tone="good"] { color: var(--sk-good); }
+.sk-email-hint[data-tone="warn"] { color: var(--sk-amber-ink); }
+.sk-email-fix { font: inherit; font-weight: 700; color: var(--sk-brand-2); background: var(--sk-brand-tint); border: 0; border-radius: 999px; padding: 3px 9px; cursor: pointer; min-height: 24px; }
+/* ---- settings: email deliveries ---- */
+.em-log { display: flex; flex-direction: column; gap: 4px; }
+.em-log .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 6px 0; border-top: 1px dashed var(--sk-line); font-size: 12.5px; min-width: 0; }
+.em-log .row .t { font-family: var(--sk-mono); font-size: 11.5px; color: var(--sk-ink-3); flex: none; }
+.em-log .row .k { font-weight: 600; }
+.em-log .row .p { font-family: var(--sk-mono); font-size: 12px; color: var(--sk-ink-2); overflow-wrap: anywhere; min-width: 0; }
+.em-log .row .e { flex: 1 0 100%; font-size: 11.5px; color: var(--sk-bad); overflow-wrap: anywhere; }
+.em-fix { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 6px 0; border-top: 1px dashed var(--sk-line); font-size: 12.5px; }
+.em-fix .p { font-family: var(--sk-mono); overflow-wrap: anywhere; min-width: 0; flex: 1 1 200px; }

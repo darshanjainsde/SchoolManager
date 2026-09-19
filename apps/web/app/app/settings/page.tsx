@@ -8,6 +8,7 @@ import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { EmailSettingsCard } from './email-card';
 import { TvCard } from './tv-card';
+import { WhatsAppCard } from './whatsapp-card';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -1029,6 +1030,9 @@ export default function SettingsPage() {
 
         {/* ── Email ─────────────────────────────────────────────────────── */}
         <EmailSettingsCard />
+
+        {/* ── WhatsApp ──────────────────────────────────────────────────── */}
+        <WhatsAppCard />
 
         <TvCard />
 

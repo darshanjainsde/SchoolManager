@@ -177,6 +177,10 @@ export type ErrorCode =
   | 'STORAGE_UNAVAILABLE'
   /** The room still has saved seating plans; deleting it would take them too — pair with 409. */
   | 'ROOM_IN_USE'
+  /** The platform has no WhatsApp credentials yet — pair with 409. */
+  | 'WHATSAPP_NOT_CONFIGURED'
+  /** A phone that does not normalise to a mobile — pair with 400. */
+  | 'BAD_PHONE'
   | 'VALIDATION'
   /** Caller is not authenticated (missing/invalid credential) — pair with 401. */
   | 'UNAUTHORIZED'

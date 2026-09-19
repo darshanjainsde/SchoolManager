@@ -9,6 +9,7 @@ import { ApiError } from '@/lib/api';
 import { useHost } from '@/components/use-host';
 import DialogShell from '@/components/ui/dialog-shell';
 import LeaveDialog from './leave-dialog';
+import { EmailHint } from '@/components/use-email-check';
 
 /** The three slices of the roll the page can show (Active Roster). */
 type StatusTab = 'active' | 'left' | 'all';
@@ -231,6 +232,7 @@ function EmailPromptModal({
             onChange={(e) => setEmail(e.target.value)}
             placeholder="jane.doe@example.com"
           />
+          <EmailHint value={email} onFix={setEmail} />
         </Field>
         <div className="sk-wrap-sm" style={{ display: 'flex', gap: 8, marginTop: 4 }}>
           <button
@@ -453,6 +455,7 @@ function StudentForm({ title, initial = {}, classes, onSave, isSaving, onCancel,
             onChange={(e) => setEmail(e.target.value)}
             placeholder="jane.doe@example.com"
           />
+          <EmailHint value={email} onFix={setEmail} />
         </Field>
 
         {websiteOptions && (

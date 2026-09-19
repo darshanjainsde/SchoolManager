@@ -45,6 +45,11 @@ interface EmailSettingsResponse {
     usingCustomSender: boolean;
     showPlatformCredit: boolean;
   };
+  deliveries: {
+    thisMonth: Record<string, number>;
+    recent: { id: string; to: string; kind: string; provider: string; status: 'QUEUED' | 'SENT' | 'DELIVERED' | 'BOUNCED' | 'COMPLAINED' | 'FAILED' | 'SUPPRESSED'; error: string | null; createdAt: string; deliveredAt: string | null; bouncedAt: string | null }[];
+    suppressed: { email: string; reason: string; detail: string | null; createdAt: string }[];
+  };
   sender: {
     mode: 'DEFAULT' | 'CUSTOM';
     status: 'UNVERIFIED' | 'VERIFIED' | 'FAILING';
@@ -195,6 +200,11 @@ export function EmailSettingsCard() {
     },
   });
 
+  const unsuppress = useMutation({
+    mutationFn: (email: string) => api.post('/manage/email-settings/unsuppress', { to: email }),
+    onSuccess: () => { toast.success('Cleared — mail to that address will be sent again.'); qc.invalidateQueries({ queryKey: ['email-settings', host] }); },
+    onError: (e: Error) => toast.error(e.message),
+  });
   const sendTest = useMutation({
     mutationFn: (to: string) =>
       api.post<{ sent: boolean; from: string; usingCustomSender: boolean }>('/manage/email-settings/test', { to }),
@@ -482,6 +492,52 @@ export function EmailSettingsCard() {
             </div>
           )}
         </div>
+      </div>
+      {/* ── Deliveries — the receipts, same shape as the WhatsApp card ───── */}
+      <div className="sk-card-b" data-testid="email-deliveries" style={{ borderTop: '1px solid var(--sk-line)' }}>
+        <div className="sk-lab">Deliveries</div>
+        <div className="wa-figs">
+          {(() => {
+            const m = d.deliveries?.thisMonth ?? {};
+            const total = Object.values(m).reduce((n, c) => n + c, 0);
+            const delivered = m.DELIVERED ?? 0;
+            const bad = (m.BOUNCED ?? 0) + (m.COMPLAINED ?? 0) + (m.FAILED ?? 0) + (m.SUPPRESSED ?? 0);
+            return (
+              <>
+                <div className="f"><div className="k">This month</div><div className="n">{total}</div><div className="h">emails</div></div>
+                <div className="f" data-tone={delivered ? 'good' : undefined}><div className="k">Delivered</div><div className="n">{delivered}</div><div className="h">{total ? `${Math.round((100 * delivered) / total)}% of sent` : 'receipts arrive via Resend'}</div></div>
+                <div className="f" data-tone={bad ? 'bad' : undefined}><div className="k">Not delivered</div><div className="n">{bad}</div><div className="h">{bad ? 'see below' : 'none'}</div></div>
+              </>
+            );
+          })()}
+        </div>
+        {d.deliveries?.suppressed?.length ? (
+          <div data-testid="email-suppressed">
+            <div className="sk-lab" style={{ color: 'var(--sk-bad)' }}>Addresses to fix</div>
+            {d.deliveries.suppressed.map((sp) => (
+              <div className="em-fix" key={sp.email}>
+                <span className="p">{sp.email}</span>
+                <span style={{ fontSize: 11.5, color: 'var(--sk-ink-3)' }}>{sp.reason === 'COMPLAINT' ? 'marked our mail as spam' : `bounced${sp.detail ? ` — ${sp.detail}` : ''}`}</span>
+                <button type="button" className="sk-btn ghost" onClick={() => unsuppress.mutate(sp.email)} disabled={unsuppress.isPending}>Fixed — send again</button>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        {d.deliveries?.recent?.length ? (
+          <div className="em-log" data-testid="email-recent">
+            {d.deliveries.recent.map((r) => (
+              <div className="row" key={r.id}>
+                <span className="t">{new Date(r.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })}</span>
+                <span className="k">{r.kind.toLowerCase().replace(/_/g, ' ')}</span>
+                <span className="p">{r.to}</span>
+                <span className="sk-pill" data-tone={r.status === 'DELIVERED' ? 'good' : r.status === 'SENT' || r.status === 'QUEUED' ? 'info' : 'bad'} title={r.error ?? undefined}>{r.status.toLowerCase()}</span>
+                {r.error ? <span className="e">{r.error}</span> : null}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="sk-state">Nothing sent yet this month.</p>
+        )}
       </div>
       <style>{`@media (max-width: 820px){ .sk-email-grid{ grid-template-columns: minmax(0,1fr) !important; } }`}</style>
     </div>

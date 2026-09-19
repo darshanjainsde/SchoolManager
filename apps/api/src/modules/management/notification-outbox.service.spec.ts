@@ -69,7 +69,8 @@ const assignmentPostedRow = {
 
 describe('NotificationOutboxService', () => {
   const push = { send: jest.fn() };
-  const svc = new NotificationOutboxService(push as unknown as PushChannel);
+  const whatsapp = { send: jest.fn().mockResolvedValue(false) };
+  const svc = new NotificationOutboxService(push as unknown as PushChannel, whatsapp as never);
 
   beforeEach(() => {
     jest.clearAllMocks();

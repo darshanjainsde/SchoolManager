@@ -6,6 +6,7 @@ import { Plus, Trash2, Upload, Pencil, X, KeyRound, CheckCircle2, Send, UserMinu
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import ReleaseSheet from './release-sheet';
+import { EmailHint } from '@/components/use-email-check';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -269,6 +270,7 @@ function TeacherForm({
             onChange={(e) => setEmail(e.target.value)}
             placeholder="jane.smith@school.com"
           />
+          <EmailHint value={email} onFix={setEmail} />
         </Field>
 
         {/* Photo upload */}

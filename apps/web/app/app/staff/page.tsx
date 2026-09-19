@@ -6,6 +6,7 @@ import { BookOpen, Plus, Trash2, Pencil, X, KeyRound, CheckCircle2, Send, UserMi
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import DialogShell from '@/components/ui/dialog-shell';
+import { EmailHint } from '@/components/use-email-check';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -357,6 +358,7 @@ function StaffForm({ title, initial = {}, onSave, isSaving, onCancel, roles }: S
               onChange={(e) => setEmail(e.target.value)}
               placeholder="ravi.kumar@school.com"
             />
+          <EmailHint value={email} onFix={setEmail} />
           </Field>
           <Field label="Phone (optional)" htmlFor="sf-phone">
             <input
