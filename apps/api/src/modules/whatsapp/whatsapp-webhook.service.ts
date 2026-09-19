@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { getPlatformPrisma } from '@skoolos/db';
+import { WhatsAppActionsService } from './whatsapp-actions.service';
 
 /**
  * Meta's webhook: one URL for every school, because the WABA is ours and a
@@ -58,6 +59,8 @@ export interface WebhookOutcome {
 export class WhatsAppWebhookService {
   private readonly logger = new Logger(WhatsAppWebhookService.name);
 
+  constructor(private readonly actions: WhatsAppActionsService) {}
+
   /** The GET handshake: Meta sends its token back and expects the challenge echoed. */
   verifyChallenge(mode: string | undefined, token: string | undefined, challenge: string | undefined): string | null {
     const expected = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN?.trim();
@@ -91,8 +94,14 @@ export class WhatsAppWebhookService {
         }
         for (const m of v.messages ?? []) {
           out.inbound += 1;
-          const what = m.button?.payload ?? m.interactive?.button_reply?.id ?? m.interactive?.list_reply?.id ?? m.text?.body ?? m.type;
-          this.logger.log(`WhatsApp inbound from ${m.from} via ${v.metadata?.phone_number_id ?? '?'}: ${String(what).slice(0, 120)}`);
+          // A tap or a reply: acted on (and answered) by the actions service,
+          // recorded whatever happens. One bad message never blocks the rest.
+          try {
+            const result = await this.actions.handleInbound(m);
+            this.logger.log(`WhatsApp inbound ${m.id} from ${m.from}: ${result}`);
+          } catch (e) {
+            this.logger.error(`WhatsApp inbound ${m.id} failed: ${(e as Error).message}`);
+          }
         }
       }
     }

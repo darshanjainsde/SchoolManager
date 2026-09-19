@@ -401,6 +401,7 @@ model School {
   whatsAppDeliveries     WhatsAppDelivery[]
   emailDeliveries        EmailDelivery[]
   emailSuppressions      EmailSuppression[]
+  whatsAppInbounds       WhatsAppInbound[]
   houses                 House[]
   housePoints            HousePoint[]
   sportsTournaments      SportsTournament[]
@@ -494,6 +495,16 @@ model User {
   role                UserRole
   isActive            Boolean              @default(true)
   mfaSecret           String?
+  /// The person's own WhatsApp number (E.164), proven by a code sent to it.
+  /// Admin notices go here; a verified User.phone also wins over the
+  /// office-typed Teacher.phone / Staff.phone for that person. Never used
+  /// unverified — a typo must not send a school's leave requests elsewhere.
+  phone               String?
+  phoneVerifiedAt     DateTime?
+  phonePending        String?
+  phoneOtpHash        String?
+  phoneOtpExpiresAt   DateTime?
+  phoneOtpAttempts    Int                  @default(0)
   failedLoginAttempts Int                  @default(0)
   lockedUntil         DateTime?
   lastLoginAt         DateTime?
@@ -506,6 +517,7 @@ model User {
   @@unique([schoolId, email])
   @@unique([schoolId, username])
   @@index([schoolId])
+  @@index([schoolId, phone])
 }
 
 model RefreshToken {
@@ -4382,4 +4394,22 @@ model EmailSuppression {
   school    School?  @relation(fields: [schoolId], references: [id], onDelete: SetNull)
 
   @@index([schoolId])
+}
+
+/// Every message or button tap a person sent US on WhatsApp, keyed by Meta's
+/// message id — which is what makes handling idempotent (Meta retries
+/// webhooks) and gives the office an audit line: who tapped Approve, when,
+/// and what happened. `schoolId` is filled once the payload names a school.
+model WhatsAppInbound {
+  id        String   @id
+  schoolId  String?  @db.Uuid
+  phone     String
+  /// button | list | text | other
+  kind      String
+  payload   String
+  result    String?
+  createdAt DateTime @default(now())
+  school    School?  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, createdAt])
 }

@@ -20,7 +20,13 @@ export interface WhatsAppTemplate {
   name: string;
   language: string;
   params: string[];
+  /** Button parameters, by the button's position in the approved template. */
+  buttons?: TemplateButton[];
 }
+export type TemplateButton =
+  | { type: 'quick_reply'; index: number; payload: string }
+  | { type: 'url'; index: number; text: string }
+  | { type: 'copy_code'; index: number; text: string };
 
 export const TEMPLATE_LANGUAGE = 'en';
 export const TEMPLATE_PREFIX = 'sckools_';
@@ -33,7 +39,22 @@ export const TEMPLATE_NAMES: Record<NotificationKind, string> = {
   ANNOUNCEMENT: `${TEMPLATE_PREFIX}announcement`,
   DIARY_REMARK: `${TEMPLATE_PREFIX}diary_remark`,
   LOW_ATTENDANCE: `${TEMPLATE_PREFIX}low_attendance`,
+  LEAVE_APPLIED: `${TEMPLATE_PREFIX}leave_applied`,
+  LEAVE_DECIDED: `${TEMPLATE_PREFIX}leave_decided`,
+  COVER_ASSIGNED: `${TEMPLATE_PREFIX}cover_assigned`,
 };
+
+/** AUTHENTICATION category: Meta fixes the body; only the code is a parameter, and the copy-code button repeats it. */
+export const VERIFY_CODE = `${TEMPLATE_PREFIX}verify_code`;
+export function verifyCodeTemplate(code: string): WhatsAppTemplate {
+  return { name: VERIFY_CODE, language: TEMPLATE_LANGUAGE, params: [code], buttons: [{ type: 'copy_code', index: 0, text: code }] };
+}
+
+/** When the 24-hour window has closed and a list cannot be sent: point at the console instead. */
+export const COVER_PENDING = `${TEMPLATE_PREFIX}cover_pending`;
+export function coverPendingTemplate(schoolName: string, gaps: number): WhatsAppTemplate {
+  return { name: COVER_PENDING, language: TEMPLATE_LANGUAGE, params: [param(schoolName), String(gaps)] };
+}
 
 /** Meta's sample template on every new number — the pipeline smoke test. */
 export const HELLO_WORLD: WhatsAppTemplate = { name: 'hello_world', language: 'en_US', params: [] };
@@ -86,6 +107,29 @@ export function templateFor(message: NotificationMessage): WhatsAppTemplate {
       const p = message.payload;
       return { name, language, params: [param(p.schoolName), param(p.studentName), param(p.className), param(String(p.percent)), param(p.period), param(String(p.threshold))] };
     }
+    case 'LEAVE_APPLIED': {
+      const p = message.payload;
+      return {
+        name, language,
+        params: [param(p.schoolName), param(p.teacherName), param(p.dates), param(String(p.days)), param(p.reason, 'no reason given'), param(String(p.periodsAffected))],
+        buttons: [
+          { type: 'quick_reply', index: 0, payload: p.approvePayload },
+          { type: 'quick_reply', index: 1, payload: p.rejectPayload },
+        ],
+      };
+    }
+    case 'LEAVE_DECIDED': {
+      const p = message.payload;
+      return { name, language, params: [param(p.schoolName), param(p.decision === 'APPROVED' ? 'approved' : 'not approved'), param(p.dates), param(p.byName, 'the office')] };
+    }
+    case 'COVER_ASSIGNED': {
+      const p = message.payload;
+      return {
+        name, language,
+        params: [param(p.schoolName), param(p.when), param(p.className), param(p.subjectName, 'the class'), param(p.originalTeacherName)],
+        buttons: [{ type: 'quick_reply', index: 0, payload: p.ackPayload }],
+      };
+    }
     default: {
       const _exhaustive: never = message;
       return _exhaustive;
@@ -98,7 +142,7 @@ export function templateFor(message: NotificationMessage): WhatsAppTemplate {
  * English). `{{n}}` placeholders correspond 1:1 to `templateFor`'s params —
  * the spec counts them. Sample values are what Meta's reviewer sees.
  */
-export const SUBMISSIONS: Record<NotificationKind, { body: string; samples: string[] }> = {
+export const SUBMISSIONS: Record<NotificationKind, { body: string; samples: string[]; buttons?: string[] }> = {
   TEST_SCHEDULED: {
     body: '{{1}} has scheduled a {{2}} test, "{{3}}", on {{4}} for {{5}}. Open the Sckools app for the details.',
     samples: ['Raffles Public School', 'Mathematics', 'Unit test 2', 'Mon 6 Oct 2026', '5-B'],
@@ -126,6 +170,35 @@ export const SUBMISSIONS: Record<NotificationKind, { body: string; samples: stri
   LOW_ATTENDANCE: {
     body: '{{1}}: {{2}} ({{3}}) has {{4}}% attendance for {{5}}, below the {{6}}% the school expects. Please make sure they attend.',
     samples: ['Raffles Public School', 'Ravi Sharma', '5-B', '68', '1 Jul 2026 – 18 Sep 2026', '75'],
+  },
+  LEAVE_APPLIED: {
+    body: '{{1}}: {{2}} has applied for leave on {{3}} ({{4}} days). Reason: {{5}}. {{6}} periods would need cover. Approve or reject below; you can also do this in the console.',
+    samples: ['Raffles Public School', 'Priya Nair', 'Mon 22 – Tue 23 Sep 2026', '2', 'Family function', '5'],
+    buttons: ['Approve', 'Reject'],
+  },
+  LEAVE_DECIDED: {
+    body: '{{1}}: your leave for {{3}} has been {{2}} by {{4}}. Open the Sckools app for the details.',
+    samples: ['Raffles Public School', 'approved', 'Mon 22 – Tue 23 Sep 2026', 'Darshan Jain'],
+  },
+  COVER_ASSIGNED: {
+    body: '{{1}}: you are covering {{3}} ({{4}}) on {{2}}, for {{5}}. Tap below to confirm you have seen this.',
+    samples: ['Raffles Public School', 'Mon 22 Sep, period 3 (10:15–11:00)', '9-A', 'Mathematics', 'Priya Nair'],
+    buttons: ['Got it'],
+  },
+};
+
+/** Not notification kinds, but templates all the same — submitted with the others. */
+export const EXTRA_SUBMISSIONS: Record<string, { category: 'AUTHENTICATION' | 'UTILITY'; body: string; samples: string[]; buttons?: string[] }> = {
+  [VERIFY_CODE]: {
+    category: 'AUTHENTICATION',
+    body: '{{1}} is your Sckools verification code. For your security, do not share this code.',
+    samples: ['482911'],
+    buttons: ['Copy code'],
+  },
+  [COVER_PENDING]: {
+    category: 'UTILITY',
+    body: '{{1}}: {{2}} periods still need cover after the leave you approved. Open the console to assign teachers.',
+    samples: ['Raffles Public School', '3'],
   },
 };
 

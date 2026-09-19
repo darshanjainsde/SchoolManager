@@ -181,6 +181,16 @@ export type ErrorCode =
   | 'WHATSAPP_NOT_CONFIGURED'
   /** A phone that does not normalise to a mobile — pair with 400. */
   | 'BAD_PHONE'
+  /** A verification code was asked for again within a minute — pair with 429. */
+  | 'PHONE_CODE_COOLDOWN'
+  /** Another login of the school already verified that number — 409. */
+  | 'PHONE_TAKEN'
+  /** No live code, or too many wrong tries — 400 / 429. */
+  | 'PHONE_CODE_EXPIRED'
+  /** The code typed is not the one sent — 400. */
+  | 'PHONE_CODE_WRONG'
+  /** WhatsApp could not deliver the code (not on WhatsApp, or platform not set up) — 502. */
+  | 'WHATSAPP_UNREACHABLE'
   | 'VALIDATION'
   /** Caller is not authenticated (missing/invalid credential) — pair with 401. */
   | 'UNAUTHORIZED'

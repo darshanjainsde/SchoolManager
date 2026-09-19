@@ -6,6 +6,9 @@ import { escapeHtml, renderLetter, type Letter } from './letterhead';
 import type {
   AbsenceNoticePayload,
   AnnouncementPayload,
+  CoverAssignedPayload,
+  LeaveAppliedPayload,
+  LeaveDecidedPayload,
   DiaryRemarkPayload,
   LowAttendancePayload,
   ResultsPublishedPayload,
@@ -322,6 +325,39 @@ export class MailService {
       intro: `${info.studentName} (${info.className}) has attended ${info.percent}% of classes over ${info.period} — below ${info.schoolName}'s ${info.threshold}% benchmark.`,
       note: 'If something is making it hard to attend, please tell the class teacher — we would rather know.',
     }, 'LOW_ATTENDANCE');
+  }
+
+  async sendLeaveApplied(to: string, p: LeaveAppliedPayload, schoolId: string | null = null): Promise<boolean> {
+    return this.sendLetter(to, schoolId, `Leave request: ${p.teacherName}, ${p.dates}`, {
+      title: `${p.teacherName} has applied for leave`,
+      intro: `${p.dates} (${p.days} day${p.days === 1 ? '' : 's'}). ${p.periodsAffected} period${p.periodsAffected === 1 ? '' : 's'} would need cover.`,
+      rows: [
+        { label: 'Reason', value: p.reason ?? 'No reason given' },
+        { label: 'Periods to cover', value: String(p.periodsAffected) },
+      ],
+      note: 'Approve or reject it in the console under Requests — or from the WhatsApp message, if your number is verified.',
+    }, 'LEAVE_APPLIED');
+  }
+
+  async sendLeaveDecided(to: string, p: LeaveDecidedPayload, schoolId: string | null = null): Promise<boolean> {
+    const word = p.decision === 'APPROVED' ? 'approved' : 'not approved';
+    return this.sendLetter(to, schoolId, `Your leave for ${p.dates} was ${word}`, {
+      title: `Leave ${word}`,
+      intro: `Your leave for ${p.dates} has been ${word} by ${p.byName ?? 'the office'}.`,
+      rows: [{ label: 'Dates', value: p.dates }, { label: 'Decision', value: word }],
+    }, 'LEAVE_DECIDED');
+  }
+
+  async sendCoverAssigned(to: string, p: CoverAssignedPayload, schoolId: string | null = null): Promise<boolean> {
+    return this.sendLetter(to, schoolId, `You are covering ${p.className} on ${p.when}`, {
+      title: 'A class to cover',
+      intro: `You have been assigned ${p.className}${p.subjectName ? ` (${p.subjectName})` : ''} on ${p.when}, in place of ${p.originalTeacherName}.`,
+      rows: [
+        { label: 'When', value: p.when },
+        { label: 'Class', value: `${p.className}${p.subjectName ? ` · ${p.subjectName}` : ''}` },
+        { label: 'For', value: p.originalTeacherName },
+      ],
+    }, 'COVER_ASSIGNED');
   }
 
   async sendAnnouncement(to: string, info: AnnouncementInfo, schoolId: string | null = null): Promise<boolean> {

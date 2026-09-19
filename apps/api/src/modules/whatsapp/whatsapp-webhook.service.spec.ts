@@ -2,9 +2,12 @@ import { createHmac } from 'node:crypto';
 
 const findUnique = jest.fn();
 const updateMany = jest.fn().mockResolvedValue({ count: 1 });
-jest.mock('@skoolos/db', () => ({ getPlatformPrisma: () => ({ whatsAppDelivery: { findUnique, updateMany } }) }));
+jest.mock('@skoolos/db', () => ({ ...jest.requireActual('@skoolos/db'), getPlatformPrisma: () => ({ whatsAppDelivery: { findUnique, updateMany } }) }));
 
 import { WhatsAppWebhookService } from './whatsapp-webhook.service';
+
+const actions = { handleInbound: jest.fn().mockResolvedValue('ignored') };
+const make = () => new WhatsAppWebhookService(actions as never);
 
 const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const status = (s: string, extra: Record<string, unknown> = {}) => ({
@@ -22,7 +25,7 @@ describe('WhatsAppWebhookService', () => {
   afterAll(() => { process.env = env; });
 
   it('echoes the challenge only for the right token and mode', () => {
-    const s = new WhatsAppWebhookService();
+    const s = make();
     expect(s.verifyChallenge('subscribe', 'verify-me', '123')).toBe('123');
     expect(s.verifyChallenge('subscribe', 'wrong', '123')).toBeNull();
     expect(s.verifyChallenge('unsubscribe', 'verify-me', '123')).toBeNull();
@@ -31,7 +34,7 @@ describe('WhatsAppWebhookService', () => {
   });
 
   it('accepts only a body signed with the app secret; no secret means nothing is accepted', () => {
-    const s = new WhatsAppWebhookService();
+    const s = make();
     const raw = Buffer.from('{"a":1}');
     const good = 'sha256=' + createHmac('sha256', 'shh').update(raw).digest('hex');
     expect(s.signatureValid(raw, good)).toBe(true);
@@ -43,7 +46,7 @@ describe('WhatsAppWebhookService', () => {
 
   it("moves a row forward by Meta's message id, under the row's own school", async () => {
     findUnique.mockResolvedValue({ id: 'd1', schoolId: SCHOOL, status: 'SENT' });
-    const out = await new WhatsAppWebhookService().handle(status('read'));
+    const out = await make().handle(status('read'));
     expect(out).toEqual({ statuses: 1, updated: 1, inbound: 0 });
     expect(findUnique.mock.calls[0][0].where).toEqual({ waMessageId: 'wamid.1' });
     const call = updateMany.mock.calls[0][0];
@@ -54,25 +57,28 @@ describe('WhatsAppWebhookService', () => {
 
   it('never lets an earlier stage overwrite a later one (delivered after read)', async () => {
     findUnique.mockResolvedValue({ id: 'd1', schoolId: SCHOOL, status: 'READ' });
-    await new WhatsAppWebhookService().handle(status('delivered'));
+    await make().handle(status('delivered'));
     expect(updateMany.mock.calls[0][0].data.status).toBeUndefined();
     expect(updateMany.mock.calls[0][0].data.deliveredAt).toBeDefined();
   });
 
   it("records Meta's failure reason", async () => {
     findUnique.mockResolvedValue({ id: 'd1', schoolId: SCHOOL, status: 'SENT' });
-    await new WhatsAppWebhookService().handle(status('failed', { errors: [{ code: 131026, title: 'Message undeliverable' }] }));
+    await make().handle(status('failed', { errors: [{ code: 131026, title: 'Message undeliverable' }] }));
     expect(updateMany.mock.calls[0][0].data).toMatchObject({ status: 'FAILED', error: 'Message undeliverable (code 131026)' });
   });
 
   it('a receipt for a message we never sent is counted and ignored', async () => {
     findUnique.mockResolvedValue(null);
-    expect(await new WhatsAppWebhookService().handle(status('sent'))).toEqual({ statuses: 1, updated: 0, inbound: 0 });
+    expect(await make().handle(status('sent'))).toEqual({ statuses: 1, updated: 0, inbound: 0 });
     expect(updateMany).not.toHaveBeenCalled();
   });
 
-  it('counts inbound replies without touching the ledger', async () => {
-    const body = { object: 'whatsapp_business_account', entry: [{ changes: [{ value: { messages: [{ id: 'm', from: '919876543210', type: 'text', text: { body: 'ok' } }] } }] }] };
-    expect(await new WhatsAppWebhookService().handle(body as never)).toEqual({ statuses: 0, updated: 0, inbound: 1 });
+  it('hands every inbound message to the actions service, and a failing one never blocks the rest', async () => {
+    const body = { object: 'whatsapp_business_account', entry: [{ changes: [{ value: { messages: [{ id: 'm1', from: '919876543210', type: 'text', text: { body: 'ok' } }, { id: 'm2', from: '919876543210', type: 'button', button: { payload: 'lv:a:x:y', text: 'Approve' } }] } }] }] };
+    actions.handleInbound.mockRejectedValueOnce(new Error('boom')).mockResolvedValueOnce('approved');
+    expect(await make().handle(body as never)).toEqual({ statuses: 0, updated: 0, inbound: 2 });
+    expect(actions.handleInbound).toHaveBeenCalledTimes(2);
+    expect(updateMany).not.toHaveBeenCalled();
   });
 });

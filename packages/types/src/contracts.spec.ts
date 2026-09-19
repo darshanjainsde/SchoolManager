@@ -175,11 +175,16 @@ describe('shared portal contracts', () => {
   it('declares exactly the NotificationOutbox kinds the API writes', () => {
     expect([...NOTIFICATION_OUTBOX_KINDS].sort()).toEqual([
       'ASSIGNMENT_POSTED',
+      // A substitute told which class to cover.
+      'COVER_ASSIGNED',
       'EXAM_SCHEDULED',
       // The fee desk: an instalment falling due, and the office's decision on a claim.
       'FEE_DUE',
       'FEE_REJECTED',
       'FEE_VERIFIED',
+      // A teacher's leave: to every admin on apply, back to the teacher on the decision.
+      'LEAVE_APPLIED',
+      'LEAVE_DECIDED',
       'LIBRARY_NOTICE',
       'MESSAGE_RECEIVED',
       'RESULT_PUBLISHED',
