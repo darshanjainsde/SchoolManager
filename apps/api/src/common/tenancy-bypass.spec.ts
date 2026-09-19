@@ -79,6 +79,10 @@ const ALLOWED: Record<string, string> = {
   // ── Crons: no JWT, and the rows span every school ─────────────────────────
   'modules/management/exam-reminders.service.ts': 'daily cron across all schools',
   'modules/management/notification-outbox.service.ts': 'outbox drain across all schools',
+  'modules/mail-webhooks/resend-webhook.service.ts':
+    'Resend posts delivery receipts for every school to one URL; each is matched to its ledger row by provider id and updated under that row\'s own schoolId; suppression is platform-wide by address',
+  'modules/mail-webhooks/email-check.controller.ts':
+    'the suppression list is platform-wide by address (a dead mailbox is dead for every school); the answer reveals only that the address bounced, never which school',
   'modules/whatsapp/whatsapp-webhook.service.ts':
     'Meta posts delivery receipts for every school to one URL; each is matched to its row by Meta\'s message id and updated under that row\'s own schoolId',
   'modules/management/sessions.service.ts': 'scheduled session-start cron scans SCHEDULED plans across all schools; every write then runs under withTenant per school',

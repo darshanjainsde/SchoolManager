@@ -399,6 +399,8 @@ model School {
   sportsSettings         SportsSettings?
   whatsAppSettings       WhatsAppSettings?
   whatsAppDeliveries     WhatsAppDelivery[]
+  emailDeliveries        EmailDelivery[]
+  emailSuppressions      EmailSuppression[]
   houses                 House[]
   housePoints            HousePoint[]
   sportsTournaments      SportsTournament[]
@@ -4336,4 +4338,48 @@ model WhatsAppDelivery {
   school       School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
   @@index([schoolId, createdAt])
+}
+
+/// The email delivery ledger — one row per message the platform asked a
+/// provider to send, whatever it was about. `schoolId` is null for mail that
+/// belongs to no school (owner alerts, marketing leads); those rows are
+/// invisible under RLS and only the platform client writes them. Resend's
+/// webhook later moves `status` by `providerId`: SENT → DELIVERED, or
+/// BOUNCED / COMPLAINED — the receipt that ends "we never got the email".
+model EmailDelivery {
+  id          String    @id @default(uuid()) @db.Uuid
+  schoolId    String?   @db.Uuid
+  /// Lower-cased recipient. Kept whole (not only the domain) because the
+  /// office needs to see WHICH address bounced to fix it.
+  to          String
+  /// NotificationKind, or the composer's name (INVITE, PASSWORD_RESET, TEST…).
+  kind        String
+  /// resend | smtp | school-smtp
+  provider    String
+  providerId  String?   @unique
+  /// QUEUED | SENT | DELIVERED | BOUNCED | COMPLAINED | FAILED | SUPPRESSED
+  status      String    @default("QUEUED")
+  error       String?
+  createdAt   DateTime  @default(now())
+  deliveredAt DateTime?
+  bouncedAt   DateTime?
+  school      School?   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, createdAt])
+}
+
+/// Addresses we will not send to again: a permanent bounce or a spam
+/// complaint. Platform-wide by address (a bounced mailbox is bounced for
+/// every school), with the school that first saw it kept for the office's
+/// "fix this address" list. Cleared when the office corrects the address.
+model EmailSuppression {
+  email     String   @id
+  schoolId  String?  @db.Uuid
+  /// BOUNCE | COMPLAINT | MANUAL
+  reason    String
+  detail    String?
+  createdAt DateTime @default(now())
+  school    School?  @relation(fields: [schoolId], references: [id], onDelete: SetNull)
+
+  @@index([schoolId])
 }

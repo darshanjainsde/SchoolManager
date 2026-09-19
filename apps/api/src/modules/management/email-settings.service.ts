@@ -95,7 +95,40 @@ export class EmailSettingsService {
         canConfigure: secretBoxAvailable(),
       },
       previews,
+      deliveries: await this.deliveries(schoolId),
     };
+  }
+
+  /**
+   * The school's email receipts: this month's figures, the last twenty rows
+   * (Resend reports delivered / bounced by provider id), and the addresses
+   * that bounced for good or complained — the office's list to fix.
+   * Tolerates the tables not existing yet (the API deploys before the
+   * migration runs) by answering empty.
+   */
+  async deliveries(schoolId: string) {
+    try {
+      const db = getPlatformPrisma();
+      const from = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1));
+      const [groups, recent, suppressed] = await Promise.all([
+        db.emailDelivery.groupBy({ by: ['status'], where: { schoolId, createdAt: { gte: from } }, _count: { _all: true } }),
+        db.emailDelivery.findMany({ where: { schoolId }, orderBy: { createdAt: 'desc' }, take: 20, select: { id: true, to: true, kind: true, provider: true, status: true, error: true, createdAt: true, deliveredAt: true, bouncedAt: true } }),
+        db.emailSuppression.findMany({ where: { schoolId }, orderBy: { createdAt: 'desc' }, take: 50, select: { email: true, reason: true, detail: true, createdAt: true } }),
+      ]);
+      const thisMonth: Record<string, number> = {};
+      for (const g of groups) thisMonth[g.status] = g._count._all;
+      return { thisMonth, recent, suppressed };
+    } catch {
+      return { thisMonth: {}, recent: [], suppressed: [] };
+    }
+  }
+
+  /** The office fixed the address (or confirmed it with the family): send again. */
+  async unsuppress(schoolId: string, email: string) {
+    const address = email.trim().toLowerCase();
+    // Only an address THIS school saw bounce; another school's row is not ours to clear.
+    await getPlatformPrisma().emailSuppression.deleteMany({ where: { email: address, schoolId } });
+    return { ok: true, email: address };
   }
 
   /** Letterhead only — never touches the sender. */
@@ -271,6 +304,7 @@ export class EmailSettingsService {
         cta: { label: 'A button looks like this', url: 'https://sckools.com' },
         note: 'Sent from your school console to check the email setup.',
       },
+      'TEST',
     );
     return { sent, from: identity.from.address, usingCustomSender: identity.usingCustomSender };
   }

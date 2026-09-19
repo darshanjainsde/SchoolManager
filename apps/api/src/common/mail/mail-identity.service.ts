@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { createTransport, type Transporter } from 'nodemailer';
+import { ResendTransport, type MailTransport } from './resend-transport';
 import { getPlatformPrisma } from '@skoolos/db';
 import { loadEnv } from '@skoolos/config';
 import { decryptSecret } from './secret-box';
@@ -25,8 +26,10 @@ export interface MailIdentity {
   /** Passed to nodemailer as-is; the object form encodes the name safely. */
   from: { name: string; address: string };
   replyTo?: string;
-  /** The school's own SMTP when verified, otherwise the platform's. */
-  transporter: Transporter;
+  /** The school's own SMTP when verified, otherwise the platform's (Resend, or SMTP). */
+  transporter: MailTransport;
+  /** Which pipe this identity sends through — recorded on every ledger row. */
+  provider: 'resend' | 'smtp' | 'school-smtp';
   usingCustomSender: boolean;
   schoolId: string | null;
 }
@@ -47,11 +50,20 @@ export class MailIdentityService {
   private readonly cache = new Map<string, CacheEntry>();
   /** One transporter per school sender, keyed by its connection signature. */
   private readonly schoolTransports = new Map<string, Transporter>();
-  private platformTransport: Transporter | null = null;
+  private platformTransport: MailTransport | null = null;
+
+  /** Resend when the key is set, else SMTP — decided once, read by every identity. */
+  platformProvider(): 'resend' | 'smtp' {
+    return this.env.RESEND_API_KEY ? 'resend' : 'smtp';
+  }
 
   /** The platform mailbox — the fallback every school starts on. */
-  private platform(): Transporter {
+  private platform(): MailTransport {
     if (!this.platformTransport) {
+      if (this.env.RESEND_API_KEY) {
+        this.platformTransport = new ResendTransport(this.env.RESEND_API_KEY);
+        return this.platformTransport;
+      }
       this.platformTransport = createTransport({
         host: this.env.SMTP_HOST,
         port: this.env.SMTP_PORT,
@@ -77,6 +89,7 @@ export class MailIdentityService {
       brand: platformBrand(),
       from: this.platformFrom(),
       transporter: this.platform(),
+      provider: this.platformProvider(),
       usingCustomSender: false,
       schoolId: null,
     };
@@ -172,7 +185,7 @@ export class MailIdentityService {
     } | null
       | undefined,
     schoolName: string,
-  ): Pick<MailIdentity, 'from' | 'replyTo' | 'transporter' | 'usingCustomSender'> {
+  ): Pick<MailIdentity, 'from' | 'replyTo' | 'transporter' | 'provider' | 'usingCustomSender'> {
     const displayName = s?.senderName?.trim() || schoolName;
     const replyTo = s?.replyTo?.trim() || undefined;
 
@@ -191,6 +204,7 @@ export class MailIdentityService {
           from: { name: displayName, address: s!.fromAddress! },
           replyTo,
           transporter,
+          provider: 'school-smtp',
           usingCustomSender: true,
         };
       }
@@ -201,6 +215,7 @@ export class MailIdentityService {
       from: this.platformFrom(displayName),
       replyTo,
       transporter: this.platform(),
+      provider: this.platformProvider(),
       usingCustomSender: false,
     };
   }
