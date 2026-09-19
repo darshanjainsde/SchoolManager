@@ -79,6 +79,13 @@ describe('WhatsAppChannel', () => {
     expect(d.whatsAppDelivery.create.mock.calls[0][0].data).toMatchObject({ status: 'FAILED', error: 'Template name does not exist (code 132001)' });
   });
 
+  it('a missing settings table (migration not yet run) reads as off — never a thrown error that would fail the outbox row', async () => {
+    const d = db({ whatsAppSettings: { findUnique: jest.fn().mockRejectedValue(new Error('relation "WhatsAppSettings" does not exist')) } });
+    const f = okFetch();
+    await expect(new WhatsAppChannel(d as never, () => CFG, f).send('p@x', MSG, SCHOOL)).resolves.toBe(false);
+    expect(f).not.toHaveBeenCalled();
+  });
+
   it('caches the switch per school for a minute and forgets it on save', async () => {
     const d = db();
     const ch = new WhatsAppChannel(d as never, () => CFG, okFetch());

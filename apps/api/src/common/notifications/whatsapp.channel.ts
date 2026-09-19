@@ -41,6 +41,7 @@ export class WhatsAppChannel implements NotificationChannel {
   private readonly logger = new Logger(WhatsAppChannel.name);
   private readonly settingsCache = new Map<string, { at: number; value: SchoolSettings }>();
   private warnedUnconfigured = false;
+  private warnedNoTable = false;
 
   constructor(
     private readonly prisma: Db,
@@ -109,11 +110,23 @@ export class WhatsAppChannel implements NotificationChannel {
   async settingsFor(schoolId: string): Promise<SchoolSettings> {
     const hit = this.settingsCache.get(schoolId);
     if (hit && Date.now() - hit.at < SETTINGS_TTL_MS) return hit.value;
-    const row = await this.prisma.whatsAppSettings.findUnique({
-      where: { schoolId },
-      select: { enabled: true, phoneNumberId: true },
-    });
-    const value: SchoolSettings = { enabled: row?.enabled ?? false, phoneNumberId: row?.phoneNumberId ?? null };
+    let value: SchoolSettings = { enabled: false, phoneNumberId: null };
+    try {
+      const row = await this.prisma.whatsAppSettings.findUnique({
+        where: { schoolId },
+        select: { enabled: true, phoneNumberId: true },
+      });
+      value = { enabled: row?.enabled ?? false, phoneNumberId: row?.phoneNumberId ?? null };
+    } catch (e) {
+      // The API deploys before a migration has necessarily run (and a deploy
+      // must never be broken by that order). A missing table reads as "off"
+      // for this school — and, crucially, never fails the outbox row that
+      // push has already been sent for, which would resend the push.
+      if (!this.warnedNoTable) {
+        this.warnedNoTable = true;
+        this.logger.warn(`WhatsApp settings unreadable — treating every school as off until the migration runs: ${(e as Error).message}`);
+      }
+    }
     this.settingsCache.set(schoolId, { at: Date.now(), value });
     return value;
   }
