@@ -555,6 +555,32 @@ export const AUTHZ_UNREVIEWED: string[] = [
   "PUT /owner/marketing-config",
 
   // Mounted while the guard was not running — see the note above.
+
+  // The phone-login, WhatsApp and email-delivery work, mounted on `staging`
+  // while the guard still was not running. Listed here rather than in
+  // AUTHZ_REVIEWED because nobody has written the assertions yet, and four of
+  // them are unauthenticated BY DESIGN — the two webhooks and the two OTP
+  // entry points — which is the set most worth a second reader.
+  "DELETE /me/phone",
+  "GET /auth/otp/ready",
+  "GET /auth/profiles",
+  "GET /manage/whatsapp-settings",
+  "GET /me/phone",
+  "GET /webhooks/whatsapp",
+  "PATCH /me/profile",
+  "POST /auth/otp/choose",
+  "POST /auth/otp/request",
+  "POST /auth/otp/verify",
+  "POST /auth/reset-with-otp",
+  "POST /auth/switch",
+  "POST /manage/email-check",
+  "POST /manage/email-settings/unsuppress",
+  "POST /manage/whatsapp-settings/test",
+  "POST /me/phone/request",
+  "POST /me/phone/verify",
+  "POST /webhooks/resend",
+  "POST /webhooks/whatsapp",
+  "PUT /manage/whatsapp-settings",
   "GET /internal/cron/fee-due-soon",
   "GET /me/fees/receipts/:paymentId",
   "POST /internal/cron/fee-due-soon",
