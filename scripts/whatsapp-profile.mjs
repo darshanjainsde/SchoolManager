@@ -14,15 +14,28 @@
  * reviews it; a test number keeps Meta's own name.
  */
 import { readFile } from 'node:fs/promises';
-import { basename } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { basename, join } from 'node:path';
 
 const V = process.env.WHATSAPP_GRAPH_VERSION || 'v21.0';
-const token = process.env.WHATSAPP_TOKEN;
+// The token comes from the environment, or from a private file in the home
+// folder (~/.sckools-whatsapp-token) so it never has to be typed into a chat
+// or a shell history. Either way it is never printed.
+const TOKEN_FILE = join(homedir(), '.sckools-whatsapp-token');
+function tokenFromFile() {
+  try { return readFileSync(TOKEN_FILE, 'utf8').trim(); } catch { return ''; }
+}
+const token = (process.env.WHATSAPP_TOKEN || tokenFromFile()).trim();
 const pnid = process.env.WHATSAPP_PHONE_NUMBER_ID;
 const appId = process.env.META_APP_ID;
 const G = `https://graph.facebook.com/${V}`;
 const args = process.argv.slice(2);
-if (!token || !pnid) { console.error('Need WHATSAPP_TOKEN and WHATSAPP_PHONE_NUMBER_ID in the environment.'); process.exit(2); }
+if (!token || !token.startsWith('EAA') || token.includes('...')) {
+  console.error(`No usable token. Put the permanent token (starts with EAA) in ${TOKEN_FILE}, one line, nothing else.`);
+  process.exit(2);
+}
+if (!pnid) { console.error('Need WHATSAPP_PHONE_NUMBER_ID in the environment.'); process.exit(2); }
 
 async function graph(path, init = {}) {
   const res = await fetch(`${G}/${path}`, { ...init, headers: { Authorization: `Bearer ${token}`, ...(init.headers || {}) } });
