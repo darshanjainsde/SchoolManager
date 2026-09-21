@@ -47,7 +47,11 @@ const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0
  * mandatory rather than stylistic: pgbouncer reuses server connections between
  * clients, and a session-scoped SET would leak the previous tenant's id.
  *
- * `orgId` is untrusted input → UUID-validated before interpolation.
+ * `orgId` is untrusted input. It is UUID-checked AND bound as a parameter —
+ * the check is defence in depth, not the only guard. `packages/db` has always
+ * done both; this file interpolated the id straight into the statement and
+ * leaned on the regex alone, which is one careless refactor away from SQL
+ * injection AT THE TENANCY BOUNDARY.
  */
 export interface WithOrgOptions {
   /** Forwarded to `$transaction`'s interactive-transaction options. Prisma 5
@@ -69,7 +73,9 @@ export async function withOrg<T>(
 ): Promise<T> {
   if (!UUID_RE.test(orgId)) throw new Error('withOrg: orgId must be a UUID');
   return client.$transaction(async (tx) => {
-    await tx.$executeRawUnsafe(`SET LOCAL app.current_org = '${orgId}'`);
+    // `set_config(..., TRUE)` is SET LOCAL by another name, and it takes the
+    // value as a bound parameter instead of splicing it into the SQL.
+    await tx.$executeRaw`SELECT set_config('app.current_org', ${orgId}, TRUE)`;
     return fn(tx);
   }, options);
 }
