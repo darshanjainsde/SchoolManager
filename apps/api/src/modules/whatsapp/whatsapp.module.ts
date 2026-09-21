@@ -1,3 +1,4 @@
+import { OtpModule } from '../../common/otp/otp.module';
 import { Module } from '@nestjs/common';
 import { FeaturesModule } from '../features';
 import { TenancyModule } from '../tenancy';
@@ -22,7 +23,7 @@ import { WhatsAppWebhookService } from './whatsapp-webhook.service';
   // route 500s. module-wiring.spec.ts now checks this for every module.
   // ManagementModule for LeaveService: a tap on WhatsApp runs the SAME
   // approve / reject / assign the console runs.
-  imports: [FeaturesModule, TenancyModule, ManagementModule],
+  imports: [FeaturesModule, TenancyModule, ManagementModule, OtpModule],
   controllers: [WhatsAppWebhookController, WhatsAppSettingsController, PhoneVerifyController],
   providers: [WhatsAppWebhookService, WhatsAppSettingsService, WhatsAppActionsService, PhoneVerifyService],
 })

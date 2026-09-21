@@ -83,6 +83,14 @@ const ALLOWED: Record<string, string> = {
     'Resend posts delivery receipts for every school to one URL; each is matched to its ledger row by provider id and updated under that row\'s own schoolId; suppression is platform-wide by address',
   'modules/mail-webhooks/email-check.controller.ts':
     'the suppression list is platform-wide by address (a dead mailbox is dead for every school); the answer reveals only that the address bounced, never which school',
+  'modules/auth/internal/phone-profiles.service.ts':
+    'who is behind a phone number is asked BEFORE a tenant is known (the app has no school host at login) and may span schools by design (a parent with children at two schools); returns only the profiles that phone owns',
+  'modules/auth/internal/me-profile.service.ts':
+    'reads and writes the caller\'s OWN User row (name, notification switches) by its id + the schoolId from the token, the same pre-tenant identity table auth owns',
+  'modules/auth/internal/otp-auth.service.ts':
+    'reads the login row for the email/phone the caller typed, the same pre-tenant lookup AuthService.login already makes',
+  'common/otp/otp.service.ts':
+    'one-time codes are minted BEFORE a tenant is known (the app has no school host at login); OtpChallenge is a platform table holding a phone, a hash and counters, nothing tenant-owned',
   'modules/whatsapp/phone-verify.service.ts':
     'User is the platform identity table auth already owns; every query carries the caller\'s own schoolId and userId',
   'modules/whatsapp/whatsapp-actions.service.ts':

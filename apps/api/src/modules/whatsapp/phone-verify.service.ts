@@ -2,11 +2,8 @@ import { createHash, randomInt } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { getPlatformPrisma } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
-import { WhatsAppChannel } from '../../common/notifications/whatsapp.channel';
-import { sendTemplate } from '../../common/notifications/whatsapp/graph.client';
-import { toE164 } from '../../common/notifications/whatsapp/phone';
-import { verifyCodeTemplate, VERIFY_CODE } from '../../common/notifications/whatsapp/templates';
-import { maskPhone } from './whatsapp-settings.service';
+import { OtpSenders } from '../../common/otp/otp-senders';
+import { maskPhone, toE164 } from '../../common/otp/phone-identity';
 
 /**
  * "This WhatsApp number is mine" — a six-digit code sent to the number ON
@@ -31,7 +28,7 @@ const hashCode = (code: string, userId: string) => createHash('sha256').update(`
 
 @Injectable()
 export class PhoneVerifyService {
-  constructor(private readonly channel: WhatsAppChannel) {}
+  constructor(private readonly senders: OtpSenders) {}
 
   async status(schoolId: string, userId: string) {
     const u = await getPlatformPrisma().user.findFirst({ where: { id: userId, schoolId }, select: { phone: true, phoneVerifiedAt: true, phonePending: true, phoneOtpExpiresAt: true } });
@@ -42,7 +39,7 @@ export class PhoneVerifyService {
       verifiedAt: u?.phoneVerifiedAt?.toISOString() ?? null,
       pending: pendingUntil && u?.phonePending ? maskPhone(u.phonePending) : null,
       pendingUntil: pendingUntil?.toISOString() ?? null,
-      platformReady: this.channel.configured,
+      platformReady: this.senders.enabledNames().length > 0,
     };
   }
 
@@ -63,10 +60,11 @@ export class PhoneVerifyService {
       where: { id: userId },
       data: { phonePending: phone, phoneOtpHash: hashCode(code, userId), phoneOtpExpiresAt: new Date(Date.now() + CODE_TTL_MS), phoneOtpAttempts: 0 },
     });
-    const sent = await this.channel.deliverWith(schoolId, phone, 'VERIFY_CODE', VERIFY_CODE, (cfg, pnid, f) => sendTemplate(cfg, phone, verifyCodeTemplate(code), { phoneNumberId: pnid, fetchImpl: f }));
-    if (!sent.ok) {
+    // Every enabled sender carries it (WhatsApp today, SMS when DLT clears).
+    const sent = await this.senders.fanOut(phone, code, { schoolId, purpose: 'VERIFY_PHONE' });
+    if (sent.sentVia.length === 0) {
       // Leave the pending state so a retry after the cooldown works; say why.
-      const why = sent.code === 131026 ? 'That number is not on WhatsApp.' : sent.code === null ? 'WhatsApp is not set up on the platform yet.' : 'WhatsApp could not deliver the code just now.';
+      const why = sent.nothingEnabled ? 'One-time codes are not set up on the platform yet.' : sent.failures.some((f) => f.code === 131026) ? 'That number is not on WhatsApp.' : 'The code could not be delivered just now.';
       throw new ApiError('WHATSAPP_UNREACHABLE', why, 502, 'phone');
     }
     return { ok: true, pending: maskPhone(phone), expiresInSeconds: CODE_TTL_MS / 1000 };

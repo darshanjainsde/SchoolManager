@@ -1,3 +1,4 @@
+import { toE164 } from '../../common/otp/phone-identity';
 import { randomBytes } from 'node:crypto';
 import {
   BadRequestException,
@@ -138,6 +139,8 @@ export class StudentsService {
         return tx.student.create({
           data: {
             ...rest,
+            // The E.164 twin of the office-typed number: the phone login's index.
+            guardianPhoneE164: toE164(rest.guardianPhone),
             schoolId,
             code,
             dob: dob ? new Date(dob) : undefined,
@@ -193,6 +196,7 @@ export class StudentsService {
           where: { id },
           data: {
             ...rest,
+            ...(rest.guardianPhone !== undefined ? { guardianPhoneE164: toE164(rest.guardianPhone) } : {}),
             ...(dob !== undefined ? { dob: new Date(dob) } : {}),
             ...(firstAdmissionDate !== undefined ? { firstAdmissionDate: new Date(firstAdmissionDate) } : {}),
           },

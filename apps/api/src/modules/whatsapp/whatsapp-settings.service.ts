@@ -1,3 +1,5 @@
+import { maskPhone } from '../../common/otp/phone-identity';
+export { maskPhone };
 import { Injectable } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
@@ -76,10 +78,3 @@ function monthStart(): Date {
 }
 
 /** +919876543210 → +91 98••• •3210 — the office recognises it; a screenshot does not leak it. */
-export function maskPhone(e164: string): string {
-  const d = e164.replace(/^\+/, '');
-  if (d.length < 8) return e164;
-  const cc = d.slice(0, d.length - 10) || '';
-  const n = d.slice(-10);
-  return `+${cc} ${n.slice(0, 2)}••• •${n.slice(-4)}`.replace(/\s+/g, ' ').trim();
-}

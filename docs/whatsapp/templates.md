@@ -26,6 +26,10 @@ A guardian's number is often shared by two or three children, so every notice AB
 | **Name** "Sckools" | WhatsApp Manager → Phone numbers → the number → Display name | Only on a real number; the test number keeps Meta's name. Meta reviews it against the business — "Sckools" is the GST trade name, so it matches. A display name that does not match the verified business is refused. |
 | **Blue tick** | WhatsApp Manager → the number → "Request Official Business Account" (free, rarely granted) — or Meta Verified for business on WhatsApp (paid subscription, India) | Needs business verification first. Not a prerequisite for anything above: templates, buttons and the name work without it. |
 
+## Phone login (design 2026-09-21)
+
+`sckools_verify_code` carries every one-time code: login (`POST /auth/otp/request` → `verify` → `choose` when a number opens several profiles), password reset (`forgot-password` now also starts a code when the login has a phone; `reset-with-otp` sets the password), and proving a number on a profile. One engine (`apps/api/src/common/otp`), every enabled sender (WhatsApp now, SMS when the MSG91 keys exist). Limits: one code a minute, three an hour, ten a day per phone and purpose; 10 minutes; 5 tries. Admins never log in by code — their profile appears only in a password session's *Switch profile* list. Spec: `docs/superpowers/specs/2026-09-21-whatsapp-identity-and-actions-design.md`.
+
 ## Actions and identity (the second batch)
 
 | Name | Category | Body | Buttons | Samples |
@@ -51,6 +55,8 @@ Until a template is approved, sends of that kind fail with Meta code 132001 and 
 | `META_APP_SECRET` | App settings → Basic → Show |
 | `WHATSAPP_WEBHOOK_VERIFY_TOKEN` | any long random string; paste the same in Meta's webhook screen |
 | `WHATSAPP_GRAPH_VERSION` | optional, default `v21.0` |
+| `MSG91_AUTH_KEY` | optional — with the template id below, one-time codes ALSO go by SMS (DLT). Unset = WhatsApp only. |
+| `MSG91_OTP_TEMPLATE_ID` | the DLT-approved OTP template with one `##OTP##` variable |
 
 Webhook: `https://api.sckools.com/webhooks/whatsapp` (staging: `https://api.test.sckools.com/webhooks/whatsapp`), subscribe to `messages`.
 

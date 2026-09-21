@@ -59,6 +59,7 @@ function build() {
     tenantCtx,
     features,
     {} as never,
+    {} as never,
   );
   return { controller, auth, features };
 }

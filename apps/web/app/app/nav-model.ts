@@ -25,6 +25,7 @@ import {
   Users,
   Wallet,
   CalendarRange,
+  UserRound,
 } from 'lucide-react';
 
 /**
@@ -120,6 +121,9 @@ export const NAV_MODEL: NavEntry[] = [
   { kind: 'item', item: { href: '/app/sports', label: 'Sports', icon: Trophy, requiredFeature: 'SPORTS' } },
   { kind: 'item', item: { href: '/app/announcements', label: 'Announcements', icon: Megaphone } },
   { kind: 'item', item: { href: '/app/alumni', label: 'Alumni', icon: Handshake, requiredFeature: 'ALUMNI' } },
+  // The person's own page — name, password, WhatsApp number, what reaches
+  // them. Above Settings because Settings is the school's, this is theirs.
+  { kind: 'item', item: { href: '/app/profile', label: 'My profile', icon: UserRound } },
   { kind: 'item', item: { href: '/app/settings', label: 'Settings', icon: Settings, requiredFeature: 'MANAGEMENT' } },
 ];
 

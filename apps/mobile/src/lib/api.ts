@@ -23,6 +23,21 @@ interface IssuedTokens {
 // apps/api/src/modules/auth/internal/auth.controller.ts. No display name is
 // available anywhere in the auth contract, so callers fall back to the
 // identifier the user logged in with.
+/** One profile a phone number opens — the chooser row and the switch row. */
+export interface OtpProfile {
+  userId: string;
+  kind: 'ADMIN' | 'TEACHER' | 'STAFF' | 'FAMILY';
+  role: Session['role'];
+  label: string;
+  sub: string;
+  schoolName: string;
+  host: string;
+}
+export interface OtpRequested { challengeId: string; phoneMasked: string; sentVia: string[]; expiresIn: number }
+export type OtpVerified =
+  | { choose: true; ticket: string; profiles: OtpProfile[] }
+  | ({ choose: false; host: string; profile: Omit<OtpProfile, 'host'> } & IssuedTokens);
+
 interface MeResponse {
   userId: string;
   schoolId: string;
@@ -252,9 +267,16 @@ export const api = {
       throw new ApiError(loginRes.status, body.message ?? 'Login failed — check your details.');
     }
     const tokens = (await loginRes.json()) as IssuedTokens;
+    return this.sessionFor(host, tokens, identifier);
+  },
 
-    // The login response carries no role/name — fetch the role from /auth/me
-    // using the freshly issued access token.
+  /**
+   * Tokens → a persisted Session. Every door (password, one-time code, a
+   * profile switch) ends here: the login response carries no role/name, so
+   * /auth/me is asked with the fresh access token, and the answer decides
+   * where the person lands.
+   */
+  async sessionFor(host: string, tokens: IssuedTokens, fallbackName: string): Promise<Session> {
     const meRes = await safeFetch(`${BASE}/auth/me`, {
       method: 'GET',
       headers: {
@@ -279,12 +301,46 @@ export const api = {
       // used to greet a teacher with "Good day, priya@stjohns.edu". It stays as
       // the fallback for an account no role record claims yet, where the
       // identifier is at least something they recognise.
-      displayName: me.name?.trim() || identifier,
+      displayName: me.name?.trim() || fallbackName,
       features: me.features ?? [],
     };
     await session.set(s);
     await session.setSchoolHost(host);
     return s;
+  },
+
+  // ── The phone door (design §4). No host: the app does not know the school
+  // before the number does, so the server searches every school and the
+  // chooser carries each profile's host.
+  async otpRequest(phone: string): Promise<OtpRequested> {
+    const res = await safeFetch(`${BASE}/auth/otp/request`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Skoolos-Client': 'native' }, body: JSON.stringify({ phone }) });
+    if (!res.ok) { const body = await res.json().catch(() => ({})); throw new ApiError(res.status, body.message ?? 'Could not send the code.'); }
+    return (await res.json()) as OtpRequested;
+  },
+
+  async otpVerify(challengeId: string, code: string): Promise<OtpVerified> {
+    const res = await safeFetch(`${BASE}/auth/otp/verify`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Skoolos-Client': 'native' }, body: JSON.stringify({ challengeId, code }) });
+    if (!res.ok) { const body = await res.json().catch(() => ({})); throw new ApiError(res.status, body.message ?? 'That code did not work.'); }
+    return (await res.json()) as OtpVerified;
+  },
+
+  /** A chooser pick → a persisted Session for that profile, on that profile's host. */
+  async otpChoose(ticket: string, profile: OtpProfile): Promise<Session> {
+    const res = await safeFetch(`${BASE}/auth/otp/choose`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Skoolos-Client': 'native' }, body: JSON.stringify({ ticket, userId: profile.userId }) });
+    if (!res.ok) { const body = await res.json().catch(() => ({})); throw new ApiError(res.status, body.message ?? 'Could not open that profile.'); }
+    const out = (await res.json()) as IssuedTokens & { host: string };
+    return this.sessionFor(out.host || profile.host, out, profile.label);
+  },
+
+  /** The profiles this session's phone number opens (the switch list). */
+  async profiles(): Promise<{ current: string; profiles: OtpProfile[] }> {
+    return this.request<{ current: string; profiles: OtpProfile[] }>('/auth/profiles');
+  },
+
+  /** Open another profile behind the same number; the new session lives on ITS host. */
+  async switchProfile(profile: OtpProfile): Promise<Session> {
+    const out = await this.request<IssuedTokens & { host: string }>('/auth/switch', { method: 'POST', body: { userId: profile.userId } });
+    return this.sessionFor(out.host || profile.host, out, profile.label);
   },
 
   // Mirrors the web's `handleLogout` (apps/web/app/teacher/layout.tsx):

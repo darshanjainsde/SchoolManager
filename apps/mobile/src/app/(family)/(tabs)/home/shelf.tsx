@@ -5,6 +5,7 @@ import { family, type ChildProfile } from '@/lib/family-store';
 import { session } from '@/lib/session';
 import { Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
+import { ProfileSwitcher } from '@/components/ProfileSwitcher';
 import { DUR, EASE, useReduceMotion } from '@/theme/motion';
 import { useTokens } from '@/theme/theme-context';
 
@@ -300,6 +301,10 @@ export default function Shelf() {
         Adding a child: their school, their code (RAF-00042) and password — once.{'\n'}Each child keeps their own
         notifications, badges and data.
       </Text>
+
+      {/* The phone door's other profiles: a sibling not yet on the shelf, a
+          teacher's own room. One tap adds the spine and opens it. */}
+      <ProfileSwitcher />
     </Screen>
   );
 }

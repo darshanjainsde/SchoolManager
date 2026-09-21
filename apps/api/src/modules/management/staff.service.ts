@@ -1,3 +1,4 @@
+import { toE164 } from '../../common/otp/phone-identity';
 import { randomBytes } from 'node:crypto';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
@@ -32,7 +33,7 @@ export class StaffService {
     try {
       return await withTenant(schoolId, (tx) =>
         tx.staff.create({
-          data: { ...dto, schoolId },
+          data: { ...dto, phoneE164: toE164(dto.phone), schoolId },
         }),
       );
     } catch (e) {
@@ -44,7 +45,7 @@ export class StaffService {
   async update(schoolId: string, id: string, dto: UpdateStaffDto) {
     try {
       return await withTenant(schoolId, (tx) =>
-        tx.staff.update({ where: { id }, data: dto }),
+        tx.staff.update({ where: { id }, data: { ...dto, ...(dto.phone !== undefined ? { phoneE164: toE164(dto.phone) } : {}) } }),
       );
     } catch (e) {
       if (isP2025(e)) throw new NotFoundException('Staff member not found');

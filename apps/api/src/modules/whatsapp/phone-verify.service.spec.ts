@@ -14,9 +14,9 @@ const codeOf = (data: Record<string, unknown>) => {
 };
 
 describe('PhoneVerifyService', () => {
-  const channel = { configured: true, deliverWith: jest.fn().mockResolvedValue({ ok: true, code: null }) };
-  const svc = () => new PhoneVerifyService(channel as never);
-  beforeEach(() => { jest.clearAllMocks(); channel.deliverWith.mockResolvedValue({ ok: true, code: null }); });
+  const senders = { enabledNames: jest.fn().mockReturnValue(['whatsapp']), fanOut: jest.fn().mockResolvedValue({ sentVia: ['whatsapp'], failures: [], nothingEnabled: false }) };
+  const svc = () => new PhoneVerifyService(senders as never);
+  beforeEach(() => { jest.clearAllMocks(); senders.enabledNames.mockReturnValue(['whatsapp']); senders.fanOut.mockResolvedValue({ sentVia: ['whatsapp'], failures: [], nothingEnabled: false }); });
 
   it('request: normalises the number, refuses one another login already verified, stores a pending number + a hashed code, and sends it on WhatsApp', async () => {
     user.findFirst.mockResolvedValueOnce({ phoneOtpExpiresAt: null }).mockResolvedValueOnce(null);
@@ -27,8 +27,10 @@ describe('PhoneVerifyService', () => {
     expect(data.phonePending).toBe('+919876543210');
     expect(data.phoneOtpHash).toMatch(/^[0-9a-f]{64}$/);
     expect(data.phoneOtpAttempts).toBe(0);
-    const [schoolId, phone, kind, label] = channel.deliverWith.mock.calls[0];
-    expect([schoolId, phone, kind, label]).toEqual([SCHOOL, '+919876543210', 'VERIFY_CODE', 'sckools_verify_code']);
+    const [phone, code, ctx] = senders.fanOut.mock.calls[0];
+    expect(phone).toBe('+919876543210');
+    expect(code).toMatch(/^\d{6}$/);
+    expect(ctx).toEqual({ schoolId: SCHOOL, purpose: 'VERIFY_PHONE' });
   });
 
   it('request: a second code within a minute is refused; a bad number is refused before anything is stored', async () => {
@@ -40,7 +42,7 @@ describe('PhoneVerifyService', () => {
 
   it("request: when WhatsApp cannot deliver, the caller is told why (not on WhatsApp / platform not set up)", async () => {
     user.findFirst.mockResolvedValueOnce({ phoneOtpExpiresAt: null }).mockResolvedValueOnce(null);
-    channel.deliverWith.mockResolvedValueOnce({ ok: false, code: 131026 });
+    senders.fanOut.mockResolvedValueOnce({ sentVia: [], failures: [{ name: 'whatsapp', code: 131026, reason: 'not on WhatsApp' }], nothingEnabled: false });
     await expect(svc().request(SCHOOL, 'u1', '9876543210')).rejects.toMatchObject({ status: 502, response: { message: 'That number is not on WhatsApp.' } });
   });
 
