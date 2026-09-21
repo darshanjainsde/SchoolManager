@@ -71,6 +71,8 @@ describe('OtpService', () => {
     expect(otp.update.mock.calls[0][0].data.consumedAt).toBeInstanceOf(Date);
     senders.fanOut.mockResolvedValueOnce({ sentVia: [], failures: [], nothingEnabled: true });
     await expect(svc().start('LOGIN', PHONE, { schoolId: SCHOOL })).rejects.toMatchObject({ response: { message: 'One-time codes are not set up on the platform yet.' } });
+    senders.fanOut.mockResolvedValueOnce({ sentVia: [], failures: [{ name: 'whatsapp', code: 131030, reason: 'not on the Meta test list' }], nothingEnabled: false });
+    await expect(svc().start('LOGIN', PHONE, { schoolId: SCHOOL })).rejects.toMatchObject({ response: { message: expect.stringContaining('not on the WhatsApp test list') } });
   });
 
   describe('check', () => {

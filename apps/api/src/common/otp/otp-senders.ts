@@ -46,7 +46,7 @@ export class WhatsAppOtpSender implements OtpSender {
     const r = await this.channel.deliverWith(ctx.schoolId, phone, `OTP_${ctx.purpose}`, VERIFY_CODE, (cfg, pnid, f) =>
       sendTemplate(cfg, phone, verifyCodeTemplate(code), { phoneNumberId: pnid, fetchImpl: f }),
     );
-    return { ok: r.ok, code: r.code, reason: r.ok ? undefined : r.code === 131026 ? 'not on WhatsApp' : 'WhatsApp did not deliver' };
+    return { ok: r.ok, code: r.code, reason: r.ok ? undefined : r.code === 131026 ? 'not on WhatsApp' : r.code === 131030 ? 'not on the Meta test list' : 'WhatsApp did not deliver' };
   }
 }
 
