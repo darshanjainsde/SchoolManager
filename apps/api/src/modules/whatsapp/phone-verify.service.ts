@@ -64,7 +64,7 @@ export class PhoneVerifyService {
     const sent = await this.senders.fanOut(phone, code, { schoolId, purpose: 'VERIFY_PHONE' });
     if (sent.sentVia.length === 0) {
       // Leave the pending state so a retry after the cooldown works; say why.
-      const why = sent.nothingEnabled ? 'One-time codes are not set up on the platform yet.' : sent.failures.some((f) => f.code === 131026) ? 'That number is not on WhatsApp.' : 'The code could not be delivered just now.';
+      const why = sent.nothingEnabled ? 'One-time codes are not set up on the platform yet.' : sent.failures.some((f) => f.code === 131026) ? 'That number is not on WhatsApp.' : sent.failures.some((f) => f.code === 131030) ? 'This number is not on the WhatsApp test list yet. Add it in Meta (WhatsApp → API Setup → To) and try again in a minute.' : 'The code could not be delivered just now.';
       throw new ApiError('WHATSAPP_UNREACHABLE', why, 502, 'phone');
     }
     return { ok: true, pending: maskPhone(phone), expiresInSeconds: CODE_TTL_MS / 1000 };

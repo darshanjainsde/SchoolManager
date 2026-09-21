@@ -77,7 +77,11 @@ export class OtpService {
         ? 'One-time codes are not set up on the platform yet.'
         : out.failures.some((f) => f.code === 131026)
           ? 'That number is not on WhatsApp.'
-          : 'The code could not be delivered just now. Try again in a minute.';
+          : out.failures.some((f) => f.code === 131030)
+            // Meta's TEST number may only message the five numbers registered
+            // against it. Until the real number is attached, say exactly that.
+            ? 'This number is not on the WhatsApp test list yet. Add it in Meta (WhatsApp → API Setup → To) and try again in a minute.'
+            : 'The code could not be delivered just now. Try again in a minute.';
       this.logger.warn(`OTP ${purpose} to ${phone} undeliverable: ${out.failures.map((f) => `${f.name}: ${f.reason}`).join('; ') || 'no sender enabled'}`);
       throw new ApiError('OTP_UNDELIVERABLE', why, 502, 'phone');
     }
