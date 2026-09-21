@@ -1,0 +1,2227 @@
+{
+ "scannedAt": "2026-09-16T18:19:56.988Z",
+ "pages": 141,
+ "bundleSizes": "from a production build",
+ "perfect": 70,
+ "moderate": 71,
+ "broken": 0,
+ "changes": [
+  {
+   "route": "/app/enquiries",
+   "from": "PERFECT",
+   "to": "MODERATE"
+  },
+  {
+   "route": "/app/events",
+   "from": "PERFECT",
+   "to": "MODERATE"
+  },
+  {
+   "route": "/app/exam-hall",
+   "from": "MODERATE",
+   "to": "PERFECT"
+  },
+  {
+   "route": "/app/fees/students/[id]",
+   "from": "MODERATE",
+   "to": "PERFECT"
+  },
+  {
+   "route": "/app/library/hall",
+   "from": "PERFECT",
+   "to": "MODERATE"
+  },
+  {
+   "route": "/app/press/results",
+   "from": "MODERATE",
+   "to": "PERFECT"
+  },
+  {
+   "route": "/blog",
+   "from": "PERFECT",
+   "to": "MODERATE"
+  },
+  {
+   "route": "/library/hall",
+   "from": "PERFECT",
+   "to": "MODERATE"
+  },
+  {
+   "route": "/platform/blog",
+   "from": "PERFECT",
+   "to": "MODERATE"
+  },
+  {
+   "route": "/platform/scale",
+   "from": "MODERATE",
+   "to": "PERFECT"
+  },
+  {
+   "route": "/platform/speed",
+   "from": "PERFECT",
+   "to": "MODERATE"
+  },
+  {
+   "route": "/portal/notifications",
+   "from": "PERFECT",
+   "to": "MODERATE"
+  },
+  {
+   "route": "/teacher/notifications",
+   "from": "PERFECT",
+   "to": "MODERATE"
+  },
+  {
+   "route": "/teacher/results",
+   "from": "MODERATE",
+   "to": "PERFECT"
+  }
+ ],
+ "rows": [
+  {
+   "route": "/accept-invite",
+   "surface": "Open pages",
+   "client": true,
+   "files": 9,
+   "mountQueries": 0,
+   "firstLoadKb": 146,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/account/password",
+   "surface": "Open pages",
+   "client": true,
+   "files": 10,
+   "mountQueries": 0,
+   "firstLoadKb": 146,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/alumni",
+   "surface": "School website",
+   "client": false,
+   "files": 44,
+   "mountQueries": 0,
+   "firstLoadKb": 142,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "raw-image",
+     "severity": "MODERATE",
+     "line": 241,
+     "detail": "`principalPhotoUrl` is painted at whatever size it was uploaded",
+     "where": "components/public/PublicSite.tsx",
+     "count": 6
+    }
+   ]
+  },
+  {
+   "route": "/app/alumni",
+   "surface": "Admin console",
+   "client": true,
+   "files": 6,
+   "mountQueries": 13,
+   "firstLoadKb": 137,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "request-fan-out",
+     "severity": "MODERATE",
+     "detail": "13 queries fire when this page mounts — each is a round trip and a tenant transaction",
+     "where": "app/app/alumni/page.tsx",
+     "count": 1
+    },
+    {
+     "rule": "raw-image",
+     "severity": "MODERATE",
+     "line": 1209,
+     "detail": "`a.url` is painted at whatever size it was uploaded",
+     "where": "app/app/alumni/page.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/app/announcements",
+   "surface": "Admin console",
+   "client": true,
+   "files": 13,
+   "mountQueries": 2,
+   "firstLoadKb": 136,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/app/availability",
+   "surface": "Admin console",
+   "client": true,
+   "files": 6,
+   "mountQueries": 1,
+   "firstLoadKb": 116,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "silent-query",
+     "severity": "MODERATE",
+     "detail": "1 query, and no error is rendered anywhere on the page",
+     "where": "app/app/availability/page.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/app/blog",
+   "surface": "Admin console",
+   "client": true,
+   "files": 21,
+   "mountQueries": 4,
+   "firstLoadKb": 155,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "silent-query",
+     "severity": "MODERATE",
+     "detail": "4 queries, and no error is rendered anywhere on the page",
+     "where": "app/app/blog/page.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/app/classes",
+   "surface": "Admin console",
+   "client": true,
+   "files": 5,
+   "mountQueries": 4,
+   "firstLoadKb": 132,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/app/classes/structure",
+   "surface": "Admin console",
+   "client": true,
+   "files": 5,
+   "mountQueries": 2,
+   "firstLoadKb": 131,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/app/enquiries",
+   "surface": "Admin console",
+   "client": true,
+   "files": 7,
+   "mountQueries": 3,
+   "firstLoadKb": 128,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "unmemoised-roster-work",
+     "severity": "MODERATE",
+     "line": 143,
+     "detail": "3 places walk a roster-scale list in the render body (first at line 143) — recomputed on every render",
+     "where": "app/app/enquiries/lead.ts",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/app/events/[id]",
+   "surface": "Admin console",
+   "client": true,
+   "files": 5,
+   "mountQueries": 1,
+   "firstLoadKb": 127,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/app/events/[id]/promo",
+   "surface": "Admin console",
+   "client": true,
+   "files": 8,
+   "mountQueries": 1,
+   "firstLoadKb": 136,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/app/events",
+   "surface": "Admin console",
+   "client": true,
+   "files": 10,
+   "mountQueries": 1,
+   "firstLoadKb": 136,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "raw-image",
+     "severity": "MODERATE",
+     "line": 90,
+     "detail": "`event.coverUrl` is painted at whatever size it was uploaded",
+     "where": "app/app/events/event-card.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/app/exam-hall",
+   "surface": "Admin console",
+   "client": true,
+   "files": 9,
+   "mountQueries": 3,
+   "firstLoadKb": 134,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/app/fees",
+   "surface": "Admin console",
+   "client": true,
+   "files": 6,
+   "mountQueries": 1,
+   "firstLoadKb": 120,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "silent-query",
+     "severity": "MODERATE",
+     "detail": "1 query, and no error is rendered anywhere on the page",
+     "where": "app/app/fees/page.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/app/fees/payment-setup",
+   "surface": "Admin console",
+   "client": true,
+   "files": 8,
+   "mountQueries": 1,
+   "firstLoadKb": 133,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "raw-image",
+     "severity": "MODERATE",
+     "line": 285,
+     "detail": "`qrUrl` is painted at whatever size it was uploaded",
+     "where": "app/app/fees/payment-setup/page.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/app/fees/setup",
+   "surface": "Admin console",
+   "client": true,
+   "files": 9,
+   "mountQueries": 10,
+   "firstLoadKb": 138,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "request-fan-out",
+     "severity": "MODERATE",
+     "detail": "10 queries fire when this page mounts — each is a round trip and a tenant transaction",
+     "where": "app/app/fees/setup/page.tsx",
+     "count": 1
+    },
+    {
+     "rule": "unmemoised-roster-work",
+     "severity": "MODERATE",
+     "line": 327,
+     "detail": "1 place walk a roster-scale list in the render body (first at line 327) — recomputed on every render",
+     "where": "app/app/fees/setup/page.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/app/fees/students/[id]",
+   "surface": "Admin console",
+   "client": true,
+   "files": 8,
+   "mountQueries": 1,
+   "firstLoadKb": 134,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/app/fees/students",
+   "surface": "Admin console",
+   "client": true,
+   "files": 7,
+   "mountQueries": 4,
+   "firstLoadKb": 121,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/app/fees/verify",
+   "surface": "Admin console",
+   "client": true,
+   "files": 7,
+   "mountQueries": 1,
+   "firstLoadKb": 134,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "raw-image",
+     "severity": "MODERATE",
+     "line": 260,
+     "detail": "`p.proofUrl` is painted at whatever size it was uploaded",
+     "where": "app/app/fees/verify/page.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/app/jobs",
+   "surface": "Admin console",
+   "client": true,
+   "files": 8,
+   "mountQueries": 0,
+   "firstLoadKb": 132,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/app/leave",
+   "surface": "Admin console",
+   "client": true,
+   "files": 5,
+   "mountQueries": 5,
+   "firstLoadKb": 133,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/app/leave/policy",
+   "surface": "Admin console",
+   "client": true,
+   "files": 5,
+   "mountQueries": 3,
+   "firstLoadKb": 131,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/app/library/books",
+   "surface": "Admin console",
+   "client": true,
+   "files": 7,
+   "mountQueries": 1,
+   "firstLoadKb": 128,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/app/library/counter",
+   "surface": "Admin console",
+   "client": true,
+   "files": 7,
+   "mountQueries": 8,
+   "firstLoadKb": 130,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "request-fan-out",
+     "severity": "MODERATE",
+     "detail": "8 queries fire when this page mounts — each is a round trip and a tenant transaction",
+     "where": "app/app/library/counter/page.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/app/library/fines",
+   "surface": "Admin console",
+   "client": true,
+   "files": 8,
+   "mountQueries": 1,
+   "firstLoadKb": 128,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/app/library/hall",
+   "surface": "Admin console",
+   "client": true,
+   "files": 8,
+   "mountQueries": 1,
+   "firstLoadKb": 129,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "unmemoised-roster-work",
+     "severity": "MODERATE",
+     "line": 62,
+     "detail": "1 place walk a roster-scale list in the render body (first at line 62) — recomputed on every render",
+     "where": "app/app/library/hall-tab.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/app/library",
+   "surface": "Admin console",
+   "client": true,
+   "files": 11,
+   "mountQueries": 5,
+   "firstLoadKb": 129,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "silent-query",
+     "severity": "MODERATE",
+     "detail": "4 queries, and no error is rendered anywhere on the page",
+     "where": "app/app/library/desk-search.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/app/library/settings",
+   "surface": "Admin console",
+   "client": true,
+   "files": 7,
+   "mountQueries": 1,
+   "firstLoadKb": 127,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/app",
+   "surface": "Admin console",
+   "client": true,
+   "files": 13,
+   "mountQueries": 11,
+   "firstLoadKb": 140,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "request-fan-out",
+     "severity": "MODERATE",
+     "detail": "11 queries fire when this page mounts — each is a round trip and a tenant transaction",
+     "where": "app/app/page.tsx",
+     "count": 1
+    },
+    {
+     "rule": "silent-query",
+     "severity": "MODERATE",
+     "detail": "1 query, and no error is rendered anywhere on the page",
+     "where": "app/app/command-bar.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/app/press/batch/[windowId]/[classId]",
+   "surface": "Admin console",
+   "client": true,
+   "files": 12,
+   "mountQueries": 1,
+   "firstLoadKb": 145,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "unmemoised-roster-work",
+     "severity": "MODERATE",
+     "line": 166,
+     "detail": "1 place walk a roster-scale list in the render body (first at line 166) — recomputed on every render",
+     "where": "app/app/press/batch/[windowId]/[classId]/page.tsx",
+     "count": 1
+    },
+    {
+     "rule": "raw-image",
+     "severity": "MODERATE",
+     "line": 59,
+     "detail": "`school.logoUrl` is painted at whatever size it was uploaded",
+     "where": "components/press/press-sheets.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/app/press/certificates",
+   "surface": "Admin console",
+   "client": true,
+   "files": 11,
+   "mountQueries": 4,
+   "firstLoadKb": 145,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "raw-image",
+     "severity": "MODERATE",
+     "line": 59,
+     "detail": "`school.logoUrl` is painted at whatever size it was uploaded",
+     "where": "components/press/press-sheets.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/app/press/orders/[id]",
+   "surface": "Admin console",
+   "client": true,
+   "files": 8,
+   "mountQueries": 1,
+   "firstLoadKb": 135,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/app/press/orders",
+   "surface": "Admin console",
+   "client": true,
+   "files": 10,
+   "mountQueries": 1,
+   "firstLoadKb": 136,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/app/press",
+   "surface": "Admin console",
+   "client": true,
+   "files": 6,
+   "mountQueries": 3,
+   "firstLoadKb": 122,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "silent-query",
+     "severity": "MODERATE",
+     "detail": "3 queries, and no error is rendered anywhere on the page",
+     "where": "app/app/press/page.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/app/press/register",
+   "surface": "Admin console",
+   "client": true,
+   "files": 11,
+   "mountQueries": 1,
+   "firstLoadKb": 141,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "raw-image",
+     "severity": "MODERATE",
+     "line": 59,
+     "detail": "`school.logoUrl` is painted at whatever size it was uploaded",
+     "where": "components/press/press-sheets.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/app/press/results",
+   "surface": "Admin console",
+   "client": true,
+   "files": 6,
+   "mountQueries": 3,
+   "firstLoadKb": 136,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/app/requests",
+   "surface": "Admin console",
+   "client": true,
+   "files": 5,
+   "mountQueries": 2,
+   "firstLoadKb": 126,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/app/sessions",
+   "surface": "Admin console",
+   "client": true,
+   "files": 15,
+   "mountQueries": 5,
+   "firstLoadKb": 145,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "silent-query",
+     "severity": "MODERATE",
+     "detail": "1 query, and no error is rendered anywhere on the page",
+     "where": "app/app/sessions/register.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/app/settings",
+   "surface": "Admin console",
+   "client": true,
+   "files": 8,
+   "mountQueries": 6,
+   "firstLoadKb": 136,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "request-fan-out",
+     "severity": "MODERATE",
+     "detail": "6 queries fire when this page mounts — each is a round trip and a tenant transaction",
+     "where": "app/app/settings/page.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/app/sports/houses",
+   "surface": "Admin console",
+   "client": true,
+   "files": 8,
+   "mountQueries": 4,
+   "firstLoadKb": 129,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "silent-query",
+     "severity": "MODERATE",
+     "detail": "1 query, and no error is rendered anywhere on the page",
+     "where": "app/app/sports/ui.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/app/sports",
+   "surface": "Admin console",
+   "client": true,
+   "files": 12,
+   "mountQueries": 4,
+   "firstLoadKb": 162,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "heavy-bundle",
+     "severity": "MODERATE",
+     "detail": "162 kB of first-load JavaScript — check for statically imported tabs or a section tree that could be split",
+     "where": "app/app/sports/page.tsx",
+     "count": 1
+    },
+    {
+     "rule": "silent-query",
+     "severity": "MODERATE",
+     "detail": "1 query, and no error is rendered anywhere on the page",
+     "where": "app/app/sports/tournaments-tab.tsx",
+     "count": 2
+    },
+    {
+     "rule": "unmemoised-roster-work",
+     "severity": "MODERATE",
+     "line": 110,
+     "detail": "6 places walk a roster-scale list in the render body (first at line 110) — recomputed on every render",
+     "where": "app/app/sports/wizard-model.ts",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/app/sports/records",
+   "surface": "Admin console",
+   "client": true,
+   "files": 9,
+   "mountQueries": 6,
+   "firstLoadKb": 153,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "request-fan-out",
+     "severity": "MODERATE",
+     "detail": "6 queries fire when this page mounts — each is a round trip and a tenant transaction",
+     "where": "app/app/sports/records/page.tsx",
+     "count": 1
+    },
+    {
+     "rule": "unmemoised-roster-work",
+     "severity": "MODERATE",
+     "line": 110,
+     "detail": "6 places walk a roster-scale list in the render body (first at line 110) — recomputed on every render",
+     "where": "app/app/sports/wizard-model.ts",
+     "count": 1
+    },
+    {
+     "rule": "silent-query",
+     "severity": "MODERATE",
+     "detail": "1 query, and no error is rendered anywhere on the page",
+     "where": "app/app/sports/ui.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/app/sports/rules",
+   "surface": "Admin console",
+   "client": true,
+   "files": 9,
+   "mountQueries": 1,
+   "firstLoadKb": 142,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "silent-query",
+     "severity": "MODERATE",
+     "detail": "1 query, and no error is rendered anywhere on the page",
+     "where": "app/app/sports/ui.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/app/sports/settings",
+   "surface": "Admin console",
+   "client": true,
+   "files": 8,
+   "mountQueries": 2,
+   "firstLoadKb": 152,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "silent-query",
+     "severity": "MODERATE",
+     "detail": "1 query, and no error is rendered anywhere on the page",
+     "where": "app/app/sports/ui.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/app/sports/teachers",
+   "surface": "Admin console",
+   "client": true,
+   "files": 8,
+   "mountQueries": 2,
+   "firstLoadKb": 152,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "silent-query",
+     "severity": "MODERATE",
+     "detail": "1 query, and no error is rendered anywhere on the page",
+     "where": "app/app/sports/ui.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/app/sports/tournaments/[id]",
+   "surface": "Admin console",
+   "client": true,
+   "files": 18,
+   "mountQueries": 2,
+   "firstLoadKb": 166,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "heavy-bundle",
+     "severity": "MODERATE",
+     "detail": "166 kB of first-load JavaScript — check for statically imported tabs or a section tree that could be split",
+     "where": "app/app/sports/tournaments/[id]/page.tsx",
+     "count": 1
+    },
+    {
+     "rule": "silent-query",
+     "severity": "MODERATE",
+     "detail": "1 query, and no error is rendered anywhere on the page",
+     "where": "app/app/sports/ui.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/app/staff-attendance",
+   "surface": "Admin console",
+   "client": true,
+   "files": 7,
+   "mountQueries": 2,
+   "firstLoadKb": 137,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/app/staff",
+   "surface": "Admin console",
+   "client": true,
+   "files": 6,
+   "mountQueries": 2,
+   "firstLoadKb": 132,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/app/students/[id]",
+   "surface": "Admin console",
+   "client": true,
+   "files": 10,
+   "mountQueries": 1,
+   "firstLoadKb": 125,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "raw-image",
+     "severity": "MODERATE",
+     "line": 52,
+     "detail": "`r.school.logoUrl` is painted at whatever size it was uploaded",
+     "where": "components/press/student-report-sheet.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/app/students",
+   "surface": "Admin console",
+   "client": true,
+   "files": 7,
+   "mountQueries": 6,
+   "firstLoadKb": 139,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "request-fan-out",
+     "severity": "MODERATE",
+     "detail": "6 queries fire when this page mounts — each is a round trip and a tenant transaction",
+     "where": "app/app/students/page.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/app/teachers",
+   "surface": "Admin console",
+   "client": true,
+   "files": 7,
+   "mountQueries": 4,
+   "firstLoadKb": 133,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/app/timetable",
+   "surface": "Admin console",
+   "client": true,
+   "files": 6,
+   "mountQueries": 6,
+   "firstLoadKb": 134,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "silent-query",
+     "severity": "MODERATE",
+     "detail": "1 query, and no error is rendered anywhere on the page",
+     "where": "app/app/timetable/page.tsx",
+     "count": 1
+    },
+    {
+     "rule": "request-fan-out",
+     "severity": "MODERATE",
+     "detail": "6 queries fire when this page mounts — each is a round trip and a tenant transaction",
+     "where": "app/app/timetable/page.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/app/website",
+   "surface": "Admin console",
+   "client": true,
+   "files": 8,
+   "mountQueries": 1,
+   "firstLoadKb": 129,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/blog/[slug]",
+   "surface": "School website",
+   "client": false,
+   "files": 26,
+   "mountQueries": 0,
+   "firstLoadKb": 127,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "raw-image",
+     "severity": "MODERATE",
+     "line": 92,
+     "detail": "`post.heroImageUrl` is painted at whatever size it was uploaded",
+     "where": "app/blog/[slug]/page.tsx",
+     "count": 2
+    }
+   ]
+  },
+  {
+   "route": "/blog",
+   "surface": "School website",
+   "client": false,
+   "files": 25,
+   "mountQueries": 0,
+   "firstLoadKb": 127,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "raw-image",
+     "severity": "MODERATE",
+     "line": 22,
+     "detail": "`p.heroImageUrl` is painted at whatever size it was uploaded",
+     "where": "components/blog/BlogIndexList.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/delete-account",
+   "surface": "Open pages",
+   "client": false,
+   "files": 5,
+   "mountQueries": 0,
+   "firstLoadKb": 106,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/forgot-password",
+   "surface": "Open pages",
+   "client": true,
+   "files": 9,
+   "mountQueries": 0,
+   "firstLoadKb": 114,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/jobs/[id]",
+   "surface": "Open pages",
+   "client": false,
+   "files": 8,
+   "mountQueries": 0,
+   "firstLoadKb": 108,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/jobs",
+   "surface": "Open pages",
+   "client": false,
+   "files": 7,
+   "mountQueries": 0,
+   "firstLoadKb": 106,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/library/books",
+   "surface": "Staff doors",
+   "client": true,
+   "files": 7,
+   "mountQueries": 1,
+   "firstLoadKb": 128,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/library/counter",
+   "surface": "Staff doors",
+   "client": true,
+   "files": 7,
+   "mountQueries": 8,
+   "firstLoadKb": 130,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "request-fan-out",
+     "severity": "MODERATE",
+     "detail": "8 queries fire when this page mounts — each is a round trip and a tenant transaction",
+     "where": "app/library/counter/page.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/library/fines",
+   "surface": "Staff doors",
+   "client": true,
+   "files": 8,
+   "mountQueries": 1,
+   "firstLoadKb": 128,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/library/hall",
+   "surface": "Staff doors",
+   "client": true,
+   "files": 8,
+   "mountQueries": 1,
+   "firstLoadKb": 129,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "unmemoised-roster-work",
+     "severity": "MODERATE",
+     "line": 62,
+     "detail": "1 place walk a roster-scale list in the render body (first at line 62) — recomputed on every render",
+     "where": "app/app/library/hall-tab.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/library",
+   "surface": "Staff doors",
+   "client": true,
+   "files": 11,
+   "mountQueries": 5,
+   "firstLoadKb": 129,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "silent-query",
+     "severity": "MODERATE",
+     "detail": "4 queries, and no error is rendered anywhere on the page",
+     "where": "app/app/library/desk-search.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/library/settings",
+   "surface": "Staff doors",
+   "client": true,
+   "files": 7,
+   "mountQueries": 1,
+   "firstLoadKb": 127,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/login",
+   "surface": "Open pages",
+   "client": false,
+   "files": 15,
+   "mountQueries": 0,
+   "firstLoadKb": 148,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/overview/[navGroup]",
+   "surface": "School website",
+   "client": false,
+   "files": 20,
+   "mountQueries": 0,
+   "firstLoadKb": 127,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/owner",
+   "surface": "Owner console",
+   "client": true,
+   "files": 5,
+   "mountQueries": 0,
+   "firstLoadKb": 106,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/",
+   "surface": "Open pages",
+   "client": false,
+   "files": 52,
+   "mountQueries": 0,
+   "firstLoadKb": 161,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "heavy-bundle",
+     "severity": "MODERATE",
+     "detail": "161 kB of first-load JavaScript — check for statically imported tabs or a section tree that could be split",
+     "where": "app/page.tsx",
+     "count": 1
+    },
+    {
+     "rule": "raw-image",
+     "severity": "MODERATE",
+     "line": 241,
+     "detail": "`principalPhotoUrl` is painted at whatever size it was uploaded",
+     "where": "components/public/PublicSite.tsx",
+     "count": 6
+    }
+   ]
+  },
+  {
+   "route": "/platform/blog",
+   "surface": "Owner console",
+   "client": true,
+   "files": 13,
+   "mountQueries": 1,
+   "firstLoadKb": 136,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "raw-image",
+     "severity": "MODERATE",
+     "line": 30,
+     "detail": "`block.url` is painted at whatever size it was uploaded",
+     "where": "components/blog/BlogBlocks.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/platform/connect",
+   "surface": "Owner console",
+   "client": true,
+   "files": 12,
+   "mountQueries": 2,
+   "firstLoadKb": 135,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/platform/jobs",
+   "surface": "Owner console",
+   "client": true,
+   "files": 5,
+   "mountQueries": 0,
+   "firstLoadKb": 127,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/platform/leads",
+   "surface": "Owner console",
+   "client": true,
+   "files": 7,
+   "mountQueries": 2,
+   "firstLoadKb": 133,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/platform/login",
+   "surface": "Owner console",
+   "client": true,
+   "files": 11,
+   "mountQueries": 0,
+   "firstLoadKb": 146,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/platform/onboard",
+   "surface": "Owner console",
+   "client": true,
+   "files": 12,
+   "mountQueries": 0,
+   "firstLoadKb": 131,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/platform/ops",
+   "surface": "Owner console",
+   "client": true,
+   "files": 5,
+   "mountQueries": 1,
+   "firstLoadKb": 116,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "silent-query",
+     "severity": "MODERATE",
+     "detail": "1 query, and no error is rendered anywhere on the page",
+     "where": "app/platform/ops/page.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/platform/orders/[id]/print",
+   "surface": "Owner console",
+   "client": true,
+   "files": 9,
+   "mountQueries": 2,
+   "firstLoadKb": 126,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "raw-image",
+     "severity": "MODERATE",
+     "line": 59,
+     "detail": "`school.logoUrl` is painted at whatever size it was uploaded",
+     "where": "components/press/press-sheets.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/platform/orders",
+   "surface": "Owner console",
+   "client": true,
+   "files": 8,
+   "mountQueries": 2,
+   "firstLoadKb": 135,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/platform",
+   "surface": "Owner console",
+   "client": true,
+   "files": 7,
+   "mountQueries": 1,
+   "firstLoadKb": 130,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/platform/remaining",
+   "surface": "Owner console",
+   "client": true,
+   "files": 2,
+   "mountQueries": 0,
+   "firstLoadKb": 106,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/platform/scale",
+   "surface": "Owner console",
+   "client": true,
+   "files": 5,
+   "mountQueries": 1,
+   "firstLoadKb": 117,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/platform/schools/[id]",
+   "surface": "Owner console",
+   "client": true,
+   "files": 15,
+   "mountQueries": 3,
+   "firstLoadKb": 138,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/platform/schools",
+   "surface": "Owner console",
+   "client": true,
+   "files": 5,
+   "mountQueries": 1,
+   "firstLoadKb": 119,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "silent-query",
+     "severity": "MODERATE",
+     "detail": "1 query, and no error is rendered anywhere on the page",
+     "where": "app/platform/schools/page.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/platform/settings",
+   "surface": "Owner console",
+   "client": true,
+   "files": 5,
+   "mountQueries": 1,
+   "firstLoadKb": 129,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/platform/speed",
+   "surface": "Owner console",
+   "client": true,
+   "files": 5,
+   "mountQueries": 1,
+   "firstLoadKb": 116,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "unmemoised-roster-work",
+     "severity": "MODERATE",
+     "line": 65,
+     "detail": "2 places walk a roster-scale list in the render body (first at line 65) — recomputed on every render",
+     "where": "app/platform/speed/page.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/portal/announcements",
+   "surface": "Family portal",
+   "client": true,
+   "files": 5,
+   "mountQueries": 1,
+   "firstLoadKb": 115,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "silent-query",
+     "severity": "MODERATE",
+     "detail": "1 query, and no error is rendered anywhere on the page",
+     "where": "app/portal/announcements/page.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/portal/assignments",
+   "surface": "Family portal",
+   "client": true,
+   "files": 5,
+   "mountQueries": 1,
+   "firstLoadKb": 118,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "silent-query",
+     "severity": "MODERATE",
+     "detail": "1 query, and no error is rendered anywhere on the page",
+     "where": "app/portal/assignments/page.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/portal/attendance",
+   "surface": "Family portal",
+   "client": true,
+   "files": 6,
+   "mountQueries": 1,
+   "firstLoadKb": 123,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "silent-query",
+     "severity": "MODERATE",
+     "detail": "1 query, and no error is rendered anywhere on the page",
+     "where": "app/portal/attendance/page.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/portal/birthdays",
+   "surface": "Family portal",
+   "client": true,
+   "files": 8,
+   "mountQueries": 2,
+   "firstLoadKb": 118,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "raw-image",
+     "severity": "MODERATE",
+     "line": 42,
+     "detail": "`row.photoUrl` is painted at whatever size it was uploaded",
+     "where": "components/public/sections/BirthdaysSection.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/portal/diary",
+   "surface": "Family portal",
+   "client": true,
+   "files": 7,
+   "mountQueries": 1,
+   "firstLoadKb": 133,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/portal/fees",
+   "surface": "Family portal",
+   "client": true,
+   "files": 7,
+   "mountQueries": 3,
+   "firstLoadKb": 130,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "raw-image",
+     "severity": "MODERATE",
+     "line": 310,
+     "detail": "`b.upiQrUrl` is painted at whatever size it was uploaded",
+     "where": "app/portal/fees/page.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/portal/library",
+   "surface": "Family portal",
+   "client": true,
+   "files": 7,
+   "mountQueries": 1,
+   "firstLoadKb": 115,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/portal/messages",
+   "surface": "Family portal",
+   "client": true,
+   "files": 5,
+   "mountQueries": 3,
+   "firstLoadKb": 148,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/portal/notifications",
+   "surface": "Family portal",
+   "client": false,
+   "files": 8,
+   "mountQueries": 1,
+   "firstLoadKb": 129,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "unmemoised-roster-work",
+     "severity": "MODERATE",
+     "line": 46,
+     "detail": "2 places walk a roster-scale list in the render body (first at line 46) — recomputed on every render",
+     "where": "components/notifications/notifications-view.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/portal",
+   "surface": "Family portal",
+   "client": true,
+   "files": 5,
+   "mountQueries": 1,
+   "firstLoadKb": 121,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/portal/profile",
+   "surface": "Family portal",
+   "client": true,
+   "files": 5,
+   "mountQueries": 1,
+   "firstLoadKb": 116,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "silent-query",
+     "severity": "MODERATE",
+     "detail": "1 query, and no error is rendered anywhere on the page",
+     "where": "app/portal/profile/page.tsx",
+     "count": 1
+    },
+    {
+     "rule": "raw-image",
+     "severity": "MODERATE",
+     "line": 103,
+     "detail": "`profile.photoUrl` is painted at whatever size it was uploaded",
+     "where": "app/portal/profile/page.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/portal/results",
+   "surface": "Family portal",
+   "client": true,
+   "files": 5,
+   "mountQueries": 2,
+   "firstLoadKb": 120,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "silent-query",
+     "severity": "MODERATE",
+     "detail": "2 queries, and no error is rendered anywhere on the page",
+     "where": "app/portal/results/page.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/portal/results/report-card/[id]",
+   "surface": "Family portal",
+   "client": true,
+   "files": 9,
+   "mountQueries": 1,
+   "firstLoadKb": 127,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "raw-image",
+     "severity": "MODERATE",
+     "line": 59,
+     "detail": "`school.logoUrl` is painted at whatever size it was uploaded",
+     "where": "components/press/press-sheets.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/portal/sports",
+   "surface": "Family portal",
+   "client": true,
+   "files": 7,
+   "mountQueries": 1,
+   "firstLoadKb": 137,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/portal/timetable",
+   "surface": "Family portal",
+   "client": true,
+   "files": 5,
+   "mountQueries": 1,
+   "firstLoadKb": 115,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "silent-query",
+     "severity": "MODERATE",
+     "detail": "1 query, and no error is rendered anywhere on the page",
+     "where": "app/portal/timetable/page.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/preview",
+   "surface": "School website",
+   "client": true,
+   "files": 42,
+   "mountQueries": 0,
+   "firstLoadKb": 169,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "heavy-bundle",
+     "severity": "MODERATE",
+     "detail": "169 kB of first-load JavaScript — check for statically imported tabs or a section tree that could be split",
+     "where": "app/preview/page.tsx",
+     "count": 1
+    },
+    {
+     "rule": "raw-image",
+     "severity": "MODERATE",
+     "line": 241,
+     "detail": "`principalPhotoUrl` is painted at whatever size it was uploaded",
+     "where": "components/public/PublicSite.tsx",
+     "count": 6
+    }
+   ]
+  },
+  {
+   "route": "/pricing",
+   "surface": "Open pages",
+   "client": false,
+   "files": 12,
+   "mountQueries": 0,
+   "firstLoadKb": 118,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/privacy",
+   "surface": "Open pages",
+   "client": false,
+   "files": 5,
+   "mountQueries": 0,
+   "firstLoadKb": 106,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/reset-password",
+   "surface": "Open pages",
+   "client": false,
+   "files": 16,
+   "mountQueries": 0,
+   "firstLoadKb": 150,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/s/[host]/academics",
+   "surface": "School website",
+   "client": false,
+   "files": 43,
+   "mountQueries": 0,
+   "firstLoadKb": 142,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "raw-image",
+     "severity": "MODERATE",
+     "line": 241,
+     "detail": "`principalPhotoUrl` is painted at whatever size it was uploaded",
+     "where": "components/public/PublicSite.tsx",
+     "count": 6
+    }
+   ]
+  },
+  {
+   "route": "/s/[host]/admissions",
+   "surface": "School website",
+   "client": false,
+   "files": 43,
+   "mountQueries": 0,
+   "firstLoadKb": 142,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "raw-image",
+     "severity": "MODERATE",
+     "line": 241,
+     "detail": "`principalPhotoUrl` is painted at whatever size it was uploaded",
+     "where": "components/public/PublicSite.tsx",
+     "count": 6
+    }
+   ]
+  },
+  {
+   "route": "/s/[host]/birthdays",
+   "surface": "School website",
+   "client": false,
+   "files": 43,
+   "mountQueries": 0,
+   "firstLoadKb": 142,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "raw-image",
+     "severity": "MODERATE",
+     "line": 241,
+     "detail": "`principalPhotoUrl` is painted at whatever size it was uploaded",
+     "where": "components/public/PublicSite.tsx",
+     "count": 6
+    }
+   ]
+  },
+  {
+   "route": "/s/[host]/connect",
+   "surface": "School website",
+   "client": false,
+   "files": 43,
+   "mountQueries": 0,
+   "firstLoadKb": 142,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "raw-image",
+     "severity": "MODERATE",
+     "line": 241,
+     "detail": "`principalPhotoUrl` is painted at whatever size it was uploaded",
+     "where": "components/public/PublicSite.tsx",
+     "count": 6
+    }
+   ]
+  },
+  {
+   "route": "/s/[host]/contact",
+   "surface": "School website",
+   "client": false,
+   "files": 43,
+   "mountQueries": 0,
+   "firstLoadKb": 142,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "raw-image",
+     "severity": "MODERATE",
+     "line": 241,
+     "detail": "`principalPhotoUrl` is painted at whatever size it was uploaded",
+     "where": "components/public/PublicSite.tsx",
+     "count": 6
+    }
+   ]
+  },
+  {
+   "route": "/s/[host]/gallery",
+   "surface": "School website",
+   "client": false,
+   "files": 43,
+   "mountQueries": 0,
+   "firstLoadKb": 142,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "raw-image",
+     "severity": "MODERATE",
+     "line": 241,
+     "detail": "`principalPhotoUrl` is painted at whatever size it was uploaded",
+     "where": "components/public/PublicSite.tsx",
+     "count": 6
+    }
+   ]
+  },
+  {
+   "route": "/s/[host]/p/[slug]",
+   "surface": "School website",
+   "client": false,
+   "files": 43,
+   "mountQueries": 0,
+   "firstLoadKb": 142,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "raw-image",
+     "severity": "MODERATE",
+     "line": 241,
+     "detail": "`principalPhotoUrl` is painted at whatever size it was uploaded",
+     "where": "components/public/PublicSite.tsx",
+     "count": 6
+    }
+   ]
+  },
+  {
+   "route": "/s/[host]",
+   "surface": "School website",
+   "client": false,
+   "files": 43,
+   "mountQueries": 0,
+   "firstLoadKb": 142,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "raw-image",
+     "severity": "MODERATE",
+     "line": 241,
+     "detail": "`principalPhotoUrl` is painted at whatever size it was uploaded",
+     "where": "components/public/PublicSite.tsx",
+     "count": 6
+    }
+   ]
+  },
+  {
+   "route": "/s/[host]/records",
+   "surface": "School website",
+   "client": false,
+   "files": 43,
+   "mountQueries": 0,
+   "firstLoadKb": 142,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "raw-image",
+     "severity": "MODERATE",
+     "line": 241,
+     "detail": "`principalPhotoUrl` is painted at whatever size it was uploaded",
+     "where": "components/public/PublicSite.tsx",
+     "count": 6
+    }
+   ]
+  },
+  {
+   "route": "/school-website-builder",
+   "surface": "Open pages",
+   "client": false,
+   "files": 6,
+   "mountQueries": 0,
+   "firstLoadKb": 106,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/sports/houses",
+   "surface": "Staff doors",
+   "client": true,
+   "files": 8,
+   "mountQueries": 4,
+   "firstLoadKb": 129,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "silent-query",
+     "severity": "MODERATE",
+     "detail": "1 query, and no error is rendered anywhere on the page",
+     "where": "app/app/sports/ui.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/sports",
+   "surface": "Staff doors",
+   "client": true,
+   "files": 12,
+   "mountQueries": 4,
+   "firstLoadKb": 162,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "heavy-bundle",
+     "severity": "MODERATE",
+     "detail": "162 kB of first-load JavaScript — check for statically imported tabs or a section tree that could be split",
+     "where": "app/sports/page.tsx",
+     "count": 1
+    },
+    {
+     "rule": "silent-query",
+     "severity": "MODERATE",
+     "detail": "1 query, and no error is rendered anywhere on the page",
+     "where": "app/app/sports/tournaments-tab.tsx",
+     "count": 2
+    },
+    {
+     "rule": "unmemoised-roster-work",
+     "severity": "MODERATE",
+     "line": 110,
+     "detail": "6 places walk a roster-scale list in the render body (first at line 110) — recomputed on every render",
+     "where": "app/app/sports/wizard-model.ts",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/sports/records",
+   "surface": "Staff doors",
+   "client": true,
+   "files": 9,
+   "mountQueries": 6,
+   "firstLoadKb": 153,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "request-fan-out",
+     "severity": "MODERATE",
+     "detail": "6 queries fire when this page mounts — each is a round trip and a tenant transaction",
+     "where": "app/sports/records/page.tsx",
+     "count": 1
+    },
+    {
+     "rule": "unmemoised-roster-work",
+     "severity": "MODERATE",
+     "line": 110,
+     "detail": "6 places walk a roster-scale list in the render body (first at line 110) — recomputed on every render",
+     "where": "app/app/sports/wizard-model.ts",
+     "count": 1
+    },
+    {
+     "rule": "silent-query",
+     "severity": "MODERATE",
+     "detail": "1 query, and no error is rendered anywhere on the page",
+     "where": "app/app/sports/ui.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/sports/rules",
+   "surface": "Staff doors",
+   "client": true,
+   "files": 9,
+   "mountQueries": 1,
+   "firstLoadKb": 142,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "silent-query",
+     "severity": "MODERATE",
+     "detail": "1 query, and no error is rendered anywhere on the page",
+     "where": "app/app/sports/ui.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/sports/settings",
+   "surface": "Staff doors",
+   "client": true,
+   "files": 8,
+   "mountQueries": 2,
+   "firstLoadKb": 152,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "silent-query",
+     "severity": "MODERATE",
+     "detail": "1 query, and no error is rendered anywhere on the page",
+     "where": "app/app/sports/ui.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/sports/tournaments/[id]",
+   "surface": "Staff doors",
+   "client": true,
+   "files": 18,
+   "mountQueries": 2,
+   "firstLoadKb": 166,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "heavy-bundle",
+     "severity": "MODERATE",
+     "detail": "166 kB of first-load JavaScript — check for statically imported tabs or a section tree that could be split",
+     "where": "app/sports/tournaments/[id]/page.tsx",
+     "count": 1
+    },
+    {
+     "rule": "silent-query",
+     "severity": "MODERATE",
+     "detail": "1 query, and no error is rendered anywhere on the page",
+     "where": "app/app/sports/ui.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/staff",
+   "surface": "Staff doors",
+   "client": true,
+   "files": 5,
+   "mountQueries": 1,
+   "firstLoadKb": 116,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "silent-query",
+     "severity": "MODERATE",
+     "detail": "1 query, and no error is rendered anywhere on the page",
+     "where": "app/staff/page.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/sv/orders",
+   "surface": "Staff doors",
+   "client": true,
+   "files": 2,
+   "mountQueries": 0,
+   "firstLoadKb": 104,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/teacher/announcements",
+   "surface": "Teacher portal",
+   "client": true,
+   "files": 10,
+   "mountQueries": 2,
+   "firstLoadKb": 135,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/teacher/assignments",
+   "surface": "Teacher portal",
+   "client": true,
+   "files": 10,
+   "mountQueries": 3,
+   "firstLoadKb": 137,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/teacher/attendance",
+   "surface": "Teacher portal",
+   "client": true,
+   "files": 11,
+   "mountQueries": 6,
+   "firstLoadKb": 138,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "request-fan-out",
+     "severity": "MODERATE",
+     "detail": "6 queries fire when this page mounts — each is a round trip and a tenant transaction",
+     "where": "app/teacher/attendance/page.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/teacher/diary",
+   "surface": "Teacher portal",
+   "client": true,
+   "files": 8,
+   "mountQueries": 3,
+   "firstLoadKb": 135,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/teacher/holidays",
+   "surface": "Teacher portal",
+   "client": true,
+   "files": 6,
+   "mountQueries": 1,
+   "firstLoadKb": 114,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/teacher/inbox",
+   "surface": "Teacher portal",
+   "client": true,
+   "files": 7,
+   "mountQueries": 2,
+   "firstLoadKb": 155,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/teacher/leave",
+   "surface": "Teacher portal",
+   "client": false,
+   "files": 1,
+   "mountQueries": 0,
+   "firstLoadKb": 103,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/teacher/library",
+   "surface": "Teacher portal",
+   "client": true,
+   "files": 7,
+   "mountQueries": 1,
+   "firstLoadKb": 115,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/teacher/notes",
+   "surface": "Teacher portal",
+   "client": true,
+   "files": 8,
+   "mountQueries": 2,
+   "firstLoadKb": 134,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/teacher/notifications",
+   "surface": "Teacher portal",
+   "client": false,
+   "files": 8,
+   "mountQueries": 1,
+   "firstLoadKb": 129,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "unmemoised-roster-work",
+     "severity": "MODERATE",
+     "line": 46,
+     "detail": "2 places walk a roster-scale list in the render body (first at line 46) — recomputed on every render",
+     "where": "components/notifications/notifications-view.tsx",
+     "count": 1
+    }
+   ]
+  },
+  {
+   "route": "/teacher",
+   "surface": "Teacher portal",
+   "client": true,
+   "files": 9,
+   "mountQueries": 2,
+   "firstLoadKb": 119,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/teacher/profile",
+   "surface": "Teacher portal",
+   "client": true,
+   "files": 7,
+   "mountQueries": 1,
+   "firstLoadKb": 124,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/teacher/requests",
+   "surface": "Teacher portal",
+   "client": true,
+   "files": 12,
+   "mountQueries": 3,
+   "firstLoadKb": 136,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/teacher/results",
+   "surface": "Teacher portal",
+   "client": true,
+   "files": 8,
+   "mountQueries": 5,
+   "firstLoadKb": 135,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/teacher/tests",
+   "surface": "Teacher portal",
+   "client": true,
+   "files": 9,
+   "mountQueries": 3,
+   "firstLoadKb": 134,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/teacher/timetable",
+   "surface": "Teacher portal",
+   "client": true,
+   "files": 8,
+   "mountQueries": 1,
+   "firstLoadKb": 116,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/terms",
+   "surface": "Open pages",
+   "client": false,
+   "files": 5,
+   "mountQueries": 0,
+   "firstLoadKb": 106,
+   "grade": "PERFECT",
+   "findings": []
+  },
+  {
+   "route": "/tv",
+   "surface": "Open pages",
+   "client": false,
+   "files": 6,
+   "mountQueries": 0,
+   "firstLoadKb": 105,
+   "grade": "MODERATE",
+   "findings": [
+    {
+     "rule": "raw-image",
+     "severity": "MODERATE",
+     "line": 113,
+     "detail": "`s.school.logoUrl` is painted at whatever size it was uploaded",
+     "where": "app/tv/tv-loop.tsx",
+     "count": 1
+    }
+   ]
+  }
+ ]
+}

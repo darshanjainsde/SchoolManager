@@ -954,6 +954,11 @@ model HallOfFameEntry {
 
   @@unique([groupId, batchYear, rank])
   @@index([schoolId])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted: that check never sees a tenant predicate, so
+  // without a leading index it reads every school's rows. See migration
+  // 20260921_010000_fk_indexes for the measurements.
+  @@index([studentId])
 }
 
 /// Which batch the public section lands on (null = latest with entries) and
@@ -1182,6 +1187,12 @@ model Student {
   @@index([schoolId, status])
   @@index([guardianPhoneE164])
   @@index([schoolId, guardianPhoneE164])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted: that check never sees a tenant predicate, so
+  // without a leading index it reads every school's rows. See migration
+  // 20260921_010000_fk_indexes for the measurements.
+  @@index([classSectionId])
+  @@index([houseId])
 }
 
 model Period {
@@ -1224,6 +1235,15 @@ model TimetableSlot {
   @@index([schoolId, teacherId, effectiveFrom])
   @@index([schoolId, subjectId])
   @@index([schoolId, academicYearId])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted: that check never sees a tenant predicate, so
+  // without a leading index it reads every school's rows. See migration
+  // 20260921_010000_fk_indexes for the measurements.
+  @@index([academicYearId])
+  @@index([classSectionId])
+  @@index([periodId])
+  @@index([subjectId])
+  @@index([teacherId])
 }
 
 // ── Academics: attendance, exams, results ────────────────
@@ -1428,6 +1448,11 @@ model Result {
 
   @@unique([examId, studentId], name: "one_result_per_exam_student")
   @@index([schoolId, studentId])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted: that check never sees a tenant predicate, so
+  // without a leading index it reads every school's rows. See migration
+  // 20260921_010000_fk_indexes for the measurements.
+  @@index([studentId])
 }
 
 /// Transactional outbox for "families' phones get told" events (S6/S7 wiring,
@@ -1480,6 +1505,11 @@ model NotificationOutbox {
   @@index([schoolId, classSectionId])
   @@index([sentAt, createdAt])
   @@index([sentAt, claimedAt, createdAt])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted: that check never sees a tenant predicate, so
+  // without a leading index it reads every school's rows. See migration
+  // 20260921_010000_fk_indexes for the measurements.
+  @@index([classSectionId])
 }
 
 /// A teacher-posted assignment for one class section (T21, Portal Parity R3
@@ -1523,6 +1553,12 @@ model Assignment {
 
   @@index([schoolId, classSectionId, dueDate])
   @@index([schoolId, subjectId])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted: that check never sees a tenant predicate, so
+  // without a leading index it reads every school's rows. See migration
+  // 20260921_010000_fk_indexes for the measurements.
+  @@index([classSectionId])
+  @@index([subjectId])
 }
 
 /// A student's "seen/opened" mark for an `Assignment` — v1's ONLY tracking
@@ -1550,6 +1586,11 @@ model AssignmentSeen {
   @@index([schoolId, studentId])
   /// Serves the read-receipt count per assignment, scoped to one school.
   @@index([schoolId, assignmentId])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted: that check never sees a tenant predicate, so
+  // without a leading index it reads every school's rows. See migration
+  // 20260921_010000_fk_indexes for the measurements.
+  @@index([studentId])
 }
 
 // Messaging (Phase 4 Task 5 / item T17). A student asks one of the teachers who
@@ -1578,6 +1619,13 @@ model MessageThread {
   @@index([schoolId, teacherId, lastMessageAt])
   @@index([schoolId, studentId, lastMessageAt])
   @@index([schoolId, classSectionId])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted: that check never sees a tenant predicate, so
+  // without a leading index it reads every school's rows. See migration
+  // 20260921_010000_fk_indexes for the measurements.
+  @@index([classSectionId])
+  @@index([subjectId])
+  @@index([teacherId])
 }
 
 model Message {
@@ -1940,6 +1988,11 @@ model EnquiryNote {
   enquiry      Enquiry  @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
 
   @@index([schoolId, enquiryId, createdAt])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted: that check never sees a tenant predicate, so
+  // without a leading index it reads every school's rows. See migration
+  // 20260921_010000_fk_indexes for the measurements.
+  @@index([enquiryId])
 }
 
 model Announcement {
@@ -1955,6 +2008,11 @@ model Announcement {
 
   @@index([schoolId])
   @@index([schoolId, classSectionId])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted: that check never sees a tenant predicate, so
+  // without a leading index it reads every school's rows. See migration
+  // 20260921_010000_fk_indexes for the measurements.
+  @@index([classSectionId])
 }
 
 // ── Platform-level marketing (sckools.com site) ─────────────────────────────
@@ -2144,6 +2202,12 @@ model ClassNote {
   subject         Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
 
   @@index([schoolId, classSectionId, date, subjectId])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted: that check never sees a tenant predicate, so
+  // without a leading index it reads every school's rows. See migration
+  // 20260921_010000_fk_indexes for the measurements.
+  @@index([classSectionId])
+  @@index([subjectId])
 }
 
 /// A tickable task a teacher sets for one class on one day.
@@ -2162,6 +2226,12 @@ model ClassTodo {
   subject         Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
 
   @@index([schoolId, classSectionId, date, subjectId])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted: that check never sees a tenant predicate, so
+  // without a leading index it reads every school's rows. See migration
+  // 20260921_010000_fk_indexes for the measurements.
+  @@index([classSectionId])
+  @@index([subjectId])
 }
 
 /// A request to reopen a past day's register. Registers lock at the end of
@@ -2184,6 +2254,11 @@ model RegisterChangeRequest {
 
   @@index([schoolId, status])
   @@index([schoolId, classSectionId, date])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted: that check never sees a tenant predicate, so
+  // without a leading index it reads every school's rows. See migration
+  // 20260921_010000_fk_indexes for the measurements.
+  @@index([classSectionId])
 }
 
 // ── The Daily Diary (Phase 5·3) ──────────────────────────────────────────────
@@ -2235,6 +2310,12 @@ model DiaryEntry {
   /// The diary page: one class's entries for one day.
   @@index([schoolId, classSectionId, date])
   @@index([schoolId, subjectId])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted: that check never sees a tenant predicate, so
+  // without a leading index it reads every school's rows. See migration
+  // 20260921_010000_fk_indexes for the measurements.
+  @@index([classSectionId])
+  @@index([subjectId])
 }
 
 /// Who a SELECTED entry is addressed to. Absent entirely for `audience: ALL`
@@ -2250,6 +2331,11 @@ model DiaryRecipient {
 
   @@unique([entryId, studentId], name: "one_recipient_per_entry_student")
   @@index([schoolId, studentId])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted: that check never sees a tenant predicate, so
+  // without a leading index it reads every school's rows. See migration
+  // 20260921_010000_fk_indexes for the measurements.
+  @@index([studentId])
 }
 
 /// Read receipt + parent signature, written LAZILY: a row appears the first
@@ -2273,6 +2359,11 @@ model DiaryAck {
 
   @@unique([entryId, studentId], name: "one_ack_per_entry_student")
   @@index([schoolId, studentId])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted: that check never sees a tenant predicate, so
+  // without a leading index it reads every school's rows. See migration
+  // 20260921_010000_fk_indexes for the measurements.
+  @@index([studentId])
 }
 
 /// A receipt for the attendance bar's one-tap "tell these families" action.
@@ -2296,6 +2387,11 @@ model AttendanceNotice {
   /// The cooldown lookup: this student's most recent notice.
   @@index([schoolId, studentId, sentAt])
   @@index([schoolId, classSectionId, sentAt])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted: that check never sees a tenant predicate, so
+  // without a leading index it reads every school's rows. See migration
+  // 20260921_010000_fk_indexes for the measurements.
+  @@index([studentId])
 }
 
 /// ── Hiring ──────────────────────────────────────────────────────────────────
@@ -2499,6 +2595,11 @@ model LibraryBookCopy {
 
   @@unique([schoolId, accessionNo])
   @@index([schoolId, titleId])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted: that check never sees a tenant predicate, so
+  // without a leading index it reads every school's rows. See migration
+  // 20260921_010000_fk_indexes for the measurements.
+  @@index([titleId])
 }
 
 /// One loan. Exactly one of studentId/teacherId is set (the StaffAttendance
@@ -2530,6 +2631,16 @@ model LibraryIssue {
   @@index([schoolId, teacherId])
   @@index([schoolId, copyId])
   @@index([schoolId, dueOn])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted: that check never sees a tenant predicate, so
+  // without a leading index it reads every school's rows. See migration
+  // 20260921_010000_fk_indexes for the measurements.
+  @@index([studentId])
+  @@index([teacherId])
+  // A plain index on copyId as well as the partial `open copy` unique: a
+  // referential-integrity check sees every row, so a partial index cannot
+  // serve it — see migration 20260921_010000_fk_indexes.
+  @@index([copyId])
 }
 
 /// A crystallized amount owed — created at return time (LATE) or write-off
@@ -2555,6 +2666,11 @@ model LibraryFine {
   @@index([schoolId, studentId])
   @@index([schoolId, teacherId])
   @@index([schoolId, issueId])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted: that check never sees a tenant predicate, so
+  // without a leading index it reads every school's rows. See migration
+  // 20260921_010000_fk_indexes for the measurements.
+  @@index([issueId])
 }
 
 /// A class's library-period attendance, saved by the librarian — either
@@ -3151,6 +3267,11 @@ model AlumniAccessToken {
 
   @@index([schoolId, alumniId])
   @@index([expiresAt])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted: that check never sees a tenant predicate, so
+  // without a leading index it reads every school's rows. See migration
+  // 20260921_010000_fk_indexes for the measurements.
+  @@index([alumniId])
 }
 
 enum AlumniTokenKind {
@@ -3426,6 +3547,9 @@ model FeeAssignment {
   @@unique([studentId, planId])
   @@index([schoolId, studentId])
   @@index([schoolId, planId])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted — see migration 20260921_010000_fk_indexes.
+  @@index([planId])
 }
 
 /// A discount for one student. Always rendered on the bill as its own named
@@ -3456,6 +3580,13 @@ model FeeConcession {
   @@index([schoolId, studentId])
   @@index([schoolId, categoryId])
   @@index([schoolId, termId])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted: that check never sees a tenant predicate, so
+  // without a leading index it reads every school's rows. See migration
+  // 20260921_010000_fk_indexes for the measurements.
+  @@index([categoryId])
+  @@index([studentId])
+  @@index([termId])
 }
 
 /// A bill. IMMUTABLE once issued — the parent has seen it. `number` is a
@@ -3494,6 +3625,12 @@ model FeeInvoice {
   @@index([schoolId, termId])
   @@index([schoolId, studentId])
   @@index([schoolId, dueDate])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted: that check never sees a tenant predicate, so
+  // without a leading index it reads every school's rows. See migration
+  // 20260921_010000_fk_indexes for the measurements.
+  @@index([planId])
+  @@index([termId])
 }
 
 /// One line of a bill. Gross, concession and net are all stored so the parent
@@ -3523,6 +3660,12 @@ model FeeInvoiceLine {
 
   @@index([schoolId, invoiceId])
   @@index([schoolId, categoryId])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted: that check never sees a tenant predicate, so
+  // without a leading index it reads every school's rows. See migration
+  // 20260921_010000_fk_indexes for the measurements.
+  @@index([categoryId])
+  @@index([invoiceId])
 }
 
 /// Money that changed hands — whoever moved it.
@@ -3585,6 +3728,12 @@ model FeePayment {
   @@index([schoolId, studentId])
   @@index([schoolId, invoiceId])
   @@index([schoolId, submittedAt])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted: that check never sees a tenant predicate, so
+  // without a leading index it reads every school's rows. See migration
+  // 20260921_010000_fk_indexes for the measurements.
+  @@index([invoiceId])
+  @@index([studentId])
 }
 
 /// Which lines of which bill a payment actually paid. Written by the
@@ -3606,6 +3755,13 @@ model FeeAllocation {
   @@index([schoolId, paymentId])
   @@index([schoolId, invoiceId])
   @@index([schoolId, invoiceLineId])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted: that check never sees a tenant predicate, so
+  // without a leading index it reads every school's rows. See migration
+  // 20260921_010000_fk_indexes for the measurements.
+  @@index([invoiceId])
+  @@index([invoiceLineId])
+  @@index([paymentId])
 }
 
 /// THE TRUTH. Append-only: no row is ever updated or deleted, and a balance is
@@ -3632,6 +3788,11 @@ model FeeLedgerEntry {
 
   @@index([schoolId, studentId, occurredAt])
   @@index([schoolId, refType, refId])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted: that check never sees a tenant predicate, so
+  // without a leading index it reads every school's rows. See migration
+  // 20260921_010000_fk_indexes for the measurements.
+  @@index([studentId])
 }
 
 /// Issued the moment a payment is verified. `number` comes from a per-school
@@ -3843,6 +4004,12 @@ model PressIssue {
   @@index([schoolId, type, windowId, studentId])
   @@index([schoolId, studentId])
   @@index([schoolId, type, issuedAt])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted: that check never sees a tenant predicate, so
+  // without a leading index it reads every school's rows. See migration
+  // 20260921_010000_fk_indexes for the measurements.
+  @@index([studentId])
+  @@index([windowId])
 }
 
 /// Per-school, per-series serial counter. Reached only through
@@ -3911,6 +4078,11 @@ model ReportRemark {
 
   @@unique([windowId, studentId])
   @@index([schoolId, studentId])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted: that check never sees a tenant predicate, so
+  // without a leading index it reads every school's rows. See migration
+  // 20260921_010000_fk_indexes for the measurements.
+  @@index([studentId])
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -4010,6 +4182,11 @@ model PrintOrderEvent {
   order  PrintOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([schoolId, orderId, at])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted: that check never sees a tenant predicate, so
+  // without a leading index it reads every school's rows. See migration
+  // 20260921_010000_fk_indexes for the measurements.
+  @@index([orderId])
 }
 
 // ── Sessions (year end) — Active Roster, Track C ─────────────────
@@ -4070,6 +4247,11 @@ model SessionDecision {
 
   @@unique([planId, studentId])
   @@index([schoolId, planId])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted: that check never sees a tenant predicate, so
+  // without a leading index it reads every school's rows. See migration
+  // 20260921_010000_fk_indexes for the measurements.
+  @@index([studentId])
 }
 
 // ── Sports wing ────────────────────────────────────────────────
@@ -4117,6 +4299,11 @@ model HousePoint {
   house     House    @relation(fields: [houseId], references: [id], onDelete: Cascade)
 
   @@index([schoolId, houseId])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted: that check never sees a tenant predicate, so
+  // without a leading index it reads every school's rows. See migration
+  // 20260921_010000_fk_indexes for the measurements.
+  @@index([houseId])
 }
 
 enum SportsTournamentStatus {
@@ -4162,6 +4349,9 @@ model SportsVenue {
   tournament   SportsTournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
 
   @@index([schoolId, tournamentId])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted — see migration 20260921_010000_fk_indexes.
+  @@index([tournamentId])
 }
 
 /// One sport × one group × one category inside a tournament.
@@ -4197,6 +4387,9 @@ model SportsEvent {
   heats           SportsHeat[]
 
   @@index([schoolId, tournamentId])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted — see migration 20260921_010000_fk_indexes.
+  @@index([tournamentId])
 }
 
 model SportsEntry {
@@ -4212,6 +4405,11 @@ model SportsEntry {
 
   @@unique([eventId, studentId])
   @@index([schoolId, eventId])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted: that check never sees a tenant predicate, so
+  // without a leading index it reads every school's rows. See migration
+  // 20260921_010000_fk_indexes for the measurements.
+  @@index([studentId])
 }
 
 /// A knockout slot. Sides are keys, not FKs — `s:<studentId>` for an
@@ -4243,6 +4441,9 @@ model SportsMatch {
   event      SportsEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   @@index([schoolId, eventId])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted — see migration 20260921_010000_fk_indexes.
+  @@index([eventId])
 }
 
 model SportsHeat {
@@ -4262,6 +4463,9 @@ model SportsHeat {
   marks      SportsMark[]
 
   @@index([schoolId, eventId])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted — see migration 20260921_010000_fk_indexes.
+  @@index([eventId])
 }
 
 model SportsMark {
