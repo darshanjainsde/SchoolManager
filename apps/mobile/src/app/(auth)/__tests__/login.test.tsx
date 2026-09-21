@@ -1,7 +1,8 @@
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import Login from '../login';
 import { session } from '@/lib/session';
-import { api } from '@/lib/api';
+import { family } from '@/lib/family-store';
+import { api, ApiError } from '@/lib/api';
 
 jest.mock('expo-secure-store', () => {
   const store: Record<string, string> = {};
@@ -19,7 +20,7 @@ jest.mock('expo-router', () => ({
 
 jest.mock('@/lib/api', () => {
   const actual = jest.requireActual('@/lib/api');
-  return { ...actual, api: { ...actual.api, login: jest.fn(), resolveSchool: jest.fn() } };
+  return { ...actual, api: { ...actual.api, login: jest.fn(), resolveSchool: jest.fn(), otpRequest: jest.fn(), otpVerify: jest.fn(), otpChoose: jest.fn(), sessionFor: jest.fn() } };
 });
 
 beforeEach(async () => {
@@ -58,6 +59,7 @@ it('clears the persisted session and shows the real message when portalForRole r
   });
 
   const { getByTestId, findByText } = render(<Login />);
+  fireEvent.press(getByTestId('login-mode-password'));
   fireEvent.changeText(getByTestId('login-id'), 'owner@raffles.sckools.com');
   fireEvent.changeText(getByTestId('login-pw'), 'password');
   fireEvent.press(getByTestId('login-btn'));
@@ -87,6 +89,7 @@ it('still routes a valid role to its portal', async () => {
   });
 
   const { getByTestId } = render(<Login />);
+  fireEvent.press(getByTestId('login-mode-password'));
   fireEvent.changeText(getByTestId('login-id'), 'teacher@raffles.sckools.com');
   fireEvent.changeText(getByTestId('login-pw'), 'password');
   fireEvent.press(getByTestId('login-btn'));
@@ -106,6 +109,7 @@ it('with no stored host, resolves the school from the identifier and logs in the
   (api.login as jest.Mock).mockImplementation(loginSucceedsAs('STUDENT'));
 
   const { getByTestId } = render(<Login />);
+  fireEvent.press(getByTestId('login-mode-password'));
   fireEvent.changeText(getByTestId('login-id'), 'RAF-00042');
   fireEvent.changeText(getByTestId('login-pw'), 'password');
   fireEvent.press(getByTestId('login-btn'));
@@ -128,6 +132,7 @@ it('falls through a stale stored host to the resolved school', async () => {
   (api.resolveSchool as jest.Mock).mockResolvedValue(['acme.sckools.com']);
 
   const { getByTestId } = render(<Login />);
+  fireEvent.press(getByTestId('login-mode-password'));
   fireEvent.changeText(getByTestId('login-id'), 'teacher@acme.edu');
   fireEvent.changeText(getByTestId('login-pw'), 'password');
   fireEvent.press(getByTestId('login-btn'));
@@ -145,6 +150,7 @@ it('shows a neutral error when the identifier resolves nowhere', async () => {
   // resolveSchool already returns [] from beforeEach.
 
   const { getByTestId, findByText } = render(<Login />);
+  fireEvent.press(getByTestId('login-mode-password'));
   fireEvent.changeText(getByTestId('login-id'), 'ZZZ-99999');
   fireEvent.changeText(getByTestId('login-pw'), 'password');
   fireEvent.press(getByTestId('login-btn'));
@@ -152,5 +158,57 @@ it('shows a neutral error when the identifier resolves nowhere', async () => {
   expect(await findByText(/check your details/i)).toBeTruthy();
   // No candidates → no login attempt was ever made anywhere.
   expect(api.login).not.toHaveBeenCalled();
+  expect(mockReplace).not.toHaveBeenCalled();
+});
+
+// ── The phone door (design §4–§5) ─────────────────────────────────────────
+const REQ = { challengeId: '11111111-1111-1111-1111-111111111111', phoneMasked: '+91 98••• •3210', sentVia: ['whatsapp'], expiresIn: 600 };
+const ravi = { userId: 'u-ravi', kind: 'FAMILY', role: 'STUDENT', label: 'Ravi Sharma', sub: 'Class 5-B', schoolName: 'Raffles', host: 'raffles.sckools.com' };
+const priya = { userId: 'u-priya', kind: 'TEACHER', role: 'TEACHER', label: 'Priya Nair', sub: 'Teacher', schoolName: 'Raffles', host: 'raffles.sckools.com' };
+const sessionOf = (role: string, name: string, host = 'raffles.sckools.com') => ({ accessToken: 'a', refreshToken: 'r', role, schoolHost: host, displayName: name, features: [] });
+
+it('phone door: number → code → one profile → straight to that role\'s home, on the shelf', async () => {
+  (api.otpRequest as jest.Mock).mockResolvedValue(REQ);
+  (api.otpVerify as jest.Mock).mockResolvedValue({ choose: false, host: 'raffles.sckools.com', profile: { ...ravi }, accessToken: 'a', refreshToken: 'r', expiresIn: 900 });
+  (api.sessionFor as jest.Mock).mockImplementation(async () => { const s = sessionOf('STUDENT', 'Ravi Sharma'); await session.set(s as never); return s; });
+  const { getByTestId, findByTestId } = render(<Login />);
+  fireEvent.changeText(getByTestId('otp-phone'), '98765 43210');
+  fireEvent.press(getByTestId('otp-send'));
+  await findByTestId('otp-code');
+  expect(api.otpRequest).toHaveBeenCalledWith('98765 43210');
+  fireEvent.changeText(getByTestId('otp-code'), '482911');
+  fireEvent.press(getByTestId('otp-verify'));
+  await waitFor(() => expect(api.otpVerify).toHaveBeenCalledWith(REQ.challengeId, '482911'));
+  await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(family)/(tabs)/home'));
+  expect((await family.list()).find((c) => c.displayName === 'Ravi Sharma')).toMatchObject({ role: 'STUDENT', schoolHost: 'raffles.sckools.com' });
+});
+
+it('phone door: two profiles → the chooser; picking the teacher opens the staff room', async () => {
+  (api.otpRequest as jest.Mock).mockResolvedValue(REQ);
+  (api.otpVerify as jest.Mock).mockResolvedValue({ choose: true, ticket: 't-1', profiles: [ravi, priya] });
+  (api.otpChoose as jest.Mock).mockImplementation(async (_t: string, p: { role: string; label: string }) => { const s = sessionOf(p.role, p.label); await session.set(s as never); return s; });
+  const { getByTestId, findByTestId } = render(<Login />);
+  fireEvent.changeText(getByTestId('otp-phone'), '9876543210');
+  fireEvent.press(getByTestId('otp-send'));
+  await findByTestId('otp-code');
+  fireEvent.changeText(getByTestId('otp-code'), '482911');
+  fireEvent.press(getByTestId('otp-verify'));
+  await findByTestId('otp-choose');
+  fireEvent.press(getByTestId('otp-choice-u-priya'));
+  await waitFor(() => expect(api.otpChoose).toHaveBeenCalledWith('t-1', expect.objectContaining({ userId: 'u-priya' })));
+  await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(staff)/(tabs)/home'));
+});
+
+it('phone door: a wrong code shows the server\'s words and stays on the code step', async () => {
+  (api.otpRequest as jest.Mock).mockResolvedValue(REQ);
+  (api.otpVerify as jest.Mock).mockRejectedValue(new ApiError(400, 'That code is not right. 4 tries left.'));
+  const { getByTestId, findByTestId, findByText } = render(<Login />);
+  fireEvent.changeText(getByTestId('otp-phone'), '9876543210');
+  fireEvent.press(getByTestId('otp-send'));
+  await findByTestId('otp-code');
+  fireEvent.changeText(getByTestId('otp-code'), '000000');
+  fireEvent.press(getByTestId('otp-verify'));
+  await findByText('That code is not right. 4 tries left.');
+  expect(getByTestId('otp-code')).toBeTruthy();
   expect(mockReplace).not.toHaveBeenCalled();
 });

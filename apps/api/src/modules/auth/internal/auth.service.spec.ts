@@ -369,3 +369,19 @@ describe('AuthService.refresh — a closed login is refused as such', () => {
     await expect(svc.refresh(token(), SCHOOL_A)).rejects.toThrow('Refresh token reuse detected');
   });
 });
+
+describe('AuthService.displayNameFor — an admin has no person record', () => {
+  const svc = new AuthService(new JwtService({}), { verify: jest.fn() } as unknown as PasswordService);
+  beforeEach(() => {
+    jest.clearAllMocks();
+    prismaMock.teacher.findFirst.mockResolvedValue(null);
+    prismaMock.student.findFirst.mockResolvedValue(null);
+    prismaMock.staff.findFirst.mockResolvedValue(null);
+  });
+  it('falls back to the name on the login itself, or null when there is none', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ name: '  Darshan Jain ' });
+    await expect(svc.displayNameFor(SCHOOL, 'user-9', 'SCHOOL_ADMIN')).resolves.toBe('Darshan Jain');
+    prismaMock.user.findUnique.mockResolvedValue({ name: null });
+    await expect(svc.displayNameFor(SCHOOL, 'user-9', 'SCHOOL_ADMIN')).resolves.toBeNull();
+  });
+});

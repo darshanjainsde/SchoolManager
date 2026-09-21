@@ -84,6 +84,11 @@ const envSchema = z.object({
   RESEND_API_KEY: z.string().optional(),
   // Signs Resend's webhook (Svix). Unset → the webhook refuses everything.
   RESEND_WEBHOOK_SECRET: z.string().optional(),
+  // MSG91 (SMS OTP over DLT). Both set → one-time codes also go by SMS beside
+  // WhatsApp; unset → the SMS sender reports itself disabled and nothing else
+  // changes. The DLT-approved template must carry a single ##OTP## variable.
+  MSG91_AUTH_KEY: z.string().optional(),
+  MSG91_OTP_TEMPLATE_ID: z.string().optional(),
 
   // Single shared password that unlocks the owner console at /owner.
   // Unset → the gate endpoint answers 503 and only email login works.

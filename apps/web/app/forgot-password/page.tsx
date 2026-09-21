@@ -20,6 +20,25 @@ export default function ForgotPasswordPage() {
   // Where the code-reset link actually went, masked by the server (or null
   // when that code has no email on file at all).
   const [sentTo, setSentTo] = useState<string | null>(null);
+  // Design §4: a login with a phone on file also gets a code on WhatsApp, and
+  // can set the new password right here. `null` = email link only.
+  const [otp, setOtp] = useState<{ challengeId: string; phoneMasked: string; sentVia: string[] } | null>(null);
+  const [otpCode, setOtpCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [otpStatus, setOtpStatus] = useState<'idle' | 'saving' | 'done' | 'error'>('idle');
+  const [otpError, setOtpError] = useState<string | null>(null);
+
+  async function onResetWithOtp(e: React.FormEvent) {
+    e.preventDefault();
+    if (!otp || otpCode.length !== 6 || newPassword.length < 8 || otpStatus === 'saving') return;
+    setOtpStatus('saving'); setOtpError(null);
+    try {
+      await api.post('/auth/reset-with-otp', { email: email.trim(), challengeId: otp.challengeId, code: otpCode, newPassword });
+      setOtpStatus('done');
+    } catch (err) {
+      setOtpStatus('error'); setOtpError((err as Error).message);
+    }
+  }
 
   const value = mode === 'email' ? email.trim() : code.trim().toUpperCase();
 
@@ -35,7 +54,8 @@ export default function ForgotPasswordPage() {
         );
         setSentTo(res.emailMasked);
       } else {
-        await api.post('/auth/forgot-password', { email: value });
+        const r = await api.post<{ ok: true; challengeId?: string; phoneMasked?: string; sentVia?: string[] }>('/auth/forgot-password', { email: value });
+        setOtp(r.challengeId && r.phoneMasked ? { challengeId: r.challengeId, phoneMasked: r.phoneMasked, sentVia: r.sentVia ?? ['whatsapp'] } : null);
       }
       setStatus('sent');
     } catch {
@@ -68,6 +88,26 @@ export default function ForgotPasswordPage() {
                     </>
                   )}
                 </p>
+              ) : otpStatus === 'done' ? (
+                <p data-testid="otp-done">Password changed. Every other session was signed out. <a href="/login" className="text-teal-700 font-medium hover:underline">Sign in</a> with the new one.</p>
+              ) : otp ? (
+                <form className="flex flex-col gap-3" data-testid="otp-reset" onSubmit={onResetWithOtp}>
+                  <p>
+                    A 6-digit code went to <b>{otp.phoneMasked}</b> on {otp.sentVia.map((v) => (v === 'sms' ? 'SMS' : 'WhatsApp')).join(' and ')}, and a link to <b>{email.trim()}</b>. Use whichever arrives first.
+                  </p>
+                  <div>
+                    <Label htmlFor="otp-code" required>The code</Label>
+                    <Input id="otp-code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="482911" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))} required />
+                  </div>
+                  <div>
+                    <Label htmlFor="otp-new" required>New password</Label>
+                    <Input id="otp-new" type="password" autoComplete="new-password" minLength={8} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required />
+                  </div>
+                  {otpError && <p className="text-xs text-rose-600" role="alert">{otpError}</p>}
+                  <Button type="submit" disabled={otpStatus === 'saving' || otpCode.length !== 6 || newPassword.length < 8}>
+                    {otpStatus === 'saving' ? 'Saving…' : 'Set new password'}
+                  </Button>
+                </form>
               ) : (
                 <p>
                   If an account exists for <b>{email.trim()}</b>, we&rsquo;ve emailed a link to reset the

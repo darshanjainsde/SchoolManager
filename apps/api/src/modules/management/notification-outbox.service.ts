@@ -4,6 +4,7 @@ import { getPlatformPrisma } from '@skoolos/db';
 import { assertNotificationOutboxKind, type NotificationOutboxKind } from '@skoolos/types';
 import { PushChannel } from '../../common/notifications/push.channel';
 import { WhatsAppChannel } from '../../common/notifications/whatsapp.channel';
+import { ackPayload, leavePayload } from '../../common/notifications/whatsapp/actions';
 import { resolveSectionRecipients, resolveUserRecipients } from '../../common/notifications/recipients';
 import type {
   MessageReceivedOutboxPayload,
@@ -121,6 +122,22 @@ function toNotificationMessage(kind: NotificationOutboxKind, payload: unknown): 
         className: 'Library',
       },
     };
+  }
+  if (kind === 'LEAVE_APPLIED') {
+    // The button payloads are signed HERE, at send time, with the app secret
+    // — never stored on the row.
+    const p = payload as { schoolName: string; leaveId: string; teacherName: string; dates: string; days: number; reason: string | null; periodsAffected: number };
+    const secret = process.env.META_APP_SECRET?.trim() || 'unset';
+    return { kind: 'LEAVE_APPLIED', payload: { ...p, approvePayload: leavePayload('approve', p.leaveId, secret), rejectPayload: leavePayload('reject', p.leaveId, secret) } };
+  }
+  if (kind === 'LEAVE_DECIDED') {
+    const p = payload as { schoolName: string; leaveId: string; decision: 'APPROVED' | 'REJECTED'; dates: string; byName: string | null };
+    return { kind: 'LEAVE_DECIDED', payload: { schoolName: p.schoolName, leaveId: p.leaveId, decision: p.decision, dates: p.dates, byName: p.byName ?? null } };
+  }
+  if (kind === 'COVER_ASSIGNED') {
+    const p = payload as { schoolName: string; substitutionId: string; when: string; className: string; subjectName: string | null; originalTeacherName: string };
+    const secret = process.env.META_APP_SECRET?.trim() || 'unset';
+    return { kind: 'COVER_ASSIGNED', payload: { ...p, ackPayload: ackPayload(p.substitutionId, secret) } };
   }
   if (kind === 'FEE_VERIFIED' || kind === 'FEE_REJECTED' || kind === 'FEE_DUE') {
     // The fee desk's decision to one family, composed at write time by

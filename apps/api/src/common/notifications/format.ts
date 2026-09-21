@@ -121,6 +121,21 @@ export function formatNotification(message: NotificationMessage): NotificationTe
         title: `Attendance: ${message.payload.studentName}`,
         body: `${message.payload.percent}% this term — below the school's ${message.payload.threshold}% benchmark.`,
       };
+    case 'LEAVE_APPLIED':
+      return {
+        title: `Leave request: ${message.payload.teacherName}`,
+        body: `${message.payload.dates} · ${message.payload.periodsAffected} period${message.payload.periodsAffected === 1 ? '' : 's'} to cover. Open Requests to decide.`,
+      };
+    case 'LEAVE_DECIDED':
+      return {
+        title: `Leave ${message.payload.decision === 'APPROVED' ? 'approved' : 'not approved'}`,
+        body: `${message.payload.dates} — ${message.payload.byName ?? 'the office'}.`,
+      };
+    case 'COVER_ASSIGNED':
+      return {
+        title: `You cover ${message.payload.className}`,
+        body: `${message.payload.when}${message.payload.subjectName ? ` · ${message.payload.subjectName}` : ''}, for ${message.payload.originalTeacherName}.`,
+      };
     default: {
       // Exhaustiveness guard — a new NotificationKind must be handled above.
       const _exhaustive: never = message;

@@ -401,6 +401,7 @@ model School {
   whatsAppDeliveries     WhatsAppDelivery[]
   emailDeliveries        EmailDelivery[]
   emailSuppressions      EmailSuppression[]
+  whatsAppInbounds       WhatsAppInbound[]
   houses                 House[]
   housePoints            HousePoint[]
   sportsTournaments      SportsTournament[]
@@ -494,6 +495,20 @@ model User {
   role                UserRole
   isActive            Boolean              @default(true)
   mfaSecret           String?
+  /// The person's own WhatsApp number (E.164), proven by a code sent to it.
+  /// Admin notices go here; a verified User.phone also wins over the
+  /// office-typed Teacher.phone / Staff.phone for that person. Never used
+  /// unverified — a typo must not send a school's leave requests elsewhere.
+  phone               String?
+  phoneVerifiedAt     DateTime?
+  phonePending        String?
+  phoneOtpHash        String?
+  phoneOtpExpiresAt   DateTime?
+  phoneOtpAttempts    Int                  @default(0)
+  // A display name for logins that have no person record of their own (admins), and the fallback for everyone.
+  name                String?
+  // What reaches this person on WhatsApp — { leave, register, fees, enquiry, summary } booleans; missing = on.
+  notifyPrefs         Json?
   failedLoginAttempts Int                  @default(0)
   lockedUntil         DateTime?
   lastLoginAt         DateTime?
@@ -506,6 +521,7 @@ model User {
   @@unique([schoolId, email])
   @@unique([schoolId, username])
   @@index([schoolId])
+  @@index([schoolId, phone])
 }
 
 model RefreshToken {
@@ -839,18 +855,18 @@ model FeaturedStaff {
 // Public "courses/classes offered" — CMS content for ALL tiers, fully
 // separate from the Management (Pro) Grade/ClassSection operational models.
 model Course {
-  id           String            @id @default(uuid()) @db.Uuid
-  schoolId     String            @db.Uuid
-  name         String
-  tagline      String?
-  description  String?
-  highlights   String[]          @default([])
-  ageRange     String?
-  imageAssetId String?           @db.Uuid
-  featured     Boolean           @default(false)
-  order        Int               @default(0)
-  school       School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  fee          CourseFee?
+  id               String            @id @default(uuid()) @db.Uuid
+  schoolId         String            @db.Uuid
+  name             String
+  tagline          String?
+  description      String?
+  highlights       String[]          @default([])
+  ageRange         String?
+  imageAssetId     String?           @db.Uuid
+  featured         Boolean           @default(false)
+  order            Int               @default(0)
+  school           School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  fee              CourseFee?
   hallOfFameGroups HallOfFameGroup[]
 
   @@index([schoolId])
@@ -1035,35 +1051,37 @@ model Subject {
 }
 
 model Teacher {
-  id               String           @id @default(uuid()) @db.Uuid
-  schoolId         String           @db.Uuid
-  userId           String?          @db.Uuid
-  firstName        String
-  lastName         String
-  email            String?
-  phone            String?
-  photoAssetId     String?          @db.Uuid
-  primarySubjectId String?          @db.Uuid
-  bio              String?
-  isActive         Boolean          @default(true)
+  id                String           @id @default(uuid()) @db.Uuid
+  schoolId          String           @db.Uuid
+  userId            String?          @db.Uuid
+  firstName         String
+  lastName          String
+  email             String?
+  phone             String?
+  phoneE164         String?
+  photoAssetId      String?          @db.Uuid
+  primarySubjectId  String?          @db.Uuid
+  bio               String?
+  isActive          Boolean          @default(true)
   /// Lifecycle (Active Roster). `isActive` above mirrors `status === ACTIVE`.
-  status            StaffStatus @default(ACTIVE)
-  leftOn            DateTime?   @db.Date
+  status            StaffStatus      @default(ACTIVE)
+  leftOn            DateTime?        @db.Date
   leftReason        String?
   leftNote          String?
   statusChangedAt   DateTime?
-  statusChangedById String?     @db.Uuid
-  school           School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  teacherSubjects  TeacherSubject[]
-  classSections    ClassSection[]   @relation("ClassTeacher")
-  timetableSlots   TimetableSlot[]
-  featuredIn       FeaturedStaff[]
-  messageThreads   MessageThread[]
-  libraryIssues    LibraryIssue[]
+  statusChangedById String?          @db.Uuid
+  school            School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  teacherSubjects   TeacherSubject[]
+  classSections     ClassSection[]   @relation("ClassTeacher")
+  timetableSlots    TimetableSlot[]
+  featuredIn        FeaturedStaff[]
+  messageThreads    MessageThread[]
+  libraryIssues     LibraryIssue[]
 
   @@index([schoolId])
   @@index([userId])
   @@index([schoolId, status])
+  @@index([phoneE164])
 }
 
 model TeacherSubject {
@@ -1095,6 +1113,8 @@ model Student {
   gender              String?
   guardianName        String?
   guardianPhone       String?
+  // The same number normalised to E.164 (+91…), maintained by StudentsService; the phone login's index.
+  guardianPhoneE164   String?
   // ── The admission-register facts a statutory Transfer Certificate prints
   //    (CBSE Examination Bye-laws, Annexure-I). All optional: collected on
   //    the student form, or asked ONCE by the certificate drawer and saved
@@ -1149,16 +1169,19 @@ model Student {
   pressIssues         PressIssue[]
   reportRemarks       ReportRemark[]
 
-  hallOfFameEntries   HallOfFameEntry[]
-  sessionDecisions    SessionDecision[]
+  hallOfFameEntries HallOfFameEntry[]
+  sessionDecisions  SessionDecision[]
   /// The house a child plays for (Sports wing). Null until the office assigns one.
-  houseId             String?            @db.Uuid
-  house               House?             @relation(fields: [houseId], references: [id], onDelete: SetNull)
-  sportsEntries       SportsEntry[]
+  houseId           String?           @db.Uuid
+  house             House?            @relation(fields: [houseId], references: [id], onDelete: SetNull)
+  sportsEntries     SportsEntry[]
+
   @@unique([schoolId, admissionNo])
   @@unique([schoolId, code])
   @@index([schoolId, classSectionId])
   @@index([schoolId, status])
+  @@index([guardianPhoneE164])
+  @@index([schoolId, guardianPhoneE164])
 }
 
 model Period {
@@ -1237,20 +1260,21 @@ model Substitution {
 }
 
 model Staff {
-  id           String    @id @default(uuid()) @db.Uuid
-  schoolId     String    @db.Uuid
-  firstName    String
-  lastName     String
-  role         StaffRole @default(OTHER)
+  id                String      @id @default(uuid()) @db.Uuid
+  schoolId          String      @db.Uuid
+  firstName         String
+  lastName          String
+  role              StaffRole   @default(OTHER)
   /// SPORTS only: ENTER · VERIFY · CREATE · PUBLISH · HOUSES · SETTINGS (sports-perms.ts).
-  sportsPerms         String[]  @default([])
-  email        String?
-  phone        String?
-  userId       String?   @db.Uuid
+  sportsPerms       String[]    @default([])
+  email             String?
+  phone             String?
+  phoneE164         String?
+  userId            String?     @db.Uuid
   /// Self-uploaded avatar (MediaAsset id, kind AVATAR) — bare scalar like
   /// Student.photoAssetId / Teacher.photoAssetId (Phase 5·0d).
-  photoAssetId String?   @db.Uuid
-  isActive     Boolean   @default(true)
+  photoAssetId      String?     @db.Uuid
+  isActive          Boolean     @default(true)
   /// Lifecycle (Active Roster). `isActive` above mirrors `status === ACTIVE`.
   status            StaffStatus @default(ACTIVE)
   leftOn            DateTime?   @db.Date
@@ -1258,11 +1282,12 @@ model Staff {
   leftNote          String?
   statusChangedAt   DateTime?
   statusChangedById String?     @db.Uuid
-  createdAt    DateTime  @default(now())
-  school       School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  createdAt         DateTime    @default(now())
+  school            School      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
   @@index([schoolId])
   @@index([schoolId, status])
+  @@index([phoneE164])
 }
 
 model StaffAttendance {
@@ -1901,18 +1926,18 @@ model Enquiry {
 /// Append-only by convention — nothing in the app updates or deletes a row.
 /// "Contacted" is a claim, and this is what makes it checkable.
 model EnquiryNote {
-  id         String   @id @default(uuid()) @db.Uuid
-  schoolId   String   @db.Uuid
-  enquiryId  String   @db.Uuid
+  id           String   @id @default(uuid()) @db.Uuid
+  schoolId     String   @db.Uuid
+  enquiryId    String   @db.Uuid
   /// NOTE (a person wrote it) | STAGE (the pipeline moved) | SYSTEM (we did it)
-  kind       String   @default("NOTE")
-  body       String
-  authorUserId String? @db.Uuid
+  kind         String   @default("NOTE")
+  body         String
+  authorUserId String?  @db.Uuid
   /// Denormalised at write time so a note still says who wrote it after that
   /// member of staff has left.
-  authorName String?
-  createdAt  DateTime @default(now())
-  enquiry    Enquiry  @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+  authorName   String?
+  createdAt    DateTime @default(now())
+  enquiry      Enquiry  @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
 
   @@index([schoolId, enquiryId, createdAt])
 }
@@ -1972,7 +1997,7 @@ model MarketingLead {
   status   LeadStatus @default(NEW)
 
   /// When the owner next intends to reach out. Drives the "due" queue.
-  nextFollowUpAt DateTime?
+  nextFollowUpAt  DateTime?
   /// Set by the service whenever a CALL/WHATSAPP/EMAIL/MEETING is logged.
   lastContactedAt DateTime?
 
@@ -2020,18 +2045,18 @@ model MarketingConfig {
 /// One-time 15-minute owner→school-admin login handoff (sha256 at rest,
 /// single-use, host-bound at exchange time). Mirrors PasswordResetToken.
 model ImpersonationToken {
-  id        String    @id @default(uuid()) @db.Uuid
-  userId    String    @db.Uuid
-  schoolId  String    @db.Uuid
-  tokenHash String    @unique
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime  @default(now())
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String    @db.Uuid
+  schoolId       String    @db.Uuid
+  tokenHash      String    @unique
+  expiresAt      DateTime
+  usedAt         DateTime?
+  createdAt      DateTime  @default(now())
   /// The platform user who minted this link. Deliberately not a relation: the
   /// owner is a platform user (schoolId null) and this table is tenant-scoped,
   /// so an FK would cross the tenant boundary. Attribution, not a reference.
-  mintedByUserId String? @db.Uuid
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mintedByUserId String?   @db.Uuid
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
@@ -4141,35 +4166,35 @@ model SportsVenue {
 
 /// One sport × one group × one category inside a tournament.
 model SportsEvent {
-  id           String           @id @default(uuid()) @db.Uuid
-  schoolId     String           @db.Uuid
-  tournamentId String           @db.Uuid
-  sportKey     String
-  sportName    String
-  kind         String
-  groupKey     String
-  category     String
-  entry        String           @default("ALL")
+  id              String           @id @default(uuid()) @db.Uuid
+  schoolId        String           @db.Uuid
+  tournamentId    String           @db.Uuid
+  sportKey        String
+  sportName       String
+  kind            String
+  groupKey        String
+  category        String
+  entry           String           @default("ALL")
   /// Team sports only: SECTIONS (9 A v 9 B), CLASSES (9 v 10) or HOUSES.
-  teamBasis    String           @default("SECTIONS")
+  teamBasis       String           @default("SECTIONS")
   /// Measured/judged events: CLASS_QUAL · OPEN_QUAL · STRAIGHT (sports/maths.ts planStages).
-  stageShape      String        @default("STRAIGHT")
+  stageShape      String           @default("STRAIGHT")
   /// CLASS_QUAL: how many of each class reach the band stage.
-  advancePerClass Int           @default(2)
+  advancePerClass Int              @default(2)
   /// OPEN_QUAL/STRAIGHT: how many reach the final.
-  finalists       Int           @default(6)
+  finalists       Int              @default(6)
   /// Pinned to this day of the meet (0-based); null = wherever it fits.
   dayIdx          Int?
-  structure    String
-  slotMin      Int
-  lanes        Int              @default(6)
-  venueIds     String[]         @default([]) @db.Uuid
-  order        Int              @default(0)
-  school       School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  tournament   SportsTournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
-  entries      SportsEntry[]
-  matches      SportsMatch[]
-  heats        SportsHeat[]
+  structure       String
+  slotMin         Int
+  lanes           Int              @default(6)
+  venueIds        String[]         @default([]) @db.Uuid
+  order           Int              @default(0)
+  school          School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  tournament      SportsTournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  entries         SportsEntry[]
+  matches         SportsMatch[]
+  heats           SportsHeat[]
 
   @@index([schoolId, tournamentId])
 }
@@ -4221,20 +4246,20 @@ model SportsMatch {
 }
 
 model SportsHeat {
-  id       String       @id @default(uuid()) @db.Uuid
-  schoolId String       @db.Uuid
-  eventId  String       @db.Uuid
+  id         String       @id @default(uuid()) @db.Uuid
+  schoolId   String       @db.Uuid
+  eventId    String       @db.Uuid
   /// HEAT · SEMI · FINAL — the step of the funnel this heat belongs to.
-  kind     String
+  kind       String
   /// Class heats: the class they belong to ("Class 9"), so the best of each class advance.
   groupLabel String?
-  idx      Int
-  venueId  String?      @db.Uuid
-  atMin    Int?
-  done     Boolean      @default(false)
-  school   School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  event    SportsEvent  @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  marks    SportsMark[]
+  idx        Int
+  venueId    String?      @db.Uuid
+  atMin      Int?
+  done       Boolean      @default(false)
+  school     School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  event      SportsEvent  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  marks      SportsMark[]
 
   @@index([schoolId, eventId])
 }
@@ -4382,4 +4407,42 @@ model EmailSuppression {
   school    School?  @relation(fields: [schoolId], references: [id], onDelete: SetNull)
 
   @@index([schoolId])
+}
+
+/// Every message or button tap a person sent US on WhatsApp, keyed by Meta's
+/// message id — which is what makes handling idempotent (Meta retries
+/// webhooks) and gives the office an audit line: who tapped Approve, when,
+/// and what happened. `schoolId` is filled once the payload names a school.
+model WhatsAppInbound {
+  id        String   @id
+  schoolId  String?  @db.Uuid
+  phone     String
+  /// button | list | text | other
+  kind      String
+  payload   String
+  result    String?
+  createdAt DateTime @default(now())
+  school    School?  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, createdAt])
+}
+
+/// One-time code for a phone: login, password reset, or proving a number.
+/// Platform-side (a phone is not a tenant row): no schoolId FK, no RLS —
+/// allow-listed in packages/db/src/rls-coverage.spec.ts with the reason.
+model OtpChallenge {
+  id         String    @id @default(uuid()) @db.Uuid
+  phone      String
+  purpose    String
+  codeHash   String
+  expiresAt  DateTime
+  attempts   Int       @default(0)
+  consumedAt DateTime?
+  sentVia    String[]  @default([])
+  schoolId   String?   @db.Uuid
+  userId     String?   @db.Uuid
+  ip         String?
+  createdAt  DateTime  @default(now())
+
+  @@index([phone, purpose, createdAt])
 }

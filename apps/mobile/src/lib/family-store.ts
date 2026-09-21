@@ -21,6 +21,13 @@ export interface ChildProfile {
   key: string;
   displayName: string;
   schoolHost: string;
+  /**
+   * The shelf started as children only (Phase 5·2). With the phone door it
+   * holds every profile a number opens — a teacher who is also a parent has
+   * her own spine beside her children's. Absent on spines saved before this
+   * field existed, which means STUDENT.
+   */
+  role?: Session['role'];
   /** Deterministic accent for the spine band / avatar ring — stable per school. */
   accent: string;
   session: Session;
@@ -94,6 +101,7 @@ export const family = {
       key,
       displayName: s.displayName,
       schoolHost: s.schoolHost,
+      role: s.role,
       accent: accentFor(s.schoolHost),
       session: s,
     };

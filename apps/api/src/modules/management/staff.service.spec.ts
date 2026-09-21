@@ -93,8 +93,19 @@ describe('StaffService.list / create', () => {
     });
 
     expect(txMock.staff.create).toHaveBeenCalledWith({
-      data: { firstName: 'Ravi', lastName: 'Kumar', role: 'SECURITY', schoolId: SCHOOL },
+      data: { firstName: 'Ravi', lastName: 'Kumar', role: 'SECURITY', phoneE164: null, schoolId: SCHOOL },
     });
+  });
+
+  it('keeps the E.164 twin of the office phone in step on create and update — the phone login\'s index', async () => {
+    txMock.staff.create.mockResolvedValue({ id: STAFF_ID });
+    await svc.create(SCHOOL, { firstName: 'Ravi', lastName: 'Kumar', role: 'SECURITY', phone: '98765 43210' });
+    expect(txMock.staff.create.mock.calls[0][0].data).toMatchObject({ phone: '98765 43210', phoneE164: '+919876543210' });
+    txMock.staff.update.mockResolvedValue({ id: STAFF_ID });
+    await svc.update(SCHOOL, STAFF_ID, { phone: '0 98765 00000' });
+    expect(txMock.staff.update.mock.calls[0][0].data).toEqual({ phone: '0 98765 00000', phoneE164: '+919876500000' });
+    await svc.update(SCHOOL, STAFF_ID, { firstName: 'R' });
+    expect(txMock.staff.update.mock.calls[1][0].data).toEqual({ firstName: 'R' });
   });
 });
 

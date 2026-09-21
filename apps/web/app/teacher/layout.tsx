@@ -17,6 +17,7 @@ import { useSessionProbe } from '@/lib/use-session-probe';
 import { useHost } from '@/components/use-host';
 import { homeForRole } from '@/lib/role-routes';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
+import { SwitchProfile } from '@/components/switch-profile';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { NotificationBell } from '@/components/notifications/notification-bell';
 import { NAV_ITEMS } from './nav-items';
@@ -225,6 +226,7 @@ export default function TeacherLayout({ children }: { children: ReactNode }) {
                 onNavigate={() => setDrawerOpen(false)}
               />
               <div style={{ padding: '8px 11px' }}><ThemeToggle /></div>
+              <SwitchProfile onDone={() => setDrawerOpen(false)} />
               <button
                 onClick={handleLogout}
                 className="sk-nav"
@@ -260,6 +262,7 @@ export default function TeacherLayout({ children }: { children: ReactNode }) {
             isActive={isActive('/teacher/profile')}
           />
           <div style={{ padding: '8px 11px' }}><ThemeToggle /></div>
+          <SwitchProfile />
           <button
             onClick={handleLogout}
             className="sk-nav"

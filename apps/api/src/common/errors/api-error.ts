@@ -181,6 +181,27 @@ export type ErrorCode =
   | 'WHATSAPP_NOT_CONFIGURED'
   /** A phone that does not normalise to a mobile — pair with 400. */
   | 'BAD_PHONE'
+  /** A verification code was asked for again within a minute — pair with 429. */
+  | 'PHONE_CODE_COOLDOWN'
+  /** Another login of the school already verified that number — 409. */
+  | 'PHONE_TAKEN'
+  /** One-time codes (login, reset, verify): too many asked for this phone, or asked again within a minute. */
+  | 'OTP_RATE_LIMITED'
+  /** No sender could deliver the code (not on WhatsApp, SMS not enabled, platform not set up). */
+  | 'OTP_UNDELIVERABLE'
+  | 'OTP_EXPIRED'
+  | 'OTP_WRONG'
+  /** Five wrong tries on one code. */
+  | 'OTP_LOCKED'
+  | 'OTP_CHALLENGE_UNKNOWN'
+  /** The target login does not share this session's phone identity. */
+  | 'PROFILE_NOT_SWITCHABLE'
+  /** No live code, or too many wrong tries — 400 / 429. */
+  | 'PHONE_CODE_EXPIRED'
+  /** The code typed is not the one sent — 400. */
+  | 'PHONE_CODE_WRONG'
+  /** WhatsApp could not deliver the code (not on WhatsApp, or platform not set up) — 502. */
+  | 'WHATSAPP_UNREACHABLE'
   | 'VALIDATION'
   /** Caller is not authenticated (missing/invalid credential) — pair with 401. */
   | 'UNAUTHORIZED'

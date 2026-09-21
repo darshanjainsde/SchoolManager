@@ -1,20 +1,5 @@
 'use client';
-import {
-  Bell,
-  BookOpen,
-  CalendarCheck,
-  FileText,
-  GraduationCap,
-  Library,
-  Megaphone,
-  MessageSquare,
-  NotebookPen,
-  Receipt,
-  Sparkles,
-  TrendingDown,
-  Trophy,
-  type LucideIcon,
-} from 'lucide-react';
+import { Bell, BookOpen, CalendarCheck, FileText, GraduationCap, Library, Megaphone, MessageSquare, NotebookPen, Receipt, Sparkles, TrendingDown, Trophy, CalendarClock, UserRoundCheck, type LucideIcon } from 'lucide-react';
 import type { NotificationKind } from '@skoolos/types';
 
 /** Which portal the bell/view is mounted in — decides route targets by role. */
@@ -40,6 +25,9 @@ export const KIND_ICON: Record<NotificationKind, LucideIcon> = {
   FEE_VERIFIED: Receipt,
   FEE_REJECTED: Receipt,
   FEE_DUE: Receipt,
+  LEAVE_APPLIED: CalendarClock,
+  LEAVE_DECIDED: CalendarCheck,
+  COVER_ASSIGNED: UserRoundCheck,
 };
 
 /** Fallback for a kind the client doesn't know yet (server added one later). */
@@ -95,6 +83,13 @@ export function routeForNotification(
       case 'FEE_VERIFIED':
       case 'FEE_REJECTED':
       case 'FEE_DUE':
+        return null;
+      // The teacher's own leave: the decision, and a class to cover, both live on
+      // their leave page. LEAVE_APPLIED is the admin's copy — never a teacher's.
+      case 'LEAVE_DECIDED':
+      case 'COVER_ASSIGNED':
+        return '/teacher/leave';
+      case 'LEAVE_APPLIED':
         return null;
       default:
         return null;

@@ -7,3 +7,7 @@ export { DiaryService } from './diary.service';
 // allow siblings only through this index). CronSecretGuard lives in
 // common/auth now.
 export { istTodayISO, startOfIstDay, resolveAsOfDate } from './internal/timetable-date';
+// The leave desk and its date helpers, consumed by the WhatsApp module so an
+// Approve tapped in a chat runs the very same code path as the console.
+export { LeaveService } from './leave.service';
+export { isoWeekdayOf, toDateStr } from './internal/leave-dates';

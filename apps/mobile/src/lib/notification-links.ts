@@ -35,6 +35,9 @@ export const KIND_ICON: Record<string, string> = {
   FEE_VERIFIED: 'fees',
   FEE_REJECTED: 'fees',
   FEE_DUE: 'fees',
+  LEAVE_APPLIED: 'calendar',
+  LEAVE_DECIDED: 'calendar',
+  COVER_ASSIGNED: 'calendar',
 };
 
 /**
@@ -75,6 +78,8 @@ export function routeFor(group: NotificationGroup, n: NotificationRow): Href | n
   }
   // staff
   if (n.kind === 'LIBRARY') return '/(staff)/(tabs)/home/library';
+  // The teacher's own leave: the decision, and a class to cover.
+  if (n.kind === 'LEAVE_DECIDED' || n.kind === 'COVER_ASSIGNED' || n.kind === 'LEAVE_APPLIED') return '/(staff)/(tabs)/home/requests';
   if (n.kind === 'REQUEST_DECISION') return '/(staff)/(tabs)/home/requests';
   if (n.kind === 'DIARY') return '/(staff)/(tabs)/home/diary';
   return null;

@@ -164,6 +164,13 @@ describe('StudentsService.create — every student gets a code', () => {
   // happened to invite them. On production that was 300 of 300 students, and
   // the student-code login the school had been told about worked for none of
   // them, with nothing on screen to explain why.
+  it('writes the E.164 twin of the guardian phone beside the raw one (the phone login\'s index)', async () => {
+    const out = await svc.create(SCHOOL, { firstName: 'A', lastName: 'B', admissionNo: 'A-9', guardianPhone: '98765 43210' } as never);
+    expect(out).toMatchObject({ guardianPhone: '98765 43210', guardianPhoneE164: '+919876543210' });
+    const landline = await svc.create(SCHOOL, { firstName: 'A', lastName: 'B', admissionNo: 'A-10', guardianPhone: '0141 2345678' } as never);
+    expect(landline).toMatchObject({ guardianPhoneE164: null });
+  });
+
   it('allocates a code when the student is created, not when they are invited', async () => {
     const out = await svc.create(SCHOOL, { firstName: 'A', lastName: 'B', admissionNo: 'A-1' } as never);
     expect(out).toMatchObject({ code: 'RAF-00001' });

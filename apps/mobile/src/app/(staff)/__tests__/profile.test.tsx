@@ -2,6 +2,7 @@ import { render, fireEvent } from '@testing-library/react-native';
 import Profile from '../(tabs)/profile/index';
 import StaffAppearance from '../(tabs)/profile/appearance';
 import StaffPassword from '../(tabs)/profile/password';
+import StaffPhone from '../(tabs)/profile/phone';
 import { api, ApiError } from '@/lib/api';
 
 const mockPush = jest.fn();
@@ -166,4 +167,54 @@ it('offers the change-password door, not a pointer at the web portal — the for
 it('the Change-password door screen re-houses the real form', () => {
   const { getByTestId } = render(<StaffPassword />);
   expect(getByTestId('pw-submit')).toBeTruthy();
+});
+
+/**
+ * "My WhatsApp number" — the door on Profile and the screen behind it. The
+ * screen's three states mirror the web PhoneCard (components/phone-card.tsx):
+ * nothing yet → Send code; code sent → Verify; verified → Change / Remove.
+ */
+it('offers the My WhatsApp number door', async () => {
+  (api.request as jest.Mock).mockResolvedValue({ id: 't1', firstName: 'Asha', lastName: 'Rao', email: null, phone: null, subjects: [], classTeacherOf: [] });
+  const { findByTestId } = render(<Profile />);
+  fireEvent.press(await findByTestId('profile-menu-phone'));
+  expect(mockPush).toHaveBeenCalledWith('/(staff)/(tabs)/profile/phone');
+});
+
+it('phone screen: nothing set → typing a number and sending posts /me/phone/request', async () => {
+  (api.request as jest.Mock).mockImplementation(async (path: string) =>
+    path === '/me/phone/request' ? { ok: true, pending: '+91 98••• •3210' } : { phone: null, verified: false, verifiedAt: null, pending: null, pendingUntil: null, platformReady: true },
+  );
+  const { findByTestId, getByTestId } = render(<StaffPhone />);
+  fireEvent.changeText(await findByTestId('phone-input'), '98765 43210');
+  fireEvent.press(getByTestId('phone-send'));
+  await findByTestId('phone-note');
+  expect((api.request as jest.Mock).mock.calls.find((c) => c[0] === '/me/phone/request')?.[1]).toEqual({ method: 'POST', body: { phone: '98765 43210' } });
+});
+
+it('phone screen: code sent → six digits and Verify post /me/phone/verify', async () => {
+  (api.request as jest.Mock).mockImplementation(async (path: string) =>
+    path === '/me/phone/verify' ? {} : { phone: null, verified: false, verifiedAt: null, pending: '+91 98••• •3210', pendingUntil: '2026-09-20T10:00:00Z', platformReady: true },
+  );
+  const { findByTestId, getByTestId } = render(<StaffPhone />);
+  await findByTestId('phone-verify');
+  fireEvent.changeText(getByTestId('phone-code'), '48a29b11');
+  fireEvent.press(getByTestId('phone-verify-go'));
+  await findByTestId('phone-note');
+  expect((api.request as jest.Mock).mock.calls.find((c) => c[0] === '/me/phone/verify')?.[1]).toEqual({ method: 'POST', body: { code: '482911' } });
+});
+
+it('phone screen: verified → Remove deletes /me/phone; platform off disables sending', async () => {
+  (api.request as jest.Mock).mockResolvedValue({ phone: '+91 98••• •3210', verified: true, verifiedAt: '2026-09-20T09:55:00Z', pending: null, pendingUntil: null, platformReady: true });
+  const { findByTestId, getByTestId, unmount } = render(<StaffPhone />);
+  expect(await findByTestId('phone-number')).toHaveTextContent('+91 98••• •3210');
+  fireEvent.press(getByTestId('phone-remove'));
+  await findByTestId('phone-note');
+  expect((api.request as jest.Mock).mock.calls.find((c) => c[0] === '/me/phone' && c[1]?.method === 'DELETE')).toBeTruthy();
+  unmount();
+
+  (api.request as jest.Mock).mockResolvedValue({ phone: null, verified: false, verifiedAt: null, pending: null, pendingUntil: null, platformReady: false });
+  const second = render(<StaffPhone />);
+  await second.findByTestId('phone-platform-off');
+  expect(second.getByTestId('phone-send')).toBeDisabled();
 });

@@ -1034,6 +1034,7 @@ export default function SettingsPage() {
         {/* ── WhatsApp ──────────────────────────────────────────────────── */}
         <WhatsAppCard />
 
+
         <TvCard />
 
         {/* ── Class notes visibility ────────────────────────────────────── */}

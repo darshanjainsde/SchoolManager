@@ -18,6 +18,13 @@ export interface IssuedTokens {
   expiresIn: number;
 }
 
+/** Tokens plus the school they belong to — the cookie is named after the slug. */
+export interface IssuedFor {
+  tokens: IssuedTokens;
+  schoolId: string;
+  schoolSlug: string;
+}
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -249,6 +256,24 @@ export class AuthService {
     }).catch(() => undefined);
   }
 
+  /**
+   * Open a session for a login the caller has ALREADY authenticated another
+   * way — a one-time code on its phone, or a switch from a profile that
+   * shares that phone (design §4). The same checks a password login makes
+   * on the account itself; none on a password, because there was none.
+   */
+  async issueFor(userId: string): Promise<IssuedFor> {
+    const platform = getPlatformPrisma();
+    const user = await platform.user.findUnique({ where: { id: userId }, include: { school: { select: { slug: true, status: true } } } });
+    if (!user || !user.isActive || !user.schoolId || !user.school || user.school.status === 'SUSPENDED') {
+      throw new UnauthorizedException('This login is closed.');
+    }
+    if (user.lockedUntil && user.lockedUntil > new Date()) throw new ForbiddenException('Account temporarily locked');
+    await platform.user.update({ where: { id: user.id }, data: { failedLoginAttempts: 0, lockedUntil: null, lastLoginAt: new Date() } });
+    const { school, ...plain } = user;
+    return { tokens: await this.issueTokens(plain as User, randomUUID(), user.schoolId), schoolId: user.schoolId, schoolSlug: school.slug };
+  }
+
   private async issueTokens(user: User, familyId: string, schoolId: string): Promise<IssuedTokens> {
     const accessToken = this.signAccess(user, schoolId);
     const refreshToken = this.signRefresh({
@@ -412,7 +437,10 @@ export class AuthService {
         if (full) return full;
       }
     }
-    return null;
+    // No person record claims this login (an admin, typically): the name the
+    // person typed on their own profile, or nothing.
+    const own = await platform.user.findUnique({ where: { id: userId }, select: { name: true } });
+    return own?.name?.trim() || null;
   }
 
   /**
