@@ -75,21 +75,40 @@ function daysWord(n: number): string {
   return `in ${n} days`;
 }
 
-export function templateFor(message: NotificationMessage): WhatsAppTemplate {
+/**
+ * Who the message is FOR, when the login it is addressed to is a child's.
+ * One guardian phone often serves two or three children, so every notice
+ * about one child names that child — the family reads "Ravi Sharma (5-B)"
+ * and knows at a glance whose test, whose marks, whose class. The channel
+ * fills this in from the student record at send time; class-level payloads
+ * stay shared across recipients.
+ */
+export interface TemplateContext {
+  child?: { name: string; className: string | null } | null;
+}
+
+/** "Ravi Sharma (5-B)", or the fallback when the recipient is not a child's login. */
+export function childLabel(ctx: TemplateContext | undefined, fallback: string): string {
+  const c = ctx?.child;
+  if (!c || !c.name.trim()) return fallback;
+  return param(c.className ? `${c.name} (${c.className})` : c.name, fallback);
+}
+
+export function templateFor(message: NotificationMessage, ctx: TemplateContext = {}): WhatsAppTemplate {
   const name = TEMPLATE_NAMES[message.kind];
   const language = TEMPLATE_LANGUAGE;
   switch (message.kind) {
     case 'TEST_SCHEDULED': {
       const p = message.payload;
-      return { name, language, params: [param(p.schoolName), param(p.subjectName), param(p.examTitle), param(p.scheduledAt), param(p.classSectionName, "your child's class")] };
+      return { name, language, params: [param(p.schoolName), childLabel(ctx, p.classSectionName ? `your child in ${p.classSectionName}` : 'your child'), param(p.subjectName), param(p.examTitle), param(p.scheduledAt)] };
     }
     case 'TEST_REMINDER': {
       const p = message.payload;
-      return { name, language, params: [param(p.schoolName), param(p.subjectName), param(p.examTitle), param(p.scheduledAt), daysWord(p.daysUntil)] };
+      return { name, language, params: [param(p.schoolName), childLabel(ctx, 'your child'), param(p.subjectName), param(p.examTitle), param(p.scheduledAt), daysWord(p.daysUntil)] };
     }
     case 'RESULTS_PUBLISHED': {
       const p = message.payload;
-      return { name, language, params: [param(p.schoolName), param(p.subjectName), param(p.examTitle)] };
+      return { name, language, params: [param(p.schoolName), param(p.subjectName), param(p.examTitle), childLabel(ctx, 'your child')] };
     }
     case 'ABSENCE_NOTICE': {
       const p = message.payload;
@@ -97,7 +116,11 @@ export function templateFor(message: NotificationMessage): WhatsAppTemplate {
     }
     case 'ANNOUNCEMENT': {
       const p = message.payload;
-      return { name, language, params: [param(p.schoolName), param(p.className, 'the whole school'), param(p.title), param(p.body)] };
+      // A class announcement names the child in that class; a school-wide one
+      // stays the same words for every child on the phone, so siblings on one
+      // number get ONE copy (the channel drops identical text within a minute).
+      const who = p.className ? childLabel(ctx, p.className) : 'the whole school';
+      return { name, language, params: [param(p.schoolName), who, param(p.title), param(p.body)] };
     }
     case 'DIARY_REMARK': {
       const p = message.payload;
@@ -144,16 +167,16 @@ export function templateFor(message: NotificationMessage): WhatsAppTemplate {
  */
 export const SUBMISSIONS: Record<NotificationKind, { body: string; samples: string[]; buttons?: string[] }> = {
   TEST_SCHEDULED: {
-    body: '{{1}} has scheduled a {{2}} test, "{{3}}", on {{4}} for {{5}}. Open the Sckools app for the details.',
-    samples: ['Raffles Public School', 'Mathematics', 'Unit test 2', 'Mon 6 Oct 2026', '5-B'],
+    body: '{{1}}: {{2}} has a {{3}} test, "{{4}}", on {{5}}. Open the Sckools app for the details.',
+    samples: ['Raffles Public School', 'Ravi Sharma (5-B)', 'Mathematics', 'Unit test 2', 'Mon 6 Oct 2026'],
   },
   TEST_REMINDER: {
-    body: 'Reminder from {{1}}: the {{2}} test "{{3}}" is on {{4}} — that is {{5}}.',
-    samples: ['Raffles Public School', 'Mathematics', 'Unit test 2', 'Mon 6 Oct 2026', 'in 3 days'],
+    body: 'Reminder from {{1}}: {{2}} has the {{3}} test "{{4}}" on {{5}} — that is {{6}}.',
+    samples: ['Raffles Public School', 'Ravi Sharma (5-B)', 'Mathematics', 'Unit test 2', 'Mon 6 Oct 2026', 'in 3 days'],
   },
   RESULTS_PUBLISHED: {
-    body: '{{1}} has published the results of the {{2}} test "{{3}}". Open the Sckools app to see the marks.',
-    samples: ['Raffles Public School', 'Mathematics', 'Unit test 2'],
+    body: '{{1}} has published the results of the {{2}} test "{{3}}" for {{4}}. Open the Sckools app to see the marks.',
+    samples: ['Raffles Public School', 'Mathematics', 'Unit test 2', 'Ravi Sharma (5-B)'],
   },
   ABSENCE_NOTICE: {
     body: '{{1}}: {{2}} was marked absent on {{3}}. If this is a mistake, please tell the school office.',
@@ -161,7 +184,7 @@ export const SUBMISSIONS: Record<NotificationKind, { body: string; samples: stri
   },
   ANNOUNCEMENT: {
     body: 'Announcement from {{1}} for {{2}} — {{3}}: {{4}}',
-    samples: ['Raffles Public School', '5-B', 'PTM on Saturday', 'Parent–teacher meeting this Saturday, 10 am to 1 pm, in the school hall.'],
+    samples: ['Raffles Public School', 'Ravi Sharma (5-B)', 'PTM on Saturday', 'Parent–teacher meeting this Saturday, 10 am to 1 pm, in the school hall.'],
   },
   DIARY_REMARK: {
     body: '{{1}}: {{2}} ({{3}}) has a remark from {{4}} dated {{5}}: "{{6}}". Please read and sign it in the Sckools app.',

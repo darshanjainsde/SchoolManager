@@ -6,13 +6,25 @@ Name and body must match `apps/api/src/common/notifications/whatsapp/templates.t
 
 | Name | Body | Sample values (what the reviewer sees) |
 |---|---|---|
-| `sckools_test_scheduled` | {{1}} has scheduled a {{2}} test, "{{3}}", on {{4}} for {{5}}. Open the Sckools app for the details. | Raffles Public School · Mathematics · Unit test 2 · Mon 6 Oct 2026 · 5-B |
-| `sckools_test_reminder` | Reminder from {{1}}: the {{2}} test "{{3}}" is on {{4}} — that is {{5}}. | Raffles Public School · Mathematics · Unit test 2 · Mon 6 Oct 2026 · in 3 days |
-| `sckools_results_published` | {{1}} has published the results of the {{2}} test "{{3}}". Open the Sckools app to see the marks. | Raffles Public School · Mathematics · Unit test 2 |
+| `sckools_test_scheduled` | {{1}}: {{2}} has a {{3}} test, "{{4}}", on {{5}}. Open the Sckools app for the details. | Raffles Public School · Ravi Sharma (5-B) · Mathematics · Unit test 2 · Mon 6 Oct 2026 |
+| `sckools_test_reminder` | Reminder from {{1}}: {{2}} has the {{3}} test "{{4}}" on {{5}} — that is {{6}}. | Raffles Public School · Ravi Sharma (5-B) · Mathematics · Unit test 2 · Mon 6 Oct 2026 · in 3 days |
+| `sckools_results_published` | {{1}} has published the results of the {{2}} test "{{3}}" for {{4}}. Open the Sckools app to see the marks. | Raffles Public School · Mathematics · Unit test 2 · Ravi Sharma (5-B) |
 | `sckools_absence_notice` | {{1}}: {{2}} was marked absent on {{3}}. If this is a mistake, please tell the school office. | Raffles Public School · Ravi Sharma · Thu 18 Sep 2026 |
-| `sckools_announcement` | Announcement from {{1}} for {{2}} — {{3}}: {{4}} | Raffles Public School · 5-B · PTM on Saturday · Parent–teacher meeting this Saturday, 10 am to 1 pm, in the school hall. |
+| `sckools_announcement` | Announcement from {{1}} for {{2}} — {{3}}: {{4}} | Raffles Public School · Ravi Sharma (5-B) · PTM on Saturday · Parent–teacher meeting this Saturday, 10 am to 1 pm, in the school hall. |
 | `sckools_diary_remark` | {{1}}: {{2}} ({{3}}) has a remark from {{4}} dated {{5}}: "{{6}}". Please read and sign it in the Sckools app. | Raffles Public School · Ravi Sharma · 5-B · Priya Nair · Thu 18 Sep 2026 · Homework not done for three days. |
 | `sckools_low_attendance` | {{1}}: {{2}} ({{3}}) has {{4}}% attendance for {{5}}, below the {{6}}% the school expects. Please make sure they attend. | Raffles Public School · Ravi Sharma · 5-B · 68 · 1 Jul 2026 – 18 Sep 2026 · 75 |
+
+### One phone, several children
+
+A guardian's number is often shared by two or three children, so every notice ABOUT a child names the child — "Ravi Sharma (5-B)" — in the tests, reminder, results, absence, remark and attendance templates. The channel fills the name in from the student record at send time (`WhatsAppChannel.addressFor` → `childLabel`). A class announcement names the child in that class; a school-wide one keeps the same words for every child, so siblings on one phone get ONE copy (identical text within a minute is sent once). Plain diary lines (homework) stay on the app bell and email — a WhatsApp message per family per day is a cost the school should switch on knowingly, not a default.
+
+## Profile: logo, name, blue tick
+
+| What a family sees | Where it is set | Notes |
+|---|---|---|
+| **Photo** (the Tassel-S) | `node scripts/whatsapp-profile.mjs docs/whatsapp/profile-photo.png` with `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `META_APP_ID` in the shell — or WhatsApp Manager → Phone numbers → the number → Profile | Works on the test number today. 640×640 PNG in `docs/whatsapp/profile-photo.png`. Also sets the about line, description, website, email. |
+| **Name** "Sckools" | WhatsApp Manager → Phone numbers → the number → Display name | Only on a real number; the test number keeps Meta's name. Meta reviews it against the business — "Sckools" is the GST trade name, so it matches. A display name that does not match the verified business is refused. |
+| **Blue tick** | WhatsApp Manager → the number → "Request Official Business Account" (free, rarely granted) — or Meta Verified for business on WhatsApp (paid subscription, India) | Needs business verification first. Not a prerequisite for anything above: templates, buttons and the name work without it. |
 
 ## Actions and identity (the second batch)
 

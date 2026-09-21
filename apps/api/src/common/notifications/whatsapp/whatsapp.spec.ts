@@ -56,10 +56,30 @@ describe('templateFor ↔ SUBMISSIONS', () => {
   });
 
   it('an optional field becomes a real word, never an empty parameter', () => {
-    expect(templateFor(MESSAGES.TEST_SCHEDULED).params[4]).toBe("your child's class");
+    expect(templateFor(MESSAGES.TEST_SCHEDULED).params[1]).toBe('your child');
     expect(templateFor(MESSAGES.ANNOUNCEMENT).params[1]).toBe('the whole school');
     expect(templateFor(MESSAGES.ANNOUNCEMENT).params[3]).toBe('Saturday 10 am');
-    expect(templateFor(MESSAGES.TEST_REMINDER).params[4]).toBe('tomorrow');
+    expect(templateFor(MESSAGES.TEST_REMINDER).params[5]).toBe('tomorrow');
+  });
+
+  describe('one guardian phone, two children — every notice about a child names the child', () => {
+    const ravi = { child: { name: 'Ravi Sharma', className: '5-B' } };
+    it('test, reminder and results carry "Name (class)"', () => {
+      expect(templateFor(MESSAGES.TEST_SCHEDULED, ravi).params[1]).toBe('Ravi Sharma (5-B)');
+      expect(templateFor(MESSAGES.TEST_REMINDER, ravi).params[1]).toBe('Ravi Sharma (5-B)');
+      expect(templateFor(MESSAGES.RESULTS_PUBLISHED, ravi).params[3]).toBe('Ravi Sharma (5-B)');
+    });
+    it('a class announcement names the child in that class; a school-wide one keeps the same words for every child, so the phone gets one copy', () => {
+      const forClass = { ...MESSAGES.ANNOUNCEMENT, payload: { ...MESSAGES.ANNOUNCEMENT.payload, className: '5-B' } } as typeof MESSAGES.ANNOUNCEMENT;
+      expect(templateFor(forClass, ravi).params[1]).toBe('Ravi Sharma (5-B)');
+      expect(templateFor(forClass).params[1]).toBe('5-B');
+      expect(templateFor(MESSAGES.ANNOUNCEMENT, ravi).params[1]).toBe('the whole school');
+      expect(templateFor(MESSAGES.ANNOUNCEMENT, { child: { name: 'Meera Sharma', className: '8-A' } }).params[1]).toBe('the whole school');
+    });
+    it('a child with no section yet is named without a class; a teacher recipient gets the plain fallback', () => {
+      expect(templateFor(MESSAGES.RESULTS_PUBLISHED, { child: { name: 'Ravi Sharma', className: null } }).params[3]).toBe('Ravi Sharma');
+      expect(templateFor(MESSAGES.RESULTS_PUBLISHED, { child: null }).params[3]).toBe('your child');
+    });
   });
 
   it("hello_world is Meta's sample: no parameters, en_US", () => expect(HELLO_WORLD).toEqual({ name: 'hello_world', language: 'en_US', params: [] }));

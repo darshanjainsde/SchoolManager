@@ -85,10 +85,11 @@ export class WhatsAppChannel implements NotificationChannel {
     const settings = await this.settingsFor(schoolId);
     if (!settings.enabled) return false;
 
-    const phone = await this.phoneFor(schoolId, to);
-    if (!phone) return false;
+    const address = await this.addressFor(schoolId, to);
+    if (!address) return false;
+    const { phone } = address;
 
-    const template = templateFor(message);
+    const template = templateFor(message, { child: address.child });
     if (this.isDuplicate(phone, template)) return true;
     return this.deliver(cfg, schoolId, phone, message.kind, template, settings.phoneNumberId);
   }
@@ -194,15 +195,30 @@ export class WhatsAppChannel implements NotificationChannel {
    * normalises to a real mobile wins; none means nothing to send.
    */
   async phoneFor(schoolId: string, email: string): Promise<string | null> {
+    return (await this.addressFor(schoolId, email))?.phone ?? null;
+  }
+
+  /**
+   * The phone, plus WHICH CHILD when the login is a student's: one guardian
+   * phone often serves siblings, so every notice about a child carries that
+   * child's name and class (see `childLabel` in templates.ts).
+   */
+  async addressFor(schoolId: string, email: string): Promise<{ phone: string; child: { name: string; className: string | null } | null } | null> {
     const user = await this.prisma.user.findFirst({ where: { schoolId, email }, select: { id: true, phone: true, phoneVerifiedAt: true } });
     if (!user) return null;
-    // A number the person proved is theirs wins over anything the office typed.
-    if (user.phone && user.phoneVerifiedAt) return toE164(user.phone);
     const [student, teacher, staff] = await Promise.all([
-      this.prisma.student.findFirst({ where: { schoolId, userId: user.id }, select: { guardianPhone: true } }),
+      this.prisma.student.findFirst({
+        where: { schoolId, userId: user.id },
+        select: { guardianPhone: true, firstName: true, lastName: true, classSection: { select: { name: true, grade: { select: { name: true } } } } },
+      }),
       this.prisma.teacher.findFirst({ where: { schoolId, userId: user.id }, select: { phone: true } }),
       this.prisma.staff.findFirst({ where: { schoolId, userId: user.id }, select: { phone: true } }),
     ]);
-    return toE164(student?.guardianPhone) ?? toE164(teacher?.phone) ?? toE164(staff?.phone);
+    const child = student
+      ? { name: `${student.firstName} ${student.lastName}`.trim(), className: student.classSection ? `${student.classSection.grade.name}-${student.classSection.name}` : null }
+      : null;
+    // A number the person proved is theirs wins over anything the office typed.
+    const phone = (user.phone && user.phoneVerifiedAt ? toE164(user.phone) : null) ?? toE164(student?.guardianPhone) ?? toE164(teacher?.phone) ?? toE164(staff?.phone);
+    return phone ? { phone, child } : null;
   }
 }
