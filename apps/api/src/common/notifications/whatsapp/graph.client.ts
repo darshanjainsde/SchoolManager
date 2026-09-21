@@ -57,18 +57,81 @@ export async function sendTemplate(
 ): Promise<SendResult> {
   const f = opts.fetchImpl ?? fetch;
   const phoneNumberId = opts.phoneNumberId || cfg.phoneNumberId;
+  const components: unknown[] = [];
+  if (template.params.length) components.push({ type: 'body', parameters: template.params.map((text) => ({ type: 'text', text })) });
+  for (const b of template.buttons ?? []) {
+    if (b.type === 'quick_reply') components.push({ type: 'button', sub_type: 'quick_reply', index: b.index, parameters: [{ type: 'payload', payload: b.payload }] });
+    else if (b.type === 'url') components.push({ type: 'button', sub_type: 'url', index: b.index, parameters: [{ type: 'text', text: b.text }] });
+    else if (b.type === 'copy_code') components.push({ type: 'button', sub_type: 'url', index: b.index, parameters: [{ type: 'text', text: b.text }] });
+  }
   const body = {
     messaging_product: 'whatsapp',
     to: forGraph(to),
     type: 'template',
-    template: {
-      name: template.name,
-      language: { code: template.language },
-      ...(template.params.length
-        ? { components: [{ type: 'body', parameters: template.params.map((text) => ({ type: 'text', text })) }] }
-        : {}),
-    },
+    template: { name: template.name, language: { code: template.language }, ...(components.length ? { components } : {}) },
   };
+  return post(cfg, phoneNumberId, body, f);
+}
+
+/** Free text — allowed only inside the 24-hour window the person opened by writing or tapping. */
+export function sendText(cfg: WhatsAppConfig, to: string, text: string, opts: { phoneNumberId?: string | null; fetchImpl?: typeof fetch } = {}): Promise<SendResult> {
+  return post(cfg, opts.phoneNumberId || cfg.phoneNumberId, { messaging_product: 'whatsapp', to: forGraph(to), type: 'text', text: { body: text.slice(0, 4096), preview_url: false } }, opts.fetchImpl ?? fetch);
+}
+
+export interface ListRow { id: string; title: string; description?: string }
+
+/** An interactive list (up to 10 rows) — the "who covers period 3?" picker. Same 24-hour rule as text. */
+export function sendList(
+  cfg: WhatsAppConfig,
+  to: string,
+  list: { body: string; button: string; rows: ListRow[]; header?: string; footer?: string },
+  opts: { phoneNumberId?: string | null; fetchImpl?: typeof fetch } = {},
+): Promise<SendResult> {
+  const rows = list.rows.slice(0, 10).map((r) => ({ id: r.id.slice(0, 200), title: r.title.slice(0, 24), ...(r.description ? { description: r.description.slice(0, 72) } : {}) }));
+  return post(
+    cfg,
+    opts.phoneNumberId || cfg.phoneNumberId,
+    {
+      messaging_product: 'whatsapp',
+      to: forGraph(to),
+      type: 'interactive',
+      interactive: {
+        type: 'list',
+        ...(list.header ? { header: { type: 'text', text: list.header.slice(0, 60) } } : {}),
+        body: { text: list.body.slice(0, 1024) },
+        ...(list.footer ? { footer: { text: list.footer.slice(0, 60) } } : {}),
+        action: { button: list.button.slice(0, 20), sections: [{ title: 'Free this period', rows }] },
+      },
+    },
+    opts.fetchImpl ?? fetch,
+  );
+}
+
+/** Up to three reply buttons on a free-form message. Same 24-hour rule. */
+export function sendButtons(
+  cfg: WhatsAppConfig,
+  to: string,
+  msg: { body: string; buttons: { id: string; title: string }[] },
+  opts: { phoneNumberId?: string | null; fetchImpl?: typeof fetch } = {},
+): Promise<SendResult> {
+  return post(
+    cfg,
+    opts.phoneNumberId || cfg.phoneNumberId,
+    {
+      messaging_product: 'whatsapp',
+      to: forGraph(to),
+      type: 'interactive',
+      interactive: {
+        type: 'button',
+        body: { text: msg.body.slice(0, 1024) },
+        action: { buttons: msg.buttons.slice(0, 3).map((b) => ({ type: 'reply', reply: { id: b.id.slice(0, 256), title: b.title.slice(0, 20) } })) },
+      },
+    },
+    opts.fetchImpl ?? fetch,
+  );
+}
+
+async function post(cfg: WhatsAppConfig, phoneNumberId: string, body: unknown, f: typeof fetch): Promise<SendResult> {
   const res = await f(`https://graph.facebook.com/${cfg.graphVersion}/${phoneNumberId}/messages`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${cfg.token}`, 'Content-Type': 'application/json' },

@@ -83,6 +83,10 @@ const ALLOWED: Record<string, string> = {
     'Resend posts delivery receipts for every school to one URL; each is matched to its ledger row by provider id and updated under that row\'s own schoolId; suppression is platform-wide by address',
   'modules/mail-webhooks/email-check.controller.ts':
     'the suppression list is platform-wide by address (a dead mailbox is dead for every school); the answer reveals only that the address bounced, never which school',
+  'modules/whatsapp/phone-verify.service.ts':
+    'User is the platform identity table auth already owns; every query carries the caller\'s own schoolId and userId',
+  'modules/whatsapp/whatsapp-actions.service.ts':
+    'a tap arrives with no tenant context; the tenant is the school the signed payload\'s row belongs to, every lookup carries that schoolId, and the writes go through LeaveService under withTenant',
   'modules/whatsapp/whatsapp-webhook.service.ts':
     'Meta posts delivery receipts for every school to one URL; each is matched to its row by Meta\'s message id and updated under that row\'s own schoolId',
   'modules/management/sessions.service.ts': 'scheduled session-start cron scans SCHEDULED plans across all schools; every write then runs under withTenant per school',

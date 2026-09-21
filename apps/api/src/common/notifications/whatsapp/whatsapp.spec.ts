@@ -1,5 +1,5 @@
 import { toE164, forGraph } from './phone';
-import { HELLO_WORLD, SUBMISSIONS, TEMPLATE_NAMES, param, placeholderCount, templateFor } from './templates';
+import { EXTRA_SUBMISSIONS, HELLO_WORLD, SUBMISSIONS, TEMPLATE_NAMES, coverPendingTemplate, param, placeholderCount, templateFor, verifyCodeTemplate } from './templates';
 import type { NotificationKind, NotificationMessage } from '../notification.types';
 
 describe('toE164', () => {
@@ -36,6 +36,9 @@ const MESSAGES: { [K in NotificationKind]: NotificationMessage & { kind: K } } =
   ANNOUNCEMENT: { kind: 'ANNOUNCEMENT', payload: { schoolName: 'Raffles', title: 'PTM', body: 'Saturday\n10 am', className: null } },
   DIARY_REMARK: { kind: 'DIARY_REMARK', payload: { schoolName: 'Raffles', studentName: 'Ravi', teacherName: 'Priya', className: '5-B', date: 'Thu', remark: 'Homework not done.' } },
   LOW_ATTENDANCE: { kind: 'LOW_ATTENDANCE', payload: { schoolName: 'Raffles', studentName: 'Ravi', className: '5-B', percent: 68, threshold: 75, period: 'Jul–Sep' } },
+  LEAVE_APPLIED: { kind: 'LEAVE_APPLIED', payload: { schoolName: 'Raffles', leaveId: 'l1', teacherName: 'Priya Nair', dates: 'Mon 22 – Tue 23 Sep 2026', days: 2, reason: null, periodsAffected: 5, approvePayload: 'lv:a:l1:sig', rejectPayload: 'lv:r:l1:sig' } },
+  LEAVE_DECIDED: { kind: 'LEAVE_DECIDED', payload: { schoolName: 'Raffles', leaveId: 'l1', decision: 'REJECTED', dates: 'Mon 22 Sep 2026', byName: null } },
+  COVER_ASSIGNED: { kind: 'COVER_ASSIGNED', payload: { schoolName: 'Raffles', substitutionId: 's1', when: 'Mon 22 Sep, period 3 (10:15–11:00)', className: '9-A', subjectName: null, originalTeacherName: 'Priya Nair', ackPayload: 'ca:s1:sig' } },
 };
 
 describe('templateFor ↔ SUBMISSIONS', () => {
@@ -53,11 +56,47 @@ describe('templateFor ↔ SUBMISSIONS', () => {
   });
 
   it('an optional field becomes a real word, never an empty parameter', () => {
-    expect(templateFor(MESSAGES.TEST_SCHEDULED).params[4]).toBe("your child's class");
+    expect(templateFor(MESSAGES.TEST_SCHEDULED).params[1]).toBe('your child');
     expect(templateFor(MESSAGES.ANNOUNCEMENT).params[1]).toBe('the whole school');
     expect(templateFor(MESSAGES.ANNOUNCEMENT).params[3]).toBe('Saturday 10 am');
-    expect(templateFor(MESSAGES.TEST_REMINDER).params[4]).toBe('tomorrow');
+    expect(templateFor(MESSAGES.TEST_REMINDER).params[5]).toBe('tomorrow');
+  });
+
+  describe('one guardian phone, two children — every notice about a child names the child', () => {
+    const ravi = { child: { name: 'Ravi Sharma', className: '5-B' } };
+    it('test, reminder and results carry "Name (class)"', () => {
+      expect(templateFor(MESSAGES.TEST_SCHEDULED, ravi).params[1]).toBe('Ravi Sharma (5-B)');
+      expect(templateFor(MESSAGES.TEST_REMINDER, ravi).params[1]).toBe('Ravi Sharma (5-B)');
+      expect(templateFor(MESSAGES.RESULTS_PUBLISHED, ravi).params[3]).toBe('Ravi Sharma (5-B)');
+    });
+    it('a class announcement names the child in that class; a school-wide one keeps the same words for every child, so the phone gets one copy', () => {
+      const forClass = { ...MESSAGES.ANNOUNCEMENT, payload: { ...MESSAGES.ANNOUNCEMENT.payload, className: '5-B' } } as typeof MESSAGES.ANNOUNCEMENT;
+      expect(templateFor(forClass, ravi).params[1]).toBe('Ravi Sharma (5-B)');
+      expect(templateFor(forClass).params[1]).toBe('5-B');
+      expect(templateFor(MESSAGES.ANNOUNCEMENT, ravi).params[1]).toBe('the whole school');
+      expect(templateFor(MESSAGES.ANNOUNCEMENT, { child: { name: 'Meera Sharma', className: '8-A' } }).params[1]).toBe('the whole school');
+    });
+    it('a child with no section yet is named without a class; a teacher recipient gets the plain fallback', () => {
+      expect(templateFor(MESSAGES.RESULTS_PUBLISHED, { child: { name: 'Ravi Sharma', className: null } }).params[3]).toBe('Ravi Sharma');
+      expect(templateFor(MESSAGES.RESULTS_PUBLISHED, { child: null }).params[3]).toBe('your child');
+    });
   });
 
   it("hello_world is Meta's sample: no parameters, en_US", () => expect(HELLO_WORLD).toEqual({ name: 'hello_world', language: 'en_US', params: [] }));
+
+  it('the leave request carries its two signed buttons in the template positions Meta will have them, and the cover its one', () => {
+    const t = templateFor(MESSAGES.LEAVE_APPLIED);
+    expect(t.buttons).toEqual([{ type: 'quick_reply', index: 0, payload: 'lv:a:l1:sig' }, { type: 'quick_reply', index: 1, payload: 'lv:r:l1:sig' }]);
+    expect(SUBMISSIONS.LEAVE_APPLIED.buttons).toEqual(['Approve', 'Reject']);
+    expect(t.params[4]).toBe('no reason given');
+    expect(templateFor(MESSAGES.COVER_ASSIGNED).buttons).toEqual([{ type: 'quick_reply', index: 0, payload: 'ca:s1:sig' }]);
+    expect(templateFor(MESSAGES.LEAVE_DECIDED).params).toEqual(['Raffles', 'not approved', 'Mon 22 Sep 2026', 'the office']);
+  });
+
+  it('the verification code goes as an AUTHENTICATION template with a copy-code button; the fallback names the school and the count', () => {
+    expect(verifyCodeTemplate('482911')).toEqual({ name: 'sckools_verify_code', language: 'en', params: ['482911'], buttons: [{ type: 'copy_code', index: 0, text: '482911' }] });
+    expect(EXTRA_SUBMISSIONS.sckools_verify_code.category).toBe('AUTHENTICATION');
+    expect(coverPendingTemplate('Raffles', 3).params).toEqual(['Raffles', '3']);
+    for (const [name, sub] of Object.entries(EXTRA_SUBMISSIONS)) expect(sub.samples).toHaveLength(placeholderCount(sub.body));
+  });
 });

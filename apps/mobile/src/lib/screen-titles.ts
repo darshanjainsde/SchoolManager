@@ -28,6 +28,7 @@ const TITLES: Record<string, string> = {
   notices: 'Notices',
   notifications: 'Notifications',
   password: 'Change password',
+  phone: 'My WhatsApp number',
   post: 'Announcements',
   receipt: 'Receipt',
   'report-cards': 'Report cards',

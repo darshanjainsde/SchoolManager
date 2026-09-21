@@ -195,6 +195,7 @@ export default function Profile() {
         rows={[
           { icon: 'palette', label: 'Appearance', route: '/(staff)/(tabs)/profile/appearance', testID: 'profile-menu-appearance' },
           { icon: 'key', label: 'Change password', route: '/(staff)/(tabs)/profile/password', testID: 'profile-menu-password' },
+          { icon: 'phone', label: 'My WhatsApp number', route: '/(staff)/(tabs)/profile/phone', testID: 'profile-menu-phone' },
         ]}
       />
 

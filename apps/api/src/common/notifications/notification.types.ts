@@ -209,6 +209,47 @@ export interface LowAttendancePayload {
   period: string;
 }
 
+/**
+ * Payload for LEAVE_APPLIED — a teacher's leave request, sent to every admin
+ * of the school. `approvePayload`/`rejectPayload` are the SIGNED button
+ * payloads (whatsapp/actions.ts); email renders the same facts with a note
+ * to open the console. The outbox row stores the facts without the signed
+ * strings — the drain signs at send time, so the secret is never at rest.
+ */
+export interface LeaveAppliedPayload {
+  schoolName: string;
+  leaveId: string;
+  teacherName: string;
+  /** Human-facing, e.g. `Mon 22 – Tue 23 Sep 2026`. */
+  dates: string;
+  days: number;
+  reason: string | null;
+  periodsAffected: number;
+  approvePayload: string;
+  rejectPayload: string;
+}
+
+/** Payload for LEAVE_DECIDED — the teacher hears the decision, and who made it. */
+export interface LeaveDecidedPayload {
+  schoolName: string;
+  leaveId: string;
+  decision: 'APPROVED' | 'REJECTED';
+  dates: string;
+  byName: string | null;
+}
+
+/** Payload for COVER_ASSIGNED — a substitute is told which class, when, and for whom. */
+export interface CoverAssignedPayload {
+  schoolName: string;
+  substitutionId: string;
+  /** e.g. `Mon 22 Sep, period 3 (10:15–11:00)`. */
+  when: string;
+  className: string;
+  subjectName: string | null;
+  originalTeacherName: string;
+  ackPayload: string;
+}
+
 /** The single source of truth mapping each event to its payload shape. */
 export interface NotificationPayloadMap {
   TEST_SCHEDULED: TestScheduledPayload;
@@ -218,6 +259,9 @@ export interface NotificationPayloadMap {
   ANNOUNCEMENT: AnnouncementPayload;
   DIARY_REMARK: DiaryRemarkPayload;
   LOW_ATTENDANCE: LowAttendancePayload;
+  LEAVE_APPLIED: LeaveAppliedPayload;
+  LEAVE_DECIDED: LeaveDecidedPayload;
+  COVER_ASSIGNED: CoverAssignedPayload;
 }
 
 /**

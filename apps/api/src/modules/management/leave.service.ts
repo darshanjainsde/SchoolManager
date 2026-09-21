@@ -5,6 +5,7 @@ import { ApiError } from '../../common/errors/api-error';
 import { dateRangeInclusive, isValidDateStr, isoWeekdayOf, toDateStr, todayIstDateStr } from './internal/leave-dates';
 import type { AssignSubstitutionDto, CreateLeaveDto } from './management.dto';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
+import { resolveAdminRecipients } from '../../common/notifications/recipients';
 
 export type { LeaveApplication };
 
@@ -74,6 +75,7 @@ export class LeaveService {
           reason: dto.reason,
         },
       });
+      await this.tellAdminsApplied(tx, schoolId, created.id, teacher, dto.startDate, dto.endDate, dto.reason ?? null);
       return LeaveService.toRow(created);
     });
   }
@@ -142,10 +144,12 @@ export class LeaveService {
         throw new ApiError('LEAVE_NOT_PENDING', 'This application has already been reviewed', 409);
       }
 
-      return tx.leaveApplication.update({
+      const updated = await tx.leaveApplication.update({
         where: { id },
         data: { status: 'REJECTED', reviewedById: adminUserId, reviewedAt: new Date() },
       });
+      await this.tellTeacherDecided(tx, schoolId, app, 'REJECTED', adminUserId);
+      return updated;
     });
   }
 
@@ -187,6 +191,7 @@ export class LeaveService {
       const todayStr = todayIstDateStr(new Date());
 
       let gaps = 0;
+      const gapIds: string[] = [];
       for (const dateStr of dates) {
         const weekday = isoWeekdayOf(dateStr);
         const date = new Date(dateStr);
@@ -202,7 +207,7 @@ export class LeaveService {
           });
           if (existing) continue;
 
-          await tx.substitution.create({
+          const gap = await tx.substitution.create({
             data: {
               schoolId,
               classSectionId: slot.classSectionId,
@@ -213,6 +218,7 @@ export class LeaveService {
             },
           });
           gaps += 1;
+          gapIds.push(gap.id);
         }
 
         if (dateStr >= todayStr) {
@@ -220,7 +226,8 @@ export class LeaveService {
         }
       }
 
-      return { gaps };
+      await this.tellTeacherDecided(tx, schoolId, app, 'APPROVED', adminUserId);
+      return { gaps, gapIds };
     });
   }
 
@@ -447,11 +454,93 @@ export class LeaveService {
         );
       }
 
-      return tx.substitution.update({
+      const updated = await tx.substitution.update({
         where: { id },
         data: { substituteTeacherId: dto.substituteTeacherId },
       });
+      await this.tellSubstituteAssigned(tx, schoolId, sub, dto.substituteTeacherId);
+      return updated;
     });
+  }
+
+  // ── notices ──────────────────────────────────────────────────────────────
+  //
+  // Written INSIDE the same transaction as the leave row (an in-app bell row
+  // plus a guaranteed outbox row per recipient), so a request the admin can
+  // see in Requests is a request that WILL reach their phone — never one
+  // without the other. The outbox drain renders push + WhatsApp (+ signs the
+  // Approve/Reject buttons at send time); email goes with the same facts.
+
+  /** `Mon 22 – Tue 23 Sep 2026`, or one day. */
+  static datesLabel(start: string, end: string): string {
+    const fmt = (d: string, withYear: boolean) => {
+      const x = new Date(`${d}T00:00:00Z`);
+      const day = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][x.getUTCDay()];
+      const mon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][x.getUTCMonth()];
+      return `${day} ${x.getUTCDate()} ${mon}${withYear ? ` ${x.getUTCFullYear()}` : ''}`;
+    };
+    if (start === end) return fmt(start, true);
+    // Same month: "Mon 21 – Tue 22 Sep 2026"; otherwise both months are named.
+    const a = new Date(`${start}T00:00:00Z`);
+    const b = new Date(`${end}T00:00:00Z`);
+    if (a.getUTCMonth() === b.getUTCMonth() && a.getUTCFullYear() === b.getUTCFullYear()) {
+      const day = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][a.getUTCDay()];
+      return `${day} ${a.getUTCDate()} – ${fmt(end, true)}`;
+    }
+    return `${fmt(start, false)} – ${fmt(end, true)}`;
+  }
+
+  private async tellAdminsApplied(tx: TenantTx, schoolId: string, leaveId: string, teacher: { id: string; firstName: string; lastName: string | null }, startDate: string, endDate: string, reason: string | null): Promise<void> {
+    const [school, admins] = await Promise.all([
+      tx.school.findFirst({ where: { id: schoolId }, select: { name: true } }),
+      resolveAdminRecipients(tx, schoolId),
+    ]);
+    if (admins.length === 0) return;
+    const dates = dateRangeInclusive(startDate, endDate);
+    // How many of the teacher's active periods fall on the leave's weekdays.
+    const weekdays = [...new Set(dates.map(isoWeekdayOf))];
+    const perWeekday = await tx.timetableSlot.groupBy({ by: ['dayOfWeek'], where: { schoolId, teacherId: teacher.id, dayOfWeek: { in: weekdays }, effectiveTo: null }, _count: { _all: true } });
+    const countByDay = new Map(perWeekday.map((g) => [g.dayOfWeek, g._count._all]));
+    const periodsAffected = dates.reduce((n, d) => n + (countByDay.get(isoWeekdayOf(d)) ?? 0), 0);
+    const teacherName = `${teacher.firstName} ${teacher.lastName ?? ''}`.trim();
+    const label = LeaveService.datesLabel(startDate, endDate);
+    const payload = { schoolName: school?.name ?? 'Your school', leaveId, teacherName, dates: label, days: dates.length, reason, periodsAffected };
+    const title = `${teacherName} has applied for leave`;
+    const body = `${label} · ${dates.length} day${dates.length === 1 ? '' : 's'}${periodsAffected ? ` · ${periodsAffected} periods to cover` : ''}`;
+    for (const a of admins) {
+      await tx.notification.create({ data: { schoolId, userId: a.userId, kind: 'LEAVE_APPLIED', title, body, linkType: 'leave', linkId: leaveId } });
+      await tx.notificationOutbox.create({ data: { schoolId, kind: 'LEAVE_APPLIED', payload, targetUserId: a.userId } });
+    }
+  }
+
+  private async tellTeacherDecided(tx: TenantTx, schoolId: string, app: { id: string; teacherId: string; startDate: Date; endDate: Date }, decision: 'APPROVED' | 'REJECTED', adminUserId: string): Promise<void> {
+    const [teacher, school] = await Promise.all([
+      tx.teacher.findFirst({ where: { id: app.teacherId, schoolId }, select: { userId: true } }),
+      tx.school.findFirst({ where: { id: schoolId }, select: { name: true } }),
+    ]);
+    if (!teacher?.userId) return;
+    const label = LeaveService.datesLabel(toDateStr(app.startDate), toDateStr(app.endDate));
+    const word = decision === 'APPROVED' ? 'approved' : 'not approved';
+    const payload = { schoolName: school?.name ?? 'Your school', leaveId: app.id, decision, dates: label, byName: null as string | null, byUserId: adminUserId };
+    await tx.notification.create({ data: { schoolId, userId: teacher.userId, kind: 'LEAVE_DECIDED', title: `Leave ${word}`, body: label, linkType: 'leave', linkId: app.id } });
+    await tx.notificationOutbox.create({ data: { schoolId, kind: 'LEAVE_DECIDED', payload, targetUserId: teacher.userId } });
+  }
+
+  private async tellSubstituteAssigned(tx: TenantTx, schoolId: string, sub: { id: string; date: Date; periodId: string; classSectionId: string; originalTeacherId: string }, substituteTeacherId: string): Promise<void> {
+    const [substitute, original, school, period, section, slot] = await Promise.all([
+      tx.teacher.findFirst({ where: { id: substituteTeacherId, schoolId }, select: { userId: true } }),
+      tx.teacher.findFirst({ where: { id: sub.originalTeacherId, schoolId }, select: { firstName: true, lastName: true } }),
+      tx.school.findFirst({ where: { id: schoolId }, select: { name: true } }),
+      tx.period.findFirst({ where: { id: sub.periodId, schoolId }, select: { label: true, startTime: true, endTime: true } }),
+      tx.classSection.findFirst({ where: { id: sub.classSectionId, schoolId }, select: { name: true } }),
+      tx.timetableSlot.findFirst({ where: { schoolId, classSectionId: sub.classSectionId, periodId: sub.periodId, dayOfWeek: isoWeekdayOf(toDateStr(sub.date)), effectiveTo: null }, select: { subject: { select: { name: true } } } }),
+    ]);
+    if (!substitute?.userId) return;
+    const when = `${LeaveService.datesLabel(toDateStr(sub.date), toDateStr(sub.date))}, ${period ? `${period.label} (${period.startTime}–${period.endTime})` : 'a period'}`;
+    const className = section?.name ?? 'a class';
+    const payload = { schoolName: school?.name ?? 'Your school', substitutionId: sub.id, when, className, subjectName: slot?.subject?.name ?? null, originalTeacherName: original ? `${original.firstName} ${original.lastName ?? ''}`.trim() : 'a colleague' };
+    await tx.notification.create({ data: { schoolId, userId: substitute.userId, kind: 'COVER_ASSIGNED', title: `You cover ${className}`, body: when, linkType: 'timetable', linkId: sub.id } });
+    await tx.notificationOutbox.create({ data: { schoolId, kind: 'COVER_ASSIGNED', payload, targetUserId: substitute.userId } });
   }
 
   async clear(schoolId: string, id: string) {

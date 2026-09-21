@@ -4,7 +4,7 @@ const txMock = {
   teacher: { findFirst: jest.fn(), findMany: jest.fn() },
   leaveTypeDef: { findFirst: jest.fn() },
   leaveApplication: { create: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
-  timetableSlot: { findMany: jest.fn(), findFirst: jest.fn() },
+  timetableSlot: { findMany: jest.fn(), findFirst: jest.fn(), groupBy: jest.fn().mockResolvedValue([]) },
   substitution: {
     findFirst: jest.fn(),
     findMany: jest.fn(),
@@ -18,8 +18,15 @@ const txMock = {
     update: jest.fn(),
     delete: jest.fn(),
   },
-  classSection: { findMany: jest.fn() },
-  period: { findMany: jest.fn() },
+  classSection: { findMany: jest.fn(), findFirst: jest.fn() },
+  period: { findMany: jest.fn(), findFirst: jest.fn() },
+  // The notices apply/approve/reject/assign write: no admins, no school name,
+  // no slots → every notice is a no-op in the tests above, and the two tests
+  // at the bottom prove the writes themselves.
+  school: { findFirst: jest.fn().mockResolvedValue({ name: 'Raffles' }) },
+  user: { findMany: jest.fn().mockResolvedValue([]) },
+  notification: { create: jest.fn() },
+  notificationOutbox: { create: jest.fn() },
 };
 
 const withTenantMock = jest.fn((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));
@@ -49,6 +56,9 @@ describe('LeaveService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     withTenantMock.mockImplementation((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));
+    txMock.school.findFirst.mockResolvedValue({ name: 'Raffles' });
+    txMock.user.findMany.mockResolvedValue([]);
+    txMock.timetableSlot.groupBy.mockResolvedValue([]);
     // `apply()` resolves the school's LeaveTypeDef for the picked type;
     // null = the school never opened its leave policy (pre-policy behaviour).
     txMock.leaveTypeDef.findFirst.mockResolvedValue(null);
@@ -176,7 +186,7 @@ describe('LeaveService', () => {
           reason: 'leave',
         },
       });
-      expect(result).toEqual({ gaps: 2 });
+      expect(result).toEqual({ gaps: 2, gapIds: [undefined, undefined] }); // the mock's create returns nothing; the count is what matters here
     });
 
     it('is idempotent: skips creating a gap that already exists for that slot/date', async () => {
@@ -188,7 +198,7 @@ describe('LeaveService', () => {
       const result = await svc.approve(SCHOOL, LEAVE_ID, ADMIN_USER);
 
       expect(txMock.substitution.create).not.toHaveBeenCalled();
-      expect(result).toEqual({ gaps: 0 });
+      expect(result).toEqual({ gaps: 0, gapIds: [] });
     });
 
     it('throws LEAVE_NOT_PENDING for an application that is not PENDING', async () => {
@@ -547,5 +557,44 @@ describe('LeaveService', () => {
     it('rejects an invalid status value', async () => {
       await expect(svc.list(SCHOOL, 'BOGUS')).rejects.toMatchObject({ response: { code: 'VALIDATION' } });
     });
+  });
+});
+
+describe('LeaveService notices', () => {
+  const svc = new LeaveService();
+  beforeEach(() => {
+    jest.clearAllMocks();
+    withTenantMock.mockImplementation((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));
+    txMock.school.findFirst.mockResolvedValue({ name: 'Raffles' });
+    txMock.timetableSlot.groupBy.mockResolvedValue([{ dayOfWeek: 1, _count: { _all: 3 } }, { dayOfWeek: 2, _count: { _all: 2 } }]);
+  });
+
+  it('apply writes a bell row and a guaranteed outbox row for EVERY admin, with the periods to cover counted from the timetable', async () => {
+    txMock.teacher.findFirst.mockResolvedValue({ id: 't1', firstName: 'Priya', lastName: 'Nair' });
+    txMock.leaveTypeDef.findFirst.mockResolvedValue(null);
+    txMock.leaveApplication.create.mockResolvedValue({ id: 'l1', schoolId: 'S', teacherId: 't1', type: 'CASUAL', startDate: new Date('2026-09-21'), endDate: new Date('2026-09-22'), reason: 'Family function', status: 'PENDING', reviewedById: null, reviewedAt: null, createdAt: new Date() });
+    txMock.user.findMany.mockResolvedValue([{ id: 'a1', email: 'a1@x' }, { id: 'a2', email: 'a2@x' }]);
+    await svc.apply('S', 'u-teacher', { type: 'CASUAL', startDate: '2026-09-21', endDate: '2026-09-22', reason: 'Family function' } as never);
+    expect(txMock.user.findMany.mock.calls[0][0].where).toMatchObject({ schoolId: 'S', role: 'SCHOOL_ADMIN', isActive: true });
+    expect(txMock.notification.create).toHaveBeenCalledTimes(2);
+    expect(txMock.notificationOutbox.create).toHaveBeenCalledTimes(2);
+    const row = txMock.notificationOutbox.create.mock.calls[0][0].data;
+    expect(row).toMatchObject({ schoolId: 'S', kind: 'LEAVE_APPLIED', targetUserId: 'a1' });
+    // Mon 21 (3 periods) + Tue 22 (2 periods) = 5; the signed buttons are NOT on the row.
+    expect(row.payload).toEqual({ schoolName: 'Raffles', leaveId: 'l1', teacherName: 'Priya Nair', dates: 'Mon 21 – Tue 22 Sep 2026', days: 2, reason: 'Family function', periodsAffected: 5 });
+  });
+
+  it('reject tells the teacher, and nothing happens when the teacher has no login', async () => {
+    txMock.leaveApplication.findFirst.mockResolvedValue({ id: 'l1', schoolId: 'S', teacherId: 't1', status: 'PENDING', startDate: new Date('2026-09-21'), endDate: new Date('2026-09-21') });
+    txMock.leaveApplication.update.mockResolvedValue({ id: 'l1', status: 'REJECTED' });
+    txMock.teacher.findFirst.mockResolvedValue({ userId: 'u-teacher' });
+    await svc.reject('S', 'l1', 'u-admin');
+    expect(txMock.notificationOutbox.create.mock.calls[0][0].data).toMatchObject({ kind: 'LEAVE_DECIDED', targetUserId: 'u-teacher', payload: { decision: 'REJECTED', dates: 'Mon 21 Sep 2026', leaveId: 'l1' } });
+    jest.clearAllMocks();
+    txMock.leaveApplication.findFirst.mockResolvedValue({ id: 'l1', schoolId: 'S', teacherId: 't1', status: 'PENDING', startDate: new Date('2026-09-21'), endDate: new Date('2026-09-21') });
+    txMock.leaveApplication.update.mockResolvedValue({ id: 'l1', status: 'REJECTED' });
+    txMock.teacher.findFirst.mockResolvedValue({ userId: null });
+    await svc.reject('S', 'l1', 'u-admin');
+    expect(txMock.notificationOutbox.create).not.toHaveBeenCalled();
   });
 });

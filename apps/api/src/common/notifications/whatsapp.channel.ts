@@ -2,7 +2,7 @@ import { Logger } from '@nestjs/common';
 import type { PrismaClient } from '@skoolos/db';
 import type { NotificationChannel, NotificationMessage } from './notification.types';
 import { toE164 } from './whatsapp/phone';
-import { sendTemplate, whatsAppConfig, WhatsAppApiError, type WhatsAppConfig } from './whatsapp/graph.client';
+import { sendTemplate, whatsAppConfig, WhatsAppApiError, type SendResult, type WhatsAppConfig } from './whatsapp/graph.client';
 import { templateFor, type WhatsAppTemplate } from './whatsapp/templates';
 
 /**
@@ -54,6 +54,25 @@ export class WhatsAppChannel implements NotificationChannel {
     return this.config() !== null;
   }
 
+  /**
+   * The same words to the same phone within a minute are one message. A
+   * family with three children at the school gets ONE "PTM on Saturday",
+   * not three; the per-child kinds (absence, remark) differ in their
+   * parameters and pass. Keyed on phone + template + parameters; the map is
+   * pruned when it grows, so a fan-out of thousands stays bounded.
+   */
+  private readonly recent = new Map<string, number>();
+  private static readonly DEDUPE_MS = 60_000;
+  private isDuplicate(phone: string, template: WhatsAppTemplate): boolean {
+    const key = `${phone}|${template.name}|${template.params.join('\u0001')}`;
+    const now = Date.now();
+    const seen = this.recent.get(key);
+    if (seen && now - seen < WhatsAppChannel.DEDUPE_MS) return true;
+    if (this.recent.size > 5000) for (const [k, t] of this.recent) if (now - t > WhatsAppChannel.DEDUPE_MS) this.recent.delete(k);
+    this.recent.set(key, now);
+    return false;
+  }
+
   async send(to: string, message: NotificationMessage, schoolId: string): Promise<boolean> {
     const cfg = this.config();
     if (!cfg) {
@@ -66,11 +85,44 @@ export class WhatsAppChannel implements NotificationChannel {
     const settings = await this.settingsFor(schoolId);
     if (!settings.enabled) return false;
 
-    const phone = await this.phoneFor(schoolId, to);
-    if (!phone) return false;
+    const address = await this.addressFor(schoolId, to);
+    if (!address) return false;
+    const { phone } = address;
 
-    const template = templateFor(message);
+    const template = templateFor(message, { child: address.child });
+    if (this.isDuplicate(phone, template)) return true;
     return this.deliver(cfg, schoolId, phone, message.kind, template, settings.phoneNumberId);
+  }
+
+  /** The platform credentials for callers that compose their own sends (actions, verification). */
+  configOrNull(): WhatsAppConfig | null {
+    return this.config();
+  }
+
+  /**
+   * A send composed by the caller (free text, an interactive list, a template
+   * outside the notification kinds), still written to the ledger under the
+   * school. Resolves false and records the reason on refusal, like send().
+   */
+  async deliverWith(schoolId: string, phone: string, kind: string, label: string, fn: (cfg: WhatsAppConfig, phoneNumberId: string | null, fetchImpl: typeof fetch) => Promise<SendResult>): Promise<{ ok: boolean; code: number | null }> {
+    const cfg = this.config();
+    if (!cfg) return { ok: false, code: null };
+    const settings = await this.settingsFor(schoolId);
+    try {
+      const { messageId } = await fn(cfg, settings.phoneNumberId, this.fetchImpl);
+      await this.prisma.whatsAppDelivery.create({ data: { schoolId, phone, kind, templateName: label, waMessageId: messageId, status: 'SENT', sentAt: new Date() } });
+      return { ok: true, code: null };
+    } catch (e) {
+      const code = e instanceof WhatsAppApiError ? e.code : null;
+      const reason = e instanceof WhatsAppApiError ? `${e.message} (code ${e.code ?? '?'})` : (e as Error).message;
+      this.logger.warn(`WhatsApp ${label} to ${phone} failed: ${reason}`);
+      try {
+        await this.prisma.whatsAppDelivery.create({ data: { schoolId, phone, kind, templateName: label, status: 'FAILED', error: reason.slice(0, 500) } });
+      } catch (ledgerErr) {
+        this.logger.error(`Could not record WhatsApp failure: ${(ledgerErr as Error).message}`);
+      }
+      return { ok: false, code };
+    }
   }
 
   /**
@@ -137,18 +189,36 @@ export class WhatsAppChannel implements NotificationChannel {
   }
 
   /**
-   * The phone behind a login: a student's login reaches the guardian's
-   * phone; a teacher's or staff member's reaches their own. The first that
+   * The phone behind a login: the person's own verified number first (an
+   * admin has nothing else); then a student's login reaches the guardian's
+   * phone, a teacher's or staff member's their own record. The first that
    * normalises to a real mobile wins; none means nothing to send.
    */
   async phoneFor(schoolId: string, email: string): Promise<string | null> {
-    const user = await this.prisma.user.findFirst({ where: { schoolId, email }, select: { id: true } });
+    return (await this.addressFor(schoolId, email))?.phone ?? null;
+  }
+
+  /**
+   * The phone, plus WHICH CHILD when the login is a student's: one guardian
+   * phone often serves siblings, so every notice about a child carries that
+   * child's name and class (see `childLabel` in templates.ts).
+   */
+  async addressFor(schoolId: string, email: string): Promise<{ phone: string; child: { name: string; className: string | null } | null } | null> {
+    const user = await this.prisma.user.findFirst({ where: { schoolId, email }, select: { id: true, phone: true, phoneVerifiedAt: true } });
     if (!user) return null;
     const [student, teacher, staff] = await Promise.all([
-      this.prisma.student.findFirst({ where: { schoolId, userId: user.id }, select: { guardianPhone: true } }),
+      this.prisma.student.findFirst({
+        where: { schoolId, userId: user.id },
+        select: { guardianPhone: true, firstName: true, lastName: true, classSection: { select: { name: true, grade: { select: { name: true } } } } },
+      }),
       this.prisma.teacher.findFirst({ where: { schoolId, userId: user.id }, select: { phone: true } }),
       this.prisma.staff.findFirst({ where: { schoolId, userId: user.id }, select: { phone: true } }),
     ]);
-    return toE164(student?.guardianPhone) ?? toE164(teacher?.phone) ?? toE164(staff?.phone);
+    const child = student
+      ? { name: `${student.firstName} ${student.lastName}`.trim(), className: student.classSection ? `${student.classSection.grade.name}-${student.classSection.name}` : null }
+      : null;
+    // A number the person proved is theirs wins over anything the office typed.
+    const phone = (user.phone && user.phoneVerifiedAt ? toE164(user.phone) : null) ?? toE164(student?.guardianPhone) ?? toE164(teacher?.phone) ?? toE164(staff?.phone);
+    return phone ? { phone, child } : null;
   }
 }
