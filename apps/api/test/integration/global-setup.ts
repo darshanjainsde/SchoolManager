@@ -9,6 +9,13 @@
 import { execSync } from 'node:child_process';
 import { Client } from 'pg';
 
+// globalSetup runs before any worker and shells out to `prisma migrate deploy`
+// and the seed, both of which call loadEnv(). Without this the child processes
+// inherit only the caller's shell, so the suite needed a developer's .env to
+// start and could not run on CI at all.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+require('../env.setup.js');
+
 const SUPER_URL = 'postgresql://skoolos:skoolos@localhost:5432/postgres';
 const TEST_DB = 'skoolos_test';
 
