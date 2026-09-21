@@ -14,11 +14,29 @@ describe('NotificationOutbox claiming', () => {
   const CLAIM_TTL_MS = 5 * 60_000;
   let schoolId: string;
 
+  /**
+   * The real drain sweeps EVERY school — it runs on the platform connection and
+   * that is the point of it. This copy adds one predicate the real one must not
+   * have: `"schoolId" = <this suite's school>`.
+   *
+   * Without it the assertions below counted rows this suite never created. The
+   * second test claims with a limit of 10 and expects ZERO, which only holds if
+   * the six rows seeded here are the only unsent rows in the table — and any
+   * earlier suite that queues a notification breaks that. It was fine until fee
+   * notifications arrived and `fees.e2e-spec.ts`, which runs first, started
+   * leaving unsent FEE_* rows behind. The suite then failed in a full run and
+   * passed on its own, which reads as a flake and is not one.
+   *
+   * Scoping the copy changes nothing about what is under test: SKIP LOCKED,
+   * the claim TTL and the sent-row exclusion all behave identically on a subset
+   * of the table.
+   */
   const claimSql = (limit: number, staleBefore: Date) => `
     UPDATE "NotificationOutbox" SET "claimedAt" = now()
     WHERE id IN (
       SELECT id FROM "NotificationOutbox"
       WHERE "sentAt" IS NULL AND attempts < 5
+        AND "schoolId" = '${schoolId}'
         AND ("claimedAt" IS NULL OR "claimedAt" < '${staleBefore.toISOString()}')
       ORDER BY "createdAt" ASC
       LIMIT ${limit}
