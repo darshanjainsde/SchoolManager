@@ -284,6 +284,19 @@ model School {
   status              SchoolStatus        @default(SETUP)
   timezone            String              @default("Asia/Kolkata")
   locale              String              @default("en-IN")
+  /// ISO 3166-1 alpha-2. Decides which pay rule book applies (packages/types
+  /// payroll packs) and defaults the four fields below. Set when the school is
+  /// created; frozen once a pay run has been locked, because changing it would
+  /// invalidate every figure already filed.
+  countryCode         String              @default("IN")
+  /// ISO 4217. What money on this school's screens and payslips is in.
+  currency            String              @default("INR")
+  /// State or province code within the country — "RJ", "MH", "NSW". Half of
+  /// India's pay law lives at this level: professional tax is a state levy and
+  /// Rajasthan has none at all.
+  region              String?
+  /// 4 = the tax year starts in April, so India's runs 1 Apr to 31 Mar.
+  taxYearStartMonth   Int                 @default(4)
   workingDays         Int[]               @default([1, 2, 3, 4, 5, 6])
   classNoteVisibility ClassNoteVisibility @default(ALL_TEACHERS)
   createdAt           DateTime            @default(now())
@@ -322,6 +335,12 @@ model School {
   attendance             Attendance[]
   substitutions          Substitution[]
   staff                  Staff[]
+  payComponents          PayComponent[]
+  employeePay            EmployeePay[]
+  payRuns                PayRun[]
+  payslips               Payslip[]
+  payAdjustments         PayAdjustment[]
+  taxDeclarations        TaxDeclaration[]
   staffAttendance        StaffAttendance[]
   leaveApplications      LeaveApplication[]
   leaveTypeDefs          LeaveTypeDef[]
@@ -512,6 +531,13 @@ model User {
   failedLoginAttempts Int                  @default(0)
   lockedUntil         DateTime?
   lastLoginAt         DateTime?
+  /// MAY SEE SALARY. A school admin can see everything else in the console;
+  /// pay is the first thing where that is wrong — a head of department with
+  /// admin rights has no business reading the principal's salary. Granted per
+  /// admin by another admin who already holds it; the first holder is the
+  /// school's earliest admin, seeded when the module is switched on. Every
+  /// read of a salary screen is written to AuditLog.
+  canSeeSalary        Boolean              @default(false)
   createdAt           DateTime             @default(now())
   school              School?              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   refreshTokens       RefreshToken[]
@@ -1082,6 +1108,10 @@ model Teacher {
   featuredIn        FeaturedStaff[]
   messageThreads    MessageThread[]
   libraryIssues     LibraryIssue[]
+  employeePay       EmployeePay[]
+  payslips          Payslip[]
+  payAdjustments    PayAdjustment[]
+  taxDeclarations   TaxDeclaration[]
 
   @@index([schoolId])
   @@index([userId])
@@ -1280,30 +1310,34 @@ model Substitution {
 }
 
 model Staff {
-  id                String      @id @default(uuid()) @db.Uuid
-  schoolId          String      @db.Uuid
+  id                String           @id @default(uuid()) @db.Uuid
+  schoolId          String           @db.Uuid
   firstName         String
   lastName          String
-  role              StaffRole   @default(OTHER)
+  role              StaffRole        @default(OTHER)
   /// SPORTS only: ENTER · VERIFY · CREATE · PUBLISH · HOUSES · SETTINGS (sports-perms.ts).
-  sportsPerms       String[]    @default([])
+  sportsPerms       String[]         @default([])
   email             String?
   phone             String?
   phoneE164         String?
-  userId            String?     @db.Uuid
+  userId            String?          @db.Uuid
   /// Self-uploaded avatar (MediaAsset id, kind AVATAR) — bare scalar like
   /// Student.photoAssetId / Teacher.photoAssetId (Phase 5·0d).
-  photoAssetId      String?     @db.Uuid
-  isActive          Boolean     @default(true)
+  photoAssetId      String?          @db.Uuid
+  isActive          Boolean          @default(true)
   /// Lifecycle (Active Roster). `isActive` above mirrors `status === ACTIVE`.
-  status            StaffStatus @default(ACTIVE)
-  leftOn            DateTime?   @db.Date
+  status            StaffStatus      @default(ACTIVE)
+  leftOn            DateTime?        @db.Date
   leftReason        String?
   leftNote          String?
   statusChangedAt   DateTime?
-  statusChangedById String?     @db.Uuid
-  createdAt         DateTime    @default(now())
-  school            School      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  statusChangedById String?          @db.Uuid
+  createdAt         DateTime         @default(now())
+  school            School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  employeePay       EmployeePay[]
+  payslips          Payslip[]
+  payAdjustments    PayAdjustment[]
+  taxDeclarations   TaxDeclaration[]
 
   @@index([schoolId])
   @@index([schoolId, status])
@@ -4649,4 +4683,285 @@ model OtpChallenge {
   createdAt  DateTime  @default(now())
 
   @@index([phone, purpose, createdAt])
+}
+
+// ── SALARY ────────────────────────────────────────────────────────────────────
+// The module's whole design in one sentence: a DATED rule book (the country
+// pack in @skoolos/types) applied to an EFFECTIVE-DATED employment record,
+// producing an IMMUTABLE pay run that records which versions of both it used.
+//
+// Money is minor units — paise — and never a float, the same rule the fees
+// module enforces. Nothing here stores a tax rate or a contribution
+// percentage: those live in the pack, where they carry the date they took
+// effect, because they move (India's provident-fund ceiling changed on
+// 17 September 2026 and an arrears run still touches months under the old one).
+
+enum PayComponentKind {
+  EARNING
+  DEDUCTION
+  EMPLOYER_COST
+}
+
+enum PayComponentCalc {
+  FIXED
+  PCT_OF_BASIC
+  PCT_OF_GROSS
+  /// Whatever is left of the agreed gross once the others are assigned.
+  BALANCE
+}
+
+/// Which table the person's employment row points at. Exactly one of
+/// teacherId / staffId is set on every row — the same two-ids rule the
+/// library's borrower columns follow.
+enum PayPersonKind {
+  TEACHER
+  STAFF
+}
+
+enum PayRunStatus {
+  DRAFT
+  CALCULATED
+  APPROVED
+  /// The only irreversible step. Before it everything is editable; after it
+  /// everything is auditable and a correction is an adjustment in the NEXT run.
+  LOCKED
+  PAID
+}
+
+enum PayTaxRegime {
+  NEW
+  OLD
+}
+
+enum PayDeclarationStatus {
+  DRAFT
+  SUBMITTED
+}
+
+/// A named piece of money with FLAGS rather than a rate — is it taxable, does
+/// it count as "wages" for the Code on Wages 50% test, is the provident fund
+/// computed on it, does it shrink when someone is absent. A school starts with
+/// the pack's standard set and may add its own.
+model PayComponent {
+  id             String           @id @default(uuid()) @db.Uuid
+  schoolId       String           @db.Uuid
+  key            String
+  name           String
+  kind           PayComponentKind
+  calc           PayComponentCalc
+  /// Basis points for a PCT_* component: 4000 = 40%.
+  rateBps        Int?
+  taxable        Boolean          @default(true)
+  /// Part of Basic + dearness allowance for the 50% rule.
+  isWages        Boolean          @default(false)
+  retirementBase Boolean          @default(false)
+  healthBase     Boolean          @default(true)
+  gratuityBase   Boolean          @default(false)
+  prorate        Boolean          @default(true)
+  order          Int              @default(0)
+  active         Boolean          @default(true)
+  hint           String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  school         School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, key])
+  @@index([schoolId, order])
+}
+
+/// One person's pay, as it stood FROM a date. A raise writes a new row; nothing
+/// is ever edited in place. This is the single thing that makes a backdated
+/// increment computable rather than a spreadsheet job.
+model EmployeePay {
+  id                  String        @id @default(uuid()) @db.Uuid
+  schoolId            String        @db.Uuid
+  personKind          PayPersonKind
+  teacherId           String?       @db.Uuid
+  staffId             String?       @db.Uuid
+  effectiveFrom       DateTime      @db.Date
+  /// What the school and the person agreed as monthly gross, in paise.
+  monthlyGrossMinor   Int
+  /// componentKey -> amount in paise, for the FIXED components the admin typed.
+  fixedAmounts        Json          @default("{}")
+  taxRegime           PayTaxRegime  @default(NEW)
+  /// Provident fund: a member at all, and whether the school contributes above
+  /// the statutory ceiling (a per-person agreement, not a rule).
+  pfOptIn             Boolean       @default(true)
+  pfOnActual          Boolean       @default(false)
+  esiExempt           Boolean       @default(false)
+  localTaxExempt      Boolean       @default(false)
+  /// Paid through the summer vacation. Contract teachers on a 10- or 11-month
+  /// term are not, and their pay is prorated across the months they work.
+  paidThroughVacation Boolean       @default(true)
+  contractMonths      Int           @default(12)
+  /// A fixed-term contract qualifies for gratuity after ONE year, not five.
+  fixedTerm           Boolean       @default(false)
+  joinedOn            DateTime?     @db.Date
+  pan                 String?
+  uan                 String?
+  esiNumber           String?
+  bankAccount         String?
+  bankIfsc            String?
+  bankName            String?
+  note                String?
+  createdById         String?       @db.Uuid
+  createdAt           DateTime      @default(now())
+  school              School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  teacher             Teacher?      @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  staff               Staff?        @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, teacherId, effectiveFrom])
+  @@index([schoolId, staffId, effectiveFrom])
+  @@index([teacherId])
+  @@index([staffId])
+}
+
+/// One month, for the whole school. Immutable once LOCKED, and it records the
+/// pack version and the date its rules were read at, so a school can see which
+/// rule book produced a figure a year later.
+model PayRun {
+  id                String          @id @default(uuid()) @db.Uuid
+  schoolId          String          @db.Uuid
+  periodYear        Int
+  periodMonth       Int
+  status            PayRunStatus    @default(DRAFT)
+  packCountry       String
+  packVersion       String
+  /// The date the pack's tables were read at — the LAST day of the month, so a
+  /// rule that starts mid-month applies to that whole month's pay.
+  rulesAsAt         DateTime        @db.Date
+  headcount         Int             @default(0)
+  grossMinor        Int             @default(0)
+  deductionMinor    Int             @default(0)
+  netMinor          Int             @default(0)
+  employerCostMinor Int             @default(0)
+  note              String?
+  calculatedAt      DateTime?
+  approvedAt        DateTime?
+  approvedById      String?         @db.Uuid
+  lockedAt          DateTime?
+  lockedById        String?         @db.Uuid
+  paidAt            DateTime?
+  createdById       String?         @db.Uuid
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  school            School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  payslips          Payslip[]
+  adjustments       PayAdjustment[]
+
+  @@unique([schoolId, periodYear, periodMonth])
+  @@index([schoolId, periodYear, periodMonth])
+}
+
+/// One person's month. The lines are a SNAPSHOT, not a join: a payslip must
+/// read the same in three years even after the structure, the person's name or
+/// the rule book has moved on.
+model Payslip {
+  id                      String        @id @default(uuid()) @db.Uuid
+  schoolId                String        @db.Uuid
+  payRunId                String        @db.Uuid
+  personKind              PayPersonKind
+  teacherId               String?       @db.Uuid
+  staffId                 String?       @db.Uuid
+  name                    String
+  designation             String?
+  /// [{ key, name, kind, amountMinor }] — every earning, deduction and
+  /// employer cost, in the order the payslip prints them.
+  lines                   Json
+  daysInMonth             Int
+  daysPaid                Int
+  grossMinor              Int
+  deductionMinor          Int
+  netMinor                Int
+  employerCostMinor       Int
+  retirementEmployeeMinor Int           @default(0)
+  retirementEmployerMinor Int           @default(0)
+  pensionMinor            Int           @default(0)
+  healthEmployeeMinor     Int           @default(0)
+  healthEmployerMinor     Int           @default(0)
+  localTaxMinor           Int           @default(0)
+  incomeTaxMinor          Int           @default(0)
+  taxRegime               PayTaxRegime
+  /// Where the person stands in the tax year so far, so December is not a shock.
+  ytdGrossMinor           Int           @default(0)
+  ytdTaxMinor             Int           @default(0)
+  createdAt               DateTime      @default(now())
+  school                  School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  payRun                  PayRun        @relation(fields: [payRunId], references: [id], onDelete: Cascade)
+  teacher                 Teacher?      @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  staff                   Staff?        @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@unique([payRunId, personKind, teacherId, staffId])
+  @@index([schoolId, payRunId])
+  @@index([schoolId, teacherId])
+  @@index([schoolId, staffId])
+  @@index([payRunId])
+  @@index([teacherId])
+  @@index([staffId])
+}
+
+/// An arrears line, a one-off, or days of unpaid absence, aimed at one month.
+/// A correction to a LOCKED run is one of these in the next run, never an edit.
+model PayAdjustment {
+  id          String           @id @default(uuid()) @db.Uuid
+  schoolId    String           @db.Uuid
+  personKind  PayPersonKind
+  teacherId   String?          @db.Uuid
+  staffId     String?          @db.Uuid
+  periodYear  Int
+  periodMonth Int
+  label       String
+  kind        PayComponentKind
+  amountMinor Int
+  taxable     Boolean          @default(true)
+  /// Unpaid days, which shrink the proratable lines instead of adding money.
+  lopDays     Int              @default(0)
+  note        String?
+  payRunId    String?          @db.Uuid
+  createdById String?          @db.Uuid
+  createdAt   DateTime         @default(now())
+  school      School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  payRun      PayRun?          @relation(fields: [payRunId], references: [id], onDelete: SetNull)
+  teacher     Teacher?         @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  staff       Staff?           @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, periodYear, periodMonth])
+  @@index([payRunId])
+  @@index([teacherId])
+  @@index([staffId])
+}
+
+/// What the person declared for the year — rent, insurance, a previous
+/// employer. India calls this Form 124 since April 2026; it was Form 12BB.
+/// Only the old regime uses most of it, which the screen says plainly.
+model TaxDeclaration {
+  id                          String               @id @default(uuid()) @db.Uuid
+  schoolId                    String               @db.Uuid
+  personKind                  PayPersonKind
+  teacherId                   String?              @db.Uuid
+  staffId                     String?              @db.Uuid
+  /// The year the tax year STARTS in: 2026 means 2026-27.
+  taxYear                     Int
+  regime                      PayTaxRegime         @default(NEW)
+  rentAnnualMinor             Int                  @default(0)
+  metro                       Boolean              @default(false)
+  landlordPan                 String?
+  section80cMinor             Int                  @default(0)
+  section80dMinor             Int                  @default(0)
+  homeLoanInterestMinor       Int                  @default(0)
+  otherIncomeMinor            Int                  @default(0)
+  previousEmployerSalaryMinor Int                  @default(0)
+  previousEmployerTdsMinor    Int                  @default(0)
+  status                      PayDeclarationStatus @default(DRAFT)
+  submittedAt                 DateTime?
+  createdAt                   DateTime             @default(now())
+  updatedAt                   DateTime             @updatedAt
+  school                      School               @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  teacher                     Teacher?             @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  staff                       Staff?               @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, personKind, teacherId, staffId, taxYear])
+  @@index([schoolId, taxYear])
+  @@index([teacherId])
+  @@index([staffId])
 }

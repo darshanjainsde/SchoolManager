@@ -262,6 +262,18 @@ export type ErrorCode =
   | 'UNDECIDED_STUDENTS'
   // ── Sports wing ──
   /** Not the sports teacher (Staff.role SPORTS) nor a school admin. 403. */
+  /** The signed-in admin does not hold the salary right — 403. */
+  | 'NOT_SALARY_ADMIN'
+  /** The school's country has no pay rule book yet — 400. */
+  | 'SALARY_NO_PACK'
+  /** The structure breaks the Code on Wages 50% rule — 400. */
+  | 'SALARY_WAGE_SHARE'
+  /** A pay run that is locked cannot be changed — 409. */
+  | 'PAY_RUN_LOCKED'
+  /** The run is not in a state where that step is legal — 409. */
+  | 'PAY_RUN_STATE'
+  /** Nobody has a pay structure, so there is nothing to run — 400. */
+  | 'PAY_RUN_EMPTY'
   | 'NOT_SPORTS_DESK'
   /** The sports teacher's permission list does not include this action. 403. */
   | 'SPORTS_PERM'
