@@ -4,6 +4,7 @@ import request from 'supertest';
 import { disconnectAll, getPlatformPrisma } from '@skoolos/db';
 import { AppModule } from '../src/app.module';
 import { signSchoolToken, seedMinimalSchool } from './integration/helpers';
+import { itWithObjectStorage } from './requires-object-storage';
 
 describe('management authorization', () => {
   let app: INestApplication;
@@ -947,7 +948,7 @@ describe('management authorization', () => {
       180_000,
     );
 
-    it('a TEACHER can upload a PDF attachment via the shared storage machinery and gets back {url,name,kind}', async () => {
+    itWithObjectStorage('a TEACHER can upload a PDF attachment via the shared storage machinery and gets back {url,name,kind}', async () => {
       const res = await request(app.getHttpServer())
         .post('/manage/assignments/upload')
         .set(as(teacherToken))
