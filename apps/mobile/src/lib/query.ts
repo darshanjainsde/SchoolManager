@@ -23,6 +23,14 @@ import { api, ApiError } from './api';
 
 import { clearCache, inflight, invalidate, readCache, store } from './cache-store';
 
+/**
+ * How long a cached answer counts as fresh on a plain focus. Tab-switching
+ * Home → Fees → Home used to refire every Home request each time (perf audit
+ * 2026-09-22, #2); within this window the cached answer is shown as-is.
+ * Pull-to-refresh and `reload` always fetch.
+ */
+export const FRESH_MS = 30_000;
+
 export { clearCache, invalidate, readCache };
 
 /** Fetch `path`, sharing one in-flight request between concurrent callers, and remember the answer. */
@@ -76,6 +84,13 @@ export function useQuery<T>(path: string | null): QueryState<T> {
       const had = readCache<T>(path);
       if (had !== undefined) setData(had);
       else if (mode === 'focus') setLoading(true);
+      if (mode === 'focus') {
+        const entry = store.get(path);
+        if (entry && Date.now() - entry.at < FRESH_MS) {
+          setLoading(false);
+          return;
+        }
+      }
       fetchCached<T>(path)
         .then((fresh) => {
           if (!alive.current) return;

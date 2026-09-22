@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import { Animated, Pressable, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
-import type { AttendanceSummary } from '@/lib/portal';
+import { formatDate, type AttendanceSummary } from '@/lib/portal';
 import { buildAttendanceGrid, currentMonthKey, monthKeyLabel, shiftMonthKey } from '@/lib/attendance-grid';
 import { Card, Pill, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
@@ -421,7 +421,7 @@ export default function Attendance() {
                       borderBottomColor: tokens.color.line,
                     }}
                   >
-                    <Text style={{ fontFamily: font.mono, fontSize: 12, color: tokens.color.ink2 }}>{d.date}</Text>
+                    <Text style={{ fontFamily: font.mono, fontSize: 12, color: tokens.color.ink2 }}>{formatDate(d.date)}</Text>
                     <Pill tone={d.status === 'PRESENT' ? 'green' : d.status === 'LATE' ? 'amber' : 'red'}>
                       {d.status === 'PRESENT' ? 'Present' : d.status === 'LATE' ? 'Late' : 'Absent'}
                     </Pill>

@@ -78,7 +78,7 @@ function DiaryItem({
   children?: ReactNode;
 }) {
   const tokens = useTokens();
-  const pin = useGesture(true, DUR.pin, { delay: index * 90 });
+  const pin = useGesture(true, DUR.pin, { delay: Math.min(index, 6) * 90 });
   const red = entry.kind === 'REMARK';
 
   return (

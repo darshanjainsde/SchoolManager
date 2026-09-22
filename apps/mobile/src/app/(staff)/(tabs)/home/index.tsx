@@ -1,3 +1,4 @@
+import { fetchCached } from '@/lib/query';
 import { useCallback, useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
@@ -100,8 +101,9 @@ export default function Today() {
   const liveSubjectId = liveSlot?.subjectId ?? null;
   const refreshPeriodCounts = useCallback(() => {
     if (!liveClassSectionId || !liveSubjectId) return;
-    api
-      .request<{ notes: ClassNoteRow[]; todos: ClassTodoRow[] }>(
+    // Through the inflight map: the mount effect and the focus effect both
+    // ask on mount, and used to issue two real requests (perf audit #12).
+    fetchCached<{ notes: ClassNoteRow[]; todos: ClassTodoRow[] }>(
         `/manage/class-notes?classSectionId=${encodeURIComponent(liveClassSectionId)}&date=${encodeURIComponent(date)}&subjectId=${encodeURIComponent(liveSubjectId)}`,
       )
       .then((d) =>
@@ -113,6 +115,8 @@ export default function Today() {
     // `date` is always "today" here — see the note on the focus effect above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveClassSectionId, liveSubjectId]);
+  // Refetch when the bell flips the live period, and on every focus (a note
+  // added from the Notes tool elsewhere must show up on the badge).
   // Refetch when the bell flips the live period, and on every focus (a note
   // added from the Notes tool elsewhere must show up on the badge).
   useEffect(() => {

@@ -41,7 +41,7 @@ import { useTokens } from '@/theme/theme-context';
 function NoticeRow({ a, index }: { a: Announcement; index: number }) {
   const tokens = useTokens();
   const [expanded, setExpanded] = useState(false);
-  const pin = useGesture(true, DUR.pin, { delay: 150 + index * 180 });
+  const pin = useGesture(true, DUR.pin, { delay: 150 + Math.min(index, 6) * 90 });
 
   return (
     <Animated.View style={pinStyle(pin)}>

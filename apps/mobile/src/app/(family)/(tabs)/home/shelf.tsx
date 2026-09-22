@@ -71,7 +71,7 @@ function Spine({
         accessibilityRole="summary"
         accessibilityLabel={`${child.displayName} is no longer enrolled at ${schoolLabel(child.schoolHost)}`}
         style={{
-          width: '23%',
+          width: '22%',
           borderRadius: 12,
           borderWidth: 1,
           borderStyle: 'dashed',
@@ -108,8 +108,8 @@ function Spine({
           accessibilityRole="button"
           accessibilityLabel={`Remove ${child.displayName} from the shelf`}
           onPress={onRemove}
-          hitSlop={8}
-          style={{ marginTop: 6 }}
+          hitSlop={12}
+          style={{ marginTop: 6, minHeight: 32, justifyContent: 'center' }}
         >
           <Text style={{ fontSize: 9, fontWeight: '800', color: tokens.color.ink }}>REMOVE</Text>
         </Pressable>
@@ -118,7 +118,7 @@ function Spine({
   }
 
   return (
-    <Animated.View style={{ width: '23%', transform: [{ translateY: lift }] }}>
+    <Animated.View style={{ width: '22%', transform: [{ translateY: lift }] }}>
       <Pressable
         testID={`spine-${child.key}`}
         accessibilityRole="button"
@@ -281,7 +281,7 @@ export default function Shelf() {
             accessibilityLabel="Add a child"
             onPress={() => void addChild()}
             style={{
-              width: '23%',
+              width: '22%',
               minHeight: 108,
               borderRadius: 12,
               borderWidth: 1.5,

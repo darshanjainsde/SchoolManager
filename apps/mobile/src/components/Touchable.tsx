@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, Pressable, type ViewStyle } from 'react-native';
+import { useReduceMotion } from '@/theme/motion';
+import { useRef } from 'react';
+import { Animated, Pressable, type ViewStyle } from 'react-native';
 import * as Haptics from 'expo-haptics';
 
 /**
@@ -61,20 +62,12 @@ export function Touchable({
 }): React.JSX.Element {
   const scale = useRef(new Animated.Value(1)).current;
   const translateY = useRef(new Animated.Value(0)).current;
-  const [reduceMotion, setReduceMotion] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    void AccessibilityInfo.isReduceMotionEnabled().then((on) => {
-      if (!cancelled) setReduceMotion(on);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // Shared probe: one bridge call for the whole app, read at press time
+  // (a register renders one Touchable per student — 45 probes before).
+  const reduceMotion = useReduceMotion();
 
   function to(value: number) {
-    if (reduceMotion) return;
+    if (reduceMotion.current) return;
     Animated.spring(scale, {
       toValue: value,
       useNativeDriver: true,

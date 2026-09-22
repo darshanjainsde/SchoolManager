@@ -1,3 +1,4 @@
+import { StatusBar } from 'expo-status-bar';
 import { Stack } from 'expo-router';
 import { ScrollView, Text, View, Pressable } from 'react-native';
 import type { ErrorBoundaryProps } from 'expo-router';
@@ -11,8 +12,10 @@ import { emergency } from '@/theme/tokens';
 // (extra.sentryDsn). Native + JS crashes report to the Sckools Sentry org.
 Sentry.init({
   dsn: Constants.expoConfig?.extra?.sentryDsn as string | undefined,
-  // While stabilising the first release, capture everything.
-  tracesSampleRate: 1.0,
+  // Errors always report. Performance traces are sampled in production: at
+  // 1.0 every navigation was uploaded from every device on metered school
+  // connections (perf audit 2026-09-22, #8).
+  tracesSampleRate: __DEV__ ? 1.0 : 0.1,
   enableNativeCrashHandling: true,
 });
 
@@ -63,6 +66,9 @@ function RootLayout() {
   // 14 handset — icons as boxes for that family, on every launch.
   return (
     <ThemeProvider>
+      {/* Light icons on a light ground made the clock invisible on many
+          Android skins; "auto" follows the app's own scheme (UI audit #8). */}
+      <StatusBar style="auto" />
       {/* The pitch moves between screens the way a diary turns a page: the
           incoming screen slides in from the right as the outgoing one leaves
           (`.scr` → `translateX(26px)` + fade). expo-router's native stack

@@ -289,14 +289,14 @@ export default function Tests() {
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <Text style={labelStyle}>Date</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <Pressable testID="test-date-prev" onPress={() => setDate((d) => shiftISO(d, -1))}>
-                <Text style={{ color: tokens.color.indigo, fontWeight: '700' }}>‹</Text>
+              <Pressable testID="test-date-prev" accessibilityRole="button" accessibilityLabel="Previous day" hitSlop={12} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }} onPress={() => setDate((d) => shiftISO(d, -1))}>
+                <Text style={{ color: tokens.color.indigo, fontWeight: '700', fontSize: 18 }}>‹</Text>
               </Pressable>
               <Text testID="test-date-value" style={{ fontSize: 12.5, color: tokens.color.ink, minWidth: 84, textAlign: 'center' }}>
                 {date}
               </Text>
-              <Pressable testID="test-date-next" onPress={() => setDate((d) => shiftISO(d, 1))}>
-                <Text style={{ color: tokens.color.indigo, fontWeight: '700' }}>›</Text>
+              <Pressable testID="test-date-next" accessibilityRole="button" accessibilityLabel="Next day" hitSlop={12} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }} onPress={() => setDate((d) => shiftISO(d, 1))}>
+                <Text style={{ color: tokens.color.indigo, fontWeight: '700', fontSize: 18 }}>›</Text>
               </Pressable>
             </View>
           </View>

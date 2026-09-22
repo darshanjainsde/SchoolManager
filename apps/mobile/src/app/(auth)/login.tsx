@@ -243,14 +243,14 @@ export default function Login() {
                 <Field label="Student code or email">
                   <TextInput
                     value={identifier} onChangeText={setIdentifier} placeholder="RAF-00042" placeholderTextColor={tokens.color.placeholder}
-                    autoCapitalize="none" autoCorrect={false} testID="login-id"
+                    autoCapitalize="none" autoCorrect={false} keyboardType="email-address" autoComplete="username" textContentType="username" testID="login-id"
                     onFocus={() => setFocus('id')} onBlur={() => setFocus(null)} style={fieldInputStyle(tokens, { focused: focus === 'id' })}
                   />
                 </Field>
                 <Field label="Password">
                   <TextInput
                     value={password} onChangeText={setPassword} placeholder="••••••••" placeholderTextColor={tokens.color.placeholder}
-                    secureTextEntry testID="login-pw"
+                    secureTextEntry autoComplete="password" textContentType="password" testID="login-pw"
                     onFocus={() => setFocus('pw')} onBlur={() => setFocus(null)} style={fieldInputStyle(tokens, { focused: focus === 'pw' })}
                   />
                 </Field>

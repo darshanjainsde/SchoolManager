@@ -95,7 +95,7 @@ export default function MyPhone() {
             <Page>
               <PageHeader title="Your number" />
               <View style={{ padding: 12, gap: 10 }}>
-                <TextField label="WhatsApp number" value={phone} onChangeText={setPhone} placeholder="98765 43210" testID="phone-input" />
+                <TextField label="WhatsApp number" value={phone} onChangeText={setPhone} placeholder="98765 43210" keyboardType="phone-pad" autoComplete="tel" textContentType="telephoneNumber" testID="phone-input" />
                 <Pressable testID="phone-send" onPress={send} disabled={!d.platformReady || busy !== null || !phone.trim()} style={{ alignSelf: 'flex-start', paddingVertical: 9, paddingHorizontal: 14, borderRadius: 999, backgroundColor: tokens.color.indigo, opacity: !d.platformReady || !phone.trim() ? 0.5 : 1 }}>
                   <Text style={{ color: tokens.color.onBrand, fontWeight: '700' }}>{busy === 'send' ? 'Sending…' : d.pending ? 'Send again' : 'Send code'}</Text>
                 </Pressable>
@@ -108,7 +108,7 @@ export default function MyPhone() {
             <Page testID="phone-verify">
               <PageHeader title="The 6-digit code from WhatsApp" />
               <View style={{ padding: 12, gap: 10 }}>
-                <TextField label="Code" value={code} onChangeText={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))} placeholder="482911" testID="phone-code" />
+                <TextField label="Code" value={code} onChangeText={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))} placeholder="482911" keyboardType="number-pad" autoComplete="one-time-code" textContentType="oneTimeCode" maxLength={6} testID="phone-code" />
                 <Pressable testID="phone-verify-go" onPress={verify} disabled={busy !== null || code.length !== 6} style={{ alignSelf: 'flex-start', paddingVertical: 9, paddingHorizontal: 14, borderRadius: 999, backgroundColor: tokens.color.indigo, opacity: code.length !== 6 ? 0.5 : 1 }}>
                   <Text style={{ color: tokens.color.onBrand, fontWeight: '700' }}>{busy === 'verify' ? 'Checking…' : 'Verify'}</Text>
                 </Pressable>

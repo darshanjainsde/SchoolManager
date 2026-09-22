@@ -98,7 +98,8 @@ export function AuthScaffold({
           {subtitle ? (
             <Text
               style={{
-                color: 'rgba(255,255,255,0.78)',
+                color: brand.onHero,
+                opacity: 0.78,
                 fontSize: 15,
                 lineHeight: 21,
                 textAlign: 'center',

@@ -1,3 +1,4 @@
+import { formatDate } from '@/lib/portal';
 import { useCallback, useState } from 'react';
 import { Alert, Animated, Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -349,7 +350,7 @@ export default function TakeAttendance() {
   return (
     <Screen>
       <SectionTitle
-        title={`${name ?? 'Class'} · Attendance${date === todayISO() ? '' : ` · ${date}`}`}
+        title={`${name ?? 'Class'} · Attendance${date === todayISO() ? '' : ` · ${formatDate(date)}`}`}
       />
       {confirmation && <SavedStamp />}
       {confirmation && (

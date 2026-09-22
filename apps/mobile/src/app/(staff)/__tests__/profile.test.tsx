@@ -1,3 +1,4 @@
+import { clearCache } from '@/lib/query';
 import { render, fireEvent } from '@testing-library/react-native';
 import Profile from '../(tabs)/profile/index';
 import StaffAppearance from '../(tabs)/profile/appearance';
@@ -23,6 +24,7 @@ jest.mock('@/lib/api', () => {
 jest.mock('expo-image-picker', () => ({ launchImageLibraryAsync: jest.fn() }));
 
 beforeEach(() => {
+  clearCache();
   (api.request as jest.Mock).mockReset();
 });
 
@@ -212,6 +214,7 @@ it('phone screen: verified → Remove deletes /me/phone; platform off disables s
   await findByTestId('phone-note');
   expect((api.request as jest.Mock).mock.calls.find((c) => c[0] === '/me/phone' && c[1]?.method === 'DELETE')).toBeTruthy();
   unmount();
+  clearCache(); // the second render must not be served the first one's 30-s-fresh answer
 
   (api.request as jest.Mock).mockResolvedValue({ phone: null, verified: false, verifiedAt: null, pending: null, pendingUntil: null, platformReady: false });
   const second = render(<StaffPhone />);

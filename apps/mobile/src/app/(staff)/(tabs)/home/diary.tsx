@@ -647,8 +647,11 @@ export default function StaffDiary() {
               {e.editable && (
                 <Pressable
                   testID={`diary-remove-${e.id}`}
+                  accessibilityRole="button"
+                  accessibilityLabel="Strike out this entry"
+                  hitSlop={10}
                   onPress={() => remove(e)}
-                  style={{ alignSelf: 'flex-start', marginTop: 7 }}
+                  style={{ alignSelf: 'flex-start', marginTop: 7, minHeight: 32, justifyContent: 'center' }}
                 >
                   <Text style={{ color: tokens.color.red, fontSize: 12, fontWeight: '700' }}>
                     Strike out

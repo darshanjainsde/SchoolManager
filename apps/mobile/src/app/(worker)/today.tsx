@@ -1,3 +1,4 @@
+import { formatDate } from '@/lib/portal';
 import { useCallback, useState } from 'react';
 import { Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
@@ -202,7 +203,7 @@ export default function Today() {
                   borderTopColor: tokens.color.line,
                 }}
               >
-                <Text style={{ fontFamily: font.mono, fontSize: 12, color: tokens.color.ink2 }}>{d.date}</Text>
+                <Text style={{ fontFamily: font.mono, fontSize: 12, color: tokens.color.ink2 }}>{formatDate(d.date)}</Text>
                 <Pill tone={STATUS_TONE[d.status]}>{STATUS_LABEL[d.status]}</Pill>
               </View>
             ))}

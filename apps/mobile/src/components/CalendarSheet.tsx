@@ -1,3 +1,4 @@
+import { formatDate } from '@/lib/portal';
 import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Sheet } from './Sheet';
@@ -139,7 +140,7 @@ export function CalendarSheet({ open, title, value, minDate, onPick, onClose }: 
                   key={iso}
                   testID={`calendar-day-${iso}`}
                   accessibilityRole="button"
-                  accessibilityLabel={iso}
+                  accessibilityLabel={formatDate(iso)}
                   accessibilityState={{ disabled: belowFloor, selected: chosen }}
                   disabled={belowFloor}
                   onPress={() => {

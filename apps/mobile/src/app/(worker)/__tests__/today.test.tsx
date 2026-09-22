@@ -1,3 +1,4 @@
+import { formatDate } from '@/lib/portal';
 import { render, screen } from '@testing-library/react-native';
 import Today from '../today';
 import { api, ApiError } from '@/lib/api';
@@ -66,7 +67,7 @@ it('renders the identity greeting, stat boxes, and recent days from the real MyS
   expect(screen.getByTestId('stat-percent')).toHaveTextContent('67%');
   expect(screen.getByTestId('stat-present')).toHaveTextContent('2');
   expect(screen.getByTestId('stat-absent')).toHaveTextContent('1');
-  expect(screen.getByText('2026-07-01')).toBeTruthy();
+  expect(screen.getByText(formatDate('2026-07-01'))).toBeTruthy();
 });
 
 it('always renders the honest "leave not available yet" note — v1 has no staff-leave path', async () => {

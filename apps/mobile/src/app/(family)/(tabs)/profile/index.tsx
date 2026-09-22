@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View, Alert } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import type { StudentProfile } from '@/lib/portal';
@@ -104,6 +104,17 @@ function SettingRow({
  * Role-neutral — this is the STUDENT's own record, shown identically whether a
  * parent or the student is holding the phone (see role-neutral-copy.test.ts).
  */
+/**
+ * One stray thumb used to clear the session AND every child on the shelf
+ * (UI audit 2026-09-22, #13). Ask first, in the words that say what is lost.
+ */
+function confirmSignOut(): void {
+  Alert.alert('Sign out?', 'This removes every profile on this phone. You can sign in again with your number.', [
+    { text: 'Stay', style: 'cancel' },
+    { text: 'Sign out', style: 'destructive', onPress: () => void signOut() },
+  ]);
+}
+
 export default function Profile() {
   const tokens = useTokens();
   const [profile, setProfile] = useState<StudentProfile | null>(null);
@@ -232,7 +243,7 @@ export default function Profile() {
       <Pressable
         testID="profile-signout"
         accessibilityRole="button"
-        onPress={() => void signOut()}
+        onPress={confirmSignOut}
         style={{
           marginTop: 4,
           borderWidth: 1,

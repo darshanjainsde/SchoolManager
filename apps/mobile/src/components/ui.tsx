@@ -53,6 +53,10 @@ export function Screen({
   const scroll = (
     <ScrollView
       testID="screen-scroll"
+      // While an input is focused RN's default swallows the next tap to
+      // dismiss the keyboard — a teacher entering 40 marks tapped 80 times,
+      // a parent's "Sign" button "did not work" (UI audit 2026-09-22, #1).
+      keyboardShouldPersistTaps="handled"
       style={{ flex: 1, backgroundColor: tokens.color.appBg }}
       refreshControl={
         onRefresh ? (
@@ -383,7 +387,7 @@ export function RailRow({
           have to squint at is not a time column. */}
       <Text
         style={{
-          width: 52,
+          minWidth: 52,
           textAlign: 'center',
           fontFamily: font.mono,
           fontSize: 11,
@@ -696,7 +700,7 @@ export function Figure({
         {value}
       </Text>
       {hint && (
-        <Text style={{ fontSize: 10, color: tokens.color.sub, marginTop: 1 }} numberOfLines={1}>
+        <Text style={{ fontSize: 10, color: tokens.color.sub, marginTop: 1 }} numberOfLines={2}>
           {hint}
         </Text>
       )}

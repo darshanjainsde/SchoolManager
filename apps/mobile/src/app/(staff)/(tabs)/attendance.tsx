@@ -1,3 +1,4 @@
+import { formatDate } from '@/lib/portal';
 import { useCallback, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
@@ -304,7 +305,7 @@ export default function StaffAttendance() {
 
   return (
     <Screen>
-      <SectionTitle title={`Attendance · ${date === today ? 'today' : date}`} />
+      <SectionTitle title={`Attendance · ${date === today ? 'today' : formatDate(date)}`} />
       {/* The date control keeps its WORDS. The repaint replaced "‹ Prev day" /
           "Next day ›" with bare chevrons and turned "Jump to today" into an
           unlabelled date tile — three affordances that all stopped saying what

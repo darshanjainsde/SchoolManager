@@ -1,8 +1,7 @@
-import { useCallback, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Icon } from './icons';
-import { router, useFocusEffect } from 'expo-router';
-import { fetchUnreadCount } from '@/lib/notifications';
+import { router } from 'expo-router';
+import { useQuery } from '@/lib/query';
 import type { NotificationGroup } from '@/lib/notification-links';
 import { useTokens } from '@/theme/theme-context';
 import { brand } from '@/theme/tokens';
@@ -25,23 +24,11 @@ import { brand } from '@/theme/tokens';
  */
 export function NotificationBell({ group }: { group: NotificationGroup }) {
   const tokens = useTokens();
-  const [count, setCount] = useState(0);
-
-  useFocusEffect(
-    useCallback(() => {
-      let cancelled = false;
-      fetchUnreadCount()
-        .then((r) => {
-          if (!cancelled) setCount(r.count);
-        })
-        .catch(() => {
-          /* a badge must never surface an error */
-        });
-      return () => {
-        cancelled = true;
-      };
-    }, []),
-  );
+  // Through the shared cache: the same answer as the notifications screen,
+  // deduped with it, and fresh-for-30-s on a plain focus. A badge must never
+  // surface an error, so the query's error is simply not rendered.
+  const q = useQuery<{ count: number }>('/me/notifications/unread-count');
+  const count = q.data?.count ?? 0;
 
   return (
     <Pressable
