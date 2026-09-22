@@ -41,6 +41,24 @@ const MESSAGES: { [K in NotificationKind]: NotificationMessage & { kind: K } } =
   COVER_ASSIGNED: { kind: 'COVER_ASSIGNED', payload: { schoolName: 'Raffles', substitutionId: 's1', when: 'Mon 22 Sep, period 3 (10:15–11:00)', className: '9-A', subjectName: null, originalTeacherName: 'Priya Nair', ackPayload: 'ca:s1:sig' } },
 };
 
+describe('a missing template is a permanent refusal, not a blip', () => {
+  it('names Meta 132001 separately so the login screen can send people to the password door', async () => {
+    const { WhatsAppOtpSender } = await import('../../otp/otp-senders');
+    const channel = { configured: true, deliverWith: async () => ({ ok: false, code: 132001 }) };
+    const sender = new WhatsAppOtpSender(channel as never);
+    const r = await sender.send('+919876543210', '482911', { schoolId: 's1', purpose: 'LOGIN' });
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/not approved on this WhatsApp account/);
+  });
+
+  it('still calls an ordinary failure an ordinary failure', async () => {
+    const { WhatsAppOtpSender } = await import('../../otp/otp-senders');
+    const channel = { configured: true, deliverWith: async () => ({ ok: false, code: 500 }) };
+    const sender = new WhatsAppOtpSender(channel as never);
+    expect((await sender.send('+919876543210', '1', { schoolId: 's1', purpose: 'LOGIN' })).reason).toBe('WhatsApp did not deliver');
+  });
+});
+
 describe('templateFor ↔ SUBMISSIONS', () => {
   it.each(Object.keys(MESSAGES) as NotificationKind[])('%s: params match the body placeholders, and the name is the registered one', (kind) => {
     const t = templateFor(MESSAGES[kind]);

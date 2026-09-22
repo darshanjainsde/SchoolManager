@@ -46,7 +46,25 @@ export class WhatsAppOtpSender implements OtpSender {
     const r = await this.channel.deliverWith(ctx.schoolId, phone, `OTP_${ctx.purpose}`, VERIFY_CODE, (cfg, pnid, f) =>
       sendTemplate(cfg, phone, verifyCodeTemplate(code), { phoneNumberId: pnid, fetchImpl: f }),
     );
-    return { ok: r.ok, code: r.code, reason: r.ok ? undefined : r.code === 131026 ? 'not on WhatsApp' : r.code === 131030 ? 'not on the Meta test list' : 'WhatsApp did not deliver' };
+    return {
+      ok: r.ok,
+      code: r.code,
+      reason: r.ok
+        ? undefined
+        : r.code === 131026
+          ? 'not on WhatsApp'
+          : r.code === 131030
+            ? 'not on the Meta test list'
+            // 132001 = the template does not exist on this business account.
+            // For the code template that is not a transient failure: Meta gates
+            // the AUTHENTICATION category per account, and ours is not enabled
+            // (both the API and WhatsApp Manager refuse to create it). Naming
+            // it separately keeps a permanent block out of the "try again in a
+            // minute" bucket, where it would have people retrying forever.
+            : r.code === 132001
+              ? 'the code template is not approved on this WhatsApp account'
+              : 'WhatsApp did not deliver',
+    };
   }
 }
 
