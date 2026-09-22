@@ -58,7 +58,7 @@ export function SwitchProfile({ variant = 'nav', onDone }: { variant?: 'nav' | '
   }
 
   return (
-    <div className={`sk-switch${variant === 'bar' ? ' sk-switch-bar' : ''}`} data-testid="switch-profile">
+    <div className={`sk-swprof${variant === 'bar' ? ' sk-switch-bar' : ''}`} data-testid="switch-profile">
       <button type="button" className={variant === 'bar' ? 'sk-signout' : 'sk-nav'} aria-expanded={open} aria-haspopup="listbox" onClick={() => setOpen((o) => !o)} style={variant === 'nav' ? { width: '100%', border: 0, background: 'transparent', cursor: 'pointer', textAlign: 'left' } : undefined}>
         <UsersRound className={variant === 'bar' ? 'h-3.5 w-3.5' : 'ic'} aria-hidden="true" />
         <span className={variant === 'bar' ? 'hidden sm:inline' : undefined}>Switch profile</span>

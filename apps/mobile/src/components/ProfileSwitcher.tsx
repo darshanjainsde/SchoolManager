@@ -4,7 +4,7 @@ import { Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { api, ApiError, type OtpProfile } from '@/lib/api';
 import { family } from '@/lib/family-store';
-import { portalForRole } from '@/lib/roles';
+import { portalForSession } from '@/lib/roles';
 import { LoadingRows } from '@/components/Loading';
 import { Toast, ErrorState } from '@/components/ui';
 import { useTokens } from '@/theme/theme-context';
@@ -49,7 +49,7 @@ export function ProfileSwitcher({ testID = 'profile-switcher' }: { testID?: stri
     try {
       const s = await api.switchProfile(p);
       await family.add(s);
-      router.replace(portalForRole(s.role));
+      router.replace(portalForSession(s) as Parameters<typeof router.replace>[0]);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Could not open that profile.');
       setBusy(null);

@@ -60,3 +60,17 @@ describe('resolveStartRoute', () => {
     expect(resolveStartRoute(null)).toBe('/(auth)/login');
   });
 });
+
+describe('portalForSession — the worker portal has three desks', () => {
+  const { portalForSession } = jest.requireActual('../roles') as typeof import('../roles');
+  const base = { accessToken: 'a', refreshToken: 'r', schoolHost: 'x.sckools.com', displayName: 'S' };
+  it('a sports teacher lands on the desk, a librarian on the counter, other staff on Today', () => {
+    expect(portalForSession({ ...base, role: 'STAFF', staffRole: 'SPORTS', features: ['SPORTS'] })).toBe('/(worker)/(tabs)/desk');
+    expect(portalForSession({ ...base, role: 'STAFF', staffRole: 'LIBRARIAN', features: ['LIBRARY'] })).toBe('/(worker)/(tabs)/counter');
+    expect(portalForSession({ ...base, role: 'STAFF', staffRole: 'OFFICE', features: [] })).toBe('/(worker)/(tabs)/today');
+  });
+  it('non-staff roles are unchanged', () => {
+    expect(portalForSession({ ...base, role: 'TEACHER' })).toBe('/(staff)/(tabs)/home');
+    expect(portalForSession({ ...base, role: 'STUDENT' })).toBe('/(family)/(tabs)/home');
+  });
+});

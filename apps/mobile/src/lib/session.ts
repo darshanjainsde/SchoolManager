@@ -16,6 +16,13 @@ export interface Session {
    * sign-in. See lib/features.ts.
    */
   features?: string[];
+  /**
+   * The staff JOB (OFFICE, DRIVER, LIBRARIAN, SPORTS…) from `GET /auth/me`,
+   * null for every non-STAFF role. Optional for the same reason as
+   * `features`: a session saved before this field existed has none, and the
+   * worker portal then draws its general tabs until the next sign-in.
+   */
+  staffRole?: string | null;
 }
 
 const KEY = 'sckools.session';

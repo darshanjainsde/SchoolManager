@@ -5,8 +5,18 @@ import { family } from './family-store';
 const BASE = (Constants.expoConfig?.extra?.apiUrl as string) ?? 'http://localhost:4000';
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) { super(message); }
+  /**
+   * The server's machine code (`LIBRARY_LIMIT`, `MATCH_CHANGED`…) when the
+   * body carried one. A desk uses it to offer the right NEXT move — "Issue
+   * anyway" on an at-limit refusal — instead of parsing the sentence.
+   */
+  constructor(public status: number, message: string, public code?: string) { super(message); }
 }
+
+const codeOf = (body: unknown): string | undefined => {
+  const c = (body as { code?: unknown } | undefined)?.code;
+  return typeof c === 'string' ? c : undefined;
+};
 
 /**
  * The sentence a person sees when the server gave none. Nest's validation
@@ -66,6 +76,13 @@ interface MeResponse {
   /** The person's real name. Null when no role record claims them yet. */
   name: string | null;
   features: string[];
+  /**
+   * Which KIND of staff — OFFICE, DRIVER, LIBRARIAN, SPORTS… — for a STAFF
+   * login; null for every other role. It decides which desk the worker portal
+   * draws (lib/worker-nav.ts). Absent on an older API: the portal then shows
+   * the general staff tabs, exactly as it did before desks existed.
+   */
+  staffRole?: string | null;
 }
 
 // MINOR 1: fetch rejects (offline, DNS failure, ...) with a raw TypeError.
@@ -186,7 +203,7 @@ export const api = {
     }
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      throw new ApiError(res.status, humanMessage(body, res.status));
+      throw new ApiError(res.status, humanMessage(body, res.status), codeOf(body));
     }
     // DELETEs answer 204 No Content — parsing the empty body would throw a
     // false failure after the server already committed the write.
@@ -210,7 +227,7 @@ export const api = {
     }
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      throw new ApiError(res.status, humanMessage(body, res.status));
+      throw new ApiError(res.status, humanMessage(body, res.status), codeOf(body));
     }
     // DELETEs answer 204 No Content — parsing the empty body would throw a
     // false failure after the server already committed the write.
@@ -324,6 +341,7 @@ export const api = {
       // identifier is at least something they recognise.
       displayName: me.name?.trim() || fallbackName,
       features: me.features ?? [],
+      staffRole: me.staffRole ?? null,
     };
     await session.set(s);
     await session.setSchoolHost(host);

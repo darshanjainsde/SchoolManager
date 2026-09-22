@@ -7,6 +7,8 @@ import { Card, ErrorState, Pill, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { ProfileMenu } from '@/components/ProfileMenu';
 import { signOut } from '@/lib/sign-out';
+import { jobFor } from '@/lib/worker-nav';
+import { useSession } from '@/lib/use-session';
 import { useTokens } from '@/theme/theme-context';
 
 /**
@@ -51,6 +53,10 @@ function initials(name: string): string {
 
 export default function WorkerProfile() {
   const tokens = useTokens();
+  const session = useSession();
+  // A desk job (sports, library) lives on its desk tabs; its own attendance
+  // page is reached from here instead of taking a fifth slot in the bar.
+  const desk = jobFor(session) !== 'GENERAL';
   const [me, setMe] = useState<Me | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, reload] = useReload();
@@ -117,6 +123,7 @@ export default function WorkerProfile() {
       {/* The same four doors the teacher has, so the app is one product. */}
       <ProfileMenu
         rows={[
+          ...(desk ? [{ icon: 'take' as const, label: 'My attendance', route: '/(worker)/(tabs)/today', testID: 'profile-menu-attendance' }] : []),
           { icon: 'palette', label: 'Appearance', route: '/(worker)/(tabs)/profile/appearance', testID: 'profile-menu-appearance' },
           { icon: 'key', label: 'Change password', route: '/(worker)/(tabs)/profile/password', testID: 'profile-menu-password' },
           { icon: 'phone', label: 'My WhatsApp number', route: '/(worker)/(tabs)/profile/phone', testID: 'profile-menu-phone' },

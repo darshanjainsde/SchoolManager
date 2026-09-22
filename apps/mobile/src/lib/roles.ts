@@ -1,4 +1,5 @@
 import type { Role, Session } from './session';
+import { homeTabFor, jobFor } from './worker-nav';
 
 export function portalForRole(role: Role): '/(family)/(tabs)/home' | '/(staff)/(tabs)/home' | '/(worker)/(tabs)/today' {
   switch (role) {
@@ -28,6 +29,17 @@ export function portalForRole(role: Role): '/(family)/(tabs)/home' | '/(staff)/(
   }
 }
 
+/**
+ * Where THIS session lands. Only STAFF differs from `portalForRole`: the
+ * worker portal has three desks, and a sports teacher opens on the meet, a
+ * librarian on the counter (lib/worker-nav.ts). Throws for the web-only
+ * roles exactly as `portalForRole` does.
+ */
+export function portalForSession(s: Pick<Session, 'role' | 'staffRole' | 'features'>): string {
+  const base = portalForRole(s.role);
+  return s.role === 'STAFF' ? `/(worker)/(tabs)/${homeTabFor(jobFor(s))}` : base;
+}
+
 // Pure bootstrap decision for app/index.tsx. A persisted session whose role
 // can't be mapped to a mobile portal (currently only OWNER — a real tenant
 // role that's web-only) must never propagate a throw up to the caller: that
@@ -41,7 +53,7 @@ export function portalForRole(role: Role): '/(family)/(tabs)/home' | '/(staff)/(
 export function resolveStartRoute(session: Session | null): string {
   if (session) {
     try {
-      return portalForRole(session.role);
+      return portalForSession(session);
     } catch {
       // fall through to the gate below
     }

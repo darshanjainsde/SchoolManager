@@ -14,6 +14,7 @@ import { homeForRole } from '@/lib/role-routes';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { MobileNavButton, MobileNavDrawer } from '@/components/MobileNavDrawer';
+import { SwitchProfile } from '@/components/switch-profile';
 import { NAV_ITEMS } from './nav-items';
 import '../sk-theme.css';
 import { ConsoleSkeleton } from '@/components/console-skeleton';
@@ -46,9 +47,13 @@ export default function StaffLayout({ children }: { children: ReactNode }) {
     // as "the library is missing" — homeForRole knows the right door.
     if (me.data) {
       const target = homeForRole(me.data.role, me.data.staffRole);
-      if (target !== '/staff') router.replace(target);
+      // The one page every STAFF kind shares is the profile (WhatsApp number,
+      // password): a librarian or a sports teacher opens it here and goes
+      // back to their desk from the tab strip. Everything else is bounced.
+      const sharedProfile = me.data.role === 'STAFF' && pathname.startsWith('/staff/profile');
+      if (target !== '/staff' && !sharedProfile) router.replace(target);
     }
-  }, [hydrated, status, audience, me.data, router]);
+  }, [hydrated, status, audience, me.data, pathname, router]);
 
   if (!hydrated) return <ConsoleSkeleton chrome="side" label="Staff room" />;
 
@@ -77,6 +82,13 @@ export default function StaffLayout({ children }: { children: ReactNode }) {
   const isActive = (href: string) =>
     href === '/staff' ? pathname === '/staff' : pathname === href || pathname.startsWith(href + '/');
 
+  // A desk job's Home is its desk, not the attendance page: the first tab
+  // takes them back there instead of to a Home that would bounce them.
+  const deskHome = me.data?.role === 'STAFF' ? homeForRole('STAFF', me.data.staffRole) : '/staff';
+  const navItems = deskHome === '/staff'
+    ? NAV_ITEMS
+    : [{ href: deskHome, label: deskHome === '/library' ? 'Back to the library' : 'Back to the desk', icon: NAV_ITEMS[0].icon }, ...NAV_ITEMS.slice(1)];
+
   async function handleLogout() {
     const rt = useAuthStore.getState().refreshToken;
     await api.post('/auth/logout', rt ? { refreshToken: rt } : {}).catch(() => undefined);
@@ -95,6 +107,7 @@ export default function StaffLayout({ children }: { children: ReactNode }) {
           </div>
           <div style={{ flex: 1 }} />
           <ThemeToggle />
+          <SwitchProfile variant="bar" />
           <button className="sk-signout" onClick={handleLogout}>
             <LogOut className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Sign out</span>
@@ -107,7 +120,7 @@ export default function StaffLayout({ children }: { children: ReactNode }) {
           />
         </div>
         <nav className="sk-tabs" aria-label="Staff portal sections">
-          {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
+          {navItems.map(({ href, label, icon: Icon }) => (
             <Link key={href} href={href} className="sk-tab" data-active={isActive(href)}>
               <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
               {label}
@@ -123,7 +136,7 @@ export default function StaffLayout({ children }: { children: ReactNode }) {
         title="Staff portal"
         host={host}
         sectionLabel="Sections"
-        items={NAV_ITEMS}
+        items={navItems}
         isActive={isActive}
         foot={
           // Hidden from the bar on a phone (no room), so the drawer carries
@@ -132,6 +145,7 @@ export default function StaffLayout({ children }: { children: ReactNode }) {
             <div style={{ padding: '8px 11px' }}>
               <ThemeToggle />
             </div>
+            <SwitchProfile onDone={() => setDrawerOpen(false)} />
             <button
               className="sk-nav"
               style={{ width: '100%', textAlign: 'left', background: 'none', border: 0, cursor: 'pointer' }}

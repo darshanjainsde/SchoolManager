@@ -5,7 +5,7 @@ import { SckoolsLogo } from '@/components/SckoolsLogo';
 import { brand } from '@/theme/tokens';
 import { session } from '@/lib/session';
 import { family } from '@/lib/family-store';
-import { portalForRole, resolveStartRoute } from '@/lib/roles';
+import { portalForSession, resolveStartRoute } from '@/lib/roles';
 
 export default function Index() {
   const [target, setTarget] = useState<string | null>(null);
@@ -21,7 +21,7 @@ export default function Index() {
       // side effect so future launches don't keep tripping over it.
       if (s) {
         try {
-          portalForRole(s.role);
+          portalForSession(s);
         } catch {
           await session.clear();
         }

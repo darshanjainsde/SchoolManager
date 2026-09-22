@@ -9,7 +9,7 @@ import { SckoolsLogo } from '@/components/SckoolsLogo';
 import { Toast } from '@/components/ui';
 import { family } from '@/lib/family-store';
 import { session, type Session } from '@/lib/session';
-import { portalForRole } from '@/lib/roles';
+import { portalForSession } from '@/lib/roles';
 import { useTheme } from '@/theme/theme-context';
 import { brand, font, type GatePalette } from '@/theme/tokens';
 
@@ -63,14 +63,14 @@ export default function Login() {
   const finish = async (s: Session) => {
     // Every routable role gets a spine: the shelf is where a switch later lands.
     try {
-      portalForRole(s.role);
+      portalForSession(s);
     } catch (roleErr) {
       await session.clear();
       setError(roleErr instanceof Error ? roleErr.message : 'Owner accounts use the web console.');
       return;
     }
     await family.add(s);
-    router.replace(portalForRole(s.role));
+    router.replace(portalForSession(s) as Parameters<typeof router.replace>[0]);
   };
 
   // ── Phone door ──

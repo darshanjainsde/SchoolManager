@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { VISIBLE_TABS, HIDDEN_ROUTES } from '@/lib/worker-nav';
+import { ALL_TABS, HIDDEN_ROUTES } from '@/lib/worker-nav';
 
 /**
  * Mirror of the staff and family route-honesty checks: every tab and every
@@ -13,7 +13,7 @@ const WORKER_DIR = path.join(__dirname, '..'); // apps/mobile/src/app/(worker)
 
 describe('worker route honesty', () => {
   it('every visible tab points at a screen file that exists', () => {
-    for (const { name } of VISIBLE_TABS) {
+    for (const { name } of ALL_TABS) {
       const ok =
         fs.existsSync(path.join(WORKER_DIR, '(tabs)', `${name}.tsx`)) ||
         fs.existsSync(path.join(WORKER_DIR, '(tabs)', name, 'index.tsx'));
@@ -29,7 +29,7 @@ describe('worker route honesty', () => {
   });
 
   it('a tab that owns pushed screens carries its own stack layout', () => {
-    for (const { name } of VISIBLE_TABS) {
+    for (const { name } of ALL_TABS) {
       const dir = path.join(WORKER_DIR, '(tabs)', name);
       if (!fs.existsSync(dir)) continue;
       expect(`${name}/_layout: ${fs.existsSync(path.join(dir, '_layout.tsx'))}`).toBe(`${name}/_layout: true`);
