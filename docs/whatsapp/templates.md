@@ -49,8 +49,8 @@ Until a template is approved, sends of that kind fail with Meta code 132001 and 
 | Variable | Value |
 |---|---|
 | `WHATSAPP_TOKEN` | temporary token today; the permanent system-user token after verification |
-| `WHATSAPP_PHONE_NUMBER_ID` | `1357286177463978` (test number) today; the production number's id later |
-| `WHATSAPP_WABA_ID` | `2126847704608094` |
+| `WHATSAPP_PHONE_NUMBER_ID` | **`1415040705015934`** — the live number +91 95999 15010 (the old test number was `1357286177463978`) |
+| `WHATSAPP_WABA_ID` | **`1615192556803051`** — the "Sckools" account the live number sits on. The old `2126847704608094` is the Test account and still holds the test number. Templates belong to the ACCOUNT, so moving here meant submitting them all again. |
 | `META_APP_ID` | `3216485048535315` |
 | `META_APP_SECRET` | App settings → Basic → Show |
 | `WHATSAPP_WEBHOOK_VERIFY_TOKEN` | any long random string; paste the same in Meta's webhook screen |
@@ -69,3 +69,30 @@ Webhook: `https://api.sckools.com/webhooks/whatsapp` (staging: `https://api.test
 | **Family** | `guardianPhone` on the student record, as the office typed it | no verification; one number shared by siblings gets ONE copy of a broadcast (same words within a minute are sent once) and one copy per child of per-child notices (absence, remark) |
 
 Every tap is recorded (`WhatsAppInbound`, keyed by Meta's message id — a retried webhook is a no-op), and every send in the ledger (`WhatsAppDelivery`).
+
+## Submitting the templates
+
+```
+WHATSAPP_WABA_ID=1615192556803051 node scripts/whatsapp-templates.mjs --dry   # see what would go
+WHATSAPP_WABA_ID=1615192556803051 node scripts/whatsapp-templates.mjs         # send them
+WHATSAPP_WABA_ID=1615192556803051 node scripts/whatsapp-verify.mjs            # read back what Meta has
+```
+
+The script reads the bodies out of `apps/api/src/common/notifications/whatsapp/templates.ts`,
+not out of this table, so an approved template can never drift from the shape the code sends.
+It skips names that are already there. The token comes from `~/.sckools-whatsapp-token` and is
+never printed.
+
+**Two of Meta's content rules cost us a full round of rejections on 2026-09-22.** A body may not
+START or END with a `{{n}}` variable — every one of ours opened with the school's name — and a
+body needs enough words for the number of variables it carries. The bodies in `templates.ts`
+were rewritten for both, with the parameter ORDER unchanged, so `templateFor` still lines up.
+
+**`sckools_verify_code` cannot be created through the API on this account.** Meta answers
+`Application does not have permission for this action` (subcode 2388185) for anything in the
+AUTHENTICATION category, while every UTILITY template on the same token goes through. This is an
+account-level entitlement, not a bug in the payload: a bare authentication template with no
+buttons is refused the same way. Until it exists, one-time codes cannot go out over WhatsApp.
+Try creating it by hand in WhatsApp Manager first (the UI sometimes has the entitlement the API
+does not); if that also refuses, it is a support request to Meta to enable authentication
+templates for WABA `1615192556803051`.
