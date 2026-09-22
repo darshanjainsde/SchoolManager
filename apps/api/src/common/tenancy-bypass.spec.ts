@@ -48,6 +48,18 @@ const ALLOWED: Record<string, string> = {
   'modules/admin-credentials/internal/admin-credentials.service.ts': 'operator credential management',
   'modules/management/internal/login-invite.service.ts': 'creates the User row a login will use',
 
+  // ── Salary: School and User are PLATFORM tables, not RLS-scoped ───────────
+  // None of these three read or write a tenant table. Everything in Salary
+  // that touches pay (PayComponent, EmployeePay, PayRun, Payslip,
+  // PayAdjustment, TaxDeclaration) goes through withTenant and is protected by
+  // its own RLS policy — see 20260922_000000_salary.
+  'modules/payroll/internal/salary.guard.ts':
+    'reads one User row\'s canSeeSalary; the guard runs BEFORE any tenant transaction exists, and User carries no RLS policy',
+  'modules/payroll/internal/pay-pack.service.ts':
+    'reads the School row\'s countryCode/currency/region to pick the pay rule book; School is a platform table',
+  'modules/payroll/internal/payroll.controller.ts':
+    'sets the School row\'s country and lists/updates the school\'s admins\' canSeeSalary; both are platform tables, and every change is written to AuditLog',
+
   // ── Owner/platform console: cross-tenant BY PURPOSE ───────────────────────
   'modules/owner/internal/owner-auth.service.ts': 'operator console',
   'modules/owner/internal/owner-schools.service.ts': 'operator console',

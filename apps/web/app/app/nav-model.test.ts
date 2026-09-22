@@ -17,7 +17,7 @@ const EVERY_ROUTE = [
   '/app/staff-attendance', '/app/leave', '/app/requests',
   '/app/timetable', '/app/availability',
   '/app/exam-hall', '/app/press', '/app/press/orders',
-  '/app/fees', '/app/library', '/app/sports', '/app/announcements', '/app/alumni', '/app/profile', '/app/settings',
+  '/app/fees', '/app/salary', '/app/library', '/app/sports', '/app/announcements', '/app/alumni', '/app/profile', '/app/settings',
 ].sort();
 
 describe('the grouped sidebar model', () => {

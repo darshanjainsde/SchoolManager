@@ -1,4 +1,4 @@
-import { LayoutDashboard } from 'lucide-react';
+import { LayoutDashboard, Receipt, User } from 'lucide-react';
 
 /**
  * Staff-portal nav. Lives in its own module rather than being exported from
@@ -8,9 +8,15 @@ import { LayoutDashboard } from 'lucide-react';
  * valid Layout export field". `next lint` and `tsc --noEmit` do NOT catch
  * this; only `next build` does.
  *
- * Deliberately one entry: this portal is a first cut ("currently minimal" —
- * Phase 4 Task 3) covering only the caller's own attendance. The single-item
- * strip keeps the same topbar+tabs shell as /portal and /teacher so a future
- * Leave tab slots in without a layout rewrite.
+ * Two entries: the caller's own attendance, and their profile — the same
+ * doors the app's worker portal has (Profile: WhatsApp number, password,
+ * switch profile), so web and app are one product for a driver or a guard
+ * too. A future Leave tab slots in without a layout rewrite.
  */
-export const NAV_ITEMS = [{ href: '/staff', label: 'Home', icon: LayoutDashboard }];
+export const NAV_ITEMS = [
+  { href: '/staff', label: 'Home', icon: LayoutDashboard },
+  // Only drawn when the school has the module: `requiredFeature` is how every
+  // other nav in the product hides a room the school does not have.
+  { href: '/staff/salary', label: 'My pay', icon: Receipt, requiredFeature: 'SALARY' },
+  { href: '/staff/profile', label: 'My profile', icon: User },
+];

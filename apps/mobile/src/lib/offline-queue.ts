@@ -79,11 +79,10 @@ export function createSecureStoreQueueStorage(store: SecureStoreLike): QueueStor
       const countRaw = await store.getItemAsync(MANIFEST_KEY);
       if (!countRaw) return null;
       const count = Number(countRaw);
-      const parts: string[] = [];
-      for (let i = 0; i < count; i++) {
-        parts.push((await store.getItemAsync(chunkKey(i))) ?? '');
-      }
-      return parts.join('');
+      // In parallel: a 40-student roster is 4–8 chunks, and each read was a
+      // serialised Keystore round trip (perf audit 2026-09-22, #11).
+      const parts = await Promise.all(Array.from({ length: count }, (_, i) => store.getItemAsync(chunkKey(i))));
+      return parts.map((p) => p ?? '').join('');
     },
     async write(value: string) {
       const prevCountRaw = await store.getItemAsync(MANIFEST_KEY);
@@ -92,13 +91,11 @@ export function createSecureStoreQueueStorage(store: SecureStoreLike): QueueStor
       for (let i = 0; i < value.length; i += CHUNK_SIZE) {
         nextChunks.push(value.slice(i, i + CHUNK_SIZE));
       }
-      for (let i = 0; i < nextChunks.length; i++) {
-        await store.setItemAsync(chunkKey(i), nextChunks[i]);
-      }
+      await Promise.all(nextChunks.map((c, i) => store.setItemAsync(chunkKey(i), c)));
       // Drop any chunks left over from a previous, longer write.
-      for (let i = nextChunks.length; i < prevCount; i++) {
-        await store.deleteItemAsync(chunkKey(i));
-      }
+      await Promise.all(
+        Array.from({ length: Math.max(0, prevCount - nextChunks.length) }, (_, k) => store.deleteItemAsync(chunkKey(nextChunks.length + k))),
+      );
       // Manifest written last: if the app dies mid-write, the old manifest
       // (if any) still points only at a complete, previously-written set of
       // chunks — never a mix of new and stale ones. A read that still lands
@@ -195,6 +192,9 @@ export async function flush(api: FlushApi, deps: QueueDeps = {}): Promise<FlushR
     }
   }
 
-  await writeQueue(storage, queue);
+  // Nothing left the queue → nothing to persist. flush() runs on every focus
+  // of the attendance tab and the take screen; an empty queue used to cost
+  // two encrypted writes each time (perf audit 2026-09-22, #10).
+  if (synced.length > 0 || rejected.length > 0) await writeQueue(storage, queue);
   return { synced, rejected, retained };
 }

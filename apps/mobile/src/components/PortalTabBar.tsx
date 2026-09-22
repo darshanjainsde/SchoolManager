@@ -63,12 +63,15 @@ function TabButton({
   icon,
   focused,
   onPress,
+  tight = false,
 }: {
   name: string;
   title: string;
   icon: IconName;
   focused: boolean;
   onPress: () => void;
+  /** Five tabs on a narrow phone: tighten the label rather than clip the word. */
+  tight?: boolean;
 }) {
   const tokens = useTokens();
   // On the dark bar the accent system stays out (a school's maroon on ink
@@ -99,7 +102,15 @@ function TabButton({
       <Icon name={icon} size={22} color={color} fillOpacity={focused ? 0.34 : 0.18} />
       {/* Capped: this label lives under an icon in a fixed-height bar. Content
           elsewhere scales freely — see theme/__tests__/text-scaling.test.ts. */}
-      <Text numberOfLines={1} maxFontSizeMultiplier={1.3} style={{ fontSize: 10, fontWeight: '700', color }}>
+      <Text
+            numberOfLines={1}
+            // Five tabs on a 360 dp phone give each ~70 dp; "Attendance" at 10px
+            // and the 1.3 cap needed ~74 and rendered as "Attendanc…". The
+            // fifth tab tightens the type instead of clipping the word
+            // (UI audit 2026-09-22, #23).
+            maxFontSizeMultiplier={tight ? 1.15 : 1.3}
+            style={{ fontSize: tight ? 9.5 : 10, fontWeight: '700', color }}
+          >
         {title}
       </Text>
     </Pressable>
@@ -137,6 +148,7 @@ export function PortalTabBar({ tabs, state, navigation, insets }: PortalTabBarPr
     >
       {tabs.map((t) => (
         <TabButton
+          tight={tabs.length > 4}
           key={t.name}
           name={t.name}
           title={t.title}

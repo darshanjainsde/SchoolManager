@@ -1,12 +1,13 @@
+import { useReload } from '@/lib/query';
 import { useCallback, useState, type ReactNode } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View, Alert } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import type { TeacherProfile } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { signOut } from '@/lib/sign-out';
 import { ProfileMenu } from '@/components/ProfileMenu';
 import { EditableAvatar } from '@/components/EditableAvatar';
-import { Card, Pill, Screen, SectionTitle } from '@/components/ui';
+import { Card, ErrorState, Pill, Screen, SectionTitle } from '@/components/ui';
 import { Icon, type IconName } from '@/components/icons';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
@@ -72,8 +73,21 @@ function ProfileRow({
  * deliberately NOT built here — mobile v1 sends the teacher to the web portal
  * for that instead of half-building a security-sensitive form.
  */
+/**
+ * One stray thumb used to clear the session AND every child on the shelf
+ * (UI audit 2026-09-22, #13). Ask first, in the words that say what is lost.
+ */
+function confirmSignOut(): void {
+  Alert.alert('Sign out?', 'This removes every profile on this phone. You can sign in again with your number.', [
+    { text: 'Stay', style: 'cancel' },
+    { text: 'Sign out', style: 'destructive', onPress: () => void signOut() },
+  ]);
+}
+
 export default function Profile() {
   const tokens = useTokens();
+  // Try again / pull-to-refresh for this screen's own focus effect.
+  const [reloadKey, reload] = useReload();
   const [profile, setProfile] = useState<TeacherProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -92,7 +106,7 @@ export default function Profile() {
       return () => {
         cancelled = true;
       };
-    }, []),
+    }, [reloadKey]),
   );
 
   const labelStyle = { fontSize: 11.5, fontWeight: '700' as const, color: tokens.color.sub };
@@ -100,14 +114,10 @@ export default function Profile() {
   const mutedStyle = { fontSize: 13, color: tokens.color.sub, marginTop: 2 };
 
   return (
-    <Screen>
+    <Screen onRefresh={reload}>
       <SectionTitle title="Profile" />
 
-      {error && (
-        <Card>
-          <Text style={{ color: tokens.color.red }}>{error}</Text>
-        </Card>
-      )}
+      {error && <ErrorState error={error} onRetry={reload} />}
       {profile === null && !error && (
         <LoadingRows label="Loading profile…" rows={4} />
       )}
@@ -210,7 +220,7 @@ export default function Profile() {
       <Pressable
         testID="profile-signout"
         accessibilityRole="button"
-        onPress={() => void signOut()}
+        onPress={confirmSignOut}
         style={{
           marginTop: 4,
           borderWidth: 1,

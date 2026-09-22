@@ -604,6 +604,7 @@ export function assertNotificationOutboxKind(
 export * from './sports/catalogue';
 export * from './sports/maths';
 export * from './sports/perms';
+export * from './payroll';
 export * from './fees/receipt';
 
 export const NOTIFICATION_KINDS = [

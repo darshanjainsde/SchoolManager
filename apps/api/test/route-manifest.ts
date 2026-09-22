@@ -18,6 +18,40 @@
  * this becomes a list of good intentions.
  */
 export const AUTHZ_REVIEWED: string[] = [
+  // ── Salary ──────────────────────────────────────────────────────────────
+  // payroll-authz.e2e-spec.ts: every admin route refuses anonymous, STUDENT,
+  // TEACHER and STAFF, and admits only an admin who HOLDS the per-user salary
+  // right — "is an admin" is deliberately not enough here. `/me/pay/*` admits
+  // a teacher and a non-teaching staff member to their OWN record and can
+  // never be pointed at anybody else (the caller is resolved from their own
+  // user id, never from a parameter). The SALARY feature is in no tier, so a
+  // PRO school without the override 403s on every route in the module.
+  "GET /payroll/settings",
+  "POST /payroll/settings",
+  "GET /payroll/components",
+  "POST /payroll/components",
+  "GET /payroll/people",
+  "GET /payroll/people/:kind/:id",
+  "POST /payroll/people/preview",
+  "POST /payroll/people/structure",
+  "GET /payroll/access",
+  "POST /payroll/access",
+  "GET /payroll/runs",
+  "POST /payroll/runs",
+  "GET /payroll/runs/:id",
+  "POST /payroll/runs/:id/calculate",
+  "POST /payroll/runs/:id/approve",
+  "POST /payroll/runs/:id/lock",
+  "POST /payroll/runs/:id/paid",
+  "GET /payroll/runs/:id/files/:what",
+  "GET /payroll/adjustments",
+  "POST /payroll/adjustments",
+  "GET /payroll/statutory/calendar",
+  "GET /payroll/statement/:kind/:id",
+  "GET /me/pay",
+  "GET /me/pay/payslips/:id",
+  "POST /me/pay/declaration",
+  "GET /me/pay/statement",
   // ── The Press ───────────────────────────────────────────────────────────
   // press-authz.e2e-spec.ts: every office route refuses anonymous / STUDENT /
   // TEACHER and admits SCHOOL_ADMIN + STAFF; the portal routes are proven

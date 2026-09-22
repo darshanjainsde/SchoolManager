@@ -423,11 +423,15 @@ export default function StaffDiary() {
           marginHorizontal: 4,
         }}
       >
-        <Pressable testID="diary-prev" onPress={() => setDate((d) => shiftISO(d, -1))} hitSlop={8}>
+        <Pressable testID="diary-prev" onPress={() => setDate((d) => shiftISO(d, -1))} hitSlop={8}
+          accessibilityRole="button"
+          >
           <Text style={{ color: tokens.color.indigo, fontWeight: '700', fontSize: 13 }}>‹ Prev day</Text>
         </Pressable>
         {!isToday && (
-          <Pressable testID="diary-today" onPress={() => setDate(today)} hitSlop={8}>
+          <Pressable testID="diary-today" onPress={() => setDate(today)} hitSlop={8}
+            accessibilityRole="button"
+            >
             <Text style={{ color: tokens.color.sub, fontWeight: '600', fontSize: 12 }}>Jump to today</Text>
           </Pressable>
         )}
@@ -435,7 +439,8 @@ export default function StaffDiary() {
           testID="diary-next"
           onPress={() => setDate((d) => (d < today ? shiftISO(d, 1) : d))}
           hitSlop={8}
-        >
+          accessibilityRole="button"
+          >
           <Text
             style={{
               color: isToday ? tokens.color.placeholder : tokens.color.indigo,
@@ -465,7 +470,8 @@ export default function StaffDiary() {
                   paddingVertical: 8,
                   paddingHorizontal: 12,
                 }}
-              >
+                accessibilityRole="button"
+                >
                 <Text
                   style={{
                     fontSize: 12.5,
@@ -515,7 +521,8 @@ export default function StaffDiary() {
                         : tokens.color.indigo50
                       : tokens.color.surface,
                   }}
-                >
+                  accessibilityRole="button"
+                  >
                   <Text
                     style={{
                       fontSize: 12.5,
@@ -582,7 +589,8 @@ export default function StaffDiary() {
               borderRadius: 11,
               paddingVertical: 13,
             })}
-          >
+            accessibilityRole="button"
+            >
             <Text
               style={{
                 color: tokens.color.onBrand,
@@ -647,8 +655,11 @@ export default function StaffDiary() {
               {e.editable && (
                 <Pressable
                   testID={`diary-remove-${e.id}`}
+                  accessibilityRole="button"
+                  accessibilityLabel="Strike out this entry"
+                  hitSlop={10}
                   onPress={() => remove(e)}
-                  style={{ alignSelf: 'flex-start', marginTop: 7 }}
+                  style={{ alignSelf: 'flex-start', marginTop: 7, minHeight: 32, justifyContent: 'center' }}
                 >
                   <Text style={{ color: tokens.color.red, fontSize: 12, fontWeight: '700' }}>
                     Strike out

@@ -11,6 +11,7 @@ import { Card, Empty, Page } from '@/components/ui';
 import { BackChipHeader } from '@/components/BackChipHeader';
 import { LoadingRows } from '@/components/Loading';
 import { DUR, useGesture } from '@/theme/motion';
+import { Composer } from '@/components/Composer';
 import { Icon } from '@/components/icons';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
@@ -221,68 +222,14 @@ export default function StudentThread() {
       </ScrollView>
 
       {detail && (
-        // `.composer` — one pill: the line you write on and the button that
-        // sends it, docked so the transcript scrolls behind it.
-        <View style={{ paddingHorizontal: 10, paddingTop: 4, paddingBottom: 10 }}>
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'flex-end',
-              gap: 7,
-              backgroundColor: tokens.color.surface,
-              borderWidth: 1,
-              borderColor: tokens.color.line,
-              borderRadius: tokens.radius.chip,
-              paddingLeft: 13,
-              paddingRight: 5,
-              paddingVertical: 5,
-              shadowColor: tokens.color.ink,
-              shadowOpacity: 0.05,
-              shadowRadius: 34,
-              shadowOffset: { width: 0, height: 14 },
-              elevation: 2,
-            }}
-          >
-            <TextInput
-              testID="reply-body"
-              value={body}
-              onChangeText={setBody}
-              placeholder="Write a message…"
-              placeholderTextColor={tokens.color.placeholder}
-              multiline
-              maxLength={MESSAGE_BODY_MAX}
-              style={{
-                flex: 1,
-                fontSize: 12.5,
-                color: tokens.color.ink,
-                maxHeight: 110,
-                paddingVertical: 6,
-              }}
-            />
-            <Pressable
-              testID="reply-send"
-              accessibilityRole="button"
-              accessibilityLabel="Send"
-              onPress={() => void send()}
-              disabled={!canSend}
-              style={{
-                width: 30,
-                height: 30,
-                borderRadius: 15,
-                backgroundColor: tokens.color.indigo,
-                alignItems: 'center',
-                justifyContent: 'center',
-                opacity: canSend ? 1 : 0.6,
-              }}
-            >
-              {sending ? (
-                <Text style={{ color: tokens.color.onBrand, fontSize: 13, fontWeight: '700' }}>…</Text>
-              ) : (
-                <Icon name="send" size={16} color={tokens.color.onBrand} fillOpacity={0.35} />
-              )}
-            </Pressable>
-          </View>
-        </View>
+        <Composer
+          value={body}
+          onChangeText={setBody}
+          onSend={() => void send()}
+          sending={sending}
+          disabled={!detail}
+          maxLength={MESSAGE_BODY_MAX}
+        />
       )}
       {sendError && (
         <Text testID="reply-error" style={{ color: tokens.color.red, fontSize: 12.5, paddingHorizontal: 14, paddingBottom: 8 }}>

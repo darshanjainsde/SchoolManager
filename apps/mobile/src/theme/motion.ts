@@ -61,22 +61,34 @@ export const DUR = {
  * Tracks the OS reduce-motion preference, live. Returned as a ref so the
  * animation helpers can read it at fire time without re-rendering anything.
  */
+// ONE probe, ONE listener, shared by every animated row. Each call used to
+// issue its own bridge round trip and attach its own listener — 40 rows, 40
+// probes, torn down and rebuilt on every focus (perf audit 2026-09-22, #6/#7).
+const reduceMotionRef: React.MutableRefObject<boolean> = { current: false };
+let reduceMotionArmed = false;
+export function armReduceMotion(): void {
+  if (reduceMotionArmed) return;
+  reduceMotionArmed = true;
+  AccessibilityInfo.isReduceMotionEnabled()
+    .then((v) => {
+      reduceMotionRef.current = v;
+    })
+    .catch(() => undefined);
+  AccessibilityInfo.addEventListener('reduceMotionChanged', (v) => {
+    reduceMotionRef.current = v;
+  });
+}
+/** Tests: forget the probe so a spied `isReduceMotionEnabled` is asked again. */
+export function resetReduceMotionForTests(): void {
+  reduceMotionArmed = false;
+  reduceMotionRef.current = false;
+}
+
 export function useReduceMotion(): React.MutableRefObject<boolean> {
-  const reduced = useRef(false);
   useEffect(() => {
-    let alive = true;
-    AccessibilityInfo.isReduceMotionEnabled().then((v) => {
-      if (alive) reduced.current = v;
-    });
-    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', (v) => {
-      reduced.current = v;
-    });
-    return () => {
-      alive = false;
-      sub.remove();
-    };
+    armReduceMotion();
   }, []);
-  return reduced;
+  return reduceMotionRef;
 }
 
 /**

@@ -1,5 +1,6 @@
+import { useReload } from '@/lib/query';
 import { useCallback, useState } from 'react';
-import { Pressable, Text, View, type TextStyle } from 'react-native';
+import { Pressable, Text, View, type TextStyle, Alert } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import type { NotificationRow } from '@skoolos/types';
 import { ApiError } from '@/lib/api';
@@ -7,7 +8,7 @@ import { clearNotifications, fetchNotifications, markNotificationsRead } from '@
 import { KIND_ICON, formatWhen, routeFor, type NotificationGroup } from '@/lib/notification-links';
 import { Icon, isIconName } from '@/components/icons';
 import { Animated } from 'react-native';
-import { Card, Empty, Page, Screen, SectionTitle } from '@/components/ui';
+import { Card, Empty, Page, Screen, SectionTitle, ListScreen, ErrorState } from '@/components/ui';
 import { useTokens } from '@/theme/theme-context';
 import { font, type ColorPalette } from '@/theme/tokens';
 import { DUR, pinStyle, useGesture } from '@/theme/motion';
@@ -61,7 +62,9 @@ function Row({
   const pin = useGesture(unread, DUR.pin, { delay: Math.min(index, 6) * 60 });
 
   const row = (
-    <Pressable testID={`notification-${n.id}`} onPress={onPress}>
+    <Pressable testID={`notification-${n.id}`} onPress={onPress}
+      accessibilityRole="button"
+      >
       <Card
         style={{
           flexDirection: 'row',
@@ -165,6 +168,7 @@ function Row({
 export function NotificationsScreen({ group }: { group: Group }) {
   const tokens = useTokens();
   const [rows, setRows] = useState<NotificationRow[] | null>(null);
+  const [reloadKey, reload] = useReload();
   const [error, setError] = useState<string | null>(null);
 
   useFocusEffect(
@@ -181,7 +185,7 @@ export function NotificationsScreen({ group }: { group: Group }) {
       return () => {
         cancelled = true;
       };
-    }, []),
+    }, [reloadKey]),
   );
 
   const markAll = () => {
@@ -195,9 +199,25 @@ export function NotificationsScreen({ group }: { group: Group }) {
     clearNotifications([n.id]).catch(() => {});
   };
 
+  // Destructive and bulk: ask first, and if the server refuses (offline, say)
+  // put the list back rather than letting it empty and silently refill on the
+  // next focus (UI audit 2026-09-22, #14).
   const clearAll = () => {
-    setRows([]);
-    clearNotifications().catch(() => {});
+    Alert.alert('Clear all notifications?', 'They are removed for you. Nothing is deleted at the school.', [
+      { text: 'Keep them', style: 'cancel' },
+      {
+        text: 'Clear all',
+        style: 'destructive',
+        onPress: () => {
+          const previous = rows;
+          setRows([]);
+          clearNotifications().catch(() => {
+            setRows(previous);
+            setError('Could not clear them just now — they are still here.');
+          });
+        },
+      },
+    ]);
   };
 
   const open = (n: NotificationRow) => {
@@ -213,78 +233,89 @@ export function NotificationsScreen({ group }: { group: Group }) {
   const unread = (rows ?? []).filter((n) => !n.readAt);
   const earlier = (rows ?? []).filter((n) => n.readAt);
 
+  // One virtualised list for both groups: the "New" / "Earlier" labels ride
+  // as rows so a school with 400 notices mounts a screenful, not all 400
+  // (perf audit 2026-09-22, #3).
+  type Entry = { kind: 'label'; text: string } | { kind: 'row'; n: NotificationRow; index: number };
+  const entries: Entry[] = [];
+  if (unread.length > 0) entries.push({ kind: 'label', text: 'New' });
+  unread.forEach((n, index) => entries.push({ kind: 'row', n, index }));
+  if (earlier.length > 0) entries.push({ kind: 'label', text: 'Earlier' });
+  earlier.forEach((n, index) => entries.push({ kind: 'row', n, index }));
+
   return (
-    <Screen>
-      <SectionTitle
-        title="Notifications"
-        actionLabel={unread.length > 0 ? 'Mark all read' : undefined}
-        onAction={markAll}
-      />
-
-      {error && (
-        <Card>
-          <Text testID="notifications-error" style={{ color: tokens.color.red }}>
-            {error}
-          </Text>
-        </Card>
-      )}
-      {rows === null && !error && (
-        <Page>
-          <Empty>Looking for anything new…</Empty>
-        </Page>
-      )}
-      {rows?.length === 0 && !error && (
-        <Page>
-          <Text
-            testID="notifications-empty"
-            style={{
-              fontFamily: font.serif,
-              fontStyle: 'italic',
-              fontSize: 13,
-              color: tokens.color.sub,
-              textAlign: 'center',
-              paddingVertical: 20,
-              paddingHorizontal: 14,
-            }}
+    <ListScreen
+      testID="notifications-list"
+      onRefresh={reload}
+      data={entries}
+      keyExtractor={(e, i) => (e.kind === 'label' ? `label-${e.text}` : e.n.id) + i}
+      renderItem={(e) =>
+        e.kind === 'label' ? (
+          <Text style={groupLabel(tokens)}>{e.text}</Text>
+        ) : (
+          <Row n={e.n} index={e.index} onPress={() => open(e.n)} onDismiss={() => dismiss(e.n)} />
+        )
+      }
+      header={
+        <View style={{ gap: 10, marginBottom: 10 }}>
+          <SectionTitle
+            title="Notifications"
+            actionLabel={unread.length > 0 ? 'Mark all read' : undefined}
+            onAction={markAll}
+          />
+          {error && <ErrorState testID="notifications-error" error={error} onRetry={reload} />}
+          {rows === null && !error && (
+            <Page>
+              <Empty>Looking for anything new…</Empty>
+            </Page>
+          )}
+          {rows?.length === 0 && !error && (
+            <Page>
+              <Text
+                testID="notifications-empty"
+                style={{
+                  fontFamily: font.serif,
+                  fontStyle: 'italic',
+                  fontSize: 13,
+                  color: tokens.color.sub,
+                  textAlign: 'center',
+                  paddingVertical: 20,
+                  paddingHorizontal: 14,
+                }}
+              >
+                You&apos;re all caught up.
+              </Text>
+            </Page>
+          )}
+        </View>
+      }
+      footer={
+        (rows?.length ?? 0) > 0 ? (
+          /* Clear all — quiet, at the very foot, in the red family: it removes
+             things. Kept OFF the header so "Mark all read" (recoverable) and
+             "clear everything" (a bigger gesture) can never be mistaken for
+             one another in a hurry. */
+          <Pressable
+            testID="notifications-clear-all"
+            accessibilityRole="button"
+            accessibilityLabel="Clear all notifications"
+            onPress={clearAll}
+            style={({ pressed }) => ({
+              marginTop: 10,
+              paddingVertical: 12,
+              borderRadius: 13,
+              borderWidth: 1,
+              borderColor: tokens.color.line,
+              backgroundColor: tokens.color.surface,
+              opacity: pressed ? 0.6 : 1,
+            })}
           >
-            You&apos;re all caught up.
-          </Text>
-        </Page>
-      )}
-
-      {unread.length > 0 && <Text style={groupLabel(tokens)}>New</Text>}
-      {unread.map((n, i) => (
-        <Row key={n.id} n={n} index={i} onPress={() => open(n)} onDismiss={() => dismiss(n)} />
-      ))}
-      {earlier.length > 0 && <Text style={groupLabel(tokens)}>Earlier</Text>}
-      {earlier.map((n, i) => (
-        <Row key={n.id} n={n} index={i} onPress={() => open(n)} onDismiss={() => dismiss(n)} />
-      ))}
-
-      {/* Clear all — quiet, at the very foot, in the red family: it removes
-          things. Kept OFF the header so "Mark all read" (recoverable) and
-          "clear everything" (a bigger gesture) can never be mistaken for one
-          another in a hurry. */}
-      {(rows?.length ?? 0) > 0 && (
-        <Pressable
-          testID="notifications-clear-all"
-          accessibilityRole="button"
-          onPress={clearAll}
-          style={({ pressed }) => ({
-            marginTop: 6,
-            paddingVertical: 12,
-            borderRadius: 13,
-            borderWidth: 1,
-            borderColor: tokens.color.line,
-            backgroundColor: tokens.color.surface,
-            opacity: pressed ? 0.6 : 1,
-          })}
-        >
-          <Text style={{ textAlign: 'center', color: tokens.color.red, fontWeight: '700', fontSize: 13 }}>
-            Clear all
-          </Text>
-        </Pressable>
-      )}
-    </Screen>
+            <Text style={{ textAlign: 'center', color: tokens.color.red, fontWeight: '700', fontSize: 13 }}>
+              Clear all
+            </Text>
+          </Pressable>
+        ) : undefined
+      }
+    />
   );
 }

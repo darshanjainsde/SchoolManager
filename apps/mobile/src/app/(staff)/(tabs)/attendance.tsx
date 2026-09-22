@@ -1,3 +1,5 @@
+import { useReload } from '@/lib/query';
+import { formatDate } from '@/lib/portal';
 import { useCallback, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
@@ -6,7 +8,7 @@ import { api, ApiError } from '@/lib/api';
 import { shiftISO, todayISO, type ClassDayStatus } from '@/lib/attendance';
 import { flush, pendingSaves, queueKey, type FlushResult } from '@/lib/offline-queue';
 import { LockedDayCard } from '@/components/LockedDayCard';
-import { Card, Pill, Screen, SectionTitle } from '@/components/ui';
+import { Card, ErrorState, Pill, Screen, SectionTitle } from '@/components/ui';
 import { Touchable } from '@/components/Touchable';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
@@ -23,6 +25,8 @@ function isUnexpired(expiresAt: string | null): boolean {
 
 export default function StaffAttendance() {
   const tokens = useTokens();
+  // Try again / pull-to-refresh for this screen's own focus effect.
+  const [reloadKey, reload] = useReload();
   const [date, setDate] = useState(todayISO());
   const [rows, setRows] = useState<ClassDayStatus[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -90,7 +94,7 @@ export default function StaffAttendance() {
       return () => {
         cancelled = true;
       };
-    }, [date]),
+    }, [date, reloadKey]),
   );
 
   // Only needed once a past date is on screen — no point asking every time,
@@ -303,8 +307,8 @@ export default function StaffAttendance() {
   };
 
   return (
-    <Screen>
-      <SectionTitle title={`Attendance · ${date === today ? 'today' : date}`} />
+    <Screen onRefresh={reload}>
+      <SectionTitle title={`Attendance · ${date === today ? 'today' : formatDate(date)}`} />
       {/* The date control keeps its WORDS. The repaint replaced "‹ Prev day" /
           "Next day ›" with bare chevrons and turned "Jump to today" into an
           unlabelled date tile — three affordances that all stopped saying what
@@ -312,15 +316,21 @@ export default function StaffAttendance() {
           margins. A control a teacher uses to walk back through a term is not
           the place to spend legibility on shape. */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: 4 }}>
-        <Pressable testID="date-prev" onPress={() => setDate((d) => shiftISO(d, -1))} hitSlop={8}>
+        <Pressable testID="date-prev" onPress={() => setDate((d) => shiftISO(d, -1))} hitSlop={8}
+          accessibilityRole="button"
+          >
           <Text style={{ color: tokens.color.indigo, fontWeight: '700', fontSize: 13 }}>‹ Prev day</Text>
         </Pressable>
         {date !== today && (
-          <Pressable testID="date-today" onPress={() => setDate(today)} hitSlop={8}>
+          <Pressable testID="date-today" onPress={() => setDate(today)} hitSlop={8}
+            accessibilityRole="button"
+            >
             <Text style={{ color: tokens.color.sub, fontWeight: '600', fontSize: 12 }}>Jump to today</Text>
           </Pressable>
         )}
-        <Pressable testID="date-next" onPress={() => setDate((d) => shiftISO(d, 1))} hitSlop={8}>
+        <Pressable testID="date-next" onPress={() => setDate((d) => shiftISO(d, 1))} hitSlop={8}
+          accessibilityRole="button"
+          >
           <Text style={{ color: tokens.color.indigo, fontWeight: '700', fontSize: 13 }}>Next day ›</Text>
         </Pressable>
       </View>
@@ -335,11 +345,7 @@ export default function StaffAttendance() {
         </Card>
       ) : (
         <>
-          {error && (
-            <Card>
-              <Text style={{ color: tokens.color.red }}>{error}</Text>
-            </Card>
-          )}
+          {error && <ErrorState error={error} onRetry={reload} />}
           {isPast && myRequestsError && (
             <Card>
               <Text style={{ color: tokens.color.red }}>{myRequestsError}</Text>

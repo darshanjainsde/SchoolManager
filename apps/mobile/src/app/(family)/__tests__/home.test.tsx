@@ -1,3 +1,5 @@
+import { store } from '@/lib/cache-store';
+import { FRESH_MS } from '@/lib/query';
 import { render, fireEvent, act } from '@testing-library/react-native';
 import Home from '../(tabs)/home/index';
 import { api, ApiError } from '@/lib/api';
@@ -317,6 +319,9 @@ describe('fetch states', () => {
         { id: 'a1', title: 'Fresh notice', body: 'x', classSectionId: null, createdAt: new Date().toISOString() },
       ],
     });
+    // A focus within 30 s shows the cached answer (lib/query FRESH_MS); a real
+    // background stint is longer, so age every cached entry past the window.
+    for (const entry of store.values()) entry.at -= FRESH_MS + 1;
     expect(mockFocusEffects[0]).toBeDefined();
     await act(async () => {
       mockFocusEffects[0]?.();

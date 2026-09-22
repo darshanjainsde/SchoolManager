@@ -9,7 +9,7 @@ import { SckoolsLogo } from '@/components/SckoolsLogo';
 import { Toast } from '@/components/ui';
 import { family } from '@/lib/family-store';
 import { session, type Session } from '@/lib/session';
-import { portalForRole } from '@/lib/roles';
+import { portalForSession } from '@/lib/roles';
 import { useTheme } from '@/theme/theme-context';
 import { brand, font, type GatePalette } from '@/theme/tokens';
 
@@ -63,14 +63,14 @@ export default function Login() {
   const finish = async (s: Session) => {
     // Every routable role gets a spine: the shelf is where a switch later lands.
     try {
-      portalForRole(s.role);
+      portalForSession(s);
     } catch (roleErr) {
       await session.clear();
       setError(roleErr instanceof Error ? roleErr.message : 'Owner accounts use the web console.');
       return;
     }
     await family.add(s);
-    router.replace(portalForRole(s.role));
+    router.replace(portalForSession(s) as Parameters<typeof router.replace>[0]);
   };
 
   // ── Phone door ──
@@ -243,14 +243,14 @@ export default function Login() {
                 <Field label="Student code or email">
                   <TextInput
                     value={identifier} onChangeText={setIdentifier} placeholder="RAF-00042" placeholderTextColor={tokens.color.placeholder}
-                    autoCapitalize="none" autoCorrect={false} testID="login-id"
+                    autoCapitalize="none" autoCorrect={false} keyboardType="email-address" autoComplete="username" textContentType="username" testID="login-id"
                     onFocus={() => setFocus('id')} onBlur={() => setFocus(null)} style={fieldInputStyle(tokens, { focused: focus === 'id' })}
                   />
                 </Field>
                 <Field label="Password">
                   <TextInput
                     value={password} onChangeText={setPassword} placeholder="••••••••" placeholderTextColor={tokens.color.placeholder}
-                    secureTextEntry testID="login-pw"
+                    secureTextEntry autoComplete="password" textContentType="password" testID="login-pw"
                     onFocus={() => setFocus('pw')} onBlur={() => setFocus(null)} style={fieldInputStyle(tokens, { focused: focus === 'pw' })}
                   />
                 </Field>

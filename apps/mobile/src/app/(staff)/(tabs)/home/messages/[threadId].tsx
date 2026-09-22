@@ -1,3 +1,4 @@
+import { Composer } from '@/components/Composer';
 import { useCallback, useRef, useState, type ReactNode } from 'react';
 import { Animated, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -200,50 +201,15 @@ export default function StaffThread() {
       {/* `.composer` — one pill floating over the page, not a docked toolbar:
           replying is a small act, and the control should look like one. */}
       {detail && (
-        <View style={{ padding: 12 }}>
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'flex-end',
-              gap: 7,
-              paddingLeft: 3,
-              paddingRight: 4,
-              paddingVertical: 4,
-              borderWidth: 1,
-              borderColor: tokens.color.line,
-              borderRadius: 999,
-              backgroundColor: tokens.color.surface,
-            }}
-          >
-            <TextInput
-              testID="reply-body"
-              value={body}
-              onChangeText={setBody}
-              placeholder="Write a reply…"
-              placeholderTextColor={tokens.color.placeholder}
-              multiline
-              maxLength={MESSAGE_BODY_MAX}
-              style={[inputStyle, { maxHeight: 110 }]}
-            />
-            <Pressable
-              testID="reply-send"
-              onPress={() => void send()}
-              disabled={!canSend}
-              style={{
-                backgroundColor: tokens.color.indigo,
-                borderRadius: 999,
-                minWidth: 34,
-                height: 34,
-                alignItems: 'center',
-                justifyContent: 'center',
-                paddingHorizontal: 12,
-                opacity: canSend ? 1 : 0.6,
-              }}
-            >
-              <Text style={{ color: tokens.color.onBrand, fontWeight: '700' }}>{sending ? '…' : 'Send'}</Text>
-            </Pressable>
-          </View>
-        </View>
+        <Composer
+          value={body}
+          onChangeText={setBody}
+          onSend={() => void send()}
+          sending={sending}
+          disabled={!detail}
+          maxLength={MESSAGE_BODY_MAX}
+          placeholder="Write a reply…"
+        />
       )}
       {sendError && (
         <Text testID="reply-error" style={{ color: tokens.color.red, fontSize: 12.5, paddingHorizontal: 14, paddingBottom: 8 }}>

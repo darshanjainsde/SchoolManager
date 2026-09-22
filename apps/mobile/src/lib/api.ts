@@ -5,7 +5,38 @@ import { family } from './family-store';
 const BASE = (Constants.expoConfig?.extra?.apiUrl as string) ?? 'http://localhost:4000';
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) { super(message); }
+  /**
+   * The server's machine code (`LIBRARY_LIMIT`, `MATCH_CHANGED`…) when the
+   * body carried one. A desk uses it to offer the right NEXT move — "Issue
+   * anyway" on an at-limit refusal — instead of parsing the sentence.
+   */
+  constructor(public status: number, message: string, public code?: string) { super(message); }
+}
+
+const codeOf = (body: unknown): string | undefined => {
+  const c = (body as { code?: unknown } | undefined)?.code;
+  return typeof c === 'string' ? c : undefined;
+};
+
+/**
+ * The sentence a person sees when the server gave none. Nest's validation
+ * pipe answers with `message: string[]`, which `Error` would join with commas
+ * ("phone must be…,phone should not be empty"); a bare status used to reach
+ * the screen as "Request failed (422)" (UI audit 2026-09-22, #4).
+ */
+export function humanMessage(body: { message?: unknown } | undefined, status: number, fallback?: string): string {
+  const m = body?.message;
+  if (Array.isArray(m) && m.length && typeof m[0] === 'string') return m[0];
+  if (typeof m === 'string' && m.trim()) return m;
+  if (fallback) return fallback;
+  if (status === 0) return 'No connection. Check your network and try again.';
+  if (status === 401) return 'Please sign in again.';
+  if (status === 403) return 'You do not have access to that.';
+  if (status === 404) return 'That is no longer here.';
+  if (status === 409) return 'That was changed by someone else. Refresh and try again.';
+  if (status === 429) return 'Too many tries. Wait a minute and try again.';
+  if (status >= 500) return 'The school server had a problem. Try again in a moment.';
+  return 'Something went wrong. Try again.';
 }
 
 interface Opts { method?: string; body?: unknown; auth?: boolean }
@@ -45,6 +76,13 @@ interface MeResponse {
   /** The person's real name. Null when no role record claims them yet. */
   name: string | null;
   features: string[];
+  /**
+   * Which KIND of staff — OFFICE, DRIVER, LIBRARIAN, SPORTS… — for a STAFF
+   * login; null for every other role. It decides which desk the worker portal
+   * draws (lib/worker-nav.ts). Absent on an older API: the portal then shows
+   * the general staff tabs, exactly as it did before desks existed.
+   */
+  staffRole?: string | null;
 }
 
 // MINOR 1: fetch rejects (offline, DNS failure, ...) with a raw TypeError.
@@ -165,7 +203,7 @@ export const api = {
     }
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      throw new ApiError(res.status, body.message ?? `Request failed (${res.status})`);
+      throw new ApiError(res.status, humanMessage(body, res.status), codeOf(body));
     }
     // DELETEs answer 204 No Content — parsing the empty body would throw a
     // false failure after the server already committed the write.
@@ -189,7 +227,7 @@ export const api = {
     }
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      throw new ApiError(res.status, body.message ?? `Request failed (${res.status})`);
+      throw new ApiError(res.status, humanMessage(body, res.status), codeOf(body));
     }
     // DELETEs answer 204 No Content — parsing the empty body would throw a
     // false failure after the server already committed the write.
@@ -217,7 +255,7 @@ export const api = {
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      throw new ApiError(res.status, body.message ?? 'Could not start a reset for that code.');
+      throw new ApiError(res.status, humanMessage(body, res.status, 'Could not start a reset for that code.'));
     }
     return res.json() as Promise<{ ok: true; emailMasked: string | null }>;
   },
@@ -250,7 +288,7 @@ export const api = {
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      throw new ApiError(res.status, body.message ?? 'Login failed — check your details.');
+      throw new ApiError(res.status, humanMessage(body, res.status, 'Login failed — check your details.'));
     }
     const data = (await res.json()) as { hosts: string[] };
     return data.hosts;
@@ -264,7 +302,7 @@ export const api = {
     });
     if (!loginRes.ok) {
       const body = await loginRes.json().catch(() => ({}));
-      throw new ApiError(loginRes.status, body.message ?? 'Login failed — check your details.');
+      throw new ApiError(loginRes.status, humanMessage(body, loginRes.status, 'Login failed — check your details.'));
     }
     const tokens = (await loginRes.json()) as IssuedTokens;
     return this.sessionFor(host, tokens, identifier);
@@ -287,7 +325,7 @@ export const api = {
     });
     if (!meRes.ok) {
       const body = await meRes.json().catch(() => ({}));
-      throw new ApiError(meRes.status, body.message ?? 'Login failed — could not load profile.');
+      throw new ApiError(meRes.status, humanMessage(body, meRes.status, 'Login failed — could not load profile.'));
     }
     const me = (await meRes.json()) as MeResponse;
 
@@ -303,6 +341,7 @@ export const api = {
       // identifier is at least something they recognise.
       displayName: me.name?.trim() || fallbackName,
       features: me.features ?? [],
+      staffRole: me.staffRole ?? null,
     };
     await session.set(s);
     await session.setSchoolHost(host);
@@ -314,20 +353,20 @@ export const api = {
   // chooser carries each profile's host.
   async otpRequest(phone: string): Promise<OtpRequested> {
     const res = await safeFetch(`${BASE}/auth/otp/request`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Skoolos-Client': 'native' }, body: JSON.stringify({ phone }) });
-    if (!res.ok) { const body = await res.json().catch(() => ({})); throw new ApiError(res.status, body.message ?? 'Could not send the code.'); }
+    if (!res.ok) { const body = await res.json().catch(() => ({})); throw new ApiError(res.status, humanMessage(body, res.status, 'Could not send the code.')); }
     return (await res.json()) as OtpRequested;
   },
 
   async otpVerify(challengeId: string, code: string): Promise<OtpVerified> {
     const res = await safeFetch(`${BASE}/auth/otp/verify`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Skoolos-Client': 'native' }, body: JSON.stringify({ challengeId, code }) });
-    if (!res.ok) { const body = await res.json().catch(() => ({})); throw new ApiError(res.status, body.message ?? 'That code did not work.'); }
+    if (!res.ok) { const body = await res.json().catch(() => ({})); throw new ApiError(res.status, humanMessage(body, res.status, 'That code did not work.')); }
     return (await res.json()) as OtpVerified;
   },
 
   /** A chooser pick → a persisted Session for that profile, on that profile's host. */
   async otpChoose(ticket: string, profile: OtpProfile): Promise<Session> {
     const res = await safeFetch(`${BASE}/auth/otp/choose`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Skoolos-Client': 'native' }, body: JSON.stringify({ ticket, userId: profile.userId }) });
-    if (!res.ok) { const body = await res.json().catch(() => ({})); throw new ApiError(res.status, body.message ?? 'Could not open that profile.'); }
+    if (!res.ok) { const body = await res.json().catch(() => ({})); throw new ApiError(res.status, humanMessage(body, res.status, 'Could not open that profile.')); }
     const out = (await res.json()) as IssuedTokens & { host: string };
     return this.sessionFor(out.host || profile.host, out, profile.label);
   },

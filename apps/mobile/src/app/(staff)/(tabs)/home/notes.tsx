@@ -79,7 +79,8 @@ export default function Notes() {
           key={`${c.classSectionId}:${c.subjectId}`}
           testID={`note-class-${c.classSectionId}-${c.subjectId}`}
           onPress={() => open(c)}
-        >
+          accessibilityRole="button"
+          >
           {/* `.clsrow` — the same 34px serif-initial tile the attendance
               class list uses, so a class is the same object on both screens. */}
           <Card style={{ gap: 7 }}>

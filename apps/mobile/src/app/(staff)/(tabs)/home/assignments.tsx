@@ -312,7 +312,9 @@ export default function Assignments() {
             </View>
           ) : null}
         </View>
-        <Pressable testID={`delete-${a.id}`} onPress={() => confirmDelete(a)} disabled={deletingId === a.id}>
+        <Pressable testID={`delete-${a.id}`} onPress={() => confirmDelete(a)} disabled={deletingId === a.id}
+          accessibilityRole="button"
+          >
           <Text style={{ color: tokens.color.red, fontWeight: '700', fontSize: 12 }}>
             {deletingId === a.id ? 'Deleting…' : 'Delete'}
           </Text>
@@ -355,7 +357,8 @@ export default function Assignments() {
                   testID={`class-${c.classSectionId}`}
                   onPress={() => selectClass(c.classSectionId)}
                   style={chipStyle(tokens, on)}
-                >
+                  accessibilityRole="button"
+                  >
                   <Text style={{ fontSize: 12.5, fontWeight: '700', color: on ? tokens.color.indigo : tokens.color.sub }}>
                     {on ? `✓ ${c.name}` : c.name}
                   </Text>
@@ -382,7 +385,9 @@ export default function Assignments() {
               {(subjects ?? []).map((s) => {
                 const on = subjectId === s.id;
                 return (
-                  <Pressable key={s.id} testID={`subject-${s.id}`} onPress={() => setSubjectId(s.id)} style={chipStyle(tokens, on)}>
+                  <Pressable key={s.id} testID={`subject-${s.id}`} onPress={() => setSubjectId(s.id)} style={chipStyle(tokens, on)}
+                    accessibilityRole="button"
+                    >
                     <Text style={{ fontSize: 12.5, fontWeight: '700', color: on ? tokens.color.indigo : tokens.color.sub }}>
                       {on ? `✓ ${s.code}` : s.code}
                     </Text>
@@ -420,13 +425,17 @@ export default function Assignments() {
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <Text style={labelStyle}>Due date</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <Pressable testID="assign-due-prev" onPress={() => setDueDate((d) => shiftISO(d, -1))}>
+              <Pressable testID="assign-due-prev" onPress={() => setDueDate((d) => shiftISO(d, -1))}
+                accessibilityRole="button"
+                accessibilityLabel="Previous">
                 <Text style={{ color: tokens.color.indigo, fontWeight: '700' }}>‹</Text>
               </Pressable>
               <Text testID="assign-due-value" style={{ fontSize: 12.5, color: tokens.color.ink, minWidth: 84, textAlign: 'center' }}>
                 {dueDate}
               </Text>
-              <Pressable testID="assign-due-next" onPress={() => setDueDate((d) => shiftISO(d, 1))}>
+              <Pressable testID="assign-due-next" onPress={() => setDueDate((d) => shiftISO(d, 1))}
+                accessibilityRole="button"
+                accessibilityLabel="Next">
                 <Text style={{ color: tokens.color.indigo, fontWeight: '700' }}>›</Text>
               </Pressable>
             </View>
@@ -490,7 +499,8 @@ export default function Assignments() {
               paddingHorizontal: 18,
               opacity: canPost ? 1 : 0.6,
             }}
-          >
+            accessibilityRole="button"
+            >
             <Text style={{ color: tokens.color.onBrand, fontWeight: '700', fontSize: 13 }}>
               {posting ? 'Posting…' : 'Post assignment'}
             </Text>

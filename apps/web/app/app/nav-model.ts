@@ -24,6 +24,7 @@ import {
   UserCog,
   Users,
   Wallet,
+  Receipt,
   CalendarRange,
   UserRound,
 } from 'lucide-react';
@@ -113,6 +114,11 @@ export const NAV_MODEL: NavEntry[] = [
   },
 
   { kind: 'item', item: { href: '/app/fees', label: 'Fees', icon: Wallet, requiredFeature: 'FEES' } },
+  // "Salary", not "Payroll": it is the word a school office already says out
+  // loud — salary register, salary slip, salary account. Expenses, when it
+  // comes, is a SIBLING of this and not a tab inside it: pay is monthly,
+  // statutory and private; a vendor bill is none of those.
+  { kind: 'item', item: { href: '/app/salary', label: 'Salary', icon: Receipt, requiredFeature: 'SALARY' } },
   // The shop, not the exams: track print orders, place new ones. Lives under
   // /app/press/orders route-wise (deep links keep working) but stands alone
   // in the nav — leafActive's longest-href rule keeps the two tabs distinct.

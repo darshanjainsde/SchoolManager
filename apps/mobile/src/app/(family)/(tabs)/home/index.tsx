@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, useMemo } from 'react';
 import { Animated, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import type { PortalHome, TimetableSlot } from '@skoolos/types';
@@ -198,9 +198,11 @@ export default function Home() {
   // rather than freezing wherever the screen happened to be opened.
   const now = useNowMinutes();
   const isoDay = isoWeekday();
-  const todaySlots = (slots ?? [])
-    .filter((s) => s.dayOfWeek === isoDay)
-    .sort((a, b) => a.period.order - b.period.order);
+  // Recomputed every minute by the clock tick before (perf audit #18).
+  const todaySlots = useMemo(
+    () => (slots ?? []).filter((s) => s.dayOfWeek === isoDay).sort((a, b) => a.period.order - b.period.order),
+    [slots, isoDay],
+  );
   const currentSlot =
     todaySlots.find(
       (s) => now >= minutesOfDay(s.period.startTime) && now < minutesOfDay(s.period.endTime),
