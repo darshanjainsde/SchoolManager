@@ -1,6 +1,6 @@
 import { formatDate } from '@/lib/portal';
 import { render, screen } from '@testing-library/react-native';
-import Today from '../today';
+import Today from '../(tabs)/today/index';
 import { api, ApiError } from '@/lib/api';
 
 jest.mock('expo-router', () => ({

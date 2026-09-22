@@ -1,14 +1,5 @@
 import { useRef, type PropsWithChildren, type ReactNode } from 'react';
-import {
-  Animated,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-  type ViewStyle,
-} from 'react-native';
+import { Animated, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, type ViewStyle, FlatList } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { useSegments } from 'expo-router';
@@ -19,6 +10,98 @@ import { DASH, DUR, inkWidth, strokeDashoffset, useGesture } from '@/theme/motio
 import { isPushedRoute, titleForSegments } from '@/lib/screen-titles';
 import { BackChipHeader } from './BackChipHeader';
 import { Icon, type IconName } from './icons';
+
+/**
+ * THE LIST FORM OF `Screen`. Same chrome — top inset, back chip, the school's
+ * own pull-to-refresh, the keyboard rule — but a `FlatList` at the root, so a
+ * long list mounts only what is on screen.
+ *
+ * It exists because `Screen` IS a ScrollView: a `FlatList` inside one is not
+ * virtualised at all (React Native says so, loudly), and every list in this
+ * app used to be a `.map` inside `Screen` — a notification list, a message
+ * transcript and a month of diary all mounted every row (perf audit
+ * 2026-09-22, #3). Use this wherever the row count is set by the school's
+ * data rather than by the design; keep `Screen` for a page of cards.
+ */
+export function ListScreen<T>({
+  data,
+  renderItem,
+  keyExtractor,
+  header,
+  footer,
+  empty,
+  onRefresh,
+  refreshing = false,
+  itemHeight,
+  testID = 'screen-list',
+}: {
+  data: readonly T[];
+  renderItem: (item: T, index: number) => React.ReactElement | null;
+  keyExtractor: (item: T, index: number) => string;
+  header?: ReactNode;
+  footer?: ReactNode;
+  empty?: ReactNode;
+  onRefresh?: () => void;
+  refreshing?: boolean;
+  /** Fixed-height rows can skip measurement entirely — pass it when they are. */
+  itemHeight?: number;
+  testID?: string;
+}) {
+  const tokens = useTokens();
+  const insets = useSafeAreaInsets();
+  const segments: string[] = typeof useSegments === 'function' ? useSegments() : [];
+  const pushed = isPushedRoute(segments);
+  const list = (
+    <FlatList
+      testID={testID}
+      data={data as T[]}
+      renderItem={({ item, index }) => renderItem(item, index)}
+      keyExtractor={keyExtractor}
+      keyboardShouldPersistTaps="handled"
+      style={{ flex: 1, backgroundColor: tokens.color.appBg }}
+      ListHeaderComponent={header ? <>{header}</> : undefined}
+      ListFooterComponent={footer ? <>{footer}</> : undefined}
+      ListEmptyComponent={empty ? <>{empty}</> : undefined}
+      ItemSeparatorComponent={() => <View style={{ height: tokens.gap }} />}
+      // Windowing: enough rows above and below that a fast scroll never
+      // shows a blank band, few enough that a 500-row list is cheap.
+      initialNumToRender={12}
+      windowSize={9}
+      maxToRenderPerBatch={10}
+      removeClippedSubviews
+      getItemLayout={
+        itemHeight
+          ? (_d, index) => ({ length: itemHeight, offset: itemHeight * index, index })
+          : undefined
+      }
+      refreshControl={
+        onRefresh ? (
+          <RefreshControl
+            testID="screen-refresh"
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={tokens.color.indigo}
+            colors={[tokens.color.indigo]}
+            progressBackgroundColor={tokens.color.surface}
+          />
+        ) : undefined
+      }
+      contentContainerStyle={{
+        paddingTop: pushed ? 4 : insets.top + 10,
+        paddingHorizontal: 14,
+        paddingBottom: 28,
+        flexGrow: 1,
+      }}
+    />
+  );
+  if (!pushed) return list;
+  return (
+    <View style={{ flex: 1, backgroundColor: tokens.color.appBg }}>
+      <BackChipHeader title={titleForSegments(segments)} />
+      {list}
+    </View>
+  );
+}
 
 export function Screen({
   children,
@@ -134,7 +217,9 @@ export function SectionTitle({ title, actionLabel, onAction, right }:
       <Text style={{ fontSize: 15, fontFamily: font.serif, fontWeight: '600',
         letterSpacing: -0.2, color: tokens.color.ink }}>{title}</Text>
       {right ?? (actionLabel && (
-        <Pressable onPress={onAction}>
+        <Pressable onPress={onAction}
+          accessibilityRole="button"
+          >
           <Text style={{ fontSize: 12, fontWeight: '700', color: tokens.color.indigo }}>{actionLabel}</Text>
         </Pressable>
       ))}
@@ -274,7 +359,9 @@ export function PageHeader({
         </Text>
       </View>
       {actionLabel && (
-        <Pressable testID={actionTestID} onPress={onAction} hitSlop={6}>
+        <Pressable testID={actionTestID} onPress={onAction} hitSlop={6}
+          accessibilityRole="button"
+          >
           <Text style={{ fontSize: 12, fontWeight: '700', color: tokens.color.indigo }}>{actionLabel}</Text>
         </Pressable>
       )}
@@ -561,7 +648,9 @@ export function Toast({
     >
       <Text style={{ flex: 1, color: tone.fg, fontWeight: '600', fontSize: 13 }}>{message}</Text>
       {actionLabel && onAction && (
-        <Pressable onPress={onAction} testID={`${id}-action`}>
+        <Pressable onPress={onAction} testID={`${id}-action`}
+          accessibilityRole="button"
+          >
           <Text style={{ color: tone.fg, fontWeight: '700', fontSize: 13 }}>{actionLabel}</Text>
         </Pressable>
       )}

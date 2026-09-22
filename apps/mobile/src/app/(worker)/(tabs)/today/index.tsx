@@ -1,10 +1,12 @@
+import { useReload } from '@/lib/query';
 import { formatDate } from '@/lib/portal';
 import { useCallback, useState } from 'react';
 import { Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
-import { Card, Empty, Page, PageHeader, Pill, Screen, SectionTitle } from '@/components/ui';
+import { Card, Empty, ErrorState, Page, PageHeader, Pill, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
+import { NotificationBell } from '@/components/NotificationBell';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 
@@ -72,6 +74,8 @@ const STAFF_ROLE_LABEL: Record<string, string> = {
   HELPER: 'Helper',
   SECURITY: 'Security',
   LIBRARIAN: 'Librarian',
+  // Was missing, so a sports teacher read as the generic "Staff".
+  SPORTS: 'Sports teacher',
   OTHER: 'Staff',
 };
 
@@ -120,6 +124,8 @@ function StatBox({ testID, value, label, color }: { testID: string; value: strin
 
 export default function Today() {
   const tokens = useTokens();
+  // Try again / pull-to-refresh for this screen's own focus effect.
+  const [reloadKey, reload] = useReload();
   const [data, setData] = useState<MyStaffAttendance | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -138,7 +144,7 @@ export default function Today() {
       return () => {
         cancelled = true;
       };
-    }, []),
+    }, [reloadKey]),
   );
 
   const summary = data?.summary;
@@ -146,8 +152,11 @@ export default function Today() {
   const recent = summary ? [...summary.days].reverse().slice(0, 10) : [];
 
   return (
-    <Screen>
-      <SectionTitle title={data ? `Hi, ${data.person.firstName}` : 'Today'} />
+    <Screen onRefresh={reload}>
+      <SectionTitle
+        title={data ? `Hi, ${data.person.firstName}` : 'Today'}
+        right={<NotificationBell group="(worker)" />}
+      />
       {data && (
         // The pitch's `.gatesub` — the one line under a serif heading that says
         // whose page this is, in the UI sans so it never competes with it.
@@ -156,11 +165,7 @@ export default function Today() {
         </Text>
       )}
 
-      {error && (
-        <Card>
-          <Text style={{ color: tokens.color.red }}>{error}</Text>
-        </Card>
-      )}
+      {error && <ErrorState error={error} onRetry={reload} />}
       {data === null && !error && (
         <LoadingRows label="Loading your attendance…" rows={3} />
       )}

@@ -353,7 +353,8 @@ export default function FamilyDiary() {
                             borderRadius: 12,
                             paddingVertical: 11,
                           })}
-                        >
+                          accessibilityRole="button"
+                          >
                           <Text
                             style={{
                               color: tokens.color.onBrand,

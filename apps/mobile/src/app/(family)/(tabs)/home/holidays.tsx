@@ -1,9 +1,10 @@
+import { useReload } from '@/lib/query';
 import { useCallback, useState } from 'react';
 import { Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import { holidayDateParts, type Holiday } from '@/lib/portal';
-import { Card, Empty, Page, Pill, Screen, SectionTitle } from '@/components/ui';
+import { Card, Empty, ErrorState, Page, Pill, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
@@ -30,6 +31,8 @@ function typeTone(type: Holiday['type']): 'green' | 'amber' | 'indigo' | 'neutra
  */
 export default function Holidays() {
   const tokens = useTokens();
+  // Try again / pull-to-refresh for this screen's own focus effect.
+  const [reloadKey, reload] = useReload();
   const [items, setItems] = useState<Holiday[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,21 +53,17 @@ export default function Holidays() {
       return () => {
         cancelled = true;
       };
-    }, []),
+    }, [reloadKey]),
   );
 
   return (
-    <Screen>
+    <Screen onRefresh={reload}>
       <SectionTitle title="Holidays" />
       <Text style={{ fontSize: 11, color: tokens.color.sub, marginHorizontal: 4, marginTop: -6 }}>
         Configured by your school admin on the web portal.
       </Text>
 
-      {error && (
-        <Card>
-          <Text style={{ color: tokens.color.red }}>{error}</Text>
-        </Card>
-      )}
+      {error && <ErrorState error={error} onRetry={reload} />}
       {items === null && !error && (
         <LoadingRows label="Loading holidays…" rows={4} />
       )}

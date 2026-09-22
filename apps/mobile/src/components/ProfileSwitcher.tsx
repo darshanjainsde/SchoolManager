@@ -1,3 +1,4 @@
+import { useReload } from '@/lib/query';
 import { useCallback, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
@@ -5,7 +6,7 @@ import { api, ApiError, type OtpProfile } from '@/lib/api';
 import { family } from '@/lib/family-store';
 import { portalForRole } from '@/lib/roles';
 import { LoadingRows } from '@/components/Loading';
-import { Toast } from '@/components/ui';
+import { Toast, ErrorState } from '@/components/ui';
 import { useTokens } from '@/theme/theme-context';
 
 function initials(name: string): string {
@@ -26,15 +27,20 @@ export function ProfileSwitcher({ testID = 'profile-switcher' }: { testID?: stri
   const [list, setList] = useState<OtpProfile[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [reloadKey, reload] = useReload();
 
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
+      setFailed(false);
       api.profiles()
         .then((r) => { if (!cancelled) setList(r.profiles.filter((p) => p.userId !== r.current)); })
-        .catch(() => { if (!cancelled) setList([]); });
+        // Offline is not "you have no other profiles" (UI audit #28): say so,
+        // and offer the retry, rather than quietly claiming an empty shelf.
+        .catch(() => { if (!cancelled) { setList([]); setFailed(true); } });
       return () => { cancelled = true; };
-    }, []),
+    }, [reloadKey]),
   );
 
   async function open(p: OtpProfile) {
@@ -51,6 +57,7 @@ export function ProfileSwitcher({ testID = 'profile-switcher' }: { testID?: stri
   }
 
   if (list === null) return <LoadingRows label="Checking this number…" rows={1} />;
+  if (failed) return <ErrorState testID="profile-switcher-error" error="Could not check this number just now." onRetry={reload} />;
   if (list.length === 0) return null;
 
   return (

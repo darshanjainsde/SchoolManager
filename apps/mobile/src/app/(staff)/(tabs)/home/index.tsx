@@ -1,4 +1,4 @@
-import { fetchCached } from '@/lib/query';
+import { fetchCached, useReload } from '@/lib/query';
 import { useCallback, useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
@@ -11,7 +11,7 @@ import { useNowMinutes } from '@/lib/use-now-minutes';
 import { NowCard } from '@/components/NowCard';
 import { DayTimeline } from '@/components/DayTimeline';
 import { PeriodSheet } from '@/components/PeriodSheet';
-import { Card, Screen } from '@/components/ui';
+import { Card, ErrorState, Screen } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { NotificationBell } from '@/components/NotificationBell';
 import { HomeToolGrid } from '@/components/HomeToolGrid';
@@ -24,6 +24,8 @@ import { useSession } from '@/lib/use-session';
 export default function Today() {
   const tokens = useTokens();
   const s = useSession();
+  // Try again / pull-to-refresh for this screen's own focus effect.
+  const [reloadKey, reload] = useReload();
   const [name, setName] = useState<string | null>(null);
   const [day, setDay] = useState<TeacherDay | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -80,7 +82,7 @@ export default function Today() {
       // focus, which is what keeps a colleague's mark visible without a
       // manual reload.
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []),
+    }, [reloadKey]),
   );
 
   const entries = day?.entries ?? [];
@@ -228,11 +230,7 @@ export default function Today() {
           : `${classes.length} class${classes.length === 1 ? '' : 'es'} today · ${taken} taken · ${pending} pending`}
       </Text>
 
-      {error && (
-        <Card>
-          <Text style={{ color: tokens.color.red }}>{error}</Text>
-        </Card>
-      )}
+      {error && <ErrorState error={error} onRetry={reload} />}
 
       {/* The caption above still carries the sentence, because it IS a sentence
           — it becomes "3 classes today · 1 taken · 2 pending", not a list. What
@@ -321,7 +319,7 @@ export default function Today() {
               { label: 'Assignments', icon: 'assignments', route: '/(staff)/(tabs)/home/assignments' },
               { label: 'Notes', icon: 'notes', route: '/(staff)/(tabs)/home/notes' },
               { label: 'Tests & Results', icon: 'results', route: '/(staff)/(tabs)/home/tests' },
-              { label: 'Announce', icon: 'notices', route: '/(staff)/(tabs)/home/post', tone: 'amber' },
+              { label: 'Announcements', icon: 'notices', route: '/(staff)/(tabs)/home/post', tone: 'amber' },
               { label: 'Holidays', icon: 'holidays', route: '/(staff)/(tabs)/home/holidays', tone: 'green' },
               // The teacher's own shelf (second edition) — only for a school with the library on.
               ...(hasFeature(s, 'LIBRARY') ? [{ label: 'Library', icon: 'library', route: '/(staff)/(tabs)/home/library' }] : []),

@@ -1,3 +1,4 @@
+import { useReload } from '@/lib/query';
 import { useCallback, useState } from 'react';
 import { Pressable, Text, View, Alert } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
@@ -6,7 +7,7 @@ import type { StudentProfile } from '@/lib/portal';
 import { signOut } from '@/lib/sign-out';
 import { ProfileMenu } from '@/components/ProfileMenu';
 import { EditableAvatar } from '@/components/EditableAvatar';
-import { Card, Page, Screen } from '@/components/ui';
+import { Card, ErrorState, Page, Screen } from '@/components/ui';
 import { Icon, type IconName } from '@/components/icons';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
@@ -117,6 +118,8 @@ function confirmSignOut(): void {
 
 export default function Profile() {
   const tokens = useTokens();
+  // Try again / pull-to-refresh for this screen's own focus effect.
+  const [reloadKey, reload] = useReload();
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -135,16 +138,12 @@ export default function Profile() {
       return () => {
         cancelled = true;
       };
-    }, []),
+    }, [reloadKey]),
   );
 
   return (
-    <Screen>
-      {error && (
-        <Card>
-          <Text style={{ color: tokens.color.red }}>{error}</Text>
-        </Card>
-      )}
+    <Screen onRefresh={reload}>
+      {error && <ErrorState error={error} onRetry={reload} />}
       {profile === null && !error && (
         <LoadingRows label="Loading profile…" rows={4} />
       )}

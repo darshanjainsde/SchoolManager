@@ -1,6 +1,7 @@
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { Alert } from 'react-native';
+import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import { NotificationsScreen } from '../NotificationsScreen';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
@@ -107,12 +108,23 @@ it('the ✕ dismisses just that row — it leaves the screen and /clear gets its
   expect(mockPush).not.toHaveBeenCalled();
 });
 
-it('"Clear all" empties the list into the caught-up state', async () => {
+/** Bulk and destructive, so it asks first (UI audit 2026-09-22, #14). */
+function confirmAlert(spy: jest.SpyInstance, label: string) {
+  const call = spy.mock.calls.at(-1) as unknown as [string, string, { text: string; onPress?: () => void }[]];
+  const button = call[2].find((b) => b.text === label);
+  expect(button).toBeDefined();
+  act(() => button?.onPress?.());
+}
+
+it('"Clear all" asks first, then empties the list into the caught-up state', async () => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   withNotifications([UNREAD, READ]);
   const { getByTestId, queryByTestId } = render(<NotificationsScreen group="(family)" />);
   await waitFor(() => expect(getByTestId('notifications-clear-all')).toBeTruthy());
 
   fireEvent.press(getByTestId('notifications-clear-all'));
+  expect(queryByTestId('notification-n1')).not.toBeNull(); // nothing goes until it is confirmed
+  confirmAlert(alert, 'Clear all');
 
   await waitFor(() => expect(getByTestId('notifications-empty')).toBeTruthy());
   expect(queryByTestId('notification-n1')).toBeNull();
@@ -121,4 +133,19 @@ it('"Clear all" empties the list into the caught-up state', async () => {
     '/me/notifications/clear',
     expect.objectContaining({ method: 'POST', body: {} }),
   );
+});
+
+it('puts the list back when the server refuses to clear it', async () => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  withNotifications([UNREAD, READ]);
+  const { getByTestId, queryByTestId } = render(<NotificationsScreen group="(family)" />);
+  await waitFor(() => expect(getByTestId('notifications-clear-all')).toBeTruthy());
+  request.mockRejectedValueOnce(new ApiError(0, 'offline'));
+
+  fireEvent.press(getByTestId('notifications-clear-all'));
+  confirmAlert(alert, 'Clear all');
+
+  await waitFor(() => expect(getByTestId('notification-n1')).toBeTruthy());
+  expect(queryByTestId('notifications-empty')).toBeNull();
+  alert.mockRestore();
 });

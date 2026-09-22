@@ -1,13 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import {
-  AccessibilityInfo,
-  Animated,
-  Easing,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions,
-} from 'react-native';
+import { AccessibilityInfo, Animated, Easing, StyleSheet, Text, View, useWindowDimensions, AppState } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { Icon, type IconName } from '../icons';
 import { brand, font, type GatePalette } from '@/theme/tokens';
@@ -83,7 +75,16 @@ function DoorLayer({ door, index, centerY }: { door: Door; index: number; center
     );
     const anim = Animated.sequence([first, rest]);
     anim.start();
-    return () => anim.stop();
+    // Eight perpetual loops kept running behind the home screen — this is the
+    // screen a person sits on while waiting for a code (perf audit #14).
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next === 'active') anim.start();
+      else anim.stop();
+    });
+    return () => {
+      sub.remove();
+      anim.stop();
+    };
   }, [v, index]);
 
   const scale = v.interpolate({ inputRange: SCALE_IN, outputRange: SCALE_OUT });
@@ -129,7 +130,17 @@ function useSway(enabled: boolean) {
     const ay = drift(y, 4600);
     ax.start();
     ay.start();
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next === 'active') {
+        ax.start();
+        ay.start();
+      } else {
+        ax.stop();
+        ay.stop();
+      }
+    });
     return () => {
+      sub.remove();
       ax.stop();
       ay.stop();
     };

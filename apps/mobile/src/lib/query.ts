@@ -151,3 +151,15 @@ export function useQuery<T>(path: string | null): QueryState<T> {
     reload: () => run('focus'),
   };
 }
+
+/**
+ * RETRY FOR A HAND-ROLLED SCREEN. `useQuery` owns its own reload, but the
+ * screens that fetch inside their own focus effect had no way to try again —
+ * a signal blip while opening the register meant killing the app (UI audit
+ * 2026-09-22, #3). Bump the key, list it in the effect's deps, and the same
+ * function serves both the Try-again button and pull-to-refresh.
+ */
+export function useReload(): [number, () => void] {
+  const [key, setKey] = useState(0);
+  return [key, useCallback(() => setKey((k) => k + 1), [])];
+}

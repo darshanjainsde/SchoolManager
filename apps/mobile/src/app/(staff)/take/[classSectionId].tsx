@@ -1,5 +1,6 @@
+import { useReload } from '@/lib/query';
 import { formatDate } from '@/lib/portal';
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useMemo } from 'react';
 import { Alert, Animated, Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { type AttendanceStatusValue, type SaveAttendanceResponse } from '@skoolos/types';
@@ -7,7 +8,7 @@ import { api, ApiError } from '@/lib/api';
 import { buildMarksPayload, todayISO } from '@/lib/attendance';
 import { enqueueSave, flush } from '@/lib/offline-queue';
 import { WhoNeedsAWord } from '@/components/WhoNeedsAWord';
-import { Card, Screen, SectionTitle, Toast } from '@/components/ui';
+import { Card, ErrorState, Screen, SectionTitle, Toast } from '@/components/ui';
 import { Touchable } from '@/components/Touchable';
 import { LoadingGrid } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
@@ -156,6 +157,8 @@ export default function TakeAttendance() {
     takenBy?: string;
   }>();
   const date = dateParam ?? todayISO();
+  // Try again / pull-to-refresh for this screen's own focus effect.
+  const [reloadKey, reload] = useReload();
   const [roster, setRoster] = useState<RosterRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -219,17 +222,28 @@ export default function TakeAttendance() {
       return () => {
         cancelled = true;
       };
-    }, [classSectionId, date]),
+    }, [classSectionId, date, reloadKey]),
   );
 
   const rows = roster ?? [];
-  const presentCount = rows.filter((r) => r.status === 'PRESENT').length;
-  const absentCount = rows.filter((r) => r.status === 'ABSENT').length;
+  // One pass, memoised: three full-roster filters re-ran on EVERY cell tap
+  // (perf audit 2026-09-22, #18).
+  const counts = useMemo(() => {
+    let present = 0, absent = 0, late = 0;
+    for (const r of rows) {
+      if (r.status === 'PRESENT') present += 1;
+      else if (r.status === 'ABSENT') absent += 1;
+      else if (r.status === 'LATE') late += 1;
+    }
+    return { present, absent, late };
+  }, [rows]);
+  const presentCount = counts.present;
+  const absentCount = counts.absent;
   // LATE is a third state the register can be in, so it has to be a third
   // figure. Without it, marking two latecomers in a class of forty read
   // "38 present · 0 absent · 40 total" — two children unaccounted for, and
   // nothing on screen to say where they went.
-  const lateCount = rows.filter((r) => r.status === 'LATE').length;
+  const lateCount = counts.late;
 
   // Editing after a save invalidates the confirmation (or pending-offline
   // notice) that's on screen — it described a roster that no longer
@@ -348,7 +362,7 @@ export default function TakeAttendance() {
   });
 
   return (
-    <Screen>
+    <Screen onRefresh={reload}>
       <SectionTitle
         title={`${name ?? 'Class'} · Attendance${date === todayISO() ? '' : ` · ${formatDate(date)}`}`}
       />
@@ -369,11 +383,7 @@ export default function TakeAttendance() {
           message="No signal — attendance saved on this device. It will sync automatically once you're back online."
         />
       )}
-      {error && (
-        <Card>
-          <Text style={{ color: tokens.color.red }}>{error}</Text>
-        </Card>
-      )}
+      {error && <ErrorState error={error} onRetry={reload} />}
       {roster === null && !error && (
         <LoadingGrid label="Loading roster…" cells={30} />
       )}

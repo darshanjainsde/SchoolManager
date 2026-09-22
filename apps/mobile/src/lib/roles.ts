@@ -1,6 +1,6 @@
 import type { Role, Session } from './session';
 
-export function portalForRole(role: Role): '/(family)/(tabs)/home' | '/(staff)/(tabs)/home' | '/(worker)/today' {
+export function portalForRole(role: Role): '/(family)/(tabs)/home' | '/(staff)/(tabs)/home' | '/(worker)/(tabs)/today' {
   switch (role) {
     case 'STUDENT': return '/(family)/(tabs)/home';
     case 'TEACHER': return '/(staff)/(tabs)/home';
@@ -15,7 +15,7 @@ export function portalForRole(role: Role): '/(family)/(tabs)/home' | '/(staff)/(
     // it's the teacher+admin portal, not a "staff" one), which is exactly
     // the "wrong portal" gap this exists to close. See web's parallel fix
     // (apps/web/lib/role-routes.ts) for the same STAFF-portal split.
-    case 'STAFF': return '/(worker)/today';
+    case 'STAFF': return '/(worker)/(tabs)/today';
     // The library counter is a desk: search a child, type a book number, hand
     // the book over. It lives on the web console. Until `LIBRARIAN` was added
     // to `Role` this case did not exist and the switch fell off its end,

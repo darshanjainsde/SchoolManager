@@ -52,7 +52,8 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
       <Pressable
         onPress={retry}
         style={{ backgroundColor: emergency.cta, paddingVertical: 14, borderRadius: 12, alignItems: 'center' }}
-      >
+        accessibilityRole="button"
+        >
         <Text style={{ color: emergency.ink, fontWeight: '700' }}>Try again</Text>
       </Pressable>
     </View>

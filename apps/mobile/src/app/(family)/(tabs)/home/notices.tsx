@@ -1,9 +1,10 @@
+import { useReload } from '@/lib/query';
 import { useCallback, useState } from 'react';
 import { Animated, Pressable, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import { relativeTime, type Announcement } from '@/lib/portal';
-import { Card, Empty, Screen, SectionTitle } from '@/components/ui';
+import { Card, Empty, ErrorState, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { DUR, pinStyle, useGesture } from '@/theme/motion';
 import { Icon } from '@/components/icons';
@@ -41,6 +42,7 @@ import { useTokens } from '@/theme/theme-context';
 function NoticeRow({ a, index }: { a: Announcement; index: number }) {
   const tokens = useTokens();
   const [expanded, setExpanded] = useState(false);
+  const [overflows, setOverflows] = useState(false);
   const pin = useGesture(true, DUR.pin, { delay: 150 + Math.min(index, 6) * 90 });
 
   return (
@@ -70,14 +72,23 @@ function NoticeRow({ a, index }: { a: Announcement; index: number }) {
               {a.classSectionId ? 'Your class' : 'Whole school'} · {relativeTime(a.createdAt)}
             </Text>
             <Text
+              testID={`notice-body-${a.id}`}
               style={{ fontSize: 12.5, color: tokens.color.ink, marginTop: 6, lineHeight: 17 }}
               numberOfLines={expanded ? undefined : 2}
+              // A one-line notice used to invite a tap that changed nothing
+              // (UI audit 2026-09-22, #27) — measure once, then offer it only
+              // when the body really is longer than the two lines shown.
+              onTextLayout={(e) => {
+                if (!expanded && !overflows && e.nativeEvent.lines.length > 2) setOverflows(true);
+              }}
             >
               {a.body}
             </Text>
-            <Text style={{ fontSize: 11, fontWeight: '700', color: tokens.color.indigo, marginTop: 4 }}>
-              {expanded ? 'Show less' : 'Show more'}
-            </Text>
+            {overflows ? (
+              <Text style={{ fontSize: 11, fontWeight: '700', color: tokens.color.indigo, marginTop: 4 }}>
+                {expanded ? 'Show less' : 'Show more'}
+              </Text>
+            ) : null}
           </View>
         </Card>
       </Pressable>
@@ -87,6 +98,8 @@ function NoticeRow({ a, index }: { a: Announcement; index: number }) {
 
 export default function Notices() {
   const tokens = useTokens();
+  // Try again / pull-to-refresh for this screen's own focus effect.
+  const [reloadKey, reload] = useReload();
   const [items, setItems] = useState<Announcement[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -107,20 +120,16 @@ export default function Notices() {
       return () => {
         cancelled = true;
       };
-    }, []),
+    }, [reloadKey]),
   );
 
   return (
-    <Screen>
+    <Screen onRefresh={reload}>
       <SectionTitle title="Notices" />
       <Text style={{ fontSize: 11, color: tokens.color.sub, marginHorizontal: 4, marginTop: -6 }}>
         School circulars — the diary holds the personal ones.
       </Text>
-      {error && (
-        <Card>
-          <Text style={{ color: tokens.color.red }}>{error}</Text>
-        </Card>
-      )}
+      {error && <ErrorState error={error} onRetry={reload} />}
       {items === null && !error && (
         <LoadingRows label="Loading notices…" rows={3} />
       )}

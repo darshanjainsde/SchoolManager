@@ -1,9 +1,10 @@
+import { useReload } from '@/lib/query';
 import { useCallback, useRef, useState } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import type { StudentAssignment, StudentAssignmentList } from '@/lib/portal';
-import { Card, Empty, Page, Screen, SectionTitle } from '@/components/ui';
+import { Card, Empty, ErrorState, Page, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
@@ -83,7 +84,9 @@ function TodoRow({
           {a.attachments.length > 0 && (
             <View style={{ marginTop: 8, gap: 6, paddingLeft: 10 }}>
               {a.attachments.map((att) => (
-                <Pressable key={att.url} testID={`attachment-${att.name}`} onPress={() => void Linking.openURL(att.url)}>
+                <Pressable key={att.url} testID={`attachment-${att.name}`} onPress={() => void Linking.openURL(att.url)}
+                  accessibilityRole="button"
+                  >
                   <Text style={{ fontFamily: font.mono, fontSize: 11.5, fontWeight: '700', color: tokens.color.indigo }}>
                     {att.name}
                   </Text>
@@ -105,6 +108,8 @@ function TodoRow({
  */
 export default function Assignments() {
   const tokens = useTokens();
+  // Try again / pull-to-refresh for this screen's own focus effect.
+  const [reloadKey, reload] = useReload();
   const [list, setList] = useState<StudentAssignmentList | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -123,7 +128,7 @@ export default function Assignments() {
       return () => {
         cancelled = true;
       };
-    }, []),
+    }, [reloadKey]),
   );
 
   const [openIds, setOpenIds] = useState<Set<string>>(new Set());
@@ -152,13 +157,9 @@ export default function Assignments() {
   const past = list?.past ?? [];
 
   return (
-    <Screen>
+    <Screen onRefresh={reload}>
       <SectionTitle title="Assignments" />
-      {error && (
-        <Card>
-          <Text style={{ color: tokens.color.red }}>{error}</Text>
-        </Card>
-      )}
+      {error && <ErrorState error={error} onRetry={reload} />}
       {list === null && !error && (
         <LoadingRows label="Loading assignments…" rows={4} />
       )}

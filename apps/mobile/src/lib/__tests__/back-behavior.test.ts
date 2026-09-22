@@ -34,9 +34,9 @@ function code(rel: string): string {
 const tabLayouts = [
   ['staff', 'src/app/(staff)/(tabs)/_layout.tsx'],
   ['family', 'src/app/(family)/(tabs)/_layout.tsx'],
-  // The worker portal is a single tab with no detail screens, so it keeps the
-  // plain tab navigator — there is nothing for it to push.
-  ['worker', 'src/app/(worker)/_layout.tsx'],
+  // The worker portal now has tabs and pushed screens like the other two, so
+  // its tab navigator retraces history the same way.
+  ['worker', 'src/app/(worker)/(tabs)/_layout.tsx'],
 ] as const;
 
 /** Portals whose detail screens push over the tabs. */
