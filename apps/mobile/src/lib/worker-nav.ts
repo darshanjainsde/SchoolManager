@@ -73,6 +73,7 @@ export const HIDDEN_ROUTES: readonly string[] = [
   '(tabs)/profile/password',
   '(tabs)/profile/phone',
   '(tabs)/profile/switch',
+  '(tabs)/profile/salary',
   '(tabs)/desk/rules',
   '(tabs)/meets/[id]',
   '(tabs)/counter/member/[kind]/[id]',

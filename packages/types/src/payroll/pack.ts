@@ -13,8 +13,14 @@
  * 12% is 1200 and there is no 0.12 anywhere to round badly.
  */
 
-/** ISO 3166-1 alpha-2. The school's `countryCode`. */
-export type CountryCode = 'IN' | 'NZ' | (string & {});
+/**
+ * ISO 3166-1 alpha-2 — the school's `countryCode`.
+ *
+ * A plain string, not a union of the packs we ship: a school row can hold a
+ * country we have no rule book for yet, and `packFor` is what refuses it with
+ * a sentence a person can act on.
+ */
+export type CountryCode = string;
 
 /** A row that took effect on a date and holds until the next one. */
 export interface Dated { from: string }

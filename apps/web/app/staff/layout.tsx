@@ -34,7 +34,7 @@ export default function StaffLayout({ children }: { children: ReactNode }) {
   const me = useQuery({
     queryKey: ['me'],
     enabled: status === 'authed' && audience === 'school' && !!host,
-    queryFn: () => api.get<{ role: string; staffRole?: string | null }>('/auth/me'),
+    queryFn: () => api.get<{ role: string; staffRole?: string | null; features?: string[] }>('/auth/me'),
   });
 
   useEffect(() => {
@@ -85,9 +85,15 @@ export default function StaffLayout({ children }: { children: ReactNode }) {
   // A desk job's Home is its desk, not the attendance page: the first tab
   // takes them back there instead of to a Home that would bounce them.
   const deskHome = me.data?.role === 'STAFF' ? homeForRole('STAFF', me.data.staffRole) : '/staff';
+  // A room the school has not bought is not drawn — the same rule the teacher
+  // portal follows. Until features load, nothing is hidden, so the nav does
+  // not flicker items away.
+  const visible = NAV_ITEMS.filter(
+    (i) => !i.requiredFeature || !me.data?.features || me.data.features.includes(i.requiredFeature),
+  );
   const navItems = deskHome === '/staff'
-    ? NAV_ITEMS
-    : [{ href: deskHome, label: deskHome === '/library' ? 'Back to the library' : 'Back to the desk', icon: NAV_ITEMS[0].icon }, ...NAV_ITEMS.slice(1)];
+    ? visible
+    : [{ href: deskHome, label: deskHome === '/library' ? 'Back to the library' : 'Back to the desk', icon: visible[0].icon }, ...visible.slice(1)];
 
   async function handleLogout() {
     const rt = useAuthStore.getState().refreshToken;

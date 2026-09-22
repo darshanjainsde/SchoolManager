@@ -9,6 +9,7 @@ import { ProfileMenu } from '@/components/ProfileMenu';
 import { signOut } from '@/lib/sign-out';
 import { jobFor } from '@/lib/worker-nav';
 import { useSession } from '@/lib/use-session';
+import { hasFeature } from '@/lib/features';
 import { useTokens } from '@/theme/theme-context';
 
 /**
@@ -57,6 +58,7 @@ export default function WorkerProfile() {
   // A desk job (sports, library) lives on its desk tabs; its own attendance
   // page is reached from here instead of taking a fifth slot in the bar.
   const desk = jobFor(session) !== 'GENERAL';
+  const pay = hasFeature(session, 'SALARY');
   const [me, setMe] = useState<Me | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, reload] = useReload();
@@ -124,6 +126,7 @@ export default function WorkerProfile() {
       <ProfileMenu
         rows={[
           ...(desk ? [{ icon: 'take' as const, label: 'My attendance', route: '/(worker)/(tabs)/today', testID: 'profile-menu-attendance' }] : []),
+          ...(pay ? [{ icon: 'fees' as const, label: 'My pay', route: '/(worker)/(tabs)/profile/salary', testID: 'profile-menu-salary' }] : []),
           { icon: 'palette', label: 'Appearance', route: '/(worker)/(tabs)/profile/appearance', testID: 'profile-menu-appearance' },
           { icon: 'key', label: 'Change password', route: '/(worker)/(tabs)/profile/password', testID: 'profile-menu-password' },
           { icon: 'phone', label: 'My WhatsApp number', route: '/(worker)/(tabs)/profile/phone', testID: 'profile-menu-phone' },
