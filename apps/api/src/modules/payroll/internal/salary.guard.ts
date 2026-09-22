@@ -28,17 +28,38 @@ export class SalaryGuard implements CanActivate {
     if (user.role !== 'SCHOOL_ADMIN') {
       throw new ApiError('NOT_SALARY_ADMIN', 'Only a school admin can open Salary.', 403);
     }
-    const row = await getPlatformPrisma().user.findFirst({
+    const db = getPlatformPrisma();
+    const row = await db.user.findFirst({
       where: { id: user.sub, schoolId: user.schoolId, isActive: true },
       select: { canSeeSalary: true },
     });
-    if (!row?.canSeeSalary) {
-      throw new ApiError(
-        'NOT_SALARY_ADMIN',
-        'You do not have access to Salary. An admin who already has it can give it to you from Salary → People.',
-        403,
-      );
+    if (row?.canSeeSalary) return true;
+
+    // SELF-HEALING FIRST HOLDER. The migration granted this to each existing
+    // school's earliest admin, but a school created afterwards has nobody —
+    // and a right only an existing holder can grant would leave that school a
+    // locked room with the key inside. So: if NO admin here holds it, the
+    // earliest one does, and we write it down rather than deciding it again on
+    // every request.
+    const anyHolder = await db.user.count({
+      where: { schoolId: user.schoolId, role: 'SCHOOL_ADMIN', isActive: true, canSeeSalary: true },
+    });
+    if (anyHolder === 0) {
+      const first = await db.user.findFirst({
+        where: { schoolId: user.schoolId, role: 'SCHOOL_ADMIN', isActive: true },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        select: { id: true },
+      });
+      if (first?.id === user.sub) {
+        await db.user.update({ where: { id: first.id }, data: { canSeeSalary: true } });
+        return true;
+      }
     }
-    return true;
+
+    throw new ApiError(
+      'NOT_SALARY_ADMIN',
+      'You do not have access to Salary. An admin who already has it can give it to you from Salary → Settings.',
+      403,
+    );
   }
 }
