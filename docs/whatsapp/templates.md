@@ -93,6 +93,20 @@ were rewritten for both, with the parameter ORDER unchanged, so `templateFor` st
 AUTHENTICATION category, while every UTILITY template on the same token goes through. This is an
 account-level entitlement, not a bug in the payload: a bare authentication template with no
 buttons is refused the same way. Until it exists, one-time codes cannot go out over WhatsApp.
-Try creating it by hand in WhatsApp Manager first (the UI sometimes has the entitlement the API
-does not); if that also refuses, it is a support request to Meta to enable authentication
-templates for WABA `1615192556803051`.
+**Confirmed 2026-09-23: WhatsApp Manager refuses it too**, with the same words in a dialog
+("Cannot create message template — This WhatsApp Business account does not have permission to
+create message template"). So it is not an API payload problem and there is no UI workaround:
+it is an account entitlement only Meta can lift. Everything else on the account is healthy —
+verified, APPROVED, ACTIVE, payment added, and eleven UTILITY templates submitted fine on the
+same token minutes earlier.
+
+**What to do:** open Meta Direct Support from WhatsApp Manager (Help → Support) and ask them to
+enable the AUTHENTICATION template category for WABA `1615192556803051`. Say that utility
+templates submit without trouble on the same account, which tells them immediately it is a
+category entitlement rather than a policy problem with the business.
+
+**What it costs meanwhile:** login by one-time code cannot go out on WhatsApp. Password login is
+unaffected, and `/auth/otp/request` now answers "Signing in by code is not switched on yet.
+Please sign in with your password instead." rather than asking people to try again forever
+(Meta 132001 is treated as permanent, not transient). SMS would also carry the code the moment
+`MSG91_AUTH_KEY` and `MSG91_OTP_TEMPLATE_ID` are set, without needing Meta at all.
