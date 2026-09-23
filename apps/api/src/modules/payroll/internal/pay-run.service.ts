@@ -1,13 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { withTenant, type Prisma, type TenantTx } from '@skoolos/db';
 import {
-  asOf, daysInMonth, health, incomeTax, localTax, prorate, resolveEarnings, retirement,
+  applyGradeOverrides, asOf, daysInMonth, gradeFixedAmounts, health, incomeTax, localTax,
+  prorate, resolveEarnings, retirement,
   taxYearLabel, taxYearOf, type ComponentDef, type PayPack, type ResolvedLine, type TaxDeclarationInput,
 } from '@skoolos/types';
 import { ApiError } from '../../../common/errors/api-error';
 import { LIST_CEILING } from '../../../common/lists/list-ceiling';
 import { PayPackService } from './pay-pack.service';
-import { PayPeopleService } from './pay-people.service';
+import { PayPeopleService, readGradeOverrides } from './pay-people.service';
 
 type Kind = 'TEACHER' | 'STAFF';
 type Status = 'DRAFT' | 'CALCULATED' | 'APPROVED' | 'LOCKED' | 'PAID';
@@ -128,6 +129,14 @@ export class PayRunService {
         if (!structure.has(key)) structure.set(key, p);
       }
 
+      // A grade carries the split for everyone on it. Read once for the whole
+      // run: forty-eight payslips must not be forty-eight grade lookups.
+      const gradeRows = await tx.payGrade.findMany({
+        take: LIST_CEILING.STRUCTURE, where: { schoolId }, select: { id: true, overrides: true },
+      });
+      const gradeDefs = new Map(gradeRows.map((g) => [g.id, applyGradeOverrides(defs, readGradeOverrides(g.overrides))]));
+      const gradeFixed = new Map(gradeRows.map((g) => [g.id, gradeFixedAmounts(readGradeOverrides(g.overrides))]));
+
       const [adjustments, declarations, priorSlips] = await Promise.all([
         tx.payAdjustment.findMany({
           take: LIST_CEILING.ACTIVITY,
@@ -177,9 +186,14 @@ export class PayRunService {
         const monthsFactor = pay.paidThroughVacation ? 1 : Math.min(1, pay.contractMonths / 12);
         const agreedGross = Math.round(pay.monthlyGrossMinor * (monthsFactor === 1 ? 1 : 1));
 
-        let earnings = resolveEarnings(defs, {
+        // The person's own fixed amounts win over the grade's: a grade is the
+        // default for a job, not an override of what was agreed with a person.
+        let earnings = resolveEarnings(pay.payGradeId ? gradeDefs.get(pay.payGradeId) ?? defs : defs, {
           monthlyGrossMinor: agreedGross,
-          fixed: (pay.fixedAmounts ?? {}) as Record<string, number>,
+          fixed: {
+            ...(pay.payGradeId ? gradeFixed.get(pay.payGradeId) ?? {} : {}),
+            ...((pay.fixedAmounts ?? {}) as Record<string, number>),
+          },
         });
         earnings = prorate(earnings, daysPaid, days);
 

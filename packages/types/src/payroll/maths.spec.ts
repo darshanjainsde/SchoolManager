@@ -1,7 +1,8 @@
 import {
   bps, resolveEarnings, wageShareShortfall, prorate, retirement, health, localTax,
   incomeTax, houseRentExemption, gratuity, taxYearOf, taxYearLabel, daysInMonth, PayMathError,
-  periodEndISO, toWholeRupees,
+  periodEndISO, toWholeRupees, applyGradeOverrides, gradeFixedAmounts, bandPosition, withinBand,
+  structureOvershoot,
 } from './maths';
 import { INDIA_PACK } from './india';
 import type { ComponentDef } from './maths';
@@ -228,5 +229,82 @@ describe('the tax year', () => {
   it('knows February', () => {
     expect(daysInMonth(2026, 2)).toBe(28);
     expect(daysInMonth(2028, 2)).toBe(29);
+  });
+});
+
+describe('grades', () => {
+  it('leaves the school\'s own components alone when a grade overrides nothing', () => {
+    // The common case, and the one that must not change anything: every
+    // shipped default already satisfies the wage-share rule, so a person on a
+    // grade with no overrides is costed exactly as they were before grades.
+    const same = applyGradeOverrides(COMPONENTS, {});
+    expect(resolveEarnings(same, { monthlyGrossMinor: L(40_000), fixed: {} }))
+      .toEqual(structure(40_000));
+  });
+
+  it('retunes a percentage component for the grade', () => {
+    const driver = applyGradeOverrides(COMPONENTS, { basic: { rateBps: 6000 } });
+    const lines = resolveEarnings(driver, { monthlyGrossMinor: L(18_000), fixed: {} });
+    expect(lines.find((l) => l.key === 'basic')!.amountMinor).toBe(L(10_800));
+    // The balance still absorbs the difference, so the parts add to the gross.
+    expect(lines.reduce((a, l) => a + l.amountMinor, 0)).toBe(L(18_000));
+  });
+
+  it('does not mutate the defs it is given', () => {
+    // Defs are shared across every person in a run. A grade that edited them
+    // in place would leak its split into the next person's payslip — and it
+    // would compute correctly for whoever was first, so nothing would look wrong.
+    const before = JSON.stringify(COMPONENTS);
+    applyGradeOverrides(COMPONENTS, { basic: { rateBps: 7000 } });
+    expect(JSON.stringify(COMPONENTS)).toBe(before);
+  });
+
+  it('carries a grade\'s fixed amounts to everyone on it', () => {
+    expect(gradeFixedAmounts({ conveyance: { fixedMinor: L(1_600) }, basic: { rateBps: 5500 } }))
+      .toEqual({ conveyance: L(1_600) });
+  });
+
+  it('keeps a grade split that still passes the wage-share rule, and catches one that does not', () => {
+    const thin = applyGradeOverrides(COMPONENTS, { basic: { rateBps: 3000 } });
+    const lines = resolveEarnings(thin, { monthlyGrossMinor: L(40_000), fixed: {} });
+    // Checked ONCE for the grade instead of once per person on it.
+    expect(wageShareShortfall(lines, INDIA_PACK, '2026-09-30')).not.toBeNull();
+    expect(wageShareShortfall(structure(40_000), INDIA_PACK, '2026-09-30')).toBeNull();
+  });
+
+  it('places a figure in its band, and clamps outside it', () => {
+    expect(bandPosition(L(30_000), L(46_000), L(38_000))).toBeCloseTo(0.5, 5);
+    expect(bandPosition(L(30_000), L(46_000), L(10_000))).toBe(0);
+    expect(bandPosition(L(30_000), L(46_000), L(99_000))).toBe(1);
+  });
+
+  it('treats an unset band as no opinion, never as a refusal', () => {
+    expect(withinBand(0, 0, L(38_000))).toBe(true);
+    expect(withinBand(L(30_000), L(46_000), L(50_000))).toBe(false);
+    expect(withinBand(L(30_000), L(46_000), L(38_000))).toBe(true);
+  });
+});
+
+describe('a structure that cannot be paid as written', () => {
+  it('is zero for the shipped split, at any gross', () => {
+    for (const g of [15_000, 40_000, 125_000]) {
+      expect(structureOvershoot(structure(g), L(g))).toBe(0);
+    }
+  });
+
+  it('names the overshoot when a grade raises basic too far', () => {
+    // basic 70% + house rent 40% OF basic (28%) + fixed conveyance = 102%.
+    // resolveEarnings clamps the balance at zero rather than going negative,
+    // so without this the school agrees ₹40,000 and the payslip pays ₹40,800.
+    const defs = applyGradeOverrides(COMPONENTS, { basic: { rateBps: 7000 } });
+    const lines = resolveEarnings(defs, { monthlyGrossMinor: L(40_000), fixed: { conveyance: L(1_600) } });
+    expect(lines.reduce((a, l) => a + l.amountMinor, 0)).toBe(L(40_800));
+    expect(structureOvershoot(lines, L(40_000))).toBe(L(800));
+  });
+
+  it('is zero again once the split fits', () => {
+    const defs = applyGradeOverrides(COMPONENTS, { basic: { rateBps: 6000 } });
+    const lines = resolveEarnings(defs, { monthlyGrossMinor: L(40_000), fixed: { conveyance: L(1_600) } });
+    expect(structureOvershoot(lines, L(40_000))).toBe(0);
   });
 });

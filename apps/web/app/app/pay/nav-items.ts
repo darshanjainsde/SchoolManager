@@ -1,24 +1,26 @@
 /**
- * The Salary section's five tabs.
+ * The Pay section's six tabs.
  *
  * Own module, not a layout export — Next rejects non-reserved exports from a
  * layout or page file (see app/app/library/nav-items.ts and
  * app/route-file-exports.test.ts).
  *
- * The order is the order of use, not the order they were built: an admin opens
- * Salary to run the month, so the pay run is the index.
+ * The order is the order of use. "This month" is the index because that is
+ * what an admin opens Pay to do; Grades sits next to People because the two
+ * are read together — a grade is where a person's money comes from.
  */
-export interface SalarySection {
+export interface PaySection {
   /** Path segment under the base. Empty string = the index route. */
   seg: string;
   label: string;
 }
 
-export const SALARY_SECTIONS: SalarySection[] = [
-  { seg: '', label: 'Pay run' },
+export const PAY_SECTIONS: PaySection[] = [
+  { seg: '', label: 'This month' },
   { seg: 'people', label: 'People' },
+  { seg: 'grades', label: 'Grades' },
   { seg: 'payslips', label: 'Payslips' },
-  { seg: 'statutory', label: 'Statutory' },
+  { seg: 'filings', label: 'Filings' },
   { seg: 'settings', label: 'Settings' },
 ];
 

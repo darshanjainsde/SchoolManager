@@ -170,7 +170,19 @@
 }
 .sk-signout:hover { color: var(--sk-ink); border-color: var(--sk-brand); }
 
-.sk-tabs { max-width: 68rem; margin: 0 auto; display: flex; gap: 2px; padding: 0 12px; overflow-x: auto; }
+/* A section strip. Two homes, and they want opposite things:
+   INSIDE A PAGE (Pay, Library, Sports, Students, Alumni) it sits under a
+   left-aligned pagehead, above left-aligned cards, and must line up with
+   them — the page's own column already sets the width.
+   IN A TOPBAR (/portal, /staff) the bar is full-bleed, so the strip centres
+   itself at 68rem to line up with `.sk-topbar-inner`.
+   The page case is the DEFAULT because it is the common one and because
+   getting it wrong is invisible until someone looks at a wide screen: the
+   centred strip floats right of everything else on the page. Three pages
+   shipped that way before this was inverted. */
+.sk-tabs { max-width: none; margin: 0 0 20px; display: flex; gap: 2px; padding: 0;
+  overflow-x: auto; border-bottom: 1px solid var(--sk-line); }
+.sk-topbar .sk-tabs { max-width: 68rem; margin: 0 auto; padding: 0 12px; border-bottom: 0; }
 .sk-tab {
   display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
   padding: 12px 12px; font-size: 13.5px; font-weight: 600; color: var(--sk-ink-2);
@@ -2511,15 +2523,8 @@ html[data-theme='light'] .sk-eh-tick[aria-pressed="true"] > .box::after { border
    Every value resolves through an EXISTING token, so both schemes and both
    theme toggles follow with no new declarations. */
 
-/* The section strip sits INSIDE a page, under the pagehead — not under a
-   topbar like /portal and /teacher. Plain `.sk-tabs` centres itself at 68rem,
-   which floats the strip away from the left-aligned pagehead above it on any
-   wide screen (visible on the Alumni page today). It also has no rule of its
-   own, because in the portals the topbar supplies one. */
-.sk-tabs.sk-lib-tabs {
-  max-width: none; margin: 0 0 20px; padding: 0;
-  border-bottom: 1px solid var(--sk-line);
-}
+/* `.sk-lib-tabs` used to correct the strip's centring here. Plain `.sk-tabs`
+   now does it for every page, so the correction is gone rather than repeated. */
 
 /* A row action — "Return", "Remind", "Waive". Full `.sk-btn` is too chunky
    inside a list row, and the six places that needed one had each hand-rolled
@@ -3464,12 +3469,13 @@ html[data-theme='light'] .skosx { color-scheme: light; }
 
 /* ═══════════════════════════════════════════════════════════════
    Sports wing — the desk at /app/sports and /sports. Same strip
-   treatment as the library (`.sk-lib-tabs`), then the pieces the
+   treatment as the library, then the pieces the
    library never needed: a bracket, a heat sheet, a day board, the
    rules book and the wizard's sport picker. Every grid minimum is
    min(100%, Npx) so a phone can always collapse it (sk-responsive).
    ═══════════════════════════════════════════════════════════════ */
-.sk-tabs.sk-sp-tabs { max-width: none; margin: 0 0 14px; padding: 0; border-bottom: 1px solid var(--sk-line); }
+/* Sports wants a tighter gap under its strip than the shared 20px. */
+.sk-tabs.sk-sp-tabs { margin-bottom: 14px; }
 .sk-sp-stack { display: flex; flex-direction: column; gap: 16px; }
 .sk-sp-fieldrow { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
 .sk-sp-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
@@ -4067,3 +4073,187 @@ html[data-theme='light'] .skosx { color-scheme: light; }
 .sk-switch-t { display: flex; flex-direction: column; min-width: 0; }
 .sk-switch-t b { font-size: 13.5px; font-weight: 600; }
 .sk-switch-t small { font-size: 11.5px; color: var(--sk-ink-3); }
+
+/* ═══════════════════════════════════════════════════════════════
+   PAY — the admin console's payroll room (/app/pay).
+
+   Everything here is prefixed `sk-pay` and every one of these
+   names was grepped against this file before it was used: a new
+   component that borrows an existing class silently inherits that
+   component's box (`.sk-switch` did exactly that once).
+
+   Three shapes carry the module:
+     · the MONEY hero — one figure, the month's total cost
+     · the BAND bar   — a grade's range, drawn to scale
+     · the SPLIT bar  — where a gross actually goes, to scale
+   The last two exist so a wrong structure is visible before it is
+   saved, rather than reported afterwards as an error message.
+
+   Every grid minimum is min(100%, Npx) so a phone can collapse it
+   (sk-responsive), and every figure is tabular so columns line up.
+   ═══════════════════════════════════════════════════════════════ */
+
+.sk-paystack { display: flex; flex-direction: column; gap: 16px; }
+
+/* ---- the month's headline ----
+   The TOTAL COST, not the payout: gross plus the school's own
+   contributions. It is the number a trustee asks for and the one
+   no payroll screen ever shows. */
+.sk-payhero { display: grid; gap: 14px; }
+.sk-payhero .fig { display: grid; gap: 3px; min-width: 0; }
+.sk-payhero .lab {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.09em;
+  text-transform: uppercase; color: var(--sk-ink-3);
+}
+.sk-payhero .big {
+  font-family: var(--sk-serif); font-weight: 650; letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums; color: var(--sk-ink);
+  /* Clamped low enough that ₹1,48,62,400 still fits a 390px phone. */
+  font-size: clamp(27px, 7vw, 40px); line-height: 1.05;
+}
+.sk-payhero .sub { font-size: 12.5px; color: var(--sk-ink-3); }
+
+/* Three supporting figures. auto-fit at any sensible floor strands the third
+   on a row of its own at 390px, so the columns are fixed at three and the
+   FIGURE shrinks instead — the set always reads as one row. */
+.sk-paytrio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.sk-paytrio > div {
+  background: var(--sk-bg-2); border-radius: 11px; padding: 10px 11px;
+  display: grid; gap: 2px; min-width: 0;
+}
+.sk-paytrio .v {
+  font-family: var(--sk-mono); font-variant-numeric: tabular-nums; font-weight: 700;
+  color: var(--sk-ink); font-size: clamp(12.5px, 3.4vw, 16px);
+}
+.sk-paytrio .h { font-size: clamp(10px, 2.6vw, 11px); color: var(--sk-ink-3); line-height: 1.3; }
+
+/* ---- what needs a human ----
+   The whole review. Without it, checking a month means reading
+   forty-eight rows looking for nothing. Each line names its own
+   fix, because a warning without the move that fixes it leaves
+   the reader to work out which control resolves it. */
+.sk-payneeds {
+  border-left: 3px solid var(--sk-amber); background: var(--sk-amber-tint);
+  border-radius: 0 var(--sk-r) var(--sk-r) 0; padding: 12px 14px; display: grid; gap: 9px;
+}
+.sk-payneeds > .t { font-size: 12.5px; font-weight: 700; color: var(--sk-amber-ink); }
+.sk-payneed {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  font-size: 12.5px; color: var(--sk-ink-2); min-height: 28px;
+}
+.sk-payneed .who { flex: 1 1 200px; min-width: 0; }
+.sk-payneed .names { display: block; font-size: 11px; color: var(--sk-ink-3); }
+
+/* ---- the setup checklist ---- */
+.sk-paysteps { display: grid; gap: 13px; }
+.sk-paystep { display: grid; grid-template-columns: 28px 1fr; gap: 12px; align-items: start; }
+.sk-paystep > .i {
+  width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+  font-family: var(--sk-mono); font-size: 12px; font-weight: 700;
+  background: var(--sk-brand); color: #fff;
+}
+.sk-paystep[data-state="done"] > .i { background: var(--sk-good); }
+.sk-paystep[data-state="todo"] > .i {
+  background: transparent; color: var(--sk-ink-3); border: 1px solid var(--sk-line-2);
+}
+.sk-paystep .t { font-size: 14px; font-weight: 650; color: var(--sk-ink); }
+.sk-paystep .d { font-size: 12.5px; color: var(--sk-ink-3); margin-top: 2px; }
+
+/* ---- grades ---- */
+.sk-paygrades { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 12px; }
+.sk-paygrade {
+  background: var(--sk-card); border: 1px solid var(--sk-line); border-radius: var(--sk-r);
+  padding: 14px; display: grid; gap: 9px; min-width: 0; align-content: start;
+}
+.sk-paygrade .gname {
+  font-family: var(--sk-serif); font-size: 16.5px; font-weight: 650;
+  color: var(--sk-ink); overflow-wrap: anywhere;
+}
+.sk-paygrade .gdesc { font-size: 11.5px; color: var(--sk-ink-3); overflow-wrap: anywhere; }
+
+/* The band, to scale. The marker is a person's figure inside it. */
+.sk-payband { height: 7px; border-radius: 999px; background: var(--sk-bg-2); position: relative; overflow: hidden; }
+.sk-payband > i { position: absolute; top: 0; bottom: 0; background: var(--sk-brand); opacity: 0.5; border-radius: 999px; }
+.sk-payband > b { position: absolute; top: 0; bottom: 0; width: 3px; border-radius: 2px; background: var(--sk-brand-2); }
+.sk-paybandends {
+  display: flex; justify-content: space-between; gap: 8px;
+  font-family: var(--sk-mono); font-variant-numeric: tabular-nums;
+  font-size: 11px; color: var(--sk-ink-3);
+}
+
+/* The split, to scale. Basic is meant to be half the width — the
+   Code on Wages rule made visible, so a bad split is seen rather
+   than read about in an error. */
+.sk-paysplit { display: flex; height: 9px; border-radius: 999px; overflow: hidden; background: var(--sk-bg-2); }
+.sk-paysplit > span { display: block; min-width: 0; }
+.sk-paysplitkey { font-size: 11px; color: var(--sk-ink-3); overflow-wrap: anywhere; }
+
+/* ---- people, grouped by grade ---- */
+.sk-paygrouphead {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  padding: 16px 0 7px;
+}
+.sk-paygrouphead .t { font-family: var(--sk-serif); font-size: 15px; font-weight: 650; color: var(--sk-ink); }
+.sk-paygrouphead .c { font-size: 11.5px; color: var(--sk-ink-3); }
+
+.sk-payrow {
+  display: flex; align-items: center; gap: 11px; flex-wrap: wrap;
+  padding: 9px 0; border-top: 1px solid var(--sk-line); min-height: 48px;
+}
+.sk-payrow:first-child { border-top: 0; }
+.sk-payrow .who { flex: 1 1 180px; min-width: 0; }
+.sk-payrow .nm { font-size: 13.5px; font-weight: 650; color: var(--sk-ink); overflow-wrap: anywhere; }
+.sk-payrow .meta { font-size: 11.5px; color: var(--sk-ink-3); }
+.sk-payrow .amt {
+  font-family: var(--sk-mono); font-variant-numeric: tabular-nums;
+  font-size: 13.5px; color: var(--sk-ink); white-space: nowrap;
+}
+/* A checkbox needs 24px of finger on a touch screen. `padding` cannot
+   supply it: a checkbox renders with `appearance: auto`, which makes the
+   UA ignore padding entirely — measured at 16x16 with 4px of padding set.
+   So the BOX grows on touch widths and the negative margin keeps the row
+   rhythm; on a pointer screen it stays the usual 16px. */
+.sk-paycheck { width: 16px; height: 16px; flex: none; cursor: pointer; }
+@media (pointer: coarse), (max-width: 640px) {
+  .sk-paycheck { width: 24px; height: 24px; margin: -4px; }
+}
+
+/* ---- the editor ----
+   A drawer, not a section under the table. Rendering it after a
+   long roster put it below the fold, so pressing "Set pay" looked
+   like it did nothing — which is how the tab came to feel broken. */
+.sk-payscrim {
+  position: fixed; inset: 0; background: rgba(20, 16, 40, 0.34);
+  display: flex; justify-content: flex-end;
+}
+.sk-paydrawer {
+  background: var(--sk-card); width: min(430px, 100%); height: 100%;
+  overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 14px;
+  border-left: 1px solid var(--sk-line-2); box-shadow: -18px 0 44px rgba(20, 16, 40, 0.18);
+}
+.sk-payfield { display: grid; gap: 5px; min-width: 0; }
+.sk-payfield > .sk-input { width: 100%; box-sizing: border-box; }
+.sk-payfield .lab {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.09em;
+  text-transform: uppercase; color: var(--sk-ink-3);
+}
+.sk-payfield .hint { font-size: 11.5px; color: var(--sk-ink-3); }
+.sk-paytakehome { background: var(--sk-bg-2); border-radius: 11px; padding: 12px; display: grid; gap: 5px; }
+.sk-paytakehome .r { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; color: var(--sk-ink-2); }
+.sk-paytakehome .r > span:last-child { font-family: var(--sk-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sk-paytakehome .r[data-total] {
+  border-top: 1px solid var(--sk-line); padding-top: 6px; margin-top: 2px;
+  font-weight: 700; color: var(--sk-ink);
+}
+.sk-paydrawer-actions { display: flex; gap: 9px; flex-wrap: wrap; justify-content: space-between; margin-top: auto; }
+
+/* A phone has no room for a side drawer; it takes the bottom of the
+   screen instead, which is where a thumb already is. */
+@media (max-width: 560px) {
+  .sk-payscrim { align-items: flex-end; }
+  .sk-paydrawer {
+    width: 100%; height: auto; max-height: 92vh;
+    border-left: 0; border-top: 1px solid var(--sk-line-2);
+    border-radius: 16px 16px 0 0;
+  }
+}

@@ -344,3 +344,92 @@ export function taxYearLabel(pack: PayPack, taxYear: number): string {
 }
 
 export type { ComponentCalc };
+
+/* ═══════════════════════════════════════════════════════════════
+   GRADES
+   A school does not think in individual salaries. It thinks "all
+   TGTs get thirty-five". The money belongs to the JOB, so a grade
+   carries the band and, when it differs from the school default,
+   the split — and a person carries a grade and a figure.
+   ═══════════════════════════════════════════════════════════════ */
+
+/**
+ * One component, as a grade wants it instead of how the school set it.
+ *
+ * `rateBps` retunes a percentage component, `fixedMinor` a fixed one. Both are
+ * optional because most grades override neither: the shipped defaults already
+ * satisfy the wage-share rule, so an empty override object is the common case
+ * and means "use the school's own components".
+ */
+export interface GradeOverride {
+  rateBps?: number;
+  fixedMinor?: number;
+}
+
+/**
+ * Bend the school's components to one grade's split.
+ *
+ * Returns a NEW array — the caller's defs are shared across every person in a
+ * run, so mutating them would leak one grade's split into the next person's
+ * payslip. That bug computes silently and correctly for whoever is first.
+ */
+export function applyGradeOverrides(
+  defs: readonly ComponentDef[],
+  overrides: Readonly<Record<string, GradeOverride>> | null | undefined,
+): ComponentDef[] {
+  if (!overrides || Object.keys(overrides).length === 0) return defs.map((d) => ({ ...d }));
+  return defs.map((d) => {
+    const o = overrides[d.key];
+    if (!o) return { ...d };
+    return { ...d, ...(o.rateBps != null ? { rateBps: o.rateBps } : {}) };
+  });
+}
+
+/**
+ * The FIXED amounts a grade implies at a given gross.
+ *
+ * A fixed component (dearness allowance, conveyance) is a rupee figure, not a
+ * share, so a grade states it once and every person on that grade inherits it
+ * — that is the whole point of putting the money on the job. Percentages are
+ * handled by `applyGradeOverrides`; this covers the rest.
+ */
+export function gradeFixedAmounts(
+  overrides: Readonly<Record<string, GradeOverride>> | null | undefined,
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [key, o] of Object.entries(overrides ?? {})) {
+    if (o?.fixedMinor != null) out[key] = o.fixedMinor;
+  }
+  return out;
+}
+
+/**
+ * How much a structure's parts exceed the gross that was agreed.
+ *
+ * `resolveEarnings` gives the BALANCE component whatever is left and clamps it
+ * at zero, so a split whose fixed and percentage parts already add to more
+ * than the gross does not fail — it quietly pays MORE than the figure the
+ * school typed. With the shipped 50% split that is unreachable; a grade that
+ * raises basic makes it reachable (basic 70% + house rent 40% of basic + a
+ * fixed conveyance is 102% of gross), and the overpayment is invisible because
+ * every individual line looks right.
+ *
+ * Zero means the parts add to the agreed gross, which is the only correct
+ * answer. Anything else is a structure that cannot be paid as written.
+ */
+export function structureOvershoot(lines: readonly ResolvedLine[], grossMinor: number): number {
+  const total = lines.filter((l) => l.kind === 'EARNING').reduce((a, l) => a + l.amountMinor, 0);
+  return Math.max(0, total - grossMinor);
+}
+
+/** Where a figure sits in its band, 0–1, for the marker on the band bar. */
+export function bandPosition(minMinor: number, maxMinor: number, atMinor: number): number {
+  if (maxMinor <= minMinor) return 0;
+  return Math.min(1, Math.max(0, (atMinor - minMinor) / (maxMinor - minMinor)));
+}
+
+/** Whether a figure is inside its grade's band — a warning, never a refusal. */
+export function withinBand(minMinor: number, maxMinor: number, atMinor: number): boolean {
+  if (maxMinor <= 0) return true;
+  return atMinor >= minMinor && atMinor <= maxMinor;
+}

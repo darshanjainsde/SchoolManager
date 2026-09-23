@@ -32,8 +32,67 @@ export interface Person {
   userId: string | null;
   pay: {
     id: string; effectiveFrom: string; monthlyGrossMinor: number;
+    payGradeId: string | null;
     taxRegime: 'NEW' | 'OLD'; pfOptIn: boolean; paidThroughVacation: boolean; contractMonths: number;
+    hasBank: boolean;
   } | null;
+}
+
+export interface GradeOverride { rateBps?: number; fixedMinor?: number }
+
+export interface Grade {
+  id: string;
+  name: string;
+  description: string | null;
+  bandMinMinor: number;
+  bandMaxMinor: number;
+  overrides: Record<string, GradeOverride>;
+  order: number;
+  active: boolean;
+  note: string | null;
+  headcount: number;
+  monthlyMinor: number;
+  split: { key: string; name: string; amountMinor: number }[];
+  wageShareNote: string | null;
+  overshootMinor: number;
+}
+
+export interface SuggestedGrade {
+  name: string; description: string;
+  bandMinMinor: number; bandMaxMinor: number;
+  order: number; headcount: number; onPay: number;
+}
+
+export type ExceptionKind = 'NO_GRADE' | 'NO_PAY' | 'NO_BANK' | 'OUT_OF_BAND' | 'ARREARS';
+
+export interface PayException {
+  kind: ExceptionKind;
+  count: number;
+  label: string;
+  names: string[];
+  goTo: 'people' | 'grades';
+}
+
+export interface Overview {
+  setup: {
+    countryCode: string; gradeCount: number; rosterSize: number;
+    onPay: number; notOnPay: number; ready: boolean;
+  };
+  period: { year: number; month: number };
+  run: {
+    id: string; status: string; headcount: number;
+    grossMinor: number; deductionMinor: number; netMinor: number; employerCostMinor: number;
+  } | null;
+  cost: {
+    estimated: boolean; headcount: number; grossMinor: number; deductionMinor: number;
+    netMinor: number; employerCostMinor: number; totalCostMinor: number;
+  };
+  previousTotalMinor: number | null;
+  exceptions: PayException[];
+  recent: {
+    id: string; periodYear: number; periodMonth: number; status: string;
+    headcount: number; grossMinor: number; employerCostMinor: number; netMinor: number;
+  }[];
 }
 
 export interface RunRow {
@@ -62,6 +121,8 @@ export interface CalcResult {
 export interface PreviewResult {
   lines: (PayLine & { taxable: boolean; isWages: boolean })[];
   wageShare: { shortfallMinor: number; note: string } | null;
+  /** Above zero when the split's parts add to more than the pay agreed. */
+  overshootMinor: number;
 }
 
 export interface Duty { key: string; label: string; cadence: string; dueOn: string | null; note?: string }

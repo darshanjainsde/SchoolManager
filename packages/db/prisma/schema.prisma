@@ -336,6 +336,7 @@ model School {
   substitutions          Substitution[]
   staff                  Staff[]
   payComponents          PayComponent[]
+  payGrades              PayGrade[]
   employeePay            EmployeePay[]
   payRuns                PayRun[]
   payslips               Payslip[]
@@ -4783,6 +4784,9 @@ model EmployeePay {
   monthlyGrossMinor   Int
   /// componentKey -> amount in paise, for the FIXED components the admin typed.
   fixedAmounts        Json          @default("{}")
+  /// The job this pay belongs to. Null is legal and means a one-off structure
+  /// typed straight onto the person — the pre-grades shape, still supported.
+  payGradeId          String?       @db.Uuid
   taxRegime           PayTaxRegime  @default(NEW)
   /// Provident fund: a member at all, and whether the school contributes above
   /// the statutory ceiling (a per-person agreement, not a rule).
@@ -4809,11 +4813,43 @@ model EmployeePay {
   school              School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   teacher             Teacher?      @relation(fields: [teacherId], references: [id], onDelete: Cascade)
   staff               Staff?        @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  payGrade            PayGrade?     @relation(fields: [payGradeId], references: [id], onDelete: SetNull)
 
   @@index([schoolId, teacherId, effectiveFrom])
   @@index([schoolId, staffId, effectiveFrom])
   @@index([teacherId])
   @@index([staffId])
+  @@index([payGradeId])
+}
+
+/// A job's pay: the band it sits in, and the split when it differs from the
+/// school's own components. Putting the money on the job instead of on each
+/// person is what turns "set everyone's pay" from 48 decisions into 6.
+model PayGrade {
+  id           String        @id @default(uuid()) @db.Uuid
+  schoolId     String        @db.Uuid
+  /// Short, as a school says it out loud: "TGT", "Driver", "Principal".
+  name         String
+  /// The long form, for anyone who does not know the abbreviation.
+  description  String?
+  /// The agreed range for this job, in paise. A figure outside it WARNS and
+  /// never refuses — a school may always pay what it has agreed to pay.
+  bandMinMinor Int           @default(0)
+  bandMaxMinor Int           @default(0)
+  /// componentKey -> { rateBps?, fixedMinor? }. Empty means the school's own
+  /// components, which already satisfy the wage-share rule.
+  overrides    Json          @default("{}")
+  order        Int           @default(0)
+  active       Boolean       @default(true)
+  note         String?
+  createdById  String?       @db.Uuid
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  school       School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  employeePay  EmployeePay[]
+
+  @@unique([schoolId, name])
+  @@index([schoolId, order])
 }
 
 /// One month, for the whole school. Immutable once LOCKED, and it records the

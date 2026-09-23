@@ -4,8 +4,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { QueryError } from '@/components/ui/query-state';
-import { monthName, rupees, toMinor } from '@/app/app/salary/ui';
-import type { PayLine } from '@/app/app/salary/types';
+import { monthName, rupees, toMinor } from '@/app/app/pay/ui';
+import type { PayLine } from '@/app/app/pay/types';
 
 interface MySlip {
   id: string; name: string; designation: string | null; lines: PayLine[];

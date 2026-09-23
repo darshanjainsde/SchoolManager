@@ -114,11 +114,15 @@ export const NAV_MODEL: NavEntry[] = [
   },
 
   { kind: 'item', item: { href: '/app/fees', label: 'Fees', icon: Wallet, requiredFeature: 'FEES' } },
-  // "Salary", not "Payroll": it is the word a school office already says out
-  // loud — salary register, salary slip, salary account. Expenses, when it
-  // comes, is a SIBLING of this and not a tab inside it: pay is monthly,
-  // statutory and private; a vendor bill is none of those.
-  { kind: 'item', item: { href: '/app/salary', label: 'Salary', icon: Receipt, requiredFeature: 'SALARY' } },
+  // "Pay", one word, so it sits in the same line as Fees and finishes the
+  // sentence the nav already started: Fees is the money coming in, Pay is the
+  // money going out. "Salary" named only half of what the room holds once
+  // reimbursements and settlements arrive. Expenses, when it comes, is a
+  // SIBLING of this and not a tab inside it: pay is monthly, statutory and
+  // private; a vendor bill is none of those.
+  // The FEATURE KEY stays 'SALARY' — it is a stored value in FeatureOverride,
+  // and renaming it would mean a data migration for a word nobody sees.
+  { kind: 'item', item: { href: '/app/pay', label: 'Pay', icon: Receipt, requiredFeature: 'SALARY' } },
   // The shop, not the exams: track print orders, place new ones. Lives under
   // /app/press/orders route-wise (deep links keep working) but stands alone
   // in the nav — leafActive's longest-href rule keeps the two tabs distinct.
