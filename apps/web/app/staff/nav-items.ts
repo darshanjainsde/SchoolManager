@@ -17,6 +17,6 @@ export const NAV_ITEMS = [
   { href: '/staff', label: 'Home', icon: LayoutDashboard },
   // Only drawn when the school has the module: `requiredFeature` is how every
   // other nav in the product hides a room the school does not have.
-  { href: '/staff/salary', label: 'My pay', icon: Receipt, requiredFeature: 'SALARY' },
+  { href: '/staff/pay', label: 'My pay', icon: Receipt, requiredFeature: 'SALARY' },
   { href: '/staff/profile', label: 'My profile', icon: User },
 ];

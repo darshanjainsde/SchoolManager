@@ -23,6 +23,14 @@ import { signSchoolToken, seedMinimalSchool } from './integration/helpers';
  */
 
 const ADMIN_ROUTES: [method: 'get' | 'post', path: string][] = [
+  ['get', '/payroll/overview'],
+  ['get', '/payroll/grades'],
+  ['get', '/payroll/grades/suggest'],
+  ['post', '/payroll/grades'],
+  ['post', '/payroll/grades/preview'],
+  ['post', '/payroll/grades/raise'],
+  ['post', '/payroll/grades/assign'],
+  ['post', '/payroll/grades/00000000-0000-0000-0000-000000000001/remove'],
   ['get', '/payroll/settings'],
   ['post', '/payroll/settings'],
   ['get', '/payroll/components'],

@@ -9,6 +9,7 @@ const txMock = {
   teacher: { findMany: jest.fn(), findFirst: jest.fn() },
   staff: { findMany: jest.fn(), findFirst: jest.fn() },
   employeePay: { findMany: jest.fn(), create: jest.fn() },
+  payGrade: { findMany: jest.fn() },
 };
 const schoolMock = { findUnique: jest.fn() };
 jest.mock('@skoolos/db', () => ({
@@ -45,7 +46,7 @@ const COMPONENT_ROWS = INDIA_PACK.standardComponents.map((c) => ({
  * a fixture of one teacher has NO statutory deductions at all and is the wrong
  * shape to test them with. `others` pads the roster to a real school.
  */
-function arrange(opts: { month?: number; year?: number; gross?: number; adjustments?: unknown[]; priorSlips?: unknown[]; region?: string | null; pfOptIn?: boolean; others?: number } = {}) {
+function arrange(opts: { month?: number; year?: number; gross?: number; adjustments?: unknown[]; priorSlips?: unknown[]; region?: string | null; pfOptIn?: boolean; others?: number; grades?: unknown[]; payGradeId?: string | null } = {}) {
   jest.clearAllMocks();
   schoolMock.findUnique.mockResolvedValue({
     countryCode: 'IN', currency: 'INR', region: opts.region === undefined ? 'RJ' : opts.region, taxYearStartMonth: 4,
@@ -55,6 +56,9 @@ function arrange(opts: { month?: number; year?: number; gross?: number; adjustme
     status: 'DRAFT', headcount: 0, rulesAsAt: new Date('2026-09-30T00:00:00.000Z'),
   });
   txMock.payComponent.findMany.mockResolvedValue(COMPONENT_ROWS);
+  // No grades by default: a person with no grade must be costed exactly as
+  // they were before grades existed, which is what most of these assert.
+  txMock.payGrade.findMany.mockResolvedValue(opts.grades ?? []);
   const others = opts.others ?? 24;
   const otherIds = Array.from({ length: others }, (_, i) => `eeeeeeee-eeee-eeee-eeee-${String(i).padStart(12, '0')}`);
   txMock.teacher.findMany.mockResolvedValue([
@@ -68,6 +72,7 @@ function arrange(opts: { month?: number; year?: number; gross?: number; adjustme
     monthlyGrossMinor: L(opts.gross ?? 40_000), fixedAmounts: { conveyance: L(1_600) },
     taxRegime: 'NEW', pfOptIn: opts.pfOptIn ?? true, pfOnActual: false, esiExempt: false,
     localTaxExempt: false, paidThroughVacation: true, contractMonths: 12,
+    payGradeId: opts.payGradeId ?? null,
   });
   txMock.employeePay.findMany.mockResolvedValue([payRow(T1), ...otherIds.map(payRow)]);
   txMock.payAdjustment.findMany.mockResolvedValue(opts.adjustments ?? []);
@@ -141,6 +146,31 @@ describe('the pay run', () => {
     expect(slip().daysPaid).toBe(27);
     expect(slip().daysInMonth).toBe(30);
     expect(slip().grossMinor).toBeLessThan(L(40_000));
+  });
+
+  it("uses the person's GRADE split, not the school default, when they are on one", async () => {
+    // The wiring that makes grades real. Without it a grade is a label: the
+    // screen draws one split and the payslip pays another, and because the
+    // school default is itself valid, nothing errors and nobody notices.
+    arrange({
+      grades: [{ id: 'g1', overrides: { basic: { rateBps: 6000 } } }],
+      payGradeId: 'g1',
+    });
+    await service().calculate(SCHOOL, RUN);
+    expect(lineOf('basic')!.amountMinor).toBe(L(24_000)); // 60% of ₹40,000, not 50%
+    // The balance still absorbs the rest, so the parts add to the agreed gross.
+    expect(slip().grossMinor).toBe(L(40_000));
+  });
+
+  it("carries a grade's fixed amounts to everyone on it", async () => {
+    arrange({
+      grades: [{ id: 'g1', overrides: { conveyance: { fixedMinor: L(2_400) } } }],
+      payGradeId: 'g1',
+    });
+    await service().calculate(SCHOOL, RUN);
+    // The person's own fixedAmounts (₹1,600) win: a grade is the default for a
+    // job, not an override of what was agreed with a person.
+    expect(lineOf('conveyance')!.amountMinor).toBe(L(1_600));
   });
 
   it('shows what the school paid in on top — the line most payslips leave out', async () => {

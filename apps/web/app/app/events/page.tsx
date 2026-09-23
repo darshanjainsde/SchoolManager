@@ -108,7 +108,7 @@ export default function EventsPage() {
         </div>
       ) : null}
 
-      <nav className="sk-tabs sk-lib-tabs" aria-label="Event groups">
+      <nav className="sk-tabs" aria-label="Event groups">
         {TABS.map((t) => (
           <button
             key={t.id}

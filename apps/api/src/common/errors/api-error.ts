@@ -268,6 +268,8 @@ export type ErrorCode =
   | 'SALARY_NO_PACK'
   /** The structure breaks the Code on Wages 50% rule — 400. */
   | 'SALARY_WAGE_SHARE'
+  /** The split's parts add to MORE than the agreed gross, so it cannot be paid — 400. */
+  | 'SALARY_OVERSHOOT'
   /** A pay run that is locked cannot be changed — 409. */
   | 'PAY_RUN_LOCKED'
   /** The run is not in a state where that step is legal — 409. */

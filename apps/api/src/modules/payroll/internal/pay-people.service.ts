@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { withTenant, type TenantTx } from '@skoolos/db';
 import {
-  resolveEarnings, wageShareShortfall, type ComponentDef, type PayPack, type StandardComponent,
+  applyGradeOverrides, gradeFixedAmounts, resolveEarnings, structureOvershoot, wageShareShortfall,
+  type ComponentDef, type GradeOverride, type PayPack, type StandardComponent,
 } from '@skoolos/types';
 import { ApiError } from '../../../common/errors/api-error';
 import { LIST_CEILING } from '../../../common/lists/list-ceiling';
@@ -19,14 +20,32 @@ export interface PersonRow {
     id: string;
     effectiveFrom: string;
     monthlyGrossMinor: number;
+    payGradeId: string | null;
     taxRegime: 'NEW' | 'OLD';
     pfOptIn: boolean;
     paidThroughVacation: boolean;
     contractMonths: number;
+    /** Whether the person can actually be paid — the bank-account exception. */
+    hasBank: boolean;
   } | null;
 }
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
+
+/** The overrides column, read back out of Json without trusting its shape. */
+export function readGradeOverrides(raw: unknown): Record<string, GradeOverride> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const out: Record<string, GradeOverride> = {};
+  for (const [key, val] of Object.entries(raw as Record<string, unknown>)) {
+    if (!val || typeof val !== 'object') continue;
+    const v = val as { rateBps?: unknown; fixedMinor?: unknown };
+    const o: GradeOverride = {};
+    if (typeof v.rateBps === 'number') o.rateBps = v.rateBps;
+    if (typeof v.fixedMinor === 'number') o.fixedMinor = v.fixedMinor;
+    if (o.rateBps != null || o.fixedMinor != null) out[key] = o;
+  }
+  return out;
+}
 const nameOf = (p: { firstName: string; lastName: string }) => `${p.firstName} ${p.lastName}`.trim();
 
 /**
@@ -125,8 +144,10 @@ export class PayPeopleService {
       const shape = (p: (typeof pays)[number] | undefined) =>
         p ? {
           id: p.id, effectiveFrom: iso(p.effectiveFrom), monthlyGrossMinor: p.monthlyGrossMinor,
+          payGradeId: p.payGradeId,
           taxRegime: p.taxRegime as 'NEW' | 'OLD', pfOptIn: p.pfOptIn,
           paidThroughVacation: p.paidThroughVacation, contractMonths: p.contractMonths,
+          hasBank: !!p.bankAccount,
         } : null;
 
       return [
@@ -168,7 +189,24 @@ export class PayPeopleService {
       taxable: c.taxable, isWages: c.isWages, retirementBase: c.retirementBase,
       healthBase: c.healthBase, gratuityBase: c.gratuityBase, prorate: c.prorate, order: c.order,
     }));
-    const lines = resolveEarnings(defs, { monthlyGrossMinor: dto.monthlyGrossMinor, fixed: dto.fixedAmounts ?? {} });
+    const grade = await this.gradeOverrides(schoolId, dto.payGradeId);
+    const lines = resolveEarnings(applyGradeOverrides(defs, grade), {
+      monthlyGrossMinor: dto.monthlyGrossMinor,
+      fixed: { ...gradeFixedAmounts(grade), ...(dto.fixedAmounts ?? {}) },
+    });
+    // Refused, not warned: the wage-share rule is a policy a school may choose
+    // to take the risk on, but a split that pays MORE than the figure agreed
+    // is arithmetic, and no school ever means it.
+    const over = structureOvershoot(lines, dto.monthlyGrossMinor);
+    if (over > 0) {
+      throw new ApiError(
+        'SALARY_OVERSHOOT',
+        `This split adds up to ₹${Math.round(over / 100).toLocaleString('en-IN')} a month MORE than the pay you have agreed. Lower Basic's share on the grade, or raise the pay.`,
+        400,
+        'payGradeId',
+      );
+    }
+
     const short = wageShareShortfall(lines, pack, dto.effectiveFrom);
     if (short && !dto.acceptWageShare) {
       throw new ApiError(
@@ -188,6 +226,7 @@ export class PayPeopleService {
           staffId: dto.personKind === 'STAFF' ? dto.personId : null,
           effectiveFrom: new Date(`${dto.effectiveFrom}T00:00:00.000Z`),
           monthlyGrossMinor: dto.monthlyGrossMinor,
+          payGradeId: dto.payGradeId ?? null,
           fixedAmounts: dto.fixedAmounts ?? {},
           taxRegime: dto.taxRegime ?? 'NEW',
           pfOptIn: dto.pfOptIn ?? true,
@@ -209,7 +248,7 @@ export class PayPeopleService {
   }
 
   /** What a structure would actually pay, without saving it — the preview the screen draws. */
-  async preview(schoolId: string, dto: { monthlyGrossMinor: number; fixedAmounts?: Record<string, number>; onISO: string }) {
+  async preview(schoolId: string, dto: { monthlyGrossMinor: number; fixedAmounts?: Record<string, number>; payGradeId?: string; onISO: string }) {
     const { pack } = await this.packs.forSchool(schoolId);
     const comps = await this.components(schoolId);
     const defs: ComponentDef[] = comps.map((c) => ({
@@ -217,8 +256,31 @@ export class PayPeopleService {
       taxable: c.taxable, isWages: c.isWages, retirementBase: c.retirementBase,
       healthBase: c.healthBase, gratuityBase: c.gratuityBase, prorate: c.prorate, order: c.order,
     }));
-    const lines = resolveEarnings(defs, { monthlyGrossMinor: dto.monthlyGrossMinor, fixed: dto.fixedAmounts ?? {} });
-    return { lines, wageShare: wageShareShortfall(lines, pack, dto.onISO) };
+    const grade = await this.gradeOverrides(schoolId, dto.payGradeId);
+    const lines = resolveEarnings(applyGradeOverrides(defs, grade), {
+      monthlyGrossMinor: dto.monthlyGrossMinor,
+      fixed: { ...gradeFixedAmounts(grade), ...(dto.fixedAmounts ?? {}) },
+    });
+    return {
+      lines,
+      wageShare: wageShareShortfall(lines, pack, dto.onISO),
+      overshootMinor: structureOvershoot(lines, dto.monthlyGrossMinor),
+    };
+  }
+
+  /**
+   * A grade's split, or an empty one.
+   *
+   * Empty is the common case AND the safe default: the shipped components
+   * already satisfy the wage-share rule, so a person with no grade is costed
+   * exactly as they were before grades existed.
+   */
+  private async gradeOverrides(schoolId: string, gradeId: string | undefined): Promise<Record<string, GradeOverride>> {
+    if (!gradeId) return {};
+    const g = await withTenant(schoolId, (tx) =>
+      tx.payGrade.findFirst({ where: { id: gradeId, schoolId }, select: { overrides: true } }));
+    if (!g) throw new ApiError('NOT_FOUND', 'That grade is not on this school’s list.', 404, 'payGradeId');
+    return readGradeOverrides(g.overrides);
   }
 
   private async requirePerson(tx: TenantTx, schoolId: string, kind: 'TEACHER' | 'STAFF', id: string) {

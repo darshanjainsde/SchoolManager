@@ -67,6 +67,22 @@ const nextConfig = {
    * It stays on the platform's own domain deliberately: a link handed to a
    * school should sit on the same name as the brochure and the email address.
    */
+  /**
+   * Salary became Pay (one word, so it sits in the nav line beside Fees:
+   * money in, money out). The routes moved with it, and anything already
+   * bookmarked or linked from an older email must still land somewhere.
+   * Permanent, because the old paths are not coming back.
+   */
+  async redirects() {
+    return [
+      { source: '/app/salary', destination: '/app/pay', permanent: true },
+      { source: '/app/salary/statutory', destination: '/app/pay/filings', permanent: true },
+      { source: '/app/salary/:path*', destination: '/app/pay/:path*', permanent: true },
+      { source: '/teacher/salary', destination: '/teacher/pay', permanent: true },
+      { source: '/staff/salary', destination: '/staff/pay', permanent: true },
+    ];
+  },
+
   async rewrites() {
     /**
      * The marketing site (sckools.com and its staging twin test.sckools.com)

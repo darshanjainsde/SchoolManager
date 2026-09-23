@@ -13,12 +13,14 @@ import { RequireFeature, RequireFeatureGuard } from '../../features';
 import { TenantContextService } from '../../tenancy';
 import { SalaryGuard } from './salary.guard';
 import { PayPackService } from './pay-pack.service';
+import { PayGradesService } from './pay-grades.service';
+import { PayOverviewService } from './pay-overview.service';
 import { PayPeopleService } from './pay-people.service';
 import { PayRunService } from './pay-run.service';
 import { PayStatutoryService } from './pay-statutory.service';
 import {
-  AdjustmentDto, GrantSalaryDto, OpenRunDto, PreviewStructureDto,
-  SchoolPayCountryDto, SetStructureDto, UpsertComponentDto,
+  AdjustmentDto, AssignGradeDto, GrantSalaryDto, OpenRunDto, PreviewGradeDto, PreviewStructureDto,
+  RaiseGradeDto, SchoolPayCountryDto, SetStructureDto, UpsertComponentDto, UpsertGradeDto,
 } from './payroll.dto';
 
 /**
@@ -37,6 +39,8 @@ export class PayrollController {
   constructor(
     private readonly packs: PayPackService,
     private readonly people: PayPeopleService,
+    private readonly grades: PayGradesService,
+    private readonly overviews: PayOverviewService,
     private readonly runs: PayRunService,
     private readonly statutory: PayStatutoryService,
     private readonly tenant: TenantContextService,
@@ -95,6 +99,83 @@ export class PayrollController {
     });
     await this.audit.record({ schoolId, actorUserId: u.sub, action: 'salary.country', entity: 'School', entityId: schoolId, meta: { ...dto } });
     return { ok: true };
+  }
+
+  // ── The home screen ───────────────────────────────────────
+  /**
+   * Where the school is in the month, and what needs a person.
+   *
+   * One call for one question. The month defaults to the one a school would
+   * actually be running — today's — so the screen never has to ask which.
+   */
+  @Get('overview')
+  overview(@Query('year') year?: string, @Query('month') month?: string) {
+    const now = new Date();
+    const y = Number(year) || now.getUTCFullYear();
+    const m = Number(month) || now.getUTCMonth() + 1;
+    if (y < 2000 || y > 2100 || m < 1 || m > 12) {
+      throw new ApiError('VALIDATION', 'That is not a month we can run.', 400, 'month');
+    }
+    return this.overviews.overview(this.sid(), y, m);
+  }
+
+  // ── Grades ────────────────────────────────────────────────
+  @Get('grades')
+  gradeList(@Query('on') on?: string) {
+    return this.grades.list(this.sid(), on ?? today());
+  }
+
+  /** Grades drafted from the roll the school already has. Nothing is saved. */
+  @Get('grades/suggest')
+  gradeSuggest(@Query('on') on?: string) {
+    return this.grades.suggest(this.sid(), on ?? today());
+  }
+
+  @Post('grades')
+  async gradeUpsert(@CurrentUser() u: SchoolJwtPayload, @Body() dto: UpsertGradeDto) {
+    const r = await this.grades.upsert(this.sid(), u.sub, dto);
+    await this.audit.record({
+      schoolId: this.sid(), actorUserId: u.sub, action: 'salary.grade', entity: 'PayGrade', entityId: r.id,
+      meta: { name: dto.name, bandMinMinor: dto.bandMinMinor, bandMaxMinor: dto.bandMaxMinor },
+    });
+    return r;
+  }
+
+  /** What a grade pays at a figure, without saving it — the split bar. */
+  @Post('grades/preview')
+  gradePreview(@Body() dto: PreviewGradeDto) {
+    return this.grades.resolve(this.sid(), dto.overrides, dto.monthlyGrossMinor, dto.onISO ?? today());
+  }
+
+  /** The April job: one grade, one date, everyone on it moves. */
+  @Post('grades/raise')
+  async gradeRaise(@CurrentUser() u: SchoolJwtPayload, @Body() dto: RaiseGradeDto) {
+    const r = await this.grades.raise(this.sid(), u.sub, dto);
+    await this.audit.record({
+      schoolId: this.sid(), actorUserId: u.sub, action: 'salary.grade.raise', entity: 'PayGrade', entityId: dto.gradeId,
+      meta: { ...r, effectiveFrom: dto.effectiveFrom, percentBps: dto.percentBps ?? null, flatMinor: dto.flatMinor ?? null },
+    });
+    return r;
+  }
+
+  /** Put several people on a grade at once. */
+  @Post('grades/assign')
+  async gradeAssign(@CurrentUser() u: SchoolJwtPayload, @Body() dto: AssignGradeDto) {
+    const r = await this.grades.assign(this.sid(), u.sub, dto.gradeId, dto.effectiveFrom, dto.rows);
+    await this.audit.record({
+      schoolId: this.sid(), actorUserId: u.sub, action: 'salary.grade.assign', entity: 'PayGrade', entityId: dto.gradeId,
+      meta: { ...r, effectiveFrom: dto.effectiveFrom },
+    });
+    return r;
+  }
+
+  @Post('grades/:id/remove')
+  async gradeRemove(@CurrentUser() u: SchoolJwtPayload, @Param('id', ParseUUIDPipe) id: string) {
+    const r = await this.grades.remove(this.sid(), id, today());
+    await this.audit.record({
+      schoolId: this.sid(), actorUserId: u.sub, action: 'salary.grade.remove', entity: 'PayGrade', entityId: id,
+    });
+    return r;
   }
 
   // ── People ────────────────────────────────────────────────
@@ -268,6 +349,9 @@ export class PayrollController {
     return this.statutory.annualStatement(this.sid(), kindOf(kind), id, Number(taxYear));
   }
 }
+
+/** Today, as the date the rules and the roster are read at. */
+const today = () => new Date().toISOString().slice(0, 10);
 
 function kindOf(raw: string): 'TEACHER' | 'STAFF' {
   const k = raw.toUpperCase();
