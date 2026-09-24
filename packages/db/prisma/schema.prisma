@@ -50,6 +50,16 @@ enum EmailSenderStatus {
   FAILING
 }
 
+/// What one day of unpaid leave costs.
+enum LopBasis {
+  /// gross ÷ days in the month. A Sunday costs the same as a Tuesday.
+  CALENDAR_DAY
+  /// gross ÷ working days in the month, and leave on a non-working day is free.
+  WORKING_DAY
+  /// Nothing is deducted; the month lists it and a person decides.
+  WARN_ONLY
+}
+
 enum UserRole {
   OWNER
   SCHOOL_ADMIN
@@ -197,6 +207,17 @@ enum StaffRole {
   /// Runs the sports desk (/sports) — the same door pattern as LIBRARIAN.
   /// What they may do there is `Staff.sportsPerms`, set by the admin.
   SPORTS
+  /// Runs Pay and Leave (/accounts) — the same door pattern again.
+  ///
+  /// Deliberately a JOB and not a UserRole: the LIBRARIAN value on UserRole
+  /// records what happened the one time this was modelled as a login kind, and
+  /// the Library Wing had to undo it. An accounts officer IS the school's
+  /// staff — they hold a Staff row, they are on the payroll, they take leave.
+  /// The login stays STAFF and `/auth/me`'s staffRole picks the door.
+  ///
+  /// It does NOT by itself grant sight of a salary: `User.canSeeSalary` still
+  /// has to be granted to them by name, exactly as for an admin.
+  ACCOUNTS
   OTHER
 }
 
@@ -292,6 +313,12 @@ model School {
   /// ISO 4217. What money on this school's screens and payslips is in.
   currency            String              @default("INR")
   /// State or province code within the country — "RJ", "MH", "NSW". Half of
+  /// How leave past its quota reaches pay. One rule for the school, because a
+  /// rule chosen per person is a rule nobody can audit.
+  lopBasis            LopBasis            @default(CALENDAR_DAY)
+  /// Half a day of leave costs half a day of pay. Off = a half day is free,
+  /// which some schools prefer for sick leave.
+  lopCountsHalfDays   Boolean             @default(true)
   /// India's pay law lives at this level: professional tax is a state levy and
   /// Rajasthan has none at all.
   region              String?
@@ -1343,6 +1370,7 @@ model Staff {
   @@index([schoolId])
   @@index([schoolId, status])
   @@index([phoneE164])
+  leaveApplications  LeaveApplication[]
 }
 
 model StaffAttendance {
@@ -1364,7 +1392,16 @@ model StaffAttendance {
 model LeaveApplication {
   id           String        @id @default(uuid()) @db.Uuid
   schoolId     String        @db.Uuid
-  teacherId    String        @db.Uuid
+  /// Exactly one of these two is set — the same two-ids rule the pay tables
+  /// use, enforced by a CHECK. `teacherId` stays nullable-in-practice through
+  /// the constraint rather than the column type, because every row that
+  /// existed before staff leave has one.
+  teacherId    String?       @db.Uuid
+  staffId      String?       @db.Uuid
+  /// A half day is a single date worked at half strength. Only meaningful
+  /// when startDate = endDate; the service refuses it otherwise, because
+  /// "half of a five-day leave" is not a thing a school means.
+  halfDay      Boolean       @default(false)
   type         LeaveType
   /// The school's own leave-type row this application counts against.
   /// Null on rows from before the policy feature (and on types the school
@@ -1379,10 +1416,13 @@ model LeaveApplication {
   createdAt    DateTime      @default(now())
   school       School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   typeDef      LeaveTypeDef? @relation(fields: [typeDefId], references: [id], onDelete: SetNull)
+  staff        Staff?        @relation(fields: [staffId], references: [id], onDelete: Cascade)
 
   @@index([schoolId, status])
   @@index([schoolId, teacherId])
+  @@index([schoolId, staffId])
   @@index([schoolId, typeDefId])
+  @@index([staffId])
 }
 
 /// A school's own leave vocabulary — quota and carry-forward policy live
@@ -1399,7 +1439,16 @@ model LeaveTypeDef {
   isPaid          Boolean            @default(true)
   /// Days per year that "apply defaults to everyone" grants. 0 = the type
   /// exists but carries no standing quota (e.g. Unpaid).
+  ///
+  /// This is the TEACHER figure; `defaultAnnualStaff` is the other one. Nearly
+  /// every school gives the two different numbers, and one column would have
+  /// forced the larger on everybody.
   defaultAnnual   Int                @default(0)
+  defaultAnnualStaff Int             @default(0)
+  /// Never costs pay, whatever the balance says — maternity, bereavement.
+  /// Distinct from `isPaid`: an unpaid type always deducts, a paid type
+  /// deducts only past its quota, and this one never does either way.
+  neverDeduct     Boolean            @default(false)
   /// Max unused days that survive a year close into the next year. 0 = lapse.
   carryForwardCap Int                @default(0)
   isActive        Boolean            @default(true)
@@ -4905,7 +4954,12 @@ model Payslip {
   /// employer cost, in the order the payslip prints them.
   lines                   Json
   daysInMonth             Int
+  /// Whole days, ROUNDED — kept because installed app builds read it. The
+  /// money on this slip is exact regardless: the line amounts are prorated on
+  /// the unrounded figure, and `lopHalfDays` records the half so a screen can
+  /// print "27½ of 30 days".
   daysPaid                Int
+  lopHalfDays             Int           @default(0)
   grossMinor              Int
   deductionMinor          Int
   netMinor                Int
@@ -4952,6 +5006,14 @@ model PayAdjustment {
   taxable     Boolean          @default(true)
   /// Unpaid days, which shrink the proratable lines instead of adding money.
   lopDays     Int              @default(0)
+  /// The extra HALF day, when leave was taken at half strength. Total unpaid
+  /// is `lopDays + lopHalfDays / 2`. Kept as a second integer rather than
+  /// making lopDays a Decimal: Prisma serialises Decimal as a string, which
+  /// would silently change the shape every client already reads.
+  lopHalfDays Int              @default(0)
+  /// The leave this line came from, when the month proposed it rather than a
+  /// person typing it. Null for a hand-entered adjustment.
+  leaveApplicationId String?   @db.Uuid
   note        String?
   payRunId    String?          @db.Uuid
   createdById String?          @db.Uuid

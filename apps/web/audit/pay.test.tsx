@@ -23,6 +23,7 @@ import { useHost } from '@/components/use-host';
 import MonthTab from '@/app/app/pay/month-tab';
 import PeopleTab from '@/app/app/pay/people-tab';
 import GradesTab from '@/app/app/pay/grades-tab';
+import SettingsTab from '@/app/app/pay/settings-tab';
 
 vi.mock('@/lib/use-api', () => ({ useApi: vi.fn() }));
 vi.mock('@/components/use-host', () => ({ useHost: vi.fn() }));
@@ -99,6 +100,44 @@ const OVERVIEW = {
   ],
 };
 
+/** Longest realistic case: a full name, a sentence of arithmetic, a half day. */
+const LEAVE = {
+  basis: 'WORKING_DAY' as const, countHalfDays: true, daysInMonth: 30, workingDays: 26,
+  proposals: [
+    {
+      personKind: 'TEACHER' as const, personId: 't1', name: 'Rajeshwari Balasubramanian',
+      lopDays: 2.5, lopWholeDays: 2, lopHalfDays: 1,
+      reasons: ['Casual leave 14½ of 12 used → 2½ days over'],
+      anchorApplicationId: 'l1', applied: false, clamped: false,
+    },
+    {
+      personKind: 'STAFF' as const, personId: 's1', name: 'Mohammed Irfan Qureshi',
+      lopDays: 30, lopWholeDays: 30, lopHalfDays: 0,
+      reasons: ['Unpaid leave, 30 days — always deducts'],
+      anchorApplicationId: 'l2', applied: false, clamped: true,
+    },
+  ],
+  warnings: ['Lakshmi Venkataraman has leave still waiting on a decision — it is left out of this month.'],
+  locked: false,
+};
+
+const LEAVE_TYPES = [
+  { id: 'sick', name: 'Sick leave', builtin: 'SICK', isPaid: true, defaultAnnual: 12, defaultAnnualStaff: 8, neverDeduct: false, carryForwardCap: 0, isActive: true },
+  { id: 'casual', name: 'Casual leave', builtin: 'CASUAL', isPaid: true, defaultAnnual: 12, defaultAnnualStaff: 8, neverDeduct: false, carryForwardCap: 6, isActive: true },
+  { id: 'mat', name: 'Maternity leave', builtin: null, isPaid: true, defaultAnnual: 182, defaultAnnualStaff: 182, neverDeduct: true, carryForwardCap: 0, isActive: true },
+];
+
+const COMPONENTS = [
+  { id: 'c1', key: 'basic', name: 'Basic', kind: 'EARNING', calc: 'PCT_OF_GROSS', rateBps: 5000, taxable: true, isWages: true, retirementBase: true, healthBase: true, gratuityBase: true, prorate: true, order: 10, active: true, hint: 'Half of gross, which is what the Code on Wages asks for' },
+  { id: 'c2', key: 'hra', name: 'House rent allowance', kind: 'EARNING', calc: 'PCT_OF_BASIC', rateBps: 4000, taxable: true, isWages: false, retirementBase: false, healthBase: true, gratuityBase: false, prorate: true, order: 20, active: true, hint: null },
+  { id: 'c3', key: 'special', name: 'Special allowance', kind: 'EARNING', calc: 'BALANCE', rateBps: null, taxable: true, isWages: true, retirementBase: false, healthBase: true, gratuityBase: false, prorate: true, order: 90, active: true, hint: null },
+];
+
+const ACCESS = [
+  { id: 'u1', name: 'Rajeshwari Balasubramanian', email: 'principal@raffles.sckools.com', canSeeSalary: true, createdAt: '2026-01-01', job: 'Admin' },
+  { id: 'u2', name: 'Mohammed Irfan Qureshi', email: 'accounts.officer@raffles.sckools.com', canSeeSalary: false, createdAt: '2026-02-01', job: 'Accounts officer' },
+];
+
 function api(get: (p: string) => unknown) {
   return {
     get: vi.fn(async (p: string) => get(p)),
@@ -114,6 +153,10 @@ beforeEach(() => {
     if (p === '/payroll/overview') return OVERVIEW;
     if (p === '/payroll/people') return PEOPLE;
     if (p === '/payroll/grades') return GRADES;
+    if (p.startsWith('/payroll/leave')) return LEAVE;
+    if (p === '/payroll/components') return COMPONENTS;
+    if (p === '/payroll/access') return ACCESS;
+    if (p.startsWith('/manage/leave-policy/types')) return LEAVE_TYPES;
     return [];
   }) as never);
 });
@@ -158,12 +201,19 @@ it('writes the real Pay screens for a browser to measure', async () => {
     const btn = [...host.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Set pay');
     btn?.click();
   };
+  /** Opens the component editor, so its drawer is measured rather than assumed. */
+  const openComponent = (host: HTMLElement) => {
+    const btn = [...host.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Change');
+    btn?.click();
+  };
 
   const panels: [string, React.ReactNode, ((h: HTMLElement) => void)?][] = [
     ['This month', <MonthTab key="m" base="/app/pay" />],
     ['People', <PeopleTab key="p" base="/app/pay" />],
     ['Grades', <GradesTab key="g" base="/app/pay" />],
     ['People — pay drawer open', <PeopleTab key="d" base="/app/pay" />, openDrawer],
+    ['Settings', <SettingsTab key="s" />],
+    ['Settings — change a part of a salary', <SettingsTab key="sd" />, openComponent],
   ];
 
   const parts: string[] = [];

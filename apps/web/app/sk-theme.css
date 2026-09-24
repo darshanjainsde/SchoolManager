@@ -4359,11 +4359,24 @@ html[data-theme='light'] .skosx { color-scheme: light; }
    The LIST owns the tracks; a row never sets its own. That is the whole
    point: `.sk-row`'s `flex: 1` spacer let each row's content decide where
    its buttons landed, so no two rows agreed. */
-.sk-rowlist { display: grid; gap: 0; min-width: 0; }
+/* THE LIST OWNS THE TRACKS, and it has to be the grid to do it.
+   Each row being its own grid was not enough: an `auto` track then sizes to
+   THAT ROW's content, so "1fr auto auto" gave every row its own idea of where
+   column 2 began — the very ragged column this kit exists to remove. The
+   measured harness caught it at 768px and wider.
+   So the LIST declares the tracks and each row is a `subgrid` of it: one set
+   of columns, sized by every row's content together. Where subgrid is missing
+   the rows fall back to their own tracks, which is what shipped before — the
+   columns go back to being ragged, not broken. */
+.sk-rowlist { display: grid; grid-template-columns: var(--sk-row-cols, 1fr); gap: 0; min-width: 0; }
 .sk-rowline {
-  display: grid; grid-template-columns: var(--sk-row-cols, 1fr); gap: 11px;
+  grid-column: 1 / -1;
+  display: grid; grid-template-columns: subgrid; gap: 11px;
   align-items: center; padding: 10px 0; min-height: 48px;
   border-top: 1px solid var(--sk-line); min-width: 0; text-align: left;
+}
+@supports not (grid-template-columns: subgrid) {
+  .sk-rowline { grid-template-columns: var(--sk-row-cols, 1fr); }
 }
 .sk-rowlist > .sk-rowline:first-child { border-top: 0; }
 .sk-rowline[data-clickable] { width: 100%; background: none; border-left: 0; border-right: 0; border-bottom: 0; cursor: pointer; font: inherit; color: inherit; }
@@ -4379,11 +4392,14 @@ html[data-theme='light'] .skosx { color-scheme: light; }
 .sk-rowtitle { display: block; font-size: 13.5px; font-weight: 650; color: var(--sk-ink); overflow-wrap: anywhere; }
 .sk-rowsub { display: block; font-size: 11.5px; color: var(--sk-ink-3); overflow-wrap: anywhere; }
 .sk-rowsub[data-tone="warn"] { color: var(--sk-amber-ink); }
-.sk-rowgroup { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 16px 0 7px; min-width: 0; }
+.sk-rowgroup { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 16px 0 7px; min-width: 0; }
 .sk-rowgroup .t { font-family: var(--sk-serif); font-size: 15px; font-weight: 650; color: var(--sk-ink); }
 .sk-rowgroup .c { font-size: 11.5px; color: var(--sk-ink-3); }
 /* A phone gets one column. Three columns of nothing is not a table. */
 @media (max-width: 560px) {
+  /* Both, on purpose: the list so the subgrid inherits one column, and the
+     row so the fallback path collapses too. */
+  .sk-rowlist { grid-template-columns: 1fr; }
   .sk-rowline { grid-template-columns: 1fr; gap: 6px; padding: 12px 0; }
   .sk-rowcell[data-align="end"] { justify-items: start; text-align: left; }
 }

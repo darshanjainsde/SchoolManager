@@ -6,6 +6,7 @@ import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { QueryError } from '@/components/ui/query-state';
 import RunPanel from './run-panel';
+import LeavePanel from './leave-panel';
 import { HowPayWorks, HowPayWorksLink, useHowPayWorksHidden } from './how-pay-works';
 import { Card, CardBody, CardHead, EmptyRow, RulesAsAt, RunPill, monthName, rupees } from './ui';
 import type { Overview, SalarySettings } from './types';
@@ -227,6 +228,10 @@ export default function MonthTab({ base }: { base: string }) {
           {s ? <RulesAsAt asAt={s.pack.rulesAsAt} version={s.pack.version} /> : null}
         </CardBody>
       </Card>
+
+      {/* Before the run panel on purpose: leave changes what the month costs,
+          so it has to be settled before somebody works the month out. */}
+      <LeavePanel year={year} month={month} />
 
       {o.run ? <RunPanel runId={o.run.id} base={base} /> : null}
 

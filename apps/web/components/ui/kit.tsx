@@ -7,6 +7,26 @@ import { useFocusTrap } from './use-focus-trap';
 /**
  * THE CONSOLE KIT — the primitives every screen builds from.
  *
+ * RESPONSIVENESS IS THE FIRST RULE HERE, not a pass at the end. Most of this
+ * product is read on a ₹8,000 Android at 360 CSS pixels, and every primitive
+ * below states what it does there:
+ *
+ *   RowList   stacks to one column below `stackAt` (560px default). Its fixed
+ *             tracks are budgeted for the narrowest screen that still shows
+ *             columns, and a guard fails the build if a caller's spec cannot
+ *             fit — so a wide table can never reach a phone as a sideways
+ *             scroll.
+ *   Field     `box-sizing: border-box` and `min-width: 0`, so a full-width
+ *             control cannot overflow its track by its own padding.
+ *   FieldRow  `minmax(min(100%, N), 1fr)` — never a bare pixel minimum, which
+ *             refuses to shrink and pushes the page sideways.
+ *   Figures   fixed column count with a CLAMPED figure: the tiles shrink
+ *             rather than wrapping, because auto-fit strands the last one.
+ *   Overlay   a right-hand drawer on a laptop, a bottom sheet on a phone,
+ *             with the action bar pinned in both.
+ *
+ * The harness measures all of it at 360 / 390 / 414 / 768 / 1024 / 1280.
+ *
  * It exists because the same four UI defects kept shipping, and each one is a
  * hand-rolled layout doing what a primitive should have done:
  *
@@ -36,6 +56,30 @@ import { useFocusTrap } from './use-focus-trap';
 /* ── lists ──────────────────────────────────────────────────────────────── */
 
 /**
+ * The width below which a row stops being a row.
+ *
+ * Three columns on a phone is three columns of nothing, so rows stack. Above
+ * it, the narrowest screen that still shows columns is 561px — inside the
+ * console's padding that leaves about 480px of content, which is the budget
+ * `PHONE_SAFE_TRACK_PX` holds callers to.
+ */
+export const ROW_STACK_AT = 560;
+/** How much fixed (non-`fr`, non-`auto`) track a list may declare. */
+export const PHONE_SAFE_TRACK_PX = 420;
+
+/** Adds up the fixed part of a grid track list. `fr` and `auto` cost nothing. */
+export function fixedTrackWidth(columns: string): number {
+  let total = 0;
+  for (const t of columns.trim().split(/\s+/)) {
+    const px = /^([\d.]+)px$/.exec(t);
+    const rem = /^([\d.]+)rem$/.exec(t);
+    if (px) total += Number(px[1]);
+    else if (rem) total += Number(rem[1]) * 16;
+  }
+  return total;
+}
+
+/**
  * A list of rows whose columns line up.
  *
  * `columns` is a grid track list — `'1fr auto'`, `'1fr 8rem auto'`. Give the
@@ -43,8 +87,9 @@ import { useFocusTrap } from './use-focus-trap';
  * are shared by every row, so a long name in row 3 can never push row 3's
  * buttons out of line with row 1's.
  *
- * Below `stackAt` (560px by default) the rows collapse to one column, because
- * three columns on a phone is three columns of nothing.
+ * ON A PHONE the rows collapse to one column. A caller whose fixed tracks
+ * could not fit the narrowest columnar screen is a build failure, not a
+ * sideways scroll somebody finds later — see `app/sk-kit.test.ts`.
  */
 export function RowList({ columns, children, className = '', label }: {
   columns: string;
@@ -52,6 +97,14 @@ export function RowList({ columns, children, className = '', label }: {
   className?: string;
   label?: string;
 }) {
+  if (process.env.NODE_ENV !== 'production' && fixedTrackWidth(columns) > PHONE_SAFE_TRACK_PX) {
+    // Loud in development, because the alternative is a page that scrolls
+    // sideways on the device most of this school reads it on.
+    console.warn(
+      `RowList: "${columns}" declares ${fixedTrackWidth(columns)}px of fixed track, over the ` +
+      `${PHONE_SAFE_TRACK_PX}px a narrow screen can hold. Use fr or auto for the flexible columns.`,
+    );
+  }
   return (
     <div
       className={`sk-rowlist ${className}`.trim()}

@@ -87,15 +87,19 @@ export class WhatsAppActionsService {
   // ── leave: Approve / Reject ────────────────────────────────────────────
 
   private async onLeave(db: Db, a: Extract<Action, { kind: 'leave' }>, phone: string) {
-    const app = await db.leaveApplication.findUnique({ where: { id: a.leaveId }, select: { id: true, schoolId: true, status: true, teacherId: true, reviewedById: true, reviewedAt: true } });
+    const app = await db.leaveApplication.findUnique({ where: { id: a.leaveId }, select: { id: true, schoolId: true, status: true, teacherId: true, staffId: true, reviewedById: true, reviewedAt: true } });
     if (!app) return { result: 'leave-not-found', schoolId: null };
     const admin = await this.adminByPhone(db, app.schoolId, phone);
     if (!admin) {
       await this.text(app.schoolId, phone, 'This number is not a verified admin of the school, so nothing was changed. Verify it under Settings → My WhatsApp number, or decide in the console.');
       return { result: 'not-admin', schoolId: app.schoolId };
     }
-    const teacher = await db.teacher.findFirst({ where: { id: app.teacherId, schoolId: app.schoolId }, select: { firstName: true, lastName: true } });
-    const teacherName = teacher ? `${teacher.firstName} ${teacher.lastName ?? ''}`.trim() : 'The teacher';
+    // A leave row belongs to a teacher or to a staff member; this reply says
+    // whose it is either way rather than calling a driver "the teacher".
+    const teacher = app.teacherId
+      ? await db.teacher.findFirst({ where: { id: app.teacherId, schoolId: app.schoolId }, select: { firstName: true, lastName: true } })
+      : null;
+    const teacherName = teacher ? `${teacher.firstName} ${teacher.lastName ?? ''}`.trim() : 'The person';
     try {
       if (a.decision === 'approve') {
         const { gaps, gapIds } = await this.leave.approve(app.schoolId, app.id, admin.id);

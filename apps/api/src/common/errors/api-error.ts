@@ -277,6 +277,7 @@ export type ErrorCode =
   /** Nobody has a pay structure, so there is nothing to run — 400. */
   | 'PAY_RUN_EMPTY'
   | 'NOT_SPORTS_DESK'
+  | 'NOT_LEAVE_DESK'
   /** The sports teacher's permission list does not include this action. 403. */
   | 'SPORTS_PERM'
   /** Bands overlap, are empty or malformed. 400. */

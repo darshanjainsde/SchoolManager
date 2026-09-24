@@ -5,6 +5,7 @@ import { TenancyModule } from '../../tenancy';
 import { MePayController } from './me-pay.controller';
 import { PayMeService } from './pay-me.service';
 import { PayGradesService } from './pay-grades.service';
+import { PayLeaveService } from './pay-leave.service';
 import { PayOverviewService } from './pay-overview.service';
 import { PayPackService } from './pay-pack.service';
 import { PayPeopleService } from './pay-people.service';
@@ -31,6 +32,7 @@ import { SalaryGuard } from './salary.guard';
     PayPackService,
     PayPeopleService,
     PayGradesService,
+    PayLeaveService,
     PayOverviewService,
     PayRunService,
     PayStatutoryService,

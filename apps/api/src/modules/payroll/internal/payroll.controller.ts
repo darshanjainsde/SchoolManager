@@ -14,13 +14,15 @@ import { TenantContextService } from '../../tenancy';
 import { SalaryGuard } from './salary.guard';
 import { PayPackService } from './pay-pack.service';
 import { PayGradesService } from './pay-grades.service';
+import { PayLeaveService } from './pay-leave.service';
 import { PayOverviewService } from './pay-overview.service';
 import { PayPeopleService } from './pay-people.service';
 import { PayRunService } from './pay-run.service';
 import { PayStatutoryService } from './pay-statutory.service';
 import {
-  AdjustmentDto, AssignGradeDto, GrantSalaryDto, OpenRunDto, PayDetailsDto, PreviewGradeDto,
-  PreviewStructureDto, RaiseGradeDto, SchoolPayCountryDto, SetStructureDto, UpsertComponentDto, UpsertGradeDto,
+  AdjustmentDto, ApplyLeaveLopDto, AssignGradeDto, GrantSalaryDto, LopPolicyDto, OpenRunDto, PayDetailsDto,
+  PreviewGradeDto, PreviewStructureDto, RaiseGradeDto, SchoolPayCountryDto, SetStructureDto,
+  UpsertComponentDto, UpsertGradeDto,
 } from './payroll.dto';
 
 /**
@@ -34,12 +36,17 @@ import {
 @Controller('payroll')
 @UseGuards(SchoolJwtGuard, RequireFeatureGuard, RolesGuard, SalaryGuard)
 @RequireFeature('SALARY')
-@Roles('SCHOOL_ADMIN')
+// STAFF is admitted only so `SalaryGuard` can ask what their JOB is — it
+// refuses every staff member who is not the accounts officer, and then still
+// requires the per-person salary right. RolesGuard cannot express "a staff
+// member whose Staff.role is ACCOUNTS"; the guard after it can.
+@Roles('SCHOOL_ADMIN', 'STAFF')
 export class PayrollController {
   constructor(
     private readonly packs: PayPackService,
     private readonly people: PayPeopleService,
     private readonly grades: PayGradesService,
+    private readonly leave: PayLeaveService,
     private readonly overviews: PayOverviewService,
     private readonly runs: PayRunService,
     private readonly statutory: PayStatutoryService,
@@ -117,6 +124,42 @@ export class PayrollController {
       throw new ApiError('VALIDATION', 'That is not a month we can run.', 400, 'month');
     }
     return this.overviews.overview(this.sid(), y, m);
+  }
+
+  // ── Leave that reaches pay ────────────────────────────────
+  /**
+   * What this month's approved leave would cost, per person, with the
+   * arithmetic for each. It PROPOSES; `leave/apply` is what writes.
+   */
+  @Get('leave')
+  leaveMonth(@Query('year') year?: string, @Query('month') month?: string) {
+    const now = new Date();
+    return this.leave.month(this.sid(), Number(year) || now.getUTCFullYear(), Number(month) || now.getUTCMonth() + 1);
+  }
+
+  @Post('leave/apply')
+  async applyLeave(@CurrentUser() u: SchoolJwtPayload, @Body() dto: ApplyLeaveLopDto) {
+    const r = await this.leave.apply(this.sid(), u.sub, dto.year, dto.month, dto.personIds);
+    await this.audit.record({
+      schoolId: this.sid(), actorUserId: u.sub, action: 'salary.leave.apply', entity: 'PayAdjustment',
+      meta: { year: dto.year, month: dto.month, people: dto.personIds.length, applied: r.applied },
+    });
+    return r;
+  }
+
+  /** The school's one deduction rule. */
+  @Post('leave/policy')
+  async setLopPolicy(@CurrentUser() u: SchoolJwtPayload, @Body() dto: LopPolicyDto) {
+    const schoolId = this.sid();
+    await getPlatformPrisma().school.update({
+      where: { id: schoolId },
+      data: { lopBasis: dto.basis, ...(dto.countHalfDays === undefined ? {} : { lopCountsHalfDays: dto.countHalfDays }) },
+    });
+    await this.audit.record({
+      schoolId, actorUserId: u.sub, action: 'salary.leave.policy', entity: 'School', entityId: schoolId,
+      meta: { basis: dto.basis, countHalfDays: dto.countHalfDays ?? null },
+    });
+    return { ok: true };
   }
 
   // ── Grades ────────────────────────────────────────────────
@@ -243,16 +286,43 @@ export class PayrollController {
     return r;
   }
 
+  /**
+   * Everybody who may be GIVEN the right to see pay: the school's admins, and
+   * its accounts officers.
+   *
+   * The officers have to be here. `SalaryGuard` lets an `ACCOUNTS` staff
+   * member through the door and then asks for `canSeeSalary` by name — so a
+   * list of admins alone would be a door with no key anywhere in the product:
+   * the officer is told to ask an admin, and the admin has nobody to click.
+   */
   @Get('access')
   async access() {
     const schoolId = this.sid();
-    const admins = await getPlatformPrisma().user.findMany({
-      where: { schoolId, role: 'SCHOOL_ADMIN', isActive: true },
-      orderBy: { createdAt: 'asc' },
+    const db = getPlatformPrisma();
+    const [admins, officers] = await Promise.all([
+      db.user.findMany({
+        where: { schoolId, role: 'SCHOOL_ADMIN', isActive: true },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, name: true, email: true, canSeeSalary: true, createdAt: true },
+        take: LIST_CEILING.STRUCTURE,
+      }),
+      db.staff.findMany({
+        where: { schoolId, role: 'ACCOUNTS', isActive: true, userId: { not: null } },
+        orderBy: { createdAt: 'asc' },
+        select: { userId: true, firstName: true, lastName: true },
+        take: LIST_CEILING.STRUCTURE,
+      }),
+    ]);
+    const officerUsers = officers.length === 0 ? [] : await db.user.findMany({
+      where: { id: { in: officers.map((o) => o.userId!) }, schoolId, isActive: true },
       select: { id: true, name: true, email: true, canSeeSalary: true, createdAt: true },
       take: LIST_CEILING.STRUCTURE,
     });
-    return admins;
+    const nameByUser = new Map(officers.map((o) => [o.userId!, `${o.firstName} ${o.lastName ?? ''}`.trim()]));
+    return [
+      ...admins.map((a) => ({ ...a, job: 'Admin' as const })),
+      ...officerUsers.map((u) => ({ ...u, name: nameByUser.get(u.id) ?? u.name, job: 'Accounts officer' as const })),
+    ];
   }
 
   @Post('access')
@@ -261,11 +331,22 @@ export class PayrollController {
     if (dto.userId === u.sub && !dto.canSeeSalary) {
       throw new ApiError('VALIDATION', 'You cannot take the salary right away from yourself — ask another admin who has it.', 400, 'userId');
     }
-    const target = await getPlatformPrisma().user.findFirst({
-      where: { id: dto.userId, schoolId, role: 'SCHOOL_ADMIN' }, select: { id: true },
+    const db = getPlatformPrisma();
+    // An admin, or a login that holds the accounts job. Anyone else is not
+    // somebody this right can be given to at all. Two reads rather than a
+    // nested filter: `User` has no Prisma relation to `Staff`.
+    const candidate = await db.user.findFirst({
+      where: { id: dto.userId, schoolId, isActive: true },
+      select: { id: true, role: true },
     });
-    if (!target) throw new ApiError('NOT_FOUND', 'That admin is not at this school.', 404, 'userId');
-    await getPlatformPrisma().user.update({ where: { id: dto.userId }, data: { canSeeSalary: dto.canSeeSalary } });
+    const isOfficer = candidate?.role === 'STAFF' && (await db.staff.count({
+      where: { userId: candidate.id, schoolId, role: 'ACCOUNTS', isActive: true },
+    })) > 0;
+    const target = candidate && (candidate.role === 'SCHOOL_ADMIN' || isOfficer) ? candidate : null;
+    if (!target) {
+      throw new ApiError('NOT_FOUND', 'Pay can only be given to an admin or an accounts officer at this school.', 404, 'userId');
+    }
+    await db.user.update({ where: { id: dto.userId }, data: { canSeeSalary: dto.canSeeSalary } });
     await this.audit.record({
       schoolId, actorUserId: u.sub, action: dto.canSeeSalary ? 'salary.grant' : 'salary.revoke',
       entity: 'User', entityId: dto.userId,

@@ -131,9 +131,62 @@ export interface Calendar {
   duties: Duty[]; note: string; unverified: { what: string; why: string }[];
 }
 
-export interface AdminAccess { id: string; name: string | null; email: string; canSeeSalary: boolean; createdAt: string }
+/**
+ * Somebody who may be given the right to see pay: an admin, or an accounts
+ * officer. `job` says which — an officer reaches Pay through their job and
+ * still has to be named here, so the list has to hold both.
+ */
+export interface AdminAccess {
+  id: string; name: string | null; email: string; canSeeSalary: boolean; createdAt: string;
+  job?: 'Admin' | 'Accounts officer';
+}
 export interface Adjustment {
   id: string; personKind: 'TEACHER' | 'STAFF'; teacherId: string | null; staffId: string | null;
   periodYear: number; periodMonth: number; label: string; kind: 'EARNING' | 'DEDUCTION';
   amountMinor: number; taxable: boolean; lopDays: number; note: string | null;
+}
+
+// ── Leave that reaches pay ───────────────────────────────────────────────────
+
+/** One person's unpaid days this month, with the arithmetic behind each. */
+export interface LeaveProposal {
+  personKind: 'TEACHER' | 'STAFF';
+  personId: string;
+  name: string;
+  /** May end in .5 — a half day costs half a day. */
+  lopDays: number;
+  lopWholeDays: number;
+  lopHalfDays: number;
+  /** One sentence per line, e.g. "Casual 14 of 12 used → 2 days over". */
+  reasons: string[];
+  anchorApplicationId: string;
+  /** Already written into this month as an adjustment. */
+  applied: boolean;
+  /** The deduction would take the whole month — a conversation, not a payslip. */
+  clamped: boolean;
+}
+
+/** `GET /payroll/leave` — what this month's approved leave would cost. */
+export interface LeaveMonth {
+  basis: 'CALENDAR_DAY' | 'WORKING_DAY' | 'WARN_ONLY';
+  countHalfDays: boolean;
+  daysInMonth: number;
+  workingDays: number;
+  proposals: LeaveProposal[];
+  /** Overruns NOT deducted, and leave still waiting on a decision. */
+  warnings: string[];
+  locked: boolean;
+}
+
+/** `GET /manage/leave-policy/types` — the school's leave vocabulary. */
+export interface LeaveTypeRow {
+  id: string;
+  name: string;
+  builtin: string | null;
+  isPaid: boolean;
+  defaultAnnual: number;
+  defaultAnnualStaff: number;
+  neverDeduct: boolean;
+  carryForwardCap: number;
+  isActive: boolean;
 }
