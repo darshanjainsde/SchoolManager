@@ -118,8 +118,14 @@ beforeEach(() => {
   }) as never);
 });
 
-/** Mounts a tab, lets its queries settle, and returns the settled markup. */
-async function markup(node: React.ReactNode): Promise<string> {
+/**
+ * Mounts a tab, lets its queries settle, and returns the settled markup.
+ *
+ * `after` runs once the data has arrived — the drawer lives behind state, so
+ * without a click it is never in the markup and never measured. It shipped
+ * with its save button below the fold precisely because nothing looked at it.
+ */
+async function markup(node: React.ReactNode, after?: (host: HTMLElement) => void): Promise<string> {
   const host = document.createElement('div');
   document.body.appendChild(host);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
@@ -129,22 +135,38 @@ async function markup(node: React.ReactNode): Promise<string> {
   });
   // A second flush: the first resolves the queries, the second renders them.
   await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
-  const html = host.innerHTML;
+  if (after) {
+    await act(async () => { after(host); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+  }
+  // The drawer portals to <body>, so it is NOT inside the host — which is the
+  // whole point of it. Collect it separately or it goes unmeasured again.
+  const portal = [...document.body.children]
+    .filter((el) => el !== host && el.querySelector('.sk-paydrawer'))
+    .map((el) => el.outerHTML).join('');
+  const html = host.innerHTML + portal;
   await act(async () => { root.unmount(); });
   host.remove();
   return html;
 }
 
 it('writes the real Pay screens for a browser to measure', async () => {
-  const panels: [string, React.ReactNode][] = [
+  /** Opens the first "Set pay" on the People tab, so the drawer is measured too. */
+  const openDrawer = (host: HTMLElement) => {
+    const btn = [...host.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Set pay');
+    btn?.click();
+  };
+
+  const panels: [string, React.ReactNode, ((h: HTMLElement) => void)?][] = [
     ['This month', <MonthTab key="m" base="/app/pay" />],
     ['People', <PeopleTab key="p" base="/app/pay" />],
     ['Grades', <GradesTab key="g" base="/app/pay" />],
+    ['People — pay drawer open', <PeopleTab key="d" base="/app/pay" />, openDrawer],
   ];
 
   const parts: string[] = [];
-  for (const [name, node] of panels) {
-    const html = await markup(node);
+  for (const [name, node, after] of panels) {
+    const html = await markup(node, after);
     parts.push(`<section class="audit-panel" data-panel="${name}"><h2 class="audit-h">${name}</h2>${html}</section>`);
   }
   const body = parts.join('\n');
@@ -164,5 +186,8 @@ it('writes the real Pay screens for a browser to measure', async () => {
   expect(body).toContain('Saanvi Krishnamurthy');
   expect(body).toContain('Trained Graduate Teacher');
   expect(body).toContain('₹2,34,74,000');
+  // The drawer really opened — otherwise the panel measures an empty div and
+  // reports CLEAN for a screen nobody rendered.
+  expect(body).toContain('sk-paydrawer-actions');
   expect(body.length).toBeGreaterThan(5000);
 });

@@ -280,3 +280,32 @@ describe('a section strip lines up with the page it sits in', () => {
     expect(code(css)).not.toMatch(/\.sk-tabs\.[a-z-]+\s*\{[^}]*max-width:\s*none/);
   });
 });
+
+/**
+ * THE STACKED-LABEL GUARD.
+ *
+ * `.sk-row .nm` and `.sk-row .meta` carry no `display` of their own, because
+ * every caller in the console happens to wrap them in a `<div>` and gets block
+ * layout for free. Borrow the same class names with a `<span>` — which the Pay
+ * rows did — and the two run together with no space at all: "Aarav
+ * MehtaTeacher", "TeacherTeacher · 55 people".
+ *
+ * No DOM test can catch it: `textContent` concatenates identically whether the
+ * children are inline or block, so every assertion on the row's text passes.
+ * It is visible only in pixels, which is why it reaches a person first. The
+ * class must therefore own its own layout rather than depend on which element
+ * a caller happened to reach for.
+ */
+describe('a name above its subtitle stacks, whatever element holds it', () => {
+  const rule = (sel: string) => code(css).match(new RegExp(`\\${sel}\\s*\\{[^}]*\\}`))?.[0] ?? '';
+
+  it.each(['.sk-payrow .nm', '.sk-payrow .meta'])('%s declares its own display', (sel) => {
+    const r = rule(sel);
+    expect(r, `${sel} has no rule at all`).toBeTruthy();
+    expect(
+      r,
+      `${sel} inherits its display from whatever element the caller used. A <span> makes the ` +
+        'name and the subtitle run together with no space. Declare display: block.',
+    ).toMatch(/display:\s*block/);
+  });
+});

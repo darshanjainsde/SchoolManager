@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { QueryError } from '@/components/ui/query-state';
+import { Drawer } from './drawer';
 import { Card, CardBody, CardHead, EmptyRow, Note, rupees, toMinor } from './ui';
 import type { Grade, Person, PreviewResult, SalarySettings } from './types';
 
@@ -42,6 +43,17 @@ interface Group {
  *     already satisfy the wage-share rule, so a grade and a figure is enough
  *     and everything else keeps a working default behind "More".
  */
+/**
+ * How many rows of a group are shown before it offers the rest.
+ *
+ * On a school's first visit EVERY group is "Not on pay yet" and holds the
+ * whole roll — 73 at Raffles — so the page became one endless scroll with the
+ * next group, and the summary of what it costs, unreachable below it. Twelve
+ * is enough to see what a group holds and short enough that the group AFTER it
+ * is still on the screen.
+ */
+const GROUP_PREVIEW = 12;
+
 export default function PeopleTab({ base }: { base: string }) {
   const host = useHost();
   const api = useApi({ audience: 'school', hostHeader: host });
@@ -49,6 +61,7 @@ export default function PeopleTab({ base }: { base: string }) {
   const [editing, setEditing] = useState<Person | null>(null);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
   const settings = useQuery({ queryKey: ['pay-settings'], enabled: !!host, queryFn: () => api.get<SalarySettings>('/payroll/settings') });
@@ -120,6 +133,15 @@ export default function PeopleTab({ base }: { base: string }) {
     setPicked(next);
   };
 
+  /** Take or drop a whole group at once — the point of the group heading. */
+  const toggleGroup = (g: Group) => {
+    const ids = g.people.map((p) => p.id);
+    const allOn = ids.every((id) => picked.has(id));
+    const next = new Set(picked);
+    for (const id of ids) { if (allOn) next.delete(id); else next.add(id); }
+    setPicked(next);
+  };
+
   return (
     <div className="sk-paystack">
       {error ? <div className="sk-state" role="alert" style={{ color: 'var(--sk-bad)' }}>{error}</div> : null}
@@ -152,15 +174,25 @@ export default function PeopleTab({ base }: { base: string }) {
             <EmptyRow>Nobody is on the roll yet. Add teachers and staff first.</EmptyRow>
           ) : null}
 
-          {groups.map((g) => (
+          {groups.map((g) => {
+            const open = expanded.has(g.key);
+            const shown = open ? g.people : g.people.slice(0, GROUP_PREVIEW);
+            const hidden = g.people.length - shown.length;
+            const allPicked = g.people.length > 0 && g.people.every((p) => picked.has(p.id));
+            return (
             <section key={g.key}>
               <div className="sk-paygrouphead">
                 <span className="t">{g.title}</span>
                 <span className="c">{g.caption}</span>
                 {g.tone === 'warn' ? <span className="sk-pill" data-tone="warn">Needs you</span> : null}
+                {gradeList.length > 0 && g.people.length > 1 ? (
+                  <button type="button" className="sk-btn" data-size="sm" onClick={() => toggleGroup(g)}>
+                    {allPicked ? 'Clear' : `Select all ${g.people.length}`}
+                  </button>
+                ) : null}
               </div>
               <div>
-                {g.people.map((p) => {
+                {shown.map((p) => {
                   const band = g.grade;
                   const out = band && band.bandMaxMinor > 0 && p.pay
                     && (p.pay.monthlyGrossMinor < band.bandMinMinor || p.pay.monthlyGrossMinor > band.bandMaxMinor);
@@ -190,9 +222,23 @@ export default function PeopleTab({ base }: { base: string }) {
                     </div>
                   );
                 })}
+                {hidden > 0 ? (
+                  <button type="button" className="sk-paymore" onClick={() => setExpanded(new Set(expanded).add(g.key))}>
+                    Show the other {hidden} in {g.title}
+                  </button>
+                ) : null}
+                {open && g.people.length > GROUP_PREVIEW ? (
+                  <button
+                    type="button" className="sk-paymore"
+                    onClick={() => { const n = new Set(expanded); n.delete(g.key); setExpanded(n); }}
+                  >
+                    Show fewer
+                  </button>
+                ) : null}
               </div>
             </section>
-          ))}
+            );
+          })}
         </CardBody>
       </Card>
 
@@ -294,19 +340,25 @@ function PayDrawer({ person, settings, grades, onClose }:
     && (grossMinor < grade.bandMinMinor || grossMinor > grade.bandMaxMinor);
 
   return (
-    <div
-      className="sk-payscrim" role="dialog" aria-modal="true" aria-label={`${person.pay ? 'Change' : 'Set'} pay for ${person.name}`}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    <Drawer
+      title={person.name}
+      subtitle={person.designation ?? (person.personKind === 'TEACHER' ? 'Teacher' : 'Staff')}
+      onClose={onClose}
+      footer={(
+        <>
+          <span className="sk-muted" style={{ fontSize: 12 }}>
+            {grossMinor > 0 ? `${rupees(grossMinor)} a month` : 'Enter a figure'}
+          </span>
+          <button
+            type="button" className="sk-btn sk-press" data-variant="primary"
+            disabled={save.isPending || grossMinor <= 0 || (preview.data?.overshootMinor ?? 0) > 0}
+            onClick={() => save.mutate()}
+          >
+            {save.isPending ? 'Saving…' : person.pay ? 'Save' : 'Put on pay'}
+          </button>
+        </>
+      )}
     >
-      <div className="sk-paydrawer">
-        <div className="flex items-baseline justify-between gap-3">
-          <span style={{ fontFamily: 'var(--sk-serif)', fontSize: 18, fontWeight: 650, overflowWrap: 'anywhere' }}>{person.name}</span>
-          <button type="button" className="sk-btn" data-size="sm" onClick={onClose}>Close</button>
-        </div>
-        <span className="sk-muted" style={{ fontSize: 12.5, marginTop: -8 }}>
-          {person.designation ?? (person.personKind === 'TEACHER' ? 'Teacher' : 'Staff')}
-        </span>
-
         {grades.length > 0 ? (
           <label className="sk-payfield">
             <span className="lab">Grade</span>
@@ -416,19 +468,7 @@ function PayDrawer({ person, settings, grades, onClose }:
         ) : null}
 
         {error ? <p className="sk-state" role="alert" style={{ color: 'var(--sk-bad)' }}>{error}</p> : null}
-
-        <div className="sk-paydrawer-actions">
-          <span />
-          <button
-            type="button" className="sk-btn sk-press" data-variant="primary"
-            disabled={save.isPending || grossMinor <= 0 || (preview.data?.overshootMinor ?? 0) > 0}
-            onClick={() => save.mutate()}
-          >
-            {save.isPending ? 'Saving…' : person.pay ? 'Save' : 'Put on pay'}
-          </button>
-        </div>
-      </div>
-    </div>
+    </Drawer>
   );
 }
 
@@ -465,15 +505,23 @@ function BulkAssign({ people, grades, pending, onClose, onSubmit }: {
   const ready = !!gradeId && people.every((p) => toMinor(amounts[p.id] ?? '') > 0);
 
   return (
-    <div className="sk-payscrim" role="dialog" aria-modal="true" aria-label="Put people on a grade" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="sk-paydrawer">
-        <div className="flex items-baseline justify-between gap-3">
-          <span style={{ fontFamily: 'var(--sk-serif)', fontSize: 18, fontWeight: 650 }}>
-            Put {people.length} {people.length === 1 ? 'person' : 'people'} on a grade
-          </span>
-          <button type="button" className="sk-btn" data-size="sm" onClick={onClose}>Close</button>
-        </div>
-
+    <Drawer
+      title={`Put ${people.length} ${people.length === 1 ? 'person' : 'people'} on a grade`}
+      subtitle={total > 0 ? `${rupees(total)} a month in total` : undefined}
+      onClose={onClose}
+      footer={(
+        <>
+          <span className="sk-muted" style={{ fontSize: 12 }}>{rupees(total)} a month</span>
+          <button
+            type="button" className="sk-btn sk-press" data-variant="primary"
+            disabled={pending || !ready}
+            onClick={() => onSubmit(gradeId, effectiveFrom, amounts)}
+          >
+            {pending ? 'Saving…' : `Put ${people.length} on ${grade?.name ?? 'the grade'}`}
+          </button>
+        </>
+      )}
+    >
         <label className="sk-payfield">
           <span className="lab">Grade</span>
           <select className="sk-input" value={gradeId} onChange={(e) => setGradeId(e.target.value)}>
@@ -506,21 +554,6 @@ function BulkAssign({ people, grades, pending, onClose, onSubmit }: {
           ))}
         </div>
 
-        <div className="sk-paytakehome">
-          <div className="r" data-total><span>Adds to the monthly bill</span><span>{rupees(total)}</span></div>
-        </div>
-
-        <div className="sk-paydrawer-actions">
-          <span />
-          <button
-            type="button" className="sk-btn sk-press" data-variant="primary"
-            disabled={pending || !ready}
-            onClick={() => onSubmit(gradeId, effectiveFrom, amounts)}
-          >
-            {pending ? 'Saving…' : `Put ${people.length} on ${grade?.name ?? 'the grade'}`}
-          </button>
-        </div>
-      </div>
-    </div>
+    </Drawer>
   );
 }
