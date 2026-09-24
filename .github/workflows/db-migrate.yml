@@ -50,6 +50,17 @@ on:
         required: false
         type: string
         default: ''
+      seed_pay:
+        description: >-
+          STAGING ONLY — a school slug (e.g. raffles) to seed Pay on, with that
+          school's existing teachers and staff: the SALARY feature on, a state
+          set, nine grades with bands, everyone on a grade with bank details
+          and PAN, declarations, a backdated July raise and September's
+          exceptions. INPUTS ONLY — payslips are produced by running the
+          months through the API. Idempotent; refused against production.
+        required: false
+        type: string
+        default: ''
       resolve_applied:
         description: >-
           RECOVERY ONLY — a migration name to record as already applied,
@@ -179,6 +190,15 @@ jobs:
         run: |
           pnpm --filter @skoolos/db exec prisma generate
           pnpm --filter @skoolos/api exec tsx scripts/seed-sports-raffles.ts
+
+      - name: Seed Pay on ${{ github.event.inputs.seed_pay }} (staging only)
+        if: ${{ github.event.inputs.seed_pay != '' && github.event.inputs.environment == 'staging' && github.event.inputs.inspect_only != 'true' }}
+        env:
+          DATABASE_URL: ${{ secrets.DIRECT_URL }}
+          SEED_SCHOOL_SLUG: ${{ github.event.inputs.seed_pay }}
+        run: |
+          pnpm --filter @skoolos/db exec prisma generate
+          pnpm --filter @skoolos/api exec tsx scripts/seed-pay-raffles.ts
 
       - name: Confirm the target is current
         # An inspection only reports — pending migrations are its answer, not a failure.
