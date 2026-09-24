@@ -4195,6 +4195,17 @@ html[data-theme='light'] .skosx { color-scheme: light; }
 }
 .sk-paygrouphead .t { font-family: var(--sk-serif); font-size: 15px; font-weight: 650; color: var(--sk-ink); }
 .sk-paygrouphead .c { font-size: 11.5px; color: var(--sk-ink-3); }
+/* A group of 73 is a wall, and on first setup EVERY group is that size. The
+   list shows a readable slice and says how many more there are, rather than
+   turning the page into an endless scroll nobody reaches the bottom of. */
+.sk-paymore {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; min-height: 40px; padding: 9px 12px; margin-top: 4px;
+  border: 1px dashed var(--sk-line-2); border-radius: var(--sk-r);
+  background: transparent; color: var(--sk-ink-2);
+  font-size: 12.5px; font-weight: 650; cursor: pointer;
+}
+.sk-paymore:hover { border-color: var(--sk-brand); color: var(--sk-brand-2); }
 
 .sk-payrow {
   display: flex; align-items: center; gap: 11px; flex-wrap: wrap;
@@ -4202,8 +4213,13 @@ html[data-theme='light'] .skosx { color-scheme: light; }
 }
 .sk-payrow:first-child { border-top: 0; }
 .sk-payrow .who { flex: 1 1 180px; min-width: 0; }
-.sk-payrow .nm { font-size: 13.5px; font-weight: 650; color: var(--sk-ink); overflow-wrap: anywhere; }
-.sk-payrow .meta { font-size: 11.5px; color: var(--sk-ink-3); }
+/* `display: block` is not decoration here. The console's older `.sk-row .nm`
+   and `.meta` carry no display because every caller happens to wrap them in a
+   <div>; borrow the class names with a <span> and the two run together with no
+   space at all — "Aarav MehtaTeacher". The class now owns its own layout so it
+   cannot depend on which element a caller reached for. */
+.sk-payrow .nm { display: block; font-size: 13.5px; font-weight: 650; color: var(--sk-ink); overflow-wrap: anywhere; }
+.sk-payrow .meta { display: block; font-size: 11.5px; color: var(--sk-ink-3); overflow-wrap: anywhere; }
 .sk-payrow .amt {
   font-family: var(--sk-mono); font-variant-numeric: tabular-nums;
   font-size: 13.5px; color: var(--sk-ink); white-space: nowrap;
@@ -4228,8 +4244,23 @@ html[data-theme='light'] .skosx { color-scheme: light; }
 }
 .sk-paydrawer {
   background: var(--sk-card); width: min(430px, 100%); height: 100%;
-  overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 14px;
+  /* The PANEL does not scroll — its body does. That is what keeps the header
+     and the action bar on screen however long the form gets. */
+  overflow: hidden; display: flex; flex-direction: column;
   border-left: 1px solid var(--sk-line-2); box-shadow: -18px 0 44px rgba(20, 16, 40, 0.18);
+}
+.sk-paydrawer-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  padding: 16px 18px 12px; border-bottom: 1px solid var(--sk-line); flex: none;
+}
+.sk-paydrawer-head .t {
+  font-family: var(--sk-serif); font-size: 18px; font-weight: 650;
+  color: var(--sk-ink); overflow-wrap: anywhere;
+}
+.sk-paydrawer-head .s { font-size: 12.5px; color: var(--sk-ink-3); margin-top: 2px; }
+.sk-paydrawer-body {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  padding: 14px 18px; display: flex; flex-direction: column; gap: 14px;
 }
 .sk-payfield { display: grid; gap: 5px; min-width: 0; }
 .sk-payfield > .sk-input { width: 100%; box-sizing: border-box; }
@@ -4245,14 +4276,21 @@ html[data-theme='light'] .skosx { color-scheme: light; }
   border-top: 1px solid var(--sk-line); padding-top: 6px; margin-top: 2px;
   font-weight: 700; color: var(--sk-ink);
 }
-.sk-paydrawer-actions { display: flex; gap: 9px; flex-wrap: wrap; justify-content: space-between; margin-top: auto; }
+/* Pinned, never scrolled away. `margin-top: auto` put the primary action at
+   the bottom of the CONTENT, which is below the fold the moment the form is
+   taller than the panel — the same off-screen-action defect this drawer was
+   introduced to fix, one level down. */
+.sk-paydrawer-actions {
+  display: flex; gap: 9px; flex-wrap: wrap; justify-content: space-between; align-items: center;
+  padding: 12px 18px; border-top: 1px solid var(--sk-line); background: var(--sk-card); flex: none;
+}
 
 /* A phone has no room for a side drawer; it takes the bottom of the
    screen instead, which is where a thumb already is. */
 @media (max-width: 560px) {
   .sk-payscrim { align-items: flex-end; }
   .sk-paydrawer {
-    width: 100%; height: auto; max-height: 92vh;
+    width: 100%; height: 92vh;
     border-left: 0; border-top: 1px solid var(--sk-line-2);
     border-radius: 16px 16px 0 0;
   }

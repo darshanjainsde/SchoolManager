@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { QueryError } from '@/components/ui/query-state';
+import { Drawer } from './drawer';
 import { Card, CardBody, CardHead, EmptyRow, Note, RulesAsAt, rupees, toMinor } from './ui';
 import type { Grade, SalarySettings, SuggestedGrade } from './types';
 
@@ -288,15 +289,27 @@ export default function GradesTab({ base }: { base: string }) {
           A drawer, so pressing a button on a long list visibly does
           something instead of opening a panel below the fold. */}
       {draft ? (
-        <div className="sk-payscrim" role="dialog" aria-modal="true" aria-label={draft.id ? `Edit ${draft.name}` : 'Add a grade'} onClick={(e) => { if (e.target === e.currentTarget) setDraft(null); }}>
-          <div className="sk-paydrawer">
-            <div className="flex items-baseline justify-between gap-3">
-              <span style={{ fontFamily: 'var(--sk-serif)', fontSize: 18, fontWeight: 650 }}>
-                {draft.id ? draft.name : 'Add a grade'}
-              </span>
-              <button type="button" className="sk-btn" data-size="sm" onClick={() => setDraft(null)}>Close</button>
-            </div>
-
+        <Drawer
+          title={draft.id ? draft.name : 'Add a grade'}
+          subtitle={draft.id ? 'Everyone on this grade moves with it.' : 'A job, its band, and how its pay splits.'}
+          onClose={() => setDraft(null)}
+          footer={(
+            <>
+              {draft.id ? (
+                <button type="button" className="sk-btn" disabled={remove.isPending} onClick={() => remove.mutate(draft.id!)}>
+                  {remove.isPending ? 'Removing…' : 'Remove'}
+                </button>
+              ) : <span />}
+              <button
+                type="button" className="sk-btn sk-press" data-variant="primary"
+                disabled={save.isPending || !draft.name.trim()}
+                onClick={() => save.mutate(draft)}
+              >
+                {save.isPending ? 'Saving…' : draft.id ? 'Save' : 'Add grade'}
+              </button>
+            </>
+          )}
+        >
             <label className="sk-payfield">
               <span className="lab">Name</span>
               <input
@@ -342,36 +355,34 @@ export default function GradesTab({ base }: { base: string }) {
               </span>
             </label>
 
-            <div className="sk-paydrawer-actions">
-              {draft.id ? (
-                <button
-                  type="button" className="sk-btn" disabled={remove.isPending}
-                  onClick={() => remove.mutate(draft.id!)}
-                >
-                  {remove.isPending ? 'Removing…' : 'Remove'}
-                </button>
-              ) : <span />}
-              <button
-                type="button" className="sk-btn sk-press" data-variant="primary"
-                disabled={save.isPending || !draft.name.trim()}
-                onClick={() => save.mutate(draft)}
-              >
-                {save.isPending ? 'Saving…' : draft.id ? 'Save' : 'Add grade'}
-              </button>
-            </div>
-          </div>
-        </div>
+        </Drawer>
       ) : null}
 
       {/* ── the April job ─────────────────────────────────────────────── */}
       {raising ? (
-        <div className="sk-payscrim" role="dialog" aria-modal="true" aria-label={`Raise ${raising.name}`} onClick={(e) => { if (e.target === e.currentTarget) setRaising(null); }}>
-          <div className="sk-paydrawer">
-            <div className="flex items-baseline justify-between gap-3">
-              <span style={{ fontFamily: 'var(--sk-serif)', fontSize: 18, fontWeight: 650 }}>Raise {raising.name}</span>
-              <button type="button" className="sk-btn" data-size="sm" onClick={() => setRaising(null)}>Close</button>
-            </div>
-
+        <Drawer
+          title={`Raise ${raising.name}`}
+          subtitle={`${raising.headcount} ${raising.headcount === 1 ? 'person' : 'people'} move together`}
+          onClose={() => setRaising(null)}
+          footer={(
+            <>
+              <span className="sk-muted" style={{ fontSize: 12 }}>
+                {rupees(Math.round(raising.monthlyMinor * (1 + (Number(raisePct) || 0) / 100)))} a month after
+              </span>
+              <button
+                type="button" className="sk-btn sk-press" data-variant="primary"
+                disabled={raise.isPending || !(Number(raisePct) > 0) || !raiseFrom}
+                onClick={() => raise.mutate({
+                  gradeId: raising.id,
+                  percentBps: Math.round(Number(raisePct) * 100),
+                  effectiveFrom: raiseFrom,
+                })}
+              >
+                {raise.isPending ? 'Raising…' : `Raise ${raising.headcount} ${raising.headcount === 1 ? 'person' : 'people'}`}
+              </button>
+            </>
+          )}
+        >
             <p className="sk-muted" style={{ fontSize: 13 }}>
               All {raising.headcount} {raising.headcount === 1 ? 'person' : 'people'} on {raising.name} move together,
               from one date. Backdating is fine — the month works out the arrears by itself.
@@ -400,22 +411,7 @@ export default function GradesTab({ base }: { base: string }) {
               </div>
             </div>
 
-            <div className="sk-paydrawer-actions">
-              <span />
-              <button
-                type="button" className="sk-btn sk-press" data-variant="primary"
-                disabled={raise.isPending || !(Number(raisePct) > 0) || !raiseFrom}
-                onClick={() => raise.mutate({
-                  gradeId: raising.id,
-                  percentBps: Math.round(Number(raisePct) * 100),
-                  effectiveFrom: raiseFrom,
-                })}
-              >
-                {raise.isPending ? 'Raising…' : `Raise ${raising.headcount} ${raising.headcount === 1 ? 'person' : 'people'}`}
-              </button>
-            </div>
-          </div>
-        </div>
+        </Drawer>
       ) : null}
     </div>
   );

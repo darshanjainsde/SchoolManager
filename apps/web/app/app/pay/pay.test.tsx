@@ -281,6 +281,108 @@ describe('the people screen', () => {
   });
 });
 
+describe('the drawer — three defects that shipped, each guarded here', () => {
+  const PEOPLE = [
+    { personKind: 'TEACHER', id: 't1', name: 'Aarav Mehta', designation: 'Teacher', userId: 'u1', pay: null },
+  ];
+  const api = () => mockApi((p) => {
+    if (p === '/payroll/settings') return SETTINGS;
+    if (p === '/payroll/people') return PEOPLE;
+    if (p === '/payroll/grades') return [GRADE];
+    return [];
+  }, () => ({ lines: [], wageShare: null, overshootMinor: 0 }));
+
+  it('renders outside the page tree, because an ancestor transform re-anchors position:fixed', async () => {
+    // THE DEFECT: the console's main carries `.sk-anim`, whose keyframe
+    // animates `transform` on its direct child. A transformed ancestor becomes
+    // the containing block for `position: fixed`, so `inset: 0` resolved
+    // against the whole tall page instead of the viewport — the scrim became
+    // document-height and scrolling revealed an endless blank drawer.
+    // Asserting "a dialog exists" passed throughout. Only WHERE it is matters.
+    const user = userEvent.setup();
+    vi.mocked(useApi).mockReturnValue(api() as never);
+    const { container } = renderWithProviders(<PeopleTab base="/app/pay" />);
+
+    await user.click(await screen.findByRole('button', { name: 'Set pay' }));
+    const dialog = await screen.findByRole('dialog');
+
+    expect(container.contains(dialog), 'the drawer is inside the page tree, so any ancestor transform will trap it').toBe(false);
+    expect(dialog.parentElement).toBe(document.body);
+  });
+
+  it('keeps the primary action out of the scrolling area', async () => {
+    // THE DEFECT: `margin-top: auto` puts the button at the bottom of the
+    // CONTENT, which is below the fold the moment the form is taller than the
+    // panel — the same off-screen-action bug the drawer was introduced to fix,
+    // one level down. The footer is a sibling of the scroller, not inside it.
+    const user = userEvent.setup();
+    vi.mocked(useApi).mockReturnValue(api() as never);
+    renderWithProviders(<PeopleTab base="/app/pay" />);
+
+    await user.click(await screen.findByRole('button', { name: 'Set pay' }));
+    const dialog = await screen.findByRole('dialog');
+    const save = within(dialog).getByRole('button', { name: 'Put on pay' });
+    const scroller = dialog.querySelector('.sk-paydrawer-body');
+
+    expect(scroller, 'the drawer has no scrolling body, so the whole panel scrolls and the action goes with it').toBeTruthy();
+    expect(scroller!.contains(save), 'the save button scrolls away with the form').toBe(false);
+    expect(save.closest('.sk-paydrawer-actions')).toBeTruthy();
+  });
+
+  it('closes on Escape and frees the page it locked', async () => {
+    const user = userEvent.setup();
+    vi.mocked(useApi).mockReturnValue(api() as never);
+    renderWithProviders(<PeopleTab base="/app/pay" />);
+
+    await user.click(await screen.findByRole('button', { name: 'Set pay' }));
+    await screen.findByRole('dialog');
+    // A modal the page scrolls behind is the same defect wearing other clothes.
+    expect(document.body.style.overflow).toBe('hidden');
+
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(document.body.style.overflow).not.toBe('hidden');
+  });
+});
+
+describe('a long group does not become an endless scroll', () => {
+  const MANY = Array.from({ length: 73 }, (_, i) => ({
+    personKind: 'TEACHER', id: `t${i}`, name: `Teacher Number ${i}`,
+    designation: 'Teacher', userId: null, pay: null,
+  }));
+
+  it('shows a slice and says how many more, rather than every row on first setup', async () => {
+    // THE DEFECT: on a school's first visit EVERY person is "Not on pay yet",
+    // so the group held the whole roll (73 at Raffles) and the page became one
+    // endless scroll with the next group unreachable below it.
+    vi.mocked(useApi).mockReturnValue(mockApi((p) => {
+      if (p === '/payroll/settings') return SETTINGS;
+      if (p === '/payroll/people') return MANY;
+      if (p === '/payroll/grades') return [GRADE];
+      return [];
+    }) as never);
+    renderWithProviders(<PeopleTab base="/app/pay" />);
+
+    await screen.findByText('Teacher Number 0');
+    expect(screen.queryByText('Teacher Number 70')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Show the other 61 in Not on pay yet/ })).toBeInTheDocument();
+  });
+
+  it('can take the whole group in one action instead of 73 ticks', async () => {
+    const user = userEvent.setup();
+    vi.mocked(useApi).mockReturnValue(mockApi((p) => {
+      if (p === '/payroll/settings') return SETTINGS;
+      if (p === '/payroll/people') return MANY;
+      if (p === '/payroll/grades') return [GRADE];
+      return [];
+    }) as never);
+    renderWithProviders(<PeopleTab base="/app/pay" />);
+
+    await user.click(await screen.findByRole('button', { name: 'Select all 73' }));
+    expect(screen.getByRole('button', { name: 'Put 73 on a grade' })).toBeInTheDocument();
+  });
+});
+
 describe('the grades screen', () => {
   const api = (grades: unknown[] = [GRADE], post?: (p: string, b?: unknown) => unknown) => mockApi((p) => {
     if (p === '/payroll/settings') return SETTINGS;
