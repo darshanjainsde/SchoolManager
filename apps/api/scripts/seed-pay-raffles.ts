@@ -160,8 +160,10 @@ async function main() {
   teachers.forEach((t, i) => {
     const name = i === 0 ? 'Principal' : teachingGrades[i % teachingGrades.length];
     const g = byName.get(name)!;
-    // Nobody is put outside their band by the seed: an out-of-band figure is a
-    // warning the school should see for a REASON, not seeded noise.
+    // Everyone starts INSIDE their band. One person ends up outside it anyway,
+    // and deliberately: the July raise below lifts a top-of-band TGT past the
+    // band's ceiling, which is exactly how it happens in a real school and
+    // gives the month's OUT_OF_BAND warning something true to point at.
     const gross = near(g.min, g.max);
     // A few without a bank account, on purpose — it is the exception the month
     // screen exists to surface, and a real school always has two or three.
@@ -210,6 +212,11 @@ async function main() {
   // A second row for the same people, from 1 July: the engine must pick the
   // row in force for the month it is computing, so June differs from August.
   // This is the behaviour that makes a backdated increment a computation.
+  //
+  // It is NOT capped at the band's ceiling, on purpose. A raise that lifts
+  // someone past the top of their grade is a real thing a school does, and it
+  // is precisely what the OUT_OF_BAND warning exists to catch — a warning
+  // with nothing to warn about proves nothing.
   const tgtId = gradeId.get('TGT')!;
   const tgts = rows.filter((r) => r.payGradeId === tgtId).slice(0, 8);
   await db.employeePay.createMany({
