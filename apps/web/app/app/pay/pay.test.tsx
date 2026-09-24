@@ -341,11 +341,11 @@ describe('the drawer — three defects that shipped, each guarded here', () => {
     await user.click(await screen.findByRole('button', { name: 'Set pay' }));
     const dialog = await screen.findByRole('dialog');
     const save = within(dialog).getByRole('button', { name: 'Put on pay' });
-    const scroller = dialog.querySelector('.sk-paydrawer-body');
+    const scroller = dialog.querySelector('.sk-panel-body');
 
     expect(scroller, 'the drawer has no scrolling body, so the whole panel scrolls and the action goes with it').toBeTruthy();
     expect(scroller!.contains(save), 'the save button scrolls away with the form').toBe(false);
-    expect(save.closest('.sk-paydrawer-actions')).toBeTruthy();
+    expect(save.closest('.sk-panel-actions')).toBeTruthy();
   });
 
   it('closes on Escape and frees the page it locked', async () => {

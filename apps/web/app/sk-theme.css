@@ -4238,75 +4238,9 @@ html[data-theme='light'] .skosx { color-scheme: light; }
    A drawer, not a section under the table. Rendering it after a
    long roster put it below the fold, so pressing "Set pay" looked
    like it did nothing — which is how the tab came to feel broken. */
-/* z-index comes from Z.OVERLAY inline — the one stacking ladder in
-   lib/z-layers.ts, so this can never sit under the command bar. The portal
-   root also carries `.skosx`: every token is scoped there, and a portal on
-   bare <body> resolves them all to nothing (this shipped see-through once). */
-.sk-payscrim {
-  position: fixed; inset: 0; background: rgba(20, 16, 40, 0.34);
-  display: flex; justify-content: flex-end;
-}
-/* No fill mode, on purpose: the panel's natural position is IN PLACE and the
-   animation only ever moves it there from off-screen. With `both` the element
-   holds the off-screen `from` frame until the first animation tick — and a
-   throttled or hidden tab never ticks, so the drawer measured entirely outside
-   the viewport at every width. Base state = end state; motion is additive. */
-@keyframes sk-paydrawer-in { from { transform: translateX(100%); } to { transform: none; } }
-.sk-paydrawer { animation: sk-paydrawer-in 0.22s ease-out; }
-@media (prefers-reduced-motion: reduce) { .sk-paydrawer { animation: none; } }
-.sk-paydrawer {
-  background: var(--sk-card); width: min(430px, 100%); height: 100%;
-  /* The PANEL does not scroll — its body does. That is what keeps the header
-     and the action bar on screen however long the form gets. */
-  overflow: hidden; display: flex; flex-direction: column;
-  border-left: 1px solid var(--sk-line-2); box-shadow: -18px 0 44px rgba(20, 16, 40, 0.18);
-}
-.sk-paydrawer-head {
-  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
-  padding: 16px 18px 12px; border-bottom: 1px solid var(--sk-line); flex: none;
-}
-.sk-paydrawer-head .t {
-  font-family: var(--sk-serif); font-size: 18px; font-weight: 650;
-  color: var(--sk-ink); overflow-wrap: anywhere;
-}
-.sk-paydrawer-head .s { font-size: 12.5px; color: var(--sk-ink-3); margin-top: 2px; }
-.sk-paydrawer-body {
-  flex: 1 1 auto; min-height: 0; overflow-y: auto;
-  padding: 14px 18px; display: flex; flex-direction: column; gap: 14px;
-}
-.sk-payfield { display: grid; gap: 5px; min-width: 0; }
-.sk-payfield > .sk-input { width: 100%; box-sizing: border-box; }
-.sk-payfield .lab {
-  font-size: 11px; font-weight: 700; letter-spacing: 0.09em;
-  text-transform: uppercase; color: var(--sk-ink-3);
-}
-.sk-payfield .hint { font-size: 11.5px; color: var(--sk-ink-3); }
-.sk-paytakehome { background: var(--sk-bg-2); border-radius: 11px; padding: 12px; display: grid; gap: 5px; }
-.sk-paytakehome .r { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; color: var(--sk-ink-2); }
-.sk-paytakehome .r > span:last-child { font-family: var(--sk-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.sk-paytakehome .r[data-total] {
-  border-top: 1px solid var(--sk-line); padding-top: 6px; margin-top: 2px;
-  font-weight: 700; color: var(--sk-ink);
-}
-/* Pinned, never scrolled away. `margin-top: auto` put the primary action at
-   the bottom of the CONTENT, which is below the fold the moment the form is
-   taller than the panel — the same off-screen-action defect this drawer was
-   introduced to fix, one level down. */
-.sk-paydrawer-actions {
-  display: flex; gap: 9px; flex-wrap: wrap; justify-content: space-between; align-items: center;
-  padding: 12px 18px; border-top: 1px solid var(--sk-line); background: var(--sk-card); flex: none;
-}
+/* Pay's overlay classes retired: `Drawer` is now the kit's `Overlay`
+   (components/ui/kit.tsx), so there is one overlay, not two that drift. */
 
-/* A phone has no room for a side drawer; it takes the bottom of the
-   screen instead, which is where a thumb already is. */
-@media (max-width: 560px) {
-  .sk-payscrim { align-items: flex-end; }
-  .sk-paydrawer {
-    width: 100%; height: 92vh;
-    border-left: 0; border-top: 1px solid var(--sk-line-2);
-    border-radius: 16px 16px 0 0;
-  }
-}
 
 
 /* ═══════════════════════════════════════════════════════════════
@@ -4372,7 +4306,7 @@ html[data-theme='light'] .skosx { color-scheme: light; }
 .sk-hpw-drawer {
   position: absolute; top: 44px; right: 0; bottom: 0; width: min(300px, 92%); background: var(--sk-card);
   border-left: 1px solid var(--sk-line-2); box-shadow: -14px 0 34px rgba(20,16,40,.16); display: flex; flex-direction: column;
-  border-radius: 10px 0 0 10px; animation: sk-paydrawer-in .28s cubic-bezier(.22,1,.36,1); z-index: 2;
+  border-radius: 10px 0 0 10px; animation: sk-panel-in .28s cubic-bezier(.22,1,.36,1); z-index: 2;
 }
 .sk-hpw-drawer .dh { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--sk-line); font-family: var(--sk-serif); font-size: 14px; color: var(--sk-ink); }
 .sk-hpw-drawer .db { flex: 1; min-height: 0; overflow: hidden; padding: 10px 12px; display: grid; gap: 8px; align-content: start; }
@@ -4413,3 +4347,106 @@ html[data-theme='light'] .skosx { color-scheme: light; }
   .sk-hpw-drawer, .sk-hpw-stage .stamp, .sk-hpw-stage[data-draw] .ink, .sk-hpw-stage .inp[data-typing]::after { animation: none; }
   .sk-hpw-stage .chk, .sk-hpw-stage .chk::after, .sk-hpw-cur { transition: none; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   THE KIT — components/ui/kit.tsx.
+   Every rule here exists because its absence shipped a defect.
+   Prefixes: sk-rowlist/rowline/cell, sk-field, sk-figures,
+   sk-scrim/panel, sk-note, sk-showmore. Grepped before naming.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ---- rows that line up ----
+   The LIST owns the tracks; a row never sets its own. That is the whole
+   point: `.sk-row`'s `flex: 1` spacer let each row's content decide where
+   its buttons landed, so no two rows agreed. */
+.sk-rowlist { display: grid; gap: 0; min-width: 0; }
+.sk-rowline {
+  display: grid; grid-template-columns: var(--sk-row-cols, 1fr); gap: 11px;
+  align-items: center; padding: 10px 0; min-height: 48px;
+  border-top: 1px solid var(--sk-line); min-width: 0; text-align: left;
+}
+.sk-rowlist > .sk-rowline:first-child { border-top: 0; }
+.sk-rowline[data-clickable] { width: 100%; background: none; border-left: 0; border-right: 0; border-bottom: 0; cursor: pointer; font: inherit; color: inherit; }
+.sk-rowline[data-clickable]:hover { background: var(--sk-bg-2); }
+.sk-rowline[aria-current="true"] { background: var(--sk-brand-tint); }
+/* `sk-rowcell`, not `sk-cell`: the attendance grid already owns `.sk-cell`
+   (aspect-ratio 1, place-items centre), and borrowing it would have silently
+   restyled every attendance square. The kit's own guard caught it.
+   A grid item will not shrink below its content unless told it may — without
+   min-width:0 one long name widens the track and the page scrolls sideways. */
+.sk-rowcell { min-width: 0; display: grid; gap: 2px; align-content: center; }
+.sk-rowcell[data-align="end"] { justify-items: end; text-align: right; }
+.sk-rowtitle { display: block; font-size: 13.5px; font-weight: 650; color: var(--sk-ink); overflow-wrap: anywhere; }
+.sk-rowsub { display: block; font-size: 11.5px; color: var(--sk-ink-3); overflow-wrap: anywhere; }
+.sk-rowsub[data-tone="warn"] { color: var(--sk-amber-ink); }
+.sk-rowgroup { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 16px 0 7px; min-width: 0; }
+.sk-rowgroup .t { font-family: var(--sk-serif); font-size: 15px; font-weight: 650; color: var(--sk-ink); }
+.sk-rowgroup .c { font-size: 11.5px; color: var(--sk-ink-3); }
+/* A phone gets one column. Three columns of nothing is not a table. */
+@media (max-width: 560px) {
+  .sk-rowline { grid-template-columns: 1fr; gap: 6px; padding: 12px 0; }
+  .sk-rowcell[data-align="end"] { justify-items: start; text-align: left; }
+}
+
+/* ---- fields ----
+   box-sizing is the whole fix for the overflow that shipped twice: the
+   shared input class carries padding and a border and sets no box model. */
+.sk-field { display: grid; gap: 5px; min-width: 0; }
+.sk-field > .sk-input,
+.sk-field > select.sk-input,
+.sk-field > textarea.sk-input { width: 100%; box-sizing: border-box; min-width: 0; }
+.sk-field[data-invalid] > .sk-input { border-color: var(--sk-bad); }
+.sk-fieldhint { font-size: 11.5px; color: var(--sk-ink-3); }
+.sk-field[data-invalid] .sk-fieldhint { color: var(--sk-bad); }
+.sk-fieldrow { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--sk-field-min, 200px)), 1fr)); gap: 12px; }
+
+/* ---- figures meant to be compared ----
+   Fixed columns, never auto-fit: an auto-fit floor strands the last tile on
+   its own row at 390px. The figure shrinks instead. */
+.sk-figures { display: grid; gap: 8px; }
+.sk-figures[data-count="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.sk-figures[data-count="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.sk-figures[data-count="4"] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 420px) { .sk-figures[data-count="4"] { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.sk-figure { background: var(--sk-bg-2); border-radius: 11px; padding: 10px 11px; display: grid; gap: 2px; min-width: 0; }
+.sk-figure .v { font-family: var(--sk-mono); font-variant-numeric: tabular-nums; font-weight: 700; color: var(--sk-ink); font-size: clamp(12.5px, 3.4vw, 16px); }
+.sk-figure .h { font-size: clamp(10px, 2.6vw, 11px); color: var(--sk-ink-3); line-height: 1.3; }
+
+/* ---- overlays ----
+   z-index comes from Z.OVERLAY inline; the portal root carries `.skosx`
+   because every token is scoped there and a portal on bare <body> gets none. */
+.sk-scrim { position: fixed; inset: 0; background: rgba(20, 16, 40, 0.34); display: flex; }
+.sk-scrim[data-side="end"] { justify-content: flex-end; }
+.sk-scrim[data-side="center"] { align-items: center; justify-content: center; padding: 16px; }
+@keyframes sk-panel-in { from { transform: translateX(100%); } to { transform: none; } }
+.sk-panel {
+  background: var(--sk-card); color: var(--sk-ink); width: min(430px, 100%); height: 100%;
+  overflow: hidden; display: flex; flex-direction: column;
+  border-left: 1px solid var(--sk-line-2); box-shadow: -18px 0 44px rgba(20, 16, 40, 0.18);
+  animation: sk-panel-in 0.22s ease-out;
+}
+.sk-scrim[data-side="center"] > .sk-panel {
+  height: auto; max-height: 90vh; width: min(460px, 100%);
+  border: 1px solid var(--sk-line-2); border-radius: var(--sk-r); animation: none;
+}
+.sk-panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 18px 12px; border-bottom: 1px solid var(--sk-line); flex: none; }
+.sk-panel-head .t { font-family: var(--sk-serif); font-size: 18px; font-weight: 650; color: var(--sk-ink); overflow-wrap: anywhere; }
+.sk-panel-head .s { font-size: 12.5px; color: var(--sk-ink-3); margin-top: 2px; }
+/* The BODY scrolls, not the panel — that is what keeps the action bar on
+   screen however long the form gets. */
+.sk-panel-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 14px 18px; display: flex; flex-direction: column; gap: 14px; }
+.sk-panel-actions { display: flex; gap: 9px; flex-wrap: wrap; justify-content: space-between; align-items: center; padding: 12px 18px; border-top: 1px solid var(--sk-line); background: var(--sk-card); flex: none; }
+@media (max-width: 560px) {
+  .sk-scrim[data-side="end"] { align-items: flex-end; }
+  .sk-scrim[data-side="end"] > .sk-panel { width: 100%; height: 92vh; border-left: 0; border-top: 1px solid var(--sk-line-2); border-radius: 16px 16px 0 0; }
+}
+@media (prefers-reduced-motion: reduce) { .sk-panel { animation: none; } }
+
+/* ---- notes and the show-more ---- */
+.sk-note { border-left: 3px solid var(--sk-amber); background: var(--sk-amber-tint); border-radius: 0 var(--sk-r) var(--sk-r) 0; padding: 10px 12px; font-size: 12.5px; color: var(--sk-ink-2); display: grid; gap: 6px; }
+.sk-note[data-tone="bad"] { border-left-color: var(--sk-bad); background: var(--sk-bad-tint); }
+.sk-note[data-tone="good"] { border-left-color: var(--sk-good); background: var(--sk-good-tint); }
+.sk-showmore { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 40px; padding: 9px 12px; margin-top: 4px; border: 1px dashed var(--sk-line-2); border-radius: var(--sk-r); background: transparent; color: var(--sk-ink-2); font-size: 12.5px; font-weight: 650; cursor: pointer; }
+.sk-showmore:hover { border-color: var(--sk-brand); color: var(--sk-brand-2); }
+/* A figure in a row: mono and tabular so a column of rupees lines up. */
+.sk-amt { font-family: var(--sk-mono); font-variant-numeric: tabular-nums; font-size: 13.5px; color: var(--sk-ink); white-space: nowrap; }

@@ -6,6 +6,7 @@ import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { QueryError } from '@/components/ui/query-state';
 import { PayDetailsCard } from '@/components/pay-details-card';
+import { Cell, Row, RowGroup, RowList, RowTitle, ShowMore } from '@/components/ui/kit';
 import { Drawer } from './drawer';
 import { Card, CardBody, CardHead, EmptyRow, Note, rupees, toMinor } from './ui';
 import type { Grade, Person, PreviewResult, SalarySettings } from './types';
@@ -191,63 +192,71 @@ export default function PeopleTab({ base }: { base: string }) {
             const allPicked = g.people.length > 0 && g.people.every((p) => picked.has(p.id));
             return (
             <section key={g.key}>
-              <div className="sk-paygrouphead">
-                <span className="t">{g.title}</span>
-                <span className="c">{g.caption}</span>
+              <RowGroup title={g.title} caption={g.caption}>
                 {g.tone === 'warn' ? <span className="sk-pill" data-tone="warn">Needs you</span> : null}
                 {gradeList.length > 0 && g.people.length > 1 ? (
                   <button type="button" className="sk-btn" data-size="sm" onClick={() => toggleGroup(g)}>
                     {allPicked ? 'Clear' : `Select all ${g.people.length}`}
                   </button>
                 ) : null}
-              </div>
-              <div>
+              </RowGroup>
+              {/* The LIST declares the tracks, so every row's figure and button
+                  line up however long the name above them is. Hand-rolled flex
+                  rows are what made these columns ragged. */}
+              <RowList columns={gradeList.length > 0 ? 'auto 1fr 8rem 6.5rem' : '1fr 8rem 6.5rem'}>
                 {shown.map((p) => {
                   const band = g.grade;
                   const out = band && band.bandMaxMinor > 0 && p.pay
                     && (p.pay.monthlyGrossMinor < band.bandMinMinor || p.pay.monthlyGrossMinor > band.bandMaxMinor);
+                  const flags = [
+                    p.pay && !p.pay.hasBank ? 'no bank account' : null,
+                    out ? 'outside the band' : null,
+                  ].filter(Boolean);
                   return (
-                    <div key={p.id} className="sk-payrow">
+                    <Row key={p.id}>
                       {gradeList.length > 0 ? (
-                        <input
-                          type="checkbox" className="sk-paycheck"
-                          checked={picked.has(p.id)}
-                          onChange={() => toggle(p.id)}
-                          aria-label={`Select ${p.name}`}
-                        />
+                        <Cell>
+                          <input
+                            type="checkbox" className="sk-paycheck"
+                            checked={picked.has(p.id)}
+                            onChange={() => toggle(p.id)}
+                            aria-label={`Select ${p.name}`}
+                          />
+                        </Cell>
                       ) : null}
-                      <span className="who">
-                        <span className="nm">{p.name}</span>
-                        <span className="meta">
-                          {p.designation ?? (p.personKind === 'TEACHER' ? 'Teacher' : 'Staff')}
-                          {p.pay ? ` · from ${p.pay.effectiveFrom}` : ''}
-                          {p.pay && !p.pay.hasBank ? <span style={{ color: 'var(--sk-amber-ink)' }}> · no bank account</span> : null}
-                          {out ? <span style={{ color: 'var(--sk-amber-ink)' }}> · outside the band</span> : null}
-                        </span>
-                      </span>
-                      {/* No per-row "no pay set" pill: the group heading already says it once,
-                          and seventy-two identical pills read as decoration, not a warning. */}
-                      {p.pay ? <span className="amt">{rupees(p.pay.monthlyGrossMinor)}</span> : null}
-                      <button type="button" className="sk-btn" data-size="sm" onClick={() => { setEditing(p); setError(null); }}>
-                        {p.pay ? 'Change' : 'Set pay'}
-                      </button>
-                    </div>
+                      <Cell>
+                        <RowTitle
+                          title={p.name}
+                          tone={flags.length ? 'warn' : undefined}
+                          sub={[
+                            p.designation ?? (p.personKind === 'TEACHER' ? 'Teacher' : 'Staff'),
+                            p.pay ? `from ${p.pay.effectiveFrom}` : null,
+                            ...flags,
+                          ].filter(Boolean).join(' · ')}
+                        />
+                      </Cell>
+                      {/* No per-row "no pay set" pill: the group heading says it
+                          once, and seventy-two identical pills read as decoration. */}
+                      <Cell align="end">
+                        {p.pay ? <span className="sk-amt">{rupees(p.pay.monthlyGrossMinor)}</span> : null}
+                      </Cell>
+                      <Cell align="end">
+                        <button type="button" className="sk-btn" data-size="sm" onClick={() => { setEditing(p); setError(null); }}>
+                          {p.pay ? 'Change' : 'Set pay'}
+                        </button>
+                      </Cell>
+                    </Row>
                   );
                 })}
-                {hidden > 0 ? (
-                  <button type="button" className="sk-paymore" onClick={() => setExpanded(new Set(expanded).add(g.key))}>
-                    Show {hidden} more
-                  </button>
-                ) : null}
+                <ShowMore hidden={hidden} onShow={() => setExpanded(new Set(expanded).add(g.key))} />
                 {open && g.people.length > GROUP_PREVIEW ? (
-                  <button
-                    type="button" className="sk-paymore"
-                    onClick={() => { const n = new Set(expanded); n.delete(g.key); setExpanded(n); }}
-                  >
-                    Show fewer
-                  </button>
+                  <ShowMore
+                    hidden={0} expanded
+                    onShow={() => {}}
+                    onLess={() => { const n = new Set(expanded); n.delete(g.key); setExpanded(n); }}
+                  />
                 ) : null}
-              </div>
+              </RowList>
             </section>
             );
           })}
