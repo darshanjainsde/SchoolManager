@@ -4330,13 +4330,13 @@ html[data-theme='light'] .skosx { color-scheme: light; }
 .sk-hpw-steps button[aria-current="step"] { background: var(--sk-brand-tint); color: var(--sk-brand-2); font-weight: 650; }
 .sk-hpw-stage {
   position: relative; background: var(--sk-bg-2); border: 1px solid var(--sk-line); border-radius: 12px;
-  padding: 12px; min-height: 475px; overflow: hidden; display: grid; gap: 10px; align-content: start; min-width: 0;
+  padding: 12px; min-height: 520px; overflow: hidden; display: grid; gap: 10px; align-content: start; min-width: 0;
 }
 .sk-hpw-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--sk-line); overflow-x: auto; }
 .sk-hpw-tabs span { font-size: 12.5px; font-weight: 600; color: var(--sk-ink-3); padding: 6px 10px; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
 .sk-hpw-tabs span[data-on] { color: var(--sk-brand); border-bottom-color: var(--sk-brand); }
 /* Storyboard: every scene shows until the script is live and picks one. */
-.sk-hpw-scene { position: relative; min-height: 385px; min-width: 0; display: grid; gap: 10px; align-content: start; }
+.sk-hpw-scene { position: relative; min-height: 430px; min-width: 0; display: grid; gap: 10px; align-content: start; }
 .sk-hpw-stage[data-live] .sk-hpw-scene { display: none; }
 .sk-hpw-stage[data-live] .sk-hpw-scene[data-on] { display: grid; }
 .sk-hpw-stage [data-hide] { display: none !important; }
