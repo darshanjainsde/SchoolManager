@@ -243,6 +243,19 @@ export function workingDaysIn(year: number, month: number, workingDays: number[]
   return n;
 }
 
+/** Every date from `startISO` to `endISO`, inclusive. */
+export function datesBetween(startISO: string, endISO: string): string[] {
+  const out: string[] = [];
+  if (startISO > endISO) return out;
+  let cur = new Date(`${startISO}T00:00:00Z`);
+  const end = new Date(`${endISO}T00:00:00Z`).getTime();
+  while (cur.getTime() <= end) {
+    out.push(cur.toISOString().slice(0, 10));
+    cur = new Date(cur.getTime() + 86_400_000);
+  }
+  return out;
+}
+
 /**
  * The dates of one leave application that fall inside one month.
  *

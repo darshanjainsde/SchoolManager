@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
 import {
-  computeLop, datesInMonth, fmt, proRataAllotment, workingDaysIn,
+  computeLop, countableDates, datesBetween, datesInMonth, fmt, proRataAllotment, workingDaysIn,
   type LeaveBalanceIn, type LeaveDaysIn, type LeaveTypeRule, type LopBasis, type LopOptions,
 } from '@skoolos/types';
 import { ApiError } from '../../../common/errors/api-error';
@@ -176,11 +176,30 @@ export class PayLeaveService {
       // What each person had already used earlier in the SAME year, so the
       // quota is consumed in date order rather than reset every month.
       const yearStart = new Date(Date.UTC(year, 0, 1));
-      const usedBefore = await tx.leaveApplication.findMany({
-        take: LIST_CEILING.ACTIVITY,
-        where: { schoolId, status: 'APPROVED', startDate: { gte: yearStart, lt: first } },
-        select: { teacherId: true, staffId: true, typeDefId: true, type: true, startDate: true, endDate: true, halfDay: true },
-      });
+      const [usedBefore, earlierHolidays] = await Promise.all([
+        tx.leaveApplication.findMany({
+          take: LIST_CEILING.ACTIVITY,
+          where: { schoolId, status: 'APPROVED', startDate: { gte: yearStart, lt: first } },
+          select: { teacherId: true, staffId: true, typeDefId: true, type: true, startDate: true, endDate: true, halfDay: true },
+        }),
+        // The holidays for the REST of the year so far. `pol.holidays` covers
+        // only the month being computed, and counting an earlier leave without
+        // them would measure it by a different rule than this month's.
+        tx.holiday.findMany({
+          take: LIST_CEILING.STRUCTURE,
+          where: { schoolId, startDate: { lt: first }, OR: [{ endDate: null, startDate: { gte: yearStart } }, { endDate: { gte: yearStart } }] },
+          select: { startDate: true, endDate: true },
+        }),
+      ]);
+      const closedBefore = new Set<string>(pol.holidays);
+      for (const h of earlierHolidays) {
+        const from = h.startDate.toISOString().slice(0, 10);
+        const to = (h.endDate ?? h.startDate).toISOString().slice(0, 10);
+        for (const d of datesBetween(from, to)) closedBefore.add(d);
+      }
+      // Same rule, different window — this is what keeps "14 of 12 used" the
+      // same arithmetic as the deduction underneath it.
+      const beforeOpts: LopOptions = { ...opts, holidays: [...closedBefore] };
 
       const proposals: LeaveProposal[] = [];
       const warnings: string[] = [];
@@ -190,9 +209,20 @@ export class PayLeaveService {
         for (const u of usedBefore) {
           if ((u.staffId ?? u.teacherId) !== id) continue;
           const key = u.typeDefId ?? u.type;
+          // THE BUG THIS REPLACES: these dates were counted as raw calendar
+          // days while the month being computed went through
+          // `countableDates`. Under WORKING_DAY a Sunday inside an earlier
+          // leave therefore consumed quota that the same Sunday in THIS month
+          // would not — so a person could be told "14 of 12 used" when the
+          // consistent answer was 13, and be charged a day they did not owe.
+          // Caught on staging: June 1–9 read as 9 days, not 8.
+          const counted = countableDates(
+            datesBetween(u.startDate.toISOString().slice(0, 10), u.endDate.toISOString().slice(0, 10)),
+            beforeOpts,
+          );
           const n = u.halfDay
-            ? (pol.countHalfDays ? 0.5 : 1)
-            : datesInMonth(u.startDate.toISOString().slice(0, 10), u.endDate.toISOString().slice(0, 10), u.startDate.getUTCFullYear(), u.startDate.getUTCMonth() + 1).length;
+            ? (counted.length > 0 ? (pol.countHalfDays ? 0.5 : 1) : 0)
+            : counted.length;
           usedByType.set(key, (usedByType.get(key) ?? 0) + n);
         }
 

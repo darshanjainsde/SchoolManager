@@ -79,6 +79,42 @@ describe('what a month proposes', () => {
     expect(m.proposals[0].reasons[0]).toBe('Casual 14 of 12 used → 2 days over');
   });
 
+  it('counts an EARLIER month’s leave by the same rule as this one', async () => {
+    // THE BUG THIS PINS, found on staging with real data.
+    //
+    // `usedBefore` counted raw CALENDAR dates while the month being computed
+    // went through `countableDates`. Under WORKING_DAY a Sunday inside an
+    // earlier leave therefore ate quota that the same Sunday in this month
+    // would not, and the person was charged a day they did not owe.
+    //
+    // 1–9 June 2026 is Mon–Tue and contains ONE Sunday (the 7th), so it is 8
+    // working days, not 9. With 5 more in October that is 13 against a quota
+    // of 12 → ONE day over. Counted as calendar days it read 14 → two.
+    txMock.school.findFirst.mockResolvedValue({ lopBasis: 'WORKING_DAY', lopCountsHalfDays: true, workingDays: [1, 2, 3, 4, 5, 6] });
+    txMock.leaveApplication.findMany
+      // 5–9 Oct 2026 = Mon–Fri, five working days.
+      .mockResolvedValueOnce([leave({ startDate: D('2026-10-05'), endDate: D('2026-10-09') })])
+      .mockResolvedValueOnce([leave({ id: 'l0', startDate: D('2026-06-01'), endDate: D('2026-06-09') })]);
+    const m = await service().month(SCHOOL, 2026, 10);
+    expect(m.proposals[0].lopDays).toBe(1);
+    expect(m.proposals[0].reasons[0]).toBe('Casual 13 of 12 used → 1 day over');
+  });
+
+  it('does not let a holiday in an earlier month eat the quota either', async () => {
+    // The same rule needs the same HOLIDAYS. `pol.holidays` covers only the
+    // month being computed, so without the year-to-date set an earlier
+    // holiday would count as leave taken.
+    txMock.school.findFirst.mockResolvedValue({ lopBasis: 'WORKING_DAY', lopCountsHalfDays: true, workingDays: [1, 2, 3, 4, 5, 6] });
+    // 8 June is declared a holiday, so the June leave is 7 countable days.
+    txMock.holiday.findMany.mockResolvedValue([{ startDate: D('2026-06-08'), endDate: null }]);
+    txMock.leaveApplication.findMany
+      .mockResolvedValueOnce([leave({ startDate: D('2026-10-05'), endDate: D('2026-10-09') })])
+      .mockResolvedValueOnce([leave({ id: 'l0', startDate: D('2026-06-01'), endDate: D('2026-06-09') })]);
+    const m = await service().month(SCHOOL, 2026, 10);
+    // 7 + 5 = 12, exactly the quota — nothing is owed.
+    expect(m.proposals).toEqual([]);
+  });
+
   it('gives staff their own quota, not the teachers’ one', async () => {
     // 8 for staff, 12 for teachers. Nine days must overrun for a driver and
     // not for a teacher — one column would have forced the larger on everyone.
