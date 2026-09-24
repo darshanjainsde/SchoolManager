@@ -7,7 +7,7 @@ import {
 import { ApiError } from '../../../common/errors/api-error';
 import { LIST_CEILING } from '../../../common/lists/list-ceiling';
 import { PayPackService } from './pay-pack.service';
-import type { SetStructureDto, UpsertComponentDto } from './payroll.dto';
+import type { PayDetailsDto, SetStructureDto, UpsertComponentDto } from './payroll.dto';
 
 export interface PersonRow {
   personKind: 'TEACHER' | 'STAFF';
@@ -266,6 +266,113 @@ export class PayPeopleService {
       wageShare: wageShareShortfall(lines, pack, dto.onISO),
       overshootMinor: structureOvershoot(lines, dto.monthlyGrossMinor),
     };
+  }
+
+  /**
+   * The details that belong to a PERSON, and what is still missing.
+   *
+   * Read off the row in force today, because that is the one a person is being
+   * paid on now.
+   */
+  async details(schoolId: string, personKind: 'TEACHER' | 'STAFF', personId: string) {
+    return withTenant(schoolId, async (tx) => {
+      const row = await tx.employeePay.findFirst({
+        where: { schoolId, ...(personKind === 'TEACHER' ? { teacherId: personId } : { staffId: personId }) },
+        orderBy: { effectiveFrom: 'desc' },
+        select: { bankAccount: true, bankIfsc: true, bankName: true, pan: true, uan: true, esiNumber: true },
+      });
+      const d = row ?? { bankAccount: null, bankIfsc: null, bankName: null, pan: null, uan: null, esiNumber: null };
+      return {
+        ...d,
+        onPay: !!row,
+        /** What the school cannot file or pay without. Named, not counted. */
+        missing: [
+          ...(d.bankAccount ? [] : ['a bank account number']),
+          ...(d.bankIfsc ? [] : ['the branch IFSC']),
+          ...(d.pan ? [] : ['a PAN']),
+        ],
+      };
+    });
+  }
+
+  /**
+   * Set those details — from the person themselves, or from an admin.
+   *
+   * IT UPDATES EVERY PAY ROW FOR THIS PERSON, not just the one in force, and
+   * that is deliberate. Pay TERMS are versioned: a raise writes a new row from
+   * a date, and June must keep the figure June was run on. A bank account is
+   * not a term. `bankFile()` reads the row in force for the month it is
+   * building, so a versioned account would print the OLD one on a June file
+   * re-downloaded in November — and money paid today goes to the account the
+   * person has today. The same holds for PAN and UAN: the filings quote the
+   * person's number, not the number they had in a past month.
+   *
+   * Writing a blank clears a field. That is the only way a person who typed a
+   * wrong account can take it back out.
+   */
+  async setDetails(
+    schoolId: string,
+    personKind: 'TEACHER' | 'STAFF',
+    personId: string,
+    dto: PayDetailsDto,
+  ) {
+    const trimmed = {
+      bankAccount: dto.bankAccount?.trim() ?? undefined,
+      bankIfsc: dto.bankIfsc?.trim().toUpperCase() ?? undefined,
+      bankName: dto.bankName?.trim() ?? undefined,
+      pan: dto.pan?.trim().toUpperCase() ?? undefined,
+      uan: dto.uan?.trim() ?? undefined,
+      esiNumber: dto.esiNumber?.trim() ?? undefined,
+    };
+    // An account number without its branch cannot be paid, and a school that
+    // stored one would believe it was ready. The pair travels together.
+    const acct = trimmed.bankAccount;
+    const ifsc = trimmed.bankIfsc;
+    if (acct !== undefined || ifsc !== undefined) {
+      const willHaveAcct = acct !== undefined ? acct : null;
+      const willHaveIfsc = ifsc !== undefined ? ifsc : null;
+      if (!!willHaveAcct !== !!willHaveIfsc) {
+        throw new ApiError(
+          'VALIDATION',
+          'A bank account needs its IFSC, and an IFSC needs its account — give both, or clear both.',
+          400,
+          willHaveAcct ? 'bankIfsc' : 'bankAccount',
+        );
+      }
+    }
+
+    const data: Record<string, string | null> = {};
+    for (const [k, v] of Object.entries(trimmed)) if (v !== undefined) data[k] = v === '' ? null : v;
+    if (Object.keys(data).length === 0) return this.details(schoolId, personKind, personId);
+
+    return withTenant(schoolId, async (tx) => {
+      await this.requirePerson(tx, schoolId, personKind, personId);
+      const where = { schoolId, ...(personKind === 'TEACHER' ? { teacherId: personId } : { staffId: personId }) };
+      const n = await tx.employeePay.count({ where });
+      if (n === 0) {
+        throw new ApiError(
+          'VALIDATION',
+          'Your pay has not been set up yet, so there is nothing to attach these details to. Ask the office to put you on a grade first.',
+          400,
+          'personId',
+        );
+      }
+      await tx.employeePay.updateMany({ where, data });
+      const row = await tx.employeePay.findFirst({
+        where, orderBy: { effectiveFrom: 'desc' },
+        select: { bankAccount: true, bankIfsc: true, bankName: true, pan: true, uan: true, esiNumber: true },
+      });
+      const d = row!;
+      return {
+        ...d,
+        onPay: true,
+        missing: [
+          ...(d.bankAccount ? [] : ['a bank account number']),
+          ...(d.bankIfsc ? [] : ['the branch IFSC']),
+          ...(d.pan ? [] : ['a PAN']),
+        ],
+      };
+    });
   }
 
   /**

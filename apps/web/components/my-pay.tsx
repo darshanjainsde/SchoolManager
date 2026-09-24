@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { QueryError } from '@/components/ui/query-state';
+import { PayDetailsCard } from '@/components/pay-details-card';
 import { monthName, rupees, toMinor } from '@/app/app/pay/ui';
 import type { PayLine } from '@/app/app/pay/types';
 
@@ -90,7 +91,12 @@ export function MyPay() {
         ) : null}
       </div>
 
-      {d ? <DeclarationCard pay={d} /> : null}
+      <div className="grid gap-4">
+        {/* Same rows the office writes. A person who fills their account in
+            here clears the school's "no bank account" exception at once. */}
+        <PayDetailsCard endpoint="/me/pay/details" />
+        {d ? <DeclarationCard pay={d} /> : null}
+      </div>
     </div>
   );
 }

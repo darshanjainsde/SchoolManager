@@ -19,8 +19,8 @@ import { PayPeopleService } from './pay-people.service';
 import { PayRunService } from './pay-run.service';
 import { PayStatutoryService } from './pay-statutory.service';
 import {
-  AdjustmentDto, AssignGradeDto, GrantSalaryDto, OpenRunDto, PreviewGradeDto, PreviewStructureDto,
-  RaiseGradeDto, SchoolPayCountryDto, SetStructureDto, UpsertComponentDto, UpsertGradeDto,
+  AdjustmentDto, AssignGradeDto, GrantSalaryDto, OpenRunDto, PayDetailsDto, PreviewGradeDto,
+  PreviewStructureDto, RaiseGradeDto, SchoolPayCountryDto, SetStructureDto, UpsertComponentDto, UpsertGradeDto,
 } from './payroll.dto';
 
 /**
@@ -215,6 +215,34 @@ export class PayrollController {
   }
 
   // ── Who may see salary ────────────────────────────────────
+  /**
+   * One person's bank and tax numbers, set by the office.
+   *
+   * Writes the same rows the employee's own screen writes, so whichever of
+   * them types it, the other sees it. Deliberately NOT part of
+   * `people/structure`: that creates a new pay row from a date, and a bank
+   * account is not a change of pay.
+   */
+  @Get('people/:kind/:id/details')
+  personDetails(@Param('kind') kind: string, @Param('id', ParseUUIDPipe) id: string) {
+    return this.people.details(this.sid(), kindOf(kind), id);
+  }
+
+  @Post('people/:kind/:id/details')
+  async setPersonDetails(
+    @CurrentUser() u: SchoolJwtPayload,
+    @Param('kind') kind: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: PayDetailsDto,
+  ) {
+    const r = await this.people.setDetails(this.sid(), kindOf(kind), id, dto);
+    await this.audit.record({
+      schoolId: this.sid(), actorUserId: u.sub, action: 'salary.details', entity: 'EmployeePay', entityId: id,
+      meta: { personKind: kindOf(kind), fields: Object.keys(dto) },
+    });
+    return r;
+  }
+
   @Get('access')
   async access() {
     const schoolId = this.sid();

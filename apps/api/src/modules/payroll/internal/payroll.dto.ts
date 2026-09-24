@@ -148,6 +148,25 @@ export class AssignGradeDto {
   @IsArray() @ValidateNested({ each: true }) @Type(() => AssignPersonDto) rows!: AssignPersonDto[];
 }
 
+/**
+ * The details that belong to a PERSON rather than to a month: where their
+ * money goes, and the numbers the filings quote. An employee may set their
+ * own; an admin may set anyone's. Blank is allowed — the point of the screen
+ * is to say what is still missing, not to refuse a partial answer.
+ */
+export class PayDetailsDto {
+  /** 9–18 digits. Indian account numbers have no common check digit. */
+  @IsOptional() @Matches(/^$|^[0-9]{9,18}$/, { message: 'A bank account number is 9 to 18 digits.' }) bankAccount?: string;
+  /** Four letters, a zero, then six characters — the RBI format. */
+  @IsOptional() @Matches(/^$|^[A-Z]{4}0[A-Z0-9]{6}$/, { message: 'An IFSC is four letters, a zero, then six characters — like SBIN0001234.' }) bankIfsc?: string;
+  @IsOptional() @IsString() @MaxLength(60) bankName?: string;
+  /** Five letters, four digits, one letter. */
+  @IsOptional() @Matches(/^$|^[A-Z]{5}[0-9]{4}[A-Z]$/, { message: 'A PAN is five letters, four digits and a letter — like ABCDE1234F.' }) pan?: string;
+  /** The provident fund's own number for this person: twelve digits. */
+  @IsOptional() @Matches(/^$|^[0-9]{12}$/, { message: 'A UAN is twelve digits.' }) uan?: string;
+  @IsOptional() @IsString() @MaxLength(20) esiNumber?: string;
+}
+
 export class PreviewGradeDto {
   @IsObject() overrides!: Record<string, { rateBps?: number; fixedMinor?: number }>;
   @IsInt() @Min(0) @Max(1_000_000_00) monthlyGrossMinor!: number;
