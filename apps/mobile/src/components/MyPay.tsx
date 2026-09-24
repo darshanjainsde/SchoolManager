@@ -5,6 +5,7 @@ import { useQuery } from '@/lib/query';
 import { Empty, ErrorState, Figure, Page, PageHeader, Pill, Screen, SectionTitle } from '@/components/ui';
 import { Row } from '@/components/desk';
 import { LoadingRows } from '@/components/Loading';
+import { PayDetails } from '@/components/PayDetails';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 
@@ -153,6 +154,11 @@ export function MyPay({ title = 'My pay' }: { title?: string }) {
           ))}
         </Page>
       )}
+
+      {/* The same rows the office writes — a driver with no laptop can put
+          their own account in, and the school's "no bank account" exception
+          clears the moment they do. */}
+      <PayDetails />
     </Screen>
   );
 }

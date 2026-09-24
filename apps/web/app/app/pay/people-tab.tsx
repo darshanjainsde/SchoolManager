@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { QueryError } from '@/components/ui/query-state';
+import { PayDetailsCard } from '@/components/pay-details-card';
 import { Drawer } from './drawer';
 import { Card, CardBody, CardHead, EmptyRow, Note, rupees, toMinor } from './ui';
 import type { Grade, Person, PreviewResult, SalarySettings } from './types';
@@ -299,9 +300,6 @@ function PayDrawer({ person, settings, grades, onClose }:
   const [pfOptIn, setPfOptIn] = useState(person.pay?.pfOptIn ?? true);
   const [paidThroughVacation, setPaidThroughVacation] = useState(person.pay?.paidThroughVacation ?? true);
   const [contractMonths, setContractMonths] = useState(String(person.pay?.contractMonths ?? 12));
-  const [pan, setPan] = useState('');
-  const [bankAccount, setBankAccount] = useState('');
-  const [bankIfsc, setBankIfsc] = useState('');
   const [accept, setAccept] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -330,8 +328,8 @@ function PayDrawer({ person, settings, grades, onClose }:
       payGradeId: gradeId || undefined,
       taxRegime: regime, pfOptIn, paidThroughVacation,
       contractMonths: Number(contractMonths) || 12,
-      pan: pan || undefined,
-      bankAccount: bankAccount || undefined, bankIfsc: bankIfsc || undefined,
+      // Bank and PAN are deliberately absent: they are saved on their own row-wide
+      // path, because they belong to the person and not to this month's pay.
       acceptWageShare: accept,
     }),
     onSuccess: () => {
@@ -461,18 +459,22 @@ function PayDrawer({ person, settings, grades, onClose }:
                 <input className="sk-input" inputMode="numeric" value={contractMonths} onChange={(e) => setContractMonths(e.target.value)} />
               </label>
             ) : null}
-            <label className="sk-payfield">
-              <span className="lab">PAN</span>
-              <input className="sk-input" value={pan} maxLength={10} onChange={(e) => setPan(e.target.value.toUpperCase())} />
-            </label>
-            <label className="sk-payfield">
-              <span className="lab">Bank account</span>
-              <input className="sk-input" value={bankAccount} maxLength={30} onChange={(e) => setBankAccount(e.target.value)} />
-            </label>
-            <label className="sk-payfield">
-              <span className="lab">IFSC</span>
-              <input className="sk-input" value={bankIfsc} maxLength={11} onChange={(e) => setBankIfsc(e.target.value.toUpperCase())} />
-            </label>
+            {/* Bank and PAN are NOT set here. They belong to the person, not
+                to this month's pay, so they are saved on their own — and the
+                person can set them themselves from My pay. Editing them beside
+                a "from this date" figure would imply a change of pay. */}
+            {person.pay ? (
+              <PayDetailsCard
+                endpoint={`/payroll/people/${person.personKind.toLowerCase()}/${person.id}/details`}
+                title="Bank and tax numbers"
+                invalidate={[['pay-people'], ['pay-overview']]}
+              />
+            ) : (
+              <p className="sk-muted" style={{ fontSize: 12.5 }}>
+                Save their pay first, then their bank and tax numbers can be added here — or by
+                the person themselves under My pay.
+              </p>
+            )}
           </div>
         ) : null}
 

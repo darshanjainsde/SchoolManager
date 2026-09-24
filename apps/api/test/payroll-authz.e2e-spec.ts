@@ -37,6 +37,8 @@ const ADMIN_ROUTES: [method: 'get' | 'post', path: string][] = [
   ['post', '/payroll/components'],
   ['get', '/payroll/people'],
   ['get', '/payroll/people/teacher/00000000-0000-0000-0000-000000000001'],
+  ['get', '/payroll/people/teacher/00000000-0000-0000-0000-000000000001/details'],
+  ['post', '/payroll/people/teacher/00000000-0000-0000-0000-000000000001/details'],
   ['post', '/payroll/people/preview'],
   ['post', '/payroll/people/structure'],
   ['get', '/payroll/access'],
@@ -58,6 +60,8 @@ const ADMIN_ROUTES: [method: 'get' | 'post', path: string][] = [
 /** Everyone's own pay. A driver and a principal use the same routes. */
 const MINE_ROUTES: [method: 'get' | 'post', path: string][] = [
   ['get', '/me/pay'],
+  ['get', '/me/pay/details'],
+  ['post', '/me/pay/details'],
   ['get', '/me/pay/payslips/00000000-0000-0000-0000-000000000001'],
   ['post', '/me/pay/declaration'],
   ['get', '/me/pay/statement'],

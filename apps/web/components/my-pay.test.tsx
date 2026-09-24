@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithProviders, type ApiStub } from '@/test/render';
 import { useApi } from '@/lib/use-api';
@@ -9,8 +9,22 @@ import { MyPay } from './my-pay';
 vi.mock('@/lib/use-api', () => ({ useApi: vi.fn() }));
 vi.mock('@/components/use-host', () => ({ useHost: vi.fn() }));
 
+/**
+ * `/me/pay` is no longer the only call this screen makes: the details card
+ * asks for `/me/pay/details` too. A path-agnostic stub handed it the payslip
+ * payload, which has no `missing` array — and the whole screen crashed on it.
+ * Route by path, so each call gets the shape its endpoint really returns.
+ */
+const DETAILS = {
+  bankAccount: '30123456789', bankIfsc: 'SBIN0001234', bankName: 'State Bank of India',
+  pan: 'ABCDE1234F', uan: '100123456789', esiNumber: null, onPay: true, missing: [],
+};
 function mockApi(get: (p: string) => unknown, post?: (p: string, b?: unknown) => unknown): ApiStub {
-  return { get: vi.fn(async (p: string) => get(p)), post: vi.fn(async (p: string, b?: unknown) => post?.(p, b) ?? {}), put: vi.fn(), patch: vi.fn(), del: vi.fn() };
+  return {
+    get: vi.fn(async (p: string) => (p === '/me/pay/details' ? DETAILS : get(p))),
+    post: vi.fn(async (p: string, b?: unknown) => post?.(p, b) ?? {}),
+    put: vi.fn(), patch: vi.fn(), del: vi.fn(),
+  };
 }
 
 const SLIP = {
@@ -81,5 +95,46 @@ describe('My pay', () => {
     await user.click(await screen.findByRole('button', { name: 'Send to the office' }));
     expect(posts[0].p).toBe('/me/pay/declaration');
     expect(posts[0].b).toMatchObject({ taxYear: 2026, regime: 'NEW', submit: true });
+  });
+
+  it('lets a person set the bank account their pay goes to', async () => {
+    // The same rows the office writes — no second copy, nothing to sync.
+    const user = userEvent.setup();
+    const sent: { path: string; body?: unknown }[] = [];
+    vi.mocked(useApi).mockReturnValue(mockApi(() => BASE, (path, body) => { sent.push({ path, body }); return DETAILS; }) as never);
+    renderWithProviders(<MyPay />);
+
+    const acct = await screen.findByLabelText('Bank account number');
+    await user.clear(acct);
+    await user.type(acct, '30999888777');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      const save = sent.find((x) => x.path === '/me/pay/details');
+      expect(save).toBeTruthy();
+      expect(save!.body).toMatchObject({ bankAccount: '30999888777' });
+    });
+  });
+
+  it('will not save an account without its branch', async () => {
+    const user = userEvent.setup();
+    vi.mocked(useApi).mockReturnValue(mockApi(() => BASE) as never);
+    renderWithProviders(<MyPay />);
+
+    const ifsc = await screen.findByLabelText('IFSC');
+    await user.clear(ifsc);
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(screen.getByText(/needs its IFSC/)).toBeInTheDocument();
+  });
+
+  it('names what is still missing, rather than counting it', async () => {
+    vi.mocked(useApi).mockReturnValue({
+      get: vi.fn(async (p: string) => (p === '/me/pay/details'
+        ? { ...DETAILS, bankAccount: null, bankIfsc: null, missing: ['a bank account number', 'the branch IFSC'] }
+        : BASE)),
+      post: vi.fn(async () => ({})), put: vi.fn(), patch: vi.fn(), del: vi.fn(),
+    } as never);
+    renderWithProviders(<MyPay />);
+    expect(await screen.findByText(/a bank account number, the branch IFSC/)).toBeInTheDocument();
   });
 });
