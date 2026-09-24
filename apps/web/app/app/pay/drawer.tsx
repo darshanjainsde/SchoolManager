@@ -1,31 +1,34 @@
 'use client';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { Z } from '@/lib/z-layers';
+import { useFocusTrap } from '@/components/ui/use-focus-trap';
 
 /**
  * THE DRAWER every Pay panel opens in.
  *
- * It exists as one component because three separate bugs came from rolling it
- * inline, and all three are structural rather than cosmetic:
+ * Built on the console's existing overlay pattern — `order-drawer.tsx`,
+ * `record-payment-dialog.tsx` and the Fees setup dialog all do exactly this —
+ * after one release where it was not, and shipped see-through:
  *
- * 1. PORTAL, not inline. The console's main carries `.sk-anim`, whose
- *    `sk-rise` keyframe animates `transform` on its direct child with
- *    `fill-mode: both`. A transformed ancestor becomes the containing block
- *    for `position: fixed`, so a scrim rendered inside the page tree is
- *    re-anchored to that element: `inset: 0` resolves against the whole tall
- *    page instead of the viewport, the scrim becomes document-height, and
- *    scrolling reveals an endless blank drawer. It looks perfect until the
- *    page is long enough to scroll. Portalling to <body> is the only fix that
- *    does not depend on what some ancestor's stylesheet does later.
+ * 1. PORTAL TO <body>, INSIDE A `.skosx` WRAPPER. The console main carries
+ *    `.sk-anim`, whose keyframe animates `transform` on its child; a
+ *    transformed ancestor becomes the containing block for `position: fixed`,
+ *    so an inline scrim sizes itself to the tall page instead of the viewport.
+ *    Hence the portal. But every `--sk-*` token is declared on `.skosx`, never
+ *    on `:root`, so a portal that lands on bare <body> resolves every token to
+ *    nothing — transparent panel, chrome-less buttons. The wrapper carries the
+ *    theme across. Both traps are named in apps/web/app/app/fees/setup/page.tsx.
  *
- * 2. LOCK THE PAGE BEHIND IT. A modal the page scrolls behind is the same
- *    defect wearing different clothes — the list moves under a fixed panel and
- *    nothing the user does dismisses it.
+ * 2. `Z.OVERLAY`, from the one stacking ladder, so it can never end up under
+ *    the command bar the way "Record a payment" once did.
  *
- * 3. THE PRIMARY ACTION IS ALWAYS VISIBLE. `margin-top: auto` puts the button
- *    at the bottom of the panel, which is below the fold the moment the body
- *    is taller than the screen. That is exactly the defect this whole drawer
- *    was introduced to fix, reappearing one level down. The footer is sticky.
+ * 3. FOCUS STAYS INSIDE, Escape closes, the page behind does not scroll.
+ *
+ * 4. THE ACTION BAR IS PINNED. `margin-top: auto` put it at the bottom of the
+ *    content — below the fold once the form was taller than the panel, which
+ *    is the very defect this drawer exists to fix. The body scrolls; the head
+ *    and the footer do not.
  */
 export function Drawer({ title, subtitle, onClose, footer, children }: {
   title: ReactNode;
@@ -36,33 +39,23 @@ export function Drawer({ title, subtitle, onClose, footer, children }: {
   children: ReactNode;
 }) {
   const [mounted, setMounted] = useState(false);
+  const panel = useRef<HTMLDivElement>(null);
   useEffect(() => setMounted(true), []);
+  useFocusTrap(panel, onClose);
 
-  // Escape closes it, and the page behind it does not scroll while it is open.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prev;
-    };
-  }, [onClose]);
+    return () => { document.body.style.overflow = prev; };
+  }, []);
 
   if (!mounted) return null;
 
   const label = typeof title === 'string' ? title : undefined;
 
   return createPortal(
-    <div
-      className="sk-payscrim"
-      role="dialog"
-      aria-modal="true"
-      aria-label={label}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div className="sk-paydrawer">
+    <div className="skosx sk-payscrim" style={{ zIndex: Z.OVERLAY }} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div ref={panel} className="sk-paydrawer" role="dialog" aria-modal="true" aria-label={label}>
         <div className="sk-paydrawer-head">
           <div style={{ minWidth: 0 }}>
             <div className="t">{title}</div>
@@ -70,9 +63,7 @@ export function Drawer({ title, subtitle, onClose, footer, children }: {
           </div>
           <button type="button" className="sk-btn" data-size="sm" onClick={onClose}>Close</button>
         </div>
-
         <div className="sk-paydrawer-body">{children}</div>
-
         <div className="sk-paydrawer-actions">{footer}</div>
       </div>
     </div>,

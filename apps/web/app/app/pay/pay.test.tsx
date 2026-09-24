@@ -74,6 +74,11 @@ const OVERVIEW = {
 
 beforeEach(() => {
   vi.mocked(useHost).mockReturnValue('school.sckools.com');
+  // The home screen mounts the walkthrough, which asks for reduced-motion.
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true, writable: true,
+    value: vi.fn().mockImplementation((q: string) => ({ matches: false, media: q, onchange: null, addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn() })),
+  });
 });
 
 describe('pay route honesty', () => {
@@ -164,8 +169,9 @@ describe('the home screen', () => {
   it('shows the rule book and the date it was last checked, rather than implying every rate is current', async () => {
     vi.mocked(useApi).mockReturnValue(api() as never);
     renderWithProviders(<MonthTab base="/app/pay" />);
-    expect(await screen.findByText(/Rules current as at/)).toBeInTheDocument();
-    expect(screen.getByText('IN-2026.09.22')).toBeInTheDocument();
+    // The walkthrough's Settings scene prints the same line, so there are two.
+    expect((await screen.findAllByText(/Rules current as at/)).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('IN-2026.09.22').length).toBeGreaterThan(0);
   });
 });
 
@@ -193,12 +199,18 @@ describe('the people screen', () => {
     expect(headings[0]).toBe('Not on pay yet');
   });
 
-  it('says who has no pay set, rather than showing a zero', async () => {
+  it('says who has no pay set ONCE, on the group, and not again on every row', async () => {
+    // Seventy-two identical red pills read as decoration, not as a warning
+    // (ledger: warning-repeated-on-every-item). The heading states it; each
+    // row keeps only its one action, and never a zero.
     vi.mocked(useApi).mockReturnValue(api() as never);
     renderWithProviders(<PeopleTab base="/app/pay" />);
 
     expect(await screen.findByText('Sam Kumar')).toBeInTheDocument();
-    expect(screen.getByText('no pay set')).toBeInTheDocument();
+    expect(screen.getByText('Not on pay yet')).toBeInTheDocument();
+    expect(screen.getByText('Needs you')).toBeInTheDocument();
+    expect(screen.queryByText('no pay set')).not.toBeInTheDocument();
+    expect(screen.queryByText('₹0')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Set pay' })).toBeInTheDocument();
   });
 
@@ -307,7 +319,14 @@ describe('the drawer — three defects that shipped, each guarded here', () => {
     const dialog = await screen.findByRole('dialog');
 
     expect(container.contains(dialog), 'the drawer is inside the page tree, so any ancestor transform will trap it').toBe(false);
-    expect(dialog.parentElement).toBe(document.body);
+    // The portal root is the scrim; it must sit directly on <body> AND carry
+    // the theme: every --sk-* token is scoped to .skosx, and a portal on bare
+    // <body> resolved them all to nothing — transparent panel, no chrome.
+    const root = dialog.parentElement!;
+    expect(root.parentElement).toBe(document.body);
+    expect(root).toHaveClass('skosx');
+    // One stacking ladder (lib/z-layers.ts), never a number picked on the day.
+    expect(root.style.zIndex).toBe('80');
   });
 
   it('keeps the primary action out of the scrolling area', async () => {
@@ -365,7 +384,7 @@ describe('a long group does not become an endless scroll', () => {
 
     await screen.findByText('Teacher Number 0');
     expect(screen.queryByText('Teacher Number 70')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Show the other 61 in Not on pay yet/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show 61 more' })).toBeInTheDocument();
   });
 
   it('can take the whole group in one action instead of 73 ticks', async () => {
