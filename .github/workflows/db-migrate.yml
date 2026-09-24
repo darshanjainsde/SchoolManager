@@ -61,6 +61,18 @@ on:
         required: false
         type: string
         default: ''
+      seed_leave:
+        description: >-
+          STAGING ONLY — a school slug (e.g. raffles) to seed LEAVE on: the
+          leave types with teacher and staff quotas, the school's deduction
+          rule, an accounts officer with a login, and the cases worth testing
+          (inside quota, past it, a half day, one crossing a month, maternity,
+          one still pending). INPUTS ONLY — no deduction is written; Pay
+          proposes and somebody presses Charge. Idempotent; refused against
+          production.
+        required: false
+        type: string
+        default: ''
       resolve_applied:
         description: >-
           RECOVERY ONLY — a migration name to record as already applied,
@@ -199,6 +211,15 @@ jobs:
         run: |
           pnpm --filter @skoolos/db exec prisma generate
           pnpm --filter @skoolos/api exec tsx scripts/seed-pay-raffles.ts
+
+      - name: Seed leave on ${{ github.event.inputs.seed_leave }} (staging only)
+        if: ${{ github.event.inputs.seed_leave != '' && github.event.inputs.environment == 'staging' && github.event.inputs.inspect_only != 'true' }}
+        env:
+          DATABASE_URL: ${{ secrets.DIRECT_URL }}
+          SEED_SCHOOL_SLUG: ${{ github.event.inputs.seed_leave }}
+        run: |
+          pnpm --filter @skoolos/db exec prisma generate
+          pnpm --filter @skoolos/api exec tsx scripts/seed-leave-raffles.ts
 
       - name: Confirm the target is current
         # An inspection only reports — pending migrations are its answer, not a failure.
