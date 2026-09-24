@@ -13,13 +13,16 @@ import type { Session } from '@/lib/session';
  * Same shape as `staff-nav.ts` and `family-nav.ts` so all three portals are
  * one product; kept free of React so route honesty is a filesystem test.
  */
-export type WorkerJob = 'GENERAL' | 'SPORTS' | 'LIBRARIAN';
+export type WorkerJob = 'GENERAL' | 'SPORTS' | 'LIBRARIAN' | 'ACCOUNTS';
 
 /** Which desk this session opens. A librarian at a school without the Library module is general staff. */
 export function jobFor(s: Pick<Session, 'staffRole' | 'features'> | null | undefined): WorkerJob {
   if (!s) return 'GENERAL';
   if (s.staffRole === 'SPORTS' && hasFeature(s, 'SPORTS')) return 'SPORTS';
   if (s.staffRole === 'LIBRARIAN' && hasFeature(s, 'LIBRARY')) return 'LIBRARIAN';
+  // An accounts officer at a school that does not keep pay here is general
+  // staff — the same rule as a librarian without the Library module.
+  if (s.staffRole === 'ACCOUNTS' && hasFeature(s, 'SALARY')) return 'ACCOUNTS';
   return 'GENERAL';
 }
 
@@ -40,6 +43,9 @@ export const ALL_TABS: readonly TabSpec[] = [
   { name: 'hall', title: 'Hall', icon: 'take' },
   { name: 'books', title: 'Books', icon: 'notes' },
   { name: 'fines', title: 'Fines', icon: 'fees' },
+  // Accounts desk
+  { name: 'paydesk', title: 'Pay', icon: 'fees' },
+  { name: 'leavedesk', title: 'Leave', icon: 'take' },
   { name: 'profile', title: 'Profile', icon: 'person' },
 ] as const;
 
@@ -48,6 +54,10 @@ const TAB_NAMES_BY_JOB: Record<WorkerJob, readonly string[]> = {
   // Five tabs: PortalTabBar tightens the labels past four.
   SPORTS: ['desk', 'meets', 'records', 'houses', 'profile'],
   LIBRARIAN: ['counter', 'hall', 'books', 'fines', 'profile'],
+  // The standing-up half of the desk: what the month costs, and the leave
+  // waiting on a decision. Running a pay run is a sitting-down job and stays
+  // on the web, the same way the library's Settings does.
+  ACCOUNTS: ['paydesk', 'leavedesk', 'profile'],
 };
 
 export function tabsFor(job: WorkerJob): readonly TabSpec[] {

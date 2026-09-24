@@ -4,6 +4,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { QueryError } from '@/components/ui/query-state';
+import { Cell, Row, RowList, RowTitle } from '@/components/ui/kit';
+import ComponentEditor from './component-editor';
+import LeaveSettings from './leave-settings';
 import { Card, CardBody, CardHead, EmptyRow, Note, RulesAsAt, TableWrap, Td, Th } from './ui';
 import type { AdminAccess, Component, SalarySettings } from './types';
 
@@ -28,6 +31,7 @@ export default function SettingsTab() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
+  const [editing, setEditing] = useState<Component | null>(null);
 
   const settings = useQuery({ queryKey: ['salary-settings'], enabled: !!host, queryFn: () => api.get<SalarySettings>('/payroll/settings') });
   const components = useQuery({ queryKey: ['salary-components'], enabled: !!host, queryFn: () => api.get<Component[]>('/payroll/components') });
@@ -110,18 +114,28 @@ export default function SettingsTab() {
           {components.isError ? <QueryError error={components.error} onRetry={components.refetch} className="py-4" /> : null}
           {components.data && components.data.length === 0 ? <EmptyRow>Nothing yet — the standard parts appear the first time you open People.</EmptyRow> : null}
           {components.data && components.data.length > 0 ? (
-            <TableWrap minWidth={560}>
-              <thead><tr><Th>Part</Th><Th>How it is worked out</Th><Th>Counts as wages</Th><Th>Provident fund</Th></tr></thead>
+            <TableWrap minWidth={620}>
+              <thead><tr><Th>Part</Th><Th>How it is worked out</Th><Th>Counts as wages</Th><Th>Provident fund</Th><Th /></tr></thead>
               <tbody>
                 {components.data.map((c) => (
-                  <tr key={c.id} style={{ borderTop: '1px solid var(--sk-line)' }}>
+                  <tr key={c.id} style={{ borderTop: '1px solid var(--sk-line)', opacity: c.active ? 1 : 0.55 }}>
                     <Td>
                       {c.name}
                       {c.hint ? <span className="sk-muted" style={{ display: 'block', fontSize: 11 }}>{c.hint}</span> : null}
+                      {!c.active ? <span className="sk-muted" style={{ display: 'block', fontSize: 11 }}>Not in use</span> : null}
                     </Td>
                     <Td>{CALC[c.calc]}{c.rateBps != null ? ` — ${c.rateBps / 100}%` : ''}</Td>
                     <Td>{c.isWages ? 'Yes' : 'No'}</Td>
                     <Td>{c.retirementBase ? 'Yes' : 'No'}</Td>
+                    <Td right>
+                      <button
+                        type="button" className="sk-btn" data-size="sm"
+                        onClick={() => setEditing(c)}
+                        aria-label={`Change ${c.name}`}
+                      >
+                        Change
+                      </button>
+                    </Td>
                   </tr>
                 ))}
               </tbody>
@@ -129,6 +143,8 @@ export default function SettingsTab() {
           ) : null}
         </CardBody>
       </Card>
+
+      <LeaveSettings />
 
       <Card>
         <CardHead><h3>Who may see salaries</h3></CardHead>
@@ -139,21 +155,38 @@ export default function SettingsTab() {
             </p>
           </Note>
           {access.isError ? <QueryError error={access.error} onRetry={access.refetch} className="py-4" /> : null}
-          {access.data?.map((a) => (
-            <div key={a.id} className="sk-row">
-              <div>
-                <div className="nm">{a.name ?? a.email}</div>
-                <div className="meta">{a.email}</div>
-              </div>
-              <span className="sp" />
-              <button type="button" className="sk-btn" data-size="sm" data-variant={a.canSeeSalary ? undefined : 'primary'} onClick={() => void grant(a.id, !a.canSeeSalary)}>
-                {a.canSeeSalary ? 'Take away' : 'Give access'}
-              </button>
-            </div>
-          ))}
+          {access.data && access.data.length > 0 ? (
+            <RowList columns="1fr auto" label="Who may see salaries">
+              {access.data.map((a) => (
+                <Row key={a.id} testId={`access-${a.id}`}>
+                  <Cell>
+                    <RowTitle
+                      title={a.name ?? a.email}
+                      sub={`${a.job ?? 'Admin'} · ${a.email}`}
+                    />
+                  </Cell>
+                  <Cell align="end">
+                    <button
+                      type="button" className="sk-btn" data-size="sm"
+                      data-variant={a.canSeeSalary ? undefined : 'primary'}
+                      onClick={() => void grant(a.id, !a.canSeeSalary)}
+                    >
+                      {a.canSeeSalary ? 'Take away' : 'Give access'}
+                    </button>
+                  </Cell>
+                </Row>
+              ))}
+            </RowList>
+          ) : null}
+          <p className="sk-muted" style={{ fontSize: 12, margin: 0 }}>
+            An accounts officer reaches Pay through their job, and still needs to be named here before they can see a
+            single figure. Make somebody an accounts officer under Staff.
+          </p>
           {error ? <p className="sk-state err">{error}</p> : null}
         </CardBody>
       </Card>
+
+      {editing ? <ComponentEditor component={editing} onClose={() => setEditing(null)} /> : null}
     </div>
   );
 }

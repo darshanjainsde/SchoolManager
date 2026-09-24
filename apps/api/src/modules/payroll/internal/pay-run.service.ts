@@ -178,8 +178,13 @@ export class PayRunService {
         if (!pay) continue;
 
         const mine = adjustments.filter((a) => (a.teacherId ?? a.staffId) === person.id);
-        const lopDays = Math.min(days, mine.reduce((a, x) => a + x.lopDays, 0));
-        const daysPaid = Math.max(0, days - lopDays);
+        // Half days are carried as a second integer, because Prisma serialises
+        // Decimal as a string and that would change a shape every client reads.
+        // The MONEY is computed on the exact fraction; `daysPaid` below is
+        // rounded only for the number a screen prints.
+        const lopExact = Math.min(days, mine.reduce((a, x) => a + (x.lopDays ?? 0) + (x.lopHalfDays ?? 0) / 2, 0));
+        const lopHalfDays = lopExact - Math.floor(lopExact) >= 0.5 ? 1 : 0;
+        const daysPaidExact = Math.max(0, days - lopExact);
 
         // A contract teacher on a 10- or 11-month term is not paid through the
         // vacation; their agreed gross is spread over the months they work.
@@ -195,7 +200,7 @@ export class PayRunService {
             ...((pay.fixedAmounts ?? {}) as Record<string, number>),
           },
         });
-        earnings = prorate(earnings, daysPaid, days);
+        earnings = prorate(earnings, daysPaidExact, days);
 
         // Arrears and one-offs join the earnings before anything is computed on
         // them: a backdated increment attracts provident fund in the month it
@@ -268,7 +273,7 @@ export class PayRunService {
           staffId: person.kind === 'STAFF' ? person.id : null,
           name: person.name, designation: person.designation,
           lines: lines.sort((a, b) => a.order - b.order) as unknown as object,
-          daysInMonth: days, daysPaid,
+          daysInMonth: days, daysPaid: Math.round(daysPaidExact), lopHalfDays,
           grossMinor, deductionMinor, netMinor, employerCostMinor,
           retirementEmployeeMinor: pf?.employeeMinor ?? 0,
           retirementEmployerMinor: pf?.employerMinor ?? 0,

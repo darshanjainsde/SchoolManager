@@ -69,6 +69,10 @@ export class LeavePolicyService {
             name: dto.name.trim(),
             isPaid: dto.isPaid ?? true,
             defaultAnnual: dto.defaultAnnual ?? 0,
+            // Unset means "same as a teacher", not zero — a school that gives
+            // its drivers nothing must say so, rather than get it by default.
+            defaultAnnualStaff: dto.defaultAnnualStaff ?? dto.defaultAnnual ?? 0,
+            neverDeduct: dto.neverDeduct ?? false,
             carryForwardCap: dto.carryForwardCap ?? 0,
           },
         });
@@ -92,6 +96,8 @@ export class LeavePolicyService {
             ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
             ...(dto.isPaid !== undefined ? { isPaid: dto.isPaid } : {}),
             ...(dto.defaultAnnual !== undefined ? { defaultAnnual: dto.defaultAnnual } : {}),
+            ...(dto.defaultAnnualStaff !== undefined ? { defaultAnnualStaff: dto.defaultAnnualStaff } : {}),
+            ...(dto.neverDeduct !== undefined ? { neverDeduct: dto.neverDeduct } : {}),
             ...(dto.carryForwardCap !== undefined ? { carryForwardCap: dto.carryForwardCap } : {}),
             ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
           },
@@ -138,6 +144,8 @@ export class LeavePolicyService {
           name: d.name,
           isPaid: d.isPaid,
           defaultAnnual: d.defaultAnnual,
+          defaultAnnualStaff: d.defaultAnnualStaff,
+          neverDeduct: d.neverDeduct,
           carryForwardCap: d.carryForwardCap,
         })),
         teachers: teachers.map((t) => ({
@@ -297,20 +305,33 @@ export class LeavePolicyService {
 
   // ── Balances ─────────────────────────────────────────────────────────────
 
-  /** The calling teacher's own balances for the current year. */
+  /**
+   * The caller's own balances for the current year — teacher or staff.
+   *
+   * Staff have no `LeaveAllocation` rows (the grid is per teacher), so their
+   * entitlement is the TYPE's staff default. That is the same number
+   * `PayLeaveService` charges them against, which is what keeps the figure a
+   * person reads here and the figure their payslip is built from one figure.
+   */
   async balanceForUser(schoolId: string, userId: string) {
     return withTenant(schoolId, async (tx) => {
       const teacher = await tx.teacher.findFirst({ where: { schoolId, userId }, select: { id: true } });
-      if (!teacher) throw new NotFoundException('No teacher record for this login');
+      const staff = teacher ? null : await tx.staff.findFirst({ where: { schoolId, userId, isActive: true }, select: { id: true } });
+      if (!teacher && !staff) throw new NotFoundException('No teacher or staff record for this login');
+      const person = teacher
+        ? { kind: 'TEACHER' as const, id: teacher.id }
+        : { kind: 'STAFF' as const, id: staff!.id };
       const year = await this.resolveYear(tx, schoolId, undefined);
       const defs = await tx.leaveTypeDef.findMany({ take: LIST_CEILING.STRUCTURE,
         where: { schoolId, isActive: true },
         orderBy: { createdAt: 'asc' },
       });
-      const allocations = await tx.leaveAllocation.findMany({ take: LIST_CEILING.STRUCTURE,
-        where: { schoolId, academicYearId: year.id, teacherId: teacher.id },
-      });
-      const used = await this.usedDays(tx, schoolId, defs, year.startDate, year.endDate, teacher.id);
+      const allocations = person.kind === 'TEACHER'
+        ? await tx.leaveAllocation.findMany({ take: LIST_CEILING.STRUCTURE,
+            where: { schoolId, academicYearId: year.id, teacherId: person.id },
+          })
+        : [];
+      const used = await this.usedDays(tx, schoolId, defs, year.startDate, year.endDate, person);
       const allocByDef = new Map(allocations.map((a) => [a.typeDefId, a]));
 
       return {
@@ -318,19 +339,26 @@ export class LeavePolicyService {
         balances: defs
           .map((d) => {
             const alloc = allocByDef.get(d.id);
-            const usedDays = used.get(`${teacher.id}:${d.id}`) ?? 0;
+            const usedDays = used.get(`${person.id}:${d.id}`) ?? 0;
+            // No allocation row: for staff that is normal (they have none), so
+            // the type's staff default stands in. For a teacher it means the
+            // type is untracked, and `null` keeps saying so.
+            const allotted = alloc
+              ? alloc.allotted
+              : person.kind === 'STAFF' && d.defaultAnnualStaff > 0 ? d.defaultAnnualStaff : null;
+            const carriedIn = alloc?.carriedIn ?? 0;
             return {
               typeDefId: d.id,
               name: d.name,
               builtin: d.builtin,
               isPaid: d.isPaid,
-              allotted: alloc?.allotted ?? null,
-              carriedIn: alloc?.carriedIn ?? 0,
+              allotted,
+              carriedIn,
               used: usedDays,
-              remaining: alloc ? alloc.allotted + alloc.carriedIn - usedDays : null,
+              remaining: allotted === null ? null : allotted + carriedIn - usedDays,
             };
           })
-          // A type the teacher has no grant for and never used is noise.
+          // A type this person has no grant for and never used is noise.
           .filter((b) => b.allotted !== null || b.used > 0),
       };
     });
@@ -417,17 +445,17 @@ export class LeavePolicyService {
     defs: { id: string; builtin: string | null }[],
     yearStart: Date,
     yearEnd: Date,
-    teacherId?: string,
+    person?: { kind: 'TEACHER' | 'STAFF'; id: string },
   ): Promise<Map<UsedKey, number>> {
     const apps = await tx.leaveApplication.findMany({ take: LIST_CEILING.ACTIVITY,
       where: {
         schoolId,
         status: 'APPROVED',
-        ...(teacherId ? { teacherId } : {}),
+        ...(person ? (person.kind === 'TEACHER' ? { teacherId: person.id } : { staffId: person.id }) : {}),
         startDate: { lte: yearEnd },
         endDate: { gte: yearStart },
       },
-      select: { teacherId: true, type: true, typeDefId: true, startDate: true, endDate: true },
+      select: { teacherId: true, staffId: true, halfDay: true, type: true, typeDefId: true, startDate: true, endDate: true },
     });
     if (apps.length === 0) return new Map();
 
@@ -450,8 +478,11 @@ export class LeavePolicyService {
         (d) => working.has(isoWeekdayOf(d)) && !holidays.has(d),
       ).length;
       if (days === 0) continue;
-      const key: UsedKey = `${app.teacherId}:${defId}`;
-      out.set(key, (out.get(key) ?? 0) + days);
+      // Keyed by the PERSON, not by the teacher column: a staff application
+      // carries `teacherId: null`, and keying on that would pile every
+      // driver's leave into one shared "null" balance.
+      const key: UsedKey = `${app.teacherId ?? app.staffId}:${defId}`;
+      out.set(key, (out.get(key) ?? 0) + (app.halfDay ? 0.5 : days));
     }
     return out;
   }

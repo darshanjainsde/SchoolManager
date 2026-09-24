@@ -25,17 +25,46 @@ export class SalaryGuard implements CanActivate {
     const req = ctx.switchToHttp().getRequest<Request & { user?: SchoolJwtPayload }>();
     const user = req.user;
     if (!user) return false;
-    if (user.role !== 'SCHOOL_ADMIN') {
-      throw new ApiError('NOT_SALARY_ADMIN', 'Only a school admin can open Salary.', 403);
-    }
     const db = getPlatformPrisma();
+
+    // AN ACCOUNTS OFFICER IS NOT AN ADMIN, and does not need to be.
+    //
+    // Their JOB opens the door — `Staff.role = ACCOUNTS`, the same pattern the
+    // librarian and the sports desk use — but the door is not the right. They
+    // still need `canSeeSalary`, granted to them by name, exactly as an admin
+    // does. A school that makes someone an accounts officer has not thereby
+    // shown them the principal's salary.
+    if (user.role === 'STAFF') {
+      const staff = await db.staff.findFirst({
+        where: { userId: user.sub, schoolId: user.schoolId, isActive: true },
+        select: { role: true },
+      });
+      if (staff?.role !== 'ACCOUNTS') {
+        throw new ApiError('NOT_SALARY_ADMIN', 'Only a school admin or an accounts officer can open Pay.', 403);
+      }
+      const me = await db.user.findFirst({
+        where: { id: user.sub, schoolId: user.schoolId, isActive: true },
+        select: { canSeeSalary: true },
+      });
+      if (me?.canSeeSalary) return true;
+      throw new ApiError(
+        'NOT_SALARY_ADMIN',
+        'You are the accounts officer, but nobody has given you the right to see pay yet. An admin grants it under Pay \u2192 Settings.',
+        403,
+      );
+    }
+
+    if (user.role !== 'SCHOOL_ADMIN') {
+      throw new ApiError('NOT_SALARY_ADMIN', 'Only a school admin or an accounts officer can open Pay.', 403);
+    }
     const row = await db.user.findFirst({
       where: { id: user.sub, schoolId: user.schoolId, isActive: true },
       select: { canSeeSalary: true },
     });
     if (row?.canSeeSalary) return true;
 
-    // SELF-HEALING FIRST HOLDER. The migration granted this to each existing
+    // SELF-HEALING FIRST HOLDER. Admins only — an accounts officer is never
+    // the first holder, because the right has to come from somebody. The migration granted this to each existing
     // school's earliest admin, but a school created afterwards has nobody —
     // and a right only an existing holder can grant would leave that school a
     // locked room with the key inside. So: if NO admin here holds it, the

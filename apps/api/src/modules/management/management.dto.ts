@@ -241,7 +241,7 @@ export class UpdateTeacherDto {
  * The login role stays STAFF — the job title, not the account type, is what
  * makes a librarian.
  */
-const STAFF_ROLES = ['OFFICE', 'SUPPORT', 'DRIVER', 'HELPER', 'SECURITY', 'LIBRARIAN', 'SPORTS', 'OTHER'] as const;
+const STAFF_ROLES = ['OFFICE', 'SUPPORT', 'DRIVER', 'HELPER', 'SECURITY', 'LIBRARIAN', 'SPORTS', 'ACCOUNTS', 'OTHER'] as const;
 export type StaffRoleValue = (typeof STAFF_ROLES)[number];
 
 export class CreateStaffDto {
@@ -663,6 +663,11 @@ export class CreateLeaveDto {
   @IsString()
   @Length(1, 2000)
   reason?: string;
+
+  /** One date at half strength. The DB CHECKs that start and end agree. */
+  @IsOptional()
+  @IsBoolean()
+  halfDay?: boolean;
 }
 
 export class AssignSubstitutionDto {
@@ -692,6 +697,22 @@ export class CreateLeaveTypeDefDto {
   @Min(0)
   @Max(366)
   carryForwardCap?: number;
+  /**
+   * The same type, a different audience. Teachers and non-teaching staff are
+   * rarely given the same number of days, and one column would have forced
+   * the larger of the two on everybody.
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(366)
+  defaultAnnualStaff?: number;
+
+  /** Never costs pay, whatever the balance says — maternity, bereavement. */
+  @IsOptional()
+  @IsBoolean()
+  neverDeduct?: boolean;
+
 }
 
 export class UpdateLeaveTypeDefDto {
@@ -719,6 +740,22 @@ export class UpdateLeaveTypeDefDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+  /**
+   * The same type, a different audience. Teachers and non-teaching staff are
+   * rarely given the same number of days, and one column would have forced
+   * the larger of the two on everybody.
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(366)
+  defaultAnnualStaff?: number;
+
+  /** Never costs pay, whatever the balance says — maternity, bereavement. */
+  @IsOptional()
+  @IsBoolean()
+  neverDeduct?: boolean;
+
 }
 
 export class SetLeaveAllocationDto {

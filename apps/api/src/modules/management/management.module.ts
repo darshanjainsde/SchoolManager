@@ -37,6 +37,7 @@ import { NotificationOutboxService } from './notification-outbox.service';
 import { NotificationOutboxController } from './notification-outbox.controller';
 import { CronSecretGuard } from '../../common/auth/cron-secret.guard';
 import { LoginInviteService } from './internal/login-invite.service';
+import { LeaveDeskGuard } from './internal/leave-desk.guard';
 import { LeaveService } from './leave.service';
 import { BellService } from './bell.service';
 import { ConsoleSearchService } from './console-search.service';
@@ -75,7 +76,7 @@ import { SeatingController } from './seating.controller';
 
 @Module({
   imports: [AuthModule, FeaturesModule, TenancyModule, PressModule, FeesModule, AlumniModule, LibraryModule],
-  providers: [EmailSettingsService, CatalogService, TeachersService, StaffService, ClassesService, StudentsService, StudentLifecycleService, SessionsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, ExamRemindersService, NotificationOutboxService, CronSecretGuard, LoginInviteService, LeaveService, BellService, ConsoleSearchService, PulseService, StudentReportService, LeavePolicyService, HolidaysService, ClassNotesService, RegisterChangeService, AssignmentsService, MessagesService, NotificationsService, PhotoService, DiaryService, AttendanceBarService, RoomsService, SeatingService],
+  providers: [LeaveDeskGuard, EmailSettingsService, CatalogService, TeachersService, StaffService, ClassesService, StudentsService, StudentLifecycleService, SessionsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, ExamRemindersService, NotificationOutboxService, CronSecretGuard, LoginInviteService, LeaveService, BellService, ConsoleSearchService, PulseService, StudentReportService, LeavePolicyService, HolidaysService, ClassNotesService, RegisterChangeService, AssignmentsService, MessagesService, NotificationsService, PhotoService, DiaryService, AttendanceBarService, RoomsService, SeatingService],
   controllers: [
     SessionsController,
     SessionsCronController,

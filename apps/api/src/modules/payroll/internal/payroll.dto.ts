@@ -167,6 +167,18 @@ export class PayDetailsDto {
   @IsOptional() @IsString() @MaxLength(20) esiNumber?: string;
 }
 
+/** The school's one rule for what leave past its quota costs. */
+export class LopPolicyDto {
+  @IsIn(['CALENDAR_DAY', 'WORKING_DAY', 'WARN_ONLY']) basis!: 'CALENDAR_DAY' | 'WORKING_DAY' | 'WARN_ONLY';
+  @IsOptional() @IsBoolean() countHalfDays?: boolean;
+}
+
+export class ApplyLeaveLopDto {
+  @IsInt() @Min(2000) @Max(2100) year!: number;
+  @IsInt() @Min(1) @Max(12) month!: number;
+  @IsArray() @IsUUID('4', { each: true }) personIds!: string[];
+}
+
 export class PreviewGradeDto {
   @IsObject() overrides!: Record<string, { rateBps?: number; fixedMinor?: number }>;
   @IsInt() @Min(0) @Max(1_000_000_00) monthlyGrossMinor!: number;

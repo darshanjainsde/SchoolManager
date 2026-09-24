@@ -140,7 +140,7 @@ describe('the pay run', () => {
 
   it('shrinks the proratable lines for unpaid days and says how many were paid', async () => {
     arrange({
-      adjustments: [{ id: 'adj-2', teacherId: T1, staffId: null, kind: 'DEDUCTION', label: 'Unpaid leave', amountMinor: 0, taxable: false, lopDays: 3 }],
+      adjustments: [{ id: 'adj-2', teacherId: T1, staffId: null, kind: 'DEDUCTION', label: 'Unpaid leave', amountMinor: 0, taxable: false, lopDays: 3, lopHalfDays: 0 }],
     });
     await service().calculate(SCHOOL, RUN);
     expect(slip().daysPaid).toBe(27);
@@ -171,6 +171,25 @@ describe('the pay run', () => {
     // The person's own fixedAmounts (₹1,600) win: a grade is the default for a
     // job, not an override of what was agreed with a person.
     expect(lineOf('conveyance')!.amountMinor).toBe(L(1_600));
+  });
+
+  it('pays half a day less for a half-day leave, and records the half', async () => {
+    // The precision that made the second integer column worth having: the
+    // MONEY is prorated on 29.5/30, while `daysPaid` stores the rounded
+    // number an installed app build still reads.
+    arrange({
+      adjustments: [{ id: 'adj-h', teacherId: T1, staffId: null, kind: 'DEDUCTION', label: 'Leave without pay', amountMinor: 0, taxable: false, lopDays: 0, lopHalfDays: 1 }],
+    });
+    await service().calculate(SCHOOL, RUN);
+    expect(slip().lopHalfDays).toBe(1);
+    expect(slip().daysInMonth).toBe(30);
+    // 29.5/30 of ₹40,000 is ₹39,333.33 in one division — but prorate works
+    // LINE BY LINE and rounds each to the paisa, so the parts add to ₹39,332.
+    // That is the right answer: a payslip's lines must add to its own total,
+    // not to a figure computed a different way.
+    expect(slip().grossMinor).toBe(L(39_332));
+    // A whole-day deduction would have cost ₹1,333 instead of ₹668.
+    expect(L(40_000) - slip().grossMinor).toBe(L(668));
   });
 
   it('shows what the school paid in on top — the line most payslips leave out', async () => {

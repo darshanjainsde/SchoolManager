@@ -27,6 +27,9 @@ export const AUTHZ_REVIEWED: string[] = [
   // user id, never from a parameter). The SALARY feature is in no tier, so a
   // PRO school without the override 403s on every route in the module.
   "GET /payroll/overview",
+  "GET /payroll/leave",
+  "POST /payroll/leave/apply",
+  "POST /payroll/leave/policy",
   "GET /payroll/grades",
   "GET /payroll/grades/suggest",
   "POST /payroll/grades",
