@@ -26,7 +26,12 @@ function audit(doc,win,w){
     const s=win.getComputedStyle(e);
     if(e.children.length===0&&e.scrollWidth>e.clientWidth+1&&!scrolls(e)&&s.textOverflow!=='ellipsis'&&e.clientWidth>0)
       R.push(`${panel} | CLIPPED ${e.scrollWidth}>${e.clientWidth} | ${e.tagName.toLowerCase()}.${(e.className||'').toString().split(' ')[0]} | "${(e.textContent||'').trim().slice(0,40)}"`);
-    // 3. an overlay outside the theme: a dialog whose background resolved to nothing
+    // 3. RAGGED COLUMNS: two rows of one list whose cells start at different x.
+    //    The defect that made every hand-rolled list look broken — a flex row
+    //    with a `flex: 1` spacer lets each row's text decide where its controls
+    //    land. Measured, not eyeballed: same list, same column, different left.
+    // (handled once per list below, not per element)
+    // 4. an overlay outside the theme: a dialog whose background resolved to nothing
     //    (tokens live on .skosx; a portal on bare <body> gets none), or one that
     //    sits INSIDE main, where an ancestor transform will re-anchor it.
     if(e.getAttribute('role')==='dialog'){
@@ -37,6 +42,21 @@ function audit(doc,win,w){
     // 4. tap targets under 24px on touch widths
     if(w<=414&&/^(button|a|input|select)$/i.test(e.tagName)&&(r.height<24||r.width<24)&&r.height>0)
       R.push(`${panel} | TAP ${Math.round(r.width)}x${Math.round(r.height)} | ${e.tagName.toLowerCase()}.${(e.className||'').toString().split(' ')[0]} | "${(e.textContent||'').trim().slice(0,30)}"`);
+  }
+  // Ragged columns, per list.
+  for(const list of doc.querySelectorAll('.sk-rowlist')){
+    const rows=[...list.querySelectorAll(':scope > .sk-rowline')];
+    if(rows.length<2) continue;
+    const cols=rows.map(r=>[...r.querySelectorAll(':scope > .sk-rowcell')].map(c=>Math.round(c.getBoundingClientRect().left)));
+    const n=Math.min(...cols.map(c=>c.length));
+    for(let c=0;c<n;c++){
+      const xs=cols.map(r=>r[c]);
+      const spread=Math.max(...xs)-Math.min(...xs);
+      if(spread>1){
+        const panel=list.closest('.audit-panel')?.dataset.panel||'?';
+        R.push(`${panel} | RAGGED column ${c+1} varies by ${spread}px across ${rows.length} rows | the list must own the tracks`);
+      }
+    }
   }
   return R;
 }

@@ -32,6 +32,11 @@ It reports three classes of defect, each mechanical:
 - **CLIPPED** — a leaf whose content is wider than its box, with no scroller and
   no ellipsis. That is text nobody can read.
 - **TAP** — an interactive element under 24px on a touch width.
+- **RAGGED** — two rows of one list whose cells start at different x. A flex
+  row with a `flex: 1` spacer lets each row's text decide where its controls
+  land, so no two rows agree. Use `RowList`/`Row`/`Cell` from
+  `components/ui/kit.tsx`: the LIST declares the tracks, every row inherits
+  them, and the spread is measured here at 0px.
 - **DIALOG NO BACKGROUND / DIALOG INSIDE MAIN** — an overlay outside the theme
   (tokens live on `.skosx`; a portal on bare `<body>` resolves them to nothing)
   or one rendered inside `<main>`, where `.sk-anim`'s transform will re-anchor
