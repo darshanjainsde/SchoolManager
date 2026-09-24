@@ -26,7 +26,15 @@ function audit(doc,win,w){
     const s=win.getComputedStyle(e);
     if(e.children.length===0&&e.scrollWidth>e.clientWidth+1&&!scrolls(e)&&s.textOverflow!=='ellipsis'&&e.clientWidth>0)
       R.push(`${panel} | CLIPPED ${e.scrollWidth}>${e.clientWidth} | ${e.tagName.toLowerCase()}.${(e.className||'').toString().split(' ')[0]} | "${(e.textContent||'').trim().slice(0,40)}"`);
-    // 3. tap targets under 24px on touch widths
+    // 3. an overlay outside the theme: a dialog whose background resolved to nothing
+    //    (tokens live on .skosx; a portal on bare <body> gets none), or one that
+    //    sits INSIDE main, where an ancestor transform will re-anchor it.
+    if(e.getAttribute('role')==='dialog'){
+      const bg=s.backgroundColor;
+      if(!bg||bg==='rgba(0, 0, 0, 0)'||bg==='transparent') R.push(`${panel} | DIALOG NO BACKGROUND (outside .skosx?) | ${e.getAttribute('aria-label')||''}`);
+      if(e.closest('main')) R.push(`${panel} | DIALOG INSIDE MAIN (will be trapped by .sk-anim transform) | ${e.getAttribute('aria-label')||''}`);
+    }
+    // 4. tap targets under 24px on touch widths
     if(w<=414&&/^(button|a|input|select)$/i.test(e.tagName)&&(r.height<24||r.width<24)&&r.height>0)
       R.push(`${panel} | TAP ${Math.round(r.width)}x${Math.round(r.height)} | ${e.tagName.toLowerCase()}.${(e.className||'').toString().split(' ')[0]} | "${(e.textContent||'').trim().slice(0,30)}"`);
   }
@@ -35,8 +43,15 @@ function audit(doc,win,w){
 (async()=>{
   for(const w of WIDTHS){
     const f=document.createElement('iframe');
-    f.width=w;f.height=900;f.src=FILE;document.body.appendChild(f);
+    // Cache-busted: a regenerated screens file behind a cached iframe measured the OLD build once.
+    f.width=w;f.height=900;f.src=FILE+(FILE.includes('?')?'&':'?')+'t='+Date.now();document.body.appendChild(f);
     await new Promise(r=>f.onload=r);
+    // This measures LAYOUT, not motion. Chrome does not tick animations in an
+    // off-screen iframe, so a running entrance animation sits frozen on its
+    // FIRST frame — a drawer measured entirely outside the viewport at every
+    // width, a frame no user sees. Switch motion off, as reduced-motion does,
+    // and measure the resting layout.
+    f.contentDocument.head.insertAdjacentHTML('beforeend','<style>*{animation:none!important;transition:none!important}</style>');
     await new Promise(r=>setTimeout(r,250));
     const R=audit(f.contentDocument,f.contentWindow,w);
     const uniq=[...new Set(R)];

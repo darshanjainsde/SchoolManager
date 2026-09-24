@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
@@ -109,11 +110,12 @@ export default function PeopleTab({ base }: { base: string }) {
     return out;
   }, [people.data, grades.data]);
 
+  const [justAssigned, setJustAssigned] = useState<{ grade: string; moved: number } | null>(null);
   const assign = useMutation({
     mutationFn: (v: { gradeId: string; effectiveFrom: string; rows: { personKind: 'TEACHER' | 'STAFF'; personId: string; monthlyGrossMinor: number }[] }) =>
-      api.post('/payroll/grades/assign', v),
-    onSuccess: () => {
-      setBulkOpen(false); setPicked(new Set()); setError(null);
+      api.post<{ grade: string; moved: number }>('/payroll/grades/assign', v),
+    onSuccess: (r: { grade: string; moved: number }) => {
+      setBulkOpen(false); setPicked(new Set()); setError(null); setJustAssigned(r);
       void qc.invalidateQueries({ queryKey: ['pay-people'] });
       void qc.invalidateQueries({ queryKey: ['pay-grades'] });
       void qc.invalidateQueries({ queryKey: ['pay-overview'] });
@@ -145,6 +147,13 @@ export default function PeopleTab({ base }: { base: string }) {
   return (
     <div className="sk-paystack">
       {error ? <div className="sk-state" role="alert" style={{ color: 'var(--sk-bad)' }}>{error}</div> : null}
+
+      {justAssigned ? (
+        <Note>
+          <span>{justAssigned.moved} put on {justAssigned.grade}. The month now knows what it costs.</span>
+          <Link className="sk-btn" data-size="sm" href={base} style={{ justifySelf: 'start' }}>Go to This month</Link>
+        </Note>
+      ) : null}
 
       {gradeList.length === 0 ? (
         <Note>
@@ -215,7 +224,9 @@ export default function PeopleTab({ base }: { base: string }) {
                           {out ? <span style={{ color: 'var(--sk-amber-ink)' }}> · outside the band</span> : null}
                         </span>
                       </span>
-                      {p.pay ? <span className="amt">{rupees(p.pay.monthlyGrossMinor)}</span> : <span className="sk-pill" data-tone="bad">no pay set</span>}
+                      {/* No per-row "no pay set" pill: the group heading already says it once,
+                          and seventy-two identical pills read as decoration, not a warning. */}
+                      {p.pay ? <span className="amt">{rupees(p.pay.monthlyGrossMinor)}</span> : null}
                       <button type="button" className="sk-btn" data-size="sm" onClick={() => { setEditing(p); setError(null); }}>
                         {p.pay ? 'Change' : 'Set pay'}
                       </button>
@@ -224,7 +235,7 @@ export default function PeopleTab({ base }: { base: string }) {
                 })}
                 {hidden > 0 ? (
                   <button type="button" className="sk-paymore" onClick={() => setExpanded(new Set(expanded).add(g.key))}>
-                    Show the other {hidden} in {g.title}
+                    Show {hidden} more
                   </button>
                 ) : null}
                 {open && g.people.length > GROUP_PREVIEW ? (
@@ -346,9 +357,7 @@ function PayDrawer({ person, settings, grades, onClose }:
       onClose={onClose}
       footer={(
         <>
-          <span className="sk-muted" style={{ fontSize: 12 }}>
-            {grossMinor > 0 ? `${rupees(grossMinor)} a month` : 'Enter a figure'}
-          </span>
+          <span />
           <button
             type="button" className="sk-btn sk-press" data-variant="primary"
             disabled={save.isPending || grossMinor <= 0 || (preview.data?.overshootMinor ?? 0) > 0}
@@ -511,7 +520,7 @@ function BulkAssign({ people, grades, pending, onClose, onSubmit }: {
       onClose={onClose}
       footer={(
         <>
-          <span className="sk-muted" style={{ fontSize: 12 }}>{rupees(total)} a month</span>
+          <span />
           <button
             type="button" className="sk-btn sk-press" data-variant="primary"
             disabled={pending || !ready}

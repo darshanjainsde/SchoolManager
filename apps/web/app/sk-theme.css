@@ -4238,10 +4238,22 @@ html[data-theme='light'] .skosx { color-scheme: light; }
    A drawer, not a section under the table. Rendering it after a
    long roster put it below the fold, so pressing "Set pay" looked
    like it did nothing — which is how the tab came to feel broken. */
+/* z-index comes from Z.OVERLAY inline — the one stacking ladder in
+   lib/z-layers.ts, so this can never sit under the command bar. The portal
+   root also carries `.skosx`: every token is scoped there, and a portal on
+   bare <body> resolves them all to nothing (this shipped see-through once). */
 .sk-payscrim {
   position: fixed; inset: 0; background: rgba(20, 16, 40, 0.34);
   display: flex; justify-content: flex-end;
 }
+/* No fill mode, on purpose: the panel's natural position is IN PLACE and the
+   animation only ever moves it there from off-screen. With `both` the element
+   holds the off-screen `from` frame until the first animation tick — and a
+   throttled or hidden tab never ticks, so the drawer measured entirely outside
+   the viewport at every width. Base state = end state; motion is additive. */
+@keyframes sk-paydrawer-in { from { transform: translateX(100%); } to { transform: none; } }
+.sk-paydrawer { animation: sk-paydrawer-in 0.22s ease-out; }
+@media (prefers-reduced-motion: reduce) { .sk-paydrawer { animation: none; } }
 .sk-paydrawer {
   background: var(--sk-card); width: min(430px, 100%); height: 100%;
   /* The PANEL does not scroll — its body does. That is what keeps the header
@@ -4294,4 +4306,110 @@ html[data-theme='light'] .skosx { color-scheme: light; }
     border-left: 0; border-top: 1px solid var(--sk-line-2);
     border-radius: 16px 16px 0 0;
   }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════
+   HOW PAY WORKS — the six screens, walked through with a pointer,
+   on the Pay home. Every scene renders in full as a storyboard;
+   the script only ever ADDS data-hide, so nothing is hidden waiting
+   for JavaScript. Figures are static text. Reduced motion: no
+   pointer, no autoplay, end states everywhere. Prefix sk-hpw.
+   ═══════════════════════════════════════════════════════════════ */
+.sk-hpw-walk { display: grid; grid-template-columns: minmax(min(100%, 200px), 220px) 1fr; gap: 12px; }
+.sk-hpw-walk > * { min-width: 0; }
+@media (max-width: 720px) { .sk-hpw-walk { grid-template-columns: 1fr; } }
+.sk-hpw-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; align-content: start; }
+.sk-hpw-steps ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.sk-hpw-group .g { display: block; font-family: var(--sk-serif); font-size: 13px; font-weight: 650; color: var(--sk-ink); padding: 8px 0 3px; }
+.sk-hpw-steps button {
+  all: unset; display: block; width: 100%; box-sizing: border-box; font-size: 12px; line-height: 1.3;
+  color: var(--sk-ink-2); padding: 6px 8px; min-height: 28px; border-radius: 7px; cursor: pointer;
+}
+.sk-hpw-steps button:hover { background: var(--sk-bg-2); }
+.sk-hpw-steps button[aria-current="step"] { background: var(--sk-brand-tint); color: var(--sk-brand-2); font-weight: 650; }
+.sk-hpw-stage {
+  position: relative; background: var(--sk-bg-2); border: 1px solid var(--sk-line); border-radius: 12px;
+  padding: 12px; min-height: 475px; overflow: hidden; display: grid; gap: 10px; align-content: start; min-width: 0;
+}
+.sk-hpw-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--sk-line); overflow-x: auto; }
+.sk-hpw-tabs span { font-size: 12.5px; font-weight: 600; color: var(--sk-ink-3); padding: 6px 10px; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+.sk-hpw-tabs span[data-on] { color: var(--sk-brand); border-bottom-color: var(--sk-brand); }
+/* Storyboard: every scene shows until the script is live and picks one. */
+.sk-hpw-scene { position: relative; min-height: 385px; min-width: 0; display: grid; gap: 10px; align-content: start; }
+.sk-hpw-stage[data-live] .sk-hpw-scene { display: none; }
+.sk-hpw-stage[data-live] .sk-hpw-scene[data-on] { display: grid; }
+.sk-hpw-stage [data-hide] { display: none !important; }
+.sk-hpw-card { background: var(--sk-card); border: 1px solid var(--sk-line); border-radius: 10px; min-width: 0; }
+.sk-hpw-card.narrow { max-width: 300px; }
+.sk-hpw-card > .h { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 10px 12px; border-bottom: 1px solid var(--sk-line); }
+.sk-hpw-card > .h > b { font-family: var(--sk-serif); font-size: 14px; color: var(--sk-ink); }
+.sk-hpw-card > .b { padding: 8px 12px; display: grid; gap: 6px; }
+.sk-hpw-card > .b.two, .sk-hpw-drawer .two { grid-template-columns: repeat(auto-fit, minmax(min(100%, 120px), 1fr)); gap: 8px; }
+.sk-hpw-drawer .two { display: grid; }
+.sk-hpw-stage label { display: grid; gap: 3px; min-width: 0; }
+.sk-hpw-stage .inp {
+  border: 1px solid var(--sk-line-2); border-radius: 7px; background: var(--sk-card); padding: 5px 8px;
+  font-size: 12px; color: var(--sk-ink); min-height: 28px; box-sizing: border-box; white-space: nowrap; overflow: hidden; position: relative;
+}
+.sk-hpw-stage .inp.sm { flex: 0 0 5.5em; font-family: var(--sk-mono); }
+.sk-hpw-stage .inp.dim, .sk-hpw-stage .row.dim { color: var(--sk-ink-3); opacity: .7; }
+.sk-hpw-stage .hint { font-size: 10.5px; color: var(--sk-ink-3); }
+.sk-hpw-stage .hint[data-lit] { color: var(--sk-amber-ink); background: var(--sk-amber-tint); border-radius: 5px; padding: 3px 6px; }
+.sk-hpw-stage .serif { font-family: var(--sk-serif); font-size: 15px; }
+.sk-hpw-stage .row { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-top: 1px solid var(--sk-line); font-size: 12px; min-height: 30px; flex-wrap: wrap; }
+.sk-hpw-stage .row:first-child { border-top: 0; }
+.sk-hpw-stage .row > b { font-weight: 650; color: var(--sk-ink); }
+.sk-hpw-stage .row > span { color: var(--sk-ink-3); font-size: 11.5px; flex: 1 1 110px; min-width: 0; }
+.sk-hpw-stage .row > .amt { flex: 0 0 auto; font-family: var(--sk-mono); color: var(--sk-ink); font-size: 12px; }
+.sk-hpw-stage .gh { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 4px 0 8px; min-width: 0; }
+.sk-hpw-stage .gh > span { font-size: 11px; color: var(--sk-ink-3); }
+.sk-hpw-stage .more { text-align: center; font-size: 11.5px; color: var(--sk-ink-2); border: 1px dashed var(--sk-line-2); border-radius: 8px; padding: 6px; margin-top: 4px; }
+.sk-hpw-stage .chk { width: 13px; height: 13px; border: 1.5px solid var(--sk-line-2); border-radius: 3px; flex: none; position: relative; background: var(--sk-card); transition: background .25s, border-color .25s; }
+.sk-hpw-stage .chk::after { content: ""; position: absolute; left: 3px; top: 0; width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg) scale(0); transition: transform .25s cubic-bezier(.22,1,.36,1); }
+.sk-hpw-stage[data-tick] .chk { background: var(--sk-brand); border-color: var(--sk-brand); }
+.sk-hpw-stage[data-tick] .chk::after { transform: rotate(45deg) scale(1); }
+.sk-hpw-drawer {
+  position: absolute; top: 44px; right: 0; bottom: 0; width: min(300px, 92%); background: var(--sk-card);
+  border-left: 1px solid var(--sk-line-2); box-shadow: -14px 0 34px rgba(20,16,40,.16); display: flex; flex-direction: column;
+  border-radius: 10px 0 0 10px; animation: sk-paydrawer-in .28s cubic-bezier(.22,1,.36,1); z-index: 2;
+}
+.sk-hpw-drawer .dh { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--sk-line); font-family: var(--sk-serif); font-size: 14px; color: var(--sk-ink); }
+.sk-hpw-drawer .db { flex: 1; min-height: 0; overflow: hidden; padding: 10px 12px; display: grid; gap: 8px; align-content: start; }
+.sk-hpw-drawer .df { display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; border-top: 1px solid var(--sk-line); }
+/* typing: the full text is always present; the script reveals it with a clip */
+.sk-hpw-stage .inp[data-typing] { color: transparent; }
+.sk-hpw-stage .inp[data-typing]::before { content: attr(data-shown); position: absolute; left: 8px; top: 5px; color: var(--sk-ink); }
+.sk-hpw-stage .inp[data-typing]::after { content: ""; position: absolute; top: 6px; width: 1px; height: 16px; background: var(--sk-ink); left: calc(8px + var(--cw, 0ch)); animation: sk-hpw-blink .9s steps(2) infinite; }
+@keyframes sk-hpw-blink { 50% { opacity: 0; } }
+.sk-hpw-stage .sk-btn[data-press] { transform: scale(.96); background: var(--sk-brand-2); border-color: var(--sk-brand-2); color: #fff; }
+.sk-hpw-stage .flow { display: flex; gap: 6px; flex-wrap: wrap; }
+.sk-hpw-stage .flow .sk-btn[data-done] { background: var(--sk-good-tint); border-color: var(--sk-good); color: var(--sk-good); }
+.sk-hpw-stage .flow .sk-btn[data-off] { opacity: .45; }
+.sk-hpw-stage .big { font-family: var(--sk-serif); font-size: clamp(22px, 5vw, 30px); font-weight: 650; color: var(--sk-ink); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.sk-hpw-stage .trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.sk-hpw-stage .trio > div { background: var(--sk-bg-2); border-radius: 8px; padding: 7px 8px; display: grid; gap: 1px; min-width: 0; }
+.sk-hpw-stage .trio b { font-family: var(--sk-mono); font-size: clamp(10.5px, 2.6vw, 12.5px); color: var(--sk-ink); }
+.sk-hpw-stage .trio span { font-size: 9.5px; color: var(--sk-ink-3); }
+.sk-hpw-stage .stamp { border: 2px solid var(--sk-good); color: var(--sk-good); border-radius: 5px; padding: 0 6px; font-family: var(--sk-mono); font-size: 10px; font-weight: 700; letter-spacing: .08em; transform: rotate(-8deg); animation: sk-hpw-stamp .5s cubic-bezier(.22,1,.36,1) both; }
+@keyframes sk-hpw-stamp { from { opacity: 0; transform: rotate(-8deg) scale(1.6); } 60% { transform: rotate(-8deg) scale(.95); } to { opacity: 1; transform: rotate(-8deg) scale(1); } }
+.sk-hpw-stage .ink { animation: none; }
+@keyframes sk-hpw-ink { 0% { right: 86%; } 100% { right: 26%; } }
+@keyframes sk-hpw-fill { from { transform: scaleX(0); } }
+.sk-hpw-stage[data-draw] .sk-payband > .ink { animation: sk-hpw-ink 1s cubic-bezier(.22,1,.36,1) both; }
+.sk-hpw-stage[data-draw] .sk-paysplit > .ink { transform-origin: left; animation: sk-hpw-fill .5s cubic-bezier(.22,1,.36,1) both; }
+.sk-hpw-stage[data-draw] .sk-paysplit > .ink:nth-child(2) { animation-delay: .15s; } .sk-hpw-stage[data-draw] .sk-paysplit > .ink:nth-child(3) { animation-delay: .3s; }
+.sk-hpw-cap { position: absolute; left: 12px; right: 12px; bottom: 16px; background: var(--sk-ink); color: var(--sk-card); font-size: 12.5px; line-height: 1.4; padding: 8px 11px; border-radius: 8px; box-shadow: 0 8px 22px rgba(20,16,40,.22); z-index: 3; }
+.sk-hpw-cur { position: absolute; width: 20px; height: 20px; left: 8%; top: 12%; pointer-events: none; filter: drop-shadow(0 2px 3px rgba(0,0,0,.25)); transition: left .55s cubic-bezier(.22,1,.36,1), top .55s cubic-bezier(.22,1,.36,1); z-index: 4; }
+.sk-hpw-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--sk-line); }
+.sk-hpw-bar i { display: block; height: 100%; background: var(--sk-brand); transition: width .3s linear; }
+.sk-hpw-stage:not([data-live]) .sk-hpw-cur, .sk-hpw-stage:not([data-live]) .sk-hpw-bar { display: none; }
+/* Inline links are 15px of ink and need 24px of finger; padding grows the
+   hit area and the negative margin keeps the line where it was. */
+.sk-hpw-foot a { display: inline-block; padding: 6px 4px; margin: -6px -4px; }
+@media (prefers-reduced-motion: reduce) {
+  /* End state, not "off": every base value above is already the finished picture. */
+  .sk-hpw-cur, .sk-hpw-bar { display: none; }
+  .sk-hpw-drawer, .sk-hpw-stage .stamp, .sk-hpw-stage[data-draw] .ink, .sk-hpw-stage .inp[data-typing]::after { animation: none; }
+  .sk-hpw-stage .chk, .sk-hpw-stage .chk::after, .sk-hpw-cur { transition: none; }
 }

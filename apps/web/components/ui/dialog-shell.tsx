@@ -1,5 +1,6 @@
 'use client';
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
+import { useFocusTrap } from './use-focus-trap';
 
 /**
  * The console's modal frame: a scrim, an `.sk-card` dialog, focus moved in,
@@ -21,41 +22,8 @@ export default function DialogShell({
   children: ReactNode;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = containerRef.current;
-    const focusable = el?.querySelectorAll<HTMLElement>(
-      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-    );
-    focusable?.[0]?.focus();
-
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        onClose();
-        return;
-      }
-      if (e.key === 'Tab' && el) {
-        const items = Array.from(
-          el.querySelectorAll<HTMLElement>(
-            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-          ),
-        );
-        if (items.length === 0) return;
-        const first = items[0];
-        const last = items[items.length - 1];
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault();
-          last.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault();
-          first.focus();
-        }
-      }
-    }
-    document.addEventListener('keydown', onKeyDown, true);
-    return () => document.removeEventListener('keydown', onKeyDown, true);
-  }, [onClose]);
+  // The trap lives in one hook now, shared with the Pay drawer.
+  useFocusTrap(containerRef, onClose);
 
   return (
     <div

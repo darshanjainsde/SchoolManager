@@ -140,11 +140,13 @@ async function markup(node: React.ReactNode, after?: (host: HTMLElement) => void
     await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
   }
   // The drawer portals to <body>, so it is NOT inside the host — which is the
-  // whole point of it. Collect it separately or it goes unmeasured again.
+  // whole point of it. It is written OUTSIDE <main> below, exactly where the
+  // console puts it, so the measurement sees the tree a user gets: a portal
+  // root that must carry its own `.skosx`, or every token resolves to nothing.
   const portal = [...document.body.children]
     .filter((el) => el !== host && el.querySelector('.sk-paydrawer'))
     .map((el) => el.outerHTML).join('');
-  const html = host.innerHTML + portal;
+  const html = host.innerHTML + (portal ? `</div></main>${portal}<main hidden><div>` : '');
   await act(async () => { root.unmount(); });
   host.remove();
   return html;
@@ -178,7 +180,7 @@ it('writes the real Pay screens for a browser to measure', async () => {
 <style>body{margin:0;padding:10px;background:var(--sk-bg,#fff)}
 .audit-panel{margin:0 0 26px}
 .audit-h{font:600 11px ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase;color:#888;margin:0 0 7px}</style>
-</head><body class="skosx"><div class="sk-paystack">${body}</div></body></html>`);
+</head><body><main class="skosx sk-anim" style="padding:24px"><div class="sk-paystack">${body}</div></main></body></html>`);
 
   console.log(`wrote audit/pay.html — ${body.length} bytes of real component markup`);
   // Proof the queries actually settled: a loading render would contain none of
@@ -189,5 +191,8 @@ it('writes the real Pay screens for a browser to measure', async () => {
   // The drawer really opened — otherwise the panel measures an empty div and
   // reports CLEAN for a screen nobody rendered.
   expect(body).toContain('sk-paydrawer-actions');
+  // The portal root must carry the theme itself: `.skosx` is where every
+  // token lives, and a portal on bare <body> shipped see-through once.
+  expect(body).toMatch(/<div class="skosx sk-payscrim"/);
   expect(body.length).toBeGreaterThan(5000);
 });

@@ -136,6 +136,21 @@ export default function GradesTab({ base }: { base: string }) {
     onError: (e: Error) => setError(e.message),
   });
 
+  /**
+   * Bands typed straight into the drafted list, keyed by grade name. On a
+   * first setup no pay exists yet, so every drafted band is 0–0 and "Add all"
+   * would mean adding eight grades and then editing eight. Two figures per row
+   * here turns that into one action.
+   */
+  const [draftBands, setDraftBands] = useState<Record<string, { min: string; max: string }>>({});
+  const bandOf = (r: SuggestedGrade) => {
+    const d = draftBands[r.name];
+    return {
+      bandMinMinor: d?.min ? toMinor(d.min) : r.bandMinMinor,
+      bandMaxMinor: d?.max ? toMinor(d.max) : r.bandMaxMinor,
+    };
+  };
+
   const acceptAll = useMutation({
     mutationFn: async (rows: SuggestedGrade[]) => {
       // One at a time on purpose: the name is unique per school, so a clash
@@ -143,7 +158,7 @@ export default function GradesTab({ base }: { base: string }) {
       for (const r of rows) {
         await api.post('/payroll/grades', {
           name: r.name, description: r.description,
-          bandMinMinor: r.bandMinMinor, bandMaxMinor: r.bandMaxMinor,
+          ...bandOf(r),
           order: r.order, overrides: {},
         });
       }
@@ -197,9 +212,9 @@ export default function GradesTab({ base }: { base: string }) {
                   <CardBody className="grid gap-2">
                     <Note>
                       <span>
-                        These come from the jobs already on your roll, and any band from the pay you
-                        have already set. Nothing is saved until you add them, and every one can be
-                        edited afterwards.
+                        These come from the jobs already on your roll. Type each band straight in —
+                        or edit one first. Nothing is saved until you add them, and every one can be
+                        changed afterwards.
                       </span>
                     </Note>
                     {suggest.data.map((g) => (
@@ -208,15 +223,27 @@ export default function GradesTab({ base }: { base: string }) {
                           <span className="nm">{g.name}</span>
                           <span className="meta">
                             {g.description} · {g.headcount} {g.headcount === 1 ? 'person' : 'people'}
-                            {g.bandMaxMinor > 0 ? ` · ${rupees(g.bandMinMinor)} – ${rupees(g.bandMaxMinor)}` : ' · no band yet'}
+                            {g.bandMaxMinor > 0 ? ` · ${rupees(g.bandMinMinor)} – ${rupees(g.bandMaxMinor)}` : ''}
                           </span>
                         </span>
+                        <input
+                          className="sk-input" inputMode="numeric" style={{ width: '7em', flex: '0 0 auto' }}
+                          placeholder="band from" aria-label={`${g.name} band from`}
+                          value={draftBands[g.name]?.min ?? (g.bandMinMinor ? String(Math.round(g.bandMinMinor / 100)) : '')}
+                          onChange={(e) => setDraftBands({ ...draftBands, [g.name]: { min: e.target.value, max: draftBands[g.name]?.max ?? '' } })}
+                        />
+                        <input
+                          className="sk-input" inputMode="numeric" style={{ width: '7em', flex: '0 0 auto' }}
+                          placeholder="to" aria-label={`${g.name} band to`}
+                          value={draftBands[g.name]?.max ?? (g.bandMaxMinor ? String(Math.round(g.bandMaxMinor / 100)) : '')}
+                          onChange={(e) => setDraftBands({ ...draftBands, [g.name]: { min: draftBands[g.name]?.min ?? '', max: e.target.value } })}
+                        />
                         <button
                           type="button" className="sk-btn" data-size="sm"
                           onClick={() => setDraft({
                             name: g.name, description: g.description,
-                            bandMin: g.bandMinMinor ? String(Math.round(g.bandMinMinor / 100)) : '',
-                            bandMax: g.bandMaxMinor ? String(Math.round(g.bandMaxMinor / 100)) : '',
+                            bandMin: draftBands[g.name]?.min ?? (g.bandMinMinor ? String(Math.round(g.bandMinMinor / 100)) : ''),
+                            bandMax: draftBands[g.name]?.max ?? (g.bandMaxMinor ? String(Math.round(g.bandMaxMinor / 100)) : ''),
                             basicPct: '',
                           })}
                         >

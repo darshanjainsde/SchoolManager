@@ -102,7 +102,7 @@ export default function RunPanel({ runId, base }: { runId: string; base: string 
         {open.status === 'LOCKED' || open.status === 'PAID' ? (
           <p className="sk-muted" style={{ fontSize: 12.5 }}>
             Locked on {open.lockedAt ? new Date(open.lockedAt).toLocaleDateString('en-IN', { dateStyle: 'medium' }) : '—'}.
-            Download the provident-fund, ESI and bank files under <a href={`${base}/filings`}>Filings</a>.
+            Every slip is under <a href={`${base}/payslips`}>Payslips</a>; the provident-fund, ESI and bank files are under <a href={`${base}/filings`}>Filings</a>.
           </p>
         ) : null}
 

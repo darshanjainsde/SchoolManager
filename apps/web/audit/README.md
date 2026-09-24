@@ -32,6 +32,15 @@ It reports three classes of defect, each mechanical:
 - **CLIPPED** — a leaf whose content is wider than its box, with no scroller and
   no ellipsis. That is text nobody can read.
 - **TAP** — an interactive element under 24px on a touch width.
+- **DIALOG NO BACKGROUND / DIALOG INSIDE MAIN** — an overlay outside the theme
+  (tokens live on `.skosx`; a portal on bare `<body>` resolves them to nothing)
+  or one rendered inside `<main>`, where `.sk-anim`'s transform will re-anchor
+  its `position: fixed`. Both shipped once.
+
+Motion is switched off inside the measured frame. Chrome does not tick
+animations in an off-screen iframe, so an entrance animation sits frozen on its
+first frame and a drawer measures as entirely off-screen — a frame nobody sees.
+The harness measures the resting layout, exactly as reduced-motion renders it.
 
 `screens.html` is generated and git-ignored. Fixtures deliberately use the
 longest realistic values (a full Indian name, `4 × 100 m relay`), per the
