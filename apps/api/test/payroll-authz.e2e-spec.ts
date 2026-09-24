@@ -86,11 +86,13 @@ describe('salary authorization', () => {
   let adminToken: string;
   let staffToken: string;
   let teacherToken: string;
+  let driverUserId: string;
 
   beforeAll(async () => {
     const seeded = await seedMinimalSchool();
     host = seeded.host;
     schoolId = seeded.schoolId;
+    driverUserId = seeded.driverUserId;
     await withSalary(schoolId);
     // The migration grants the right to each EXISTING school's earliest admin;
     // this school was made afterwards, so the guard's self-healing path is what
@@ -186,6 +188,70 @@ describe('salary authorization', () => {
     await call('post', '/payroll/access', adminToken).send({ userId: second.id, canSeeSalary: true }).expect(201);
     const after = await call('get', '/payroll/settings', token);
     expect([401, 403]).not.toContain(after.status);
+  });
+
+  /**
+   * THE ACCOUNTS OFFICER — a job, and then still a right.
+   *
+   * The generic-STAFF rejection above is only half the claim. These prove the
+   * other half: that the job genuinely opens the door, that it is NOT by
+   * itself enough, and that an admin can actually hand over the key. Before
+   * `/payroll/access` listed officers, that last step existed nowhere in the
+   * product — the guard told the officer to ask an admin, and the admin's
+   * grant screen did not have their name on it.
+   */
+  describe('the accounts officer', () => {
+    let officerToken: string;
+    let officerUserId: string;
+
+    beforeAll(async () => {
+      const db = getPlatformPrisma();
+      const user = await db.user.create({
+        data: { schoolId, email: `accounts-${Date.now()}@authz.test`, role: 'STAFF', passwordHash: 'x' },
+      });
+      officerUserId = user.id;
+      await db.staff.create({
+        data: { schoolId, firstName: 'Meera', lastName: 'Shah', role: 'ACCOUNTS', userId: user.id },
+      });
+      officerToken = signSchoolToken({ sub: user.id, schoolId, role: 'STAFF' });
+    });
+
+    it('is refused Pay until somebody grants the right — the job is not the right', async () => {
+      const res = await call('get', '/payroll/settings', officerToken);
+      expect(res.status).toBe(403);
+      expect(JSON.stringify(res.body)).toMatch(/accounts officer/i);
+    });
+
+    it('appears on the list of people an admin can grant it to', async () => {
+      // Without this the guard's instruction ("an admin grants it under
+      // Pay → Settings") points at a screen the officer is not on.
+      const res = await call('get', '/payroll/access', adminToken).expect(200);
+      const row = (res.body as { id: string; job?: string }[]).find((r) => r.id === officerUserId);
+      expect(row).toBeDefined();
+      expect(row!.job).toBe('Accounts officer');
+    });
+
+    it('is let into Pay once an admin grants it', async () => {
+      await call('post', '/payroll/access', adminToken).send({ userId: officerUserId, canSeeSalary: true }).expect(201);
+      const res = await call('get', '/payroll/settings', officerToken);
+      expect([401, 403]).not.toContain(res.status);
+    });
+
+    it('may decide leave without ever being shown a salary figure', async () => {
+      // Deliberate: a leave register holds dates and reasons, not pay. The
+      // desk guard asks for the JOB; only the money asks for the right.
+      const db = getPlatformPrisma();
+      await db.user.update({ where: { id: officerUserId }, data: { canSeeSalary: false } });
+      const leave = await call('get', '/manage/leave', officerToken);
+      expect([401, 403]).not.toContain(leave.status);
+      await call('get', '/payroll/settings', officerToken).expect(403);
+      await db.user.update({ where: { id: officerUserId }, data: { canSeeSalary: true } });
+    });
+
+    it('still refuses a driver the leave desk', async () => {
+      const driverToken = signSchoolToken({ sub: driverUserId, schoolId, role: 'STAFF' });
+      await call('get', '/manage/leave', driverToken).expect(403);
+    });
   });
 
   it('will not let an admin take the salary right away from themselves', async () => {

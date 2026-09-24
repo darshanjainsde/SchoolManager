@@ -59,8 +59,14 @@ ALTER TABLE "LeaveTypeDef" ADD COLUMN IF NOT EXISTS "neverDeduct" BOOLEAN NOT NU
 UPDATE "LeaveTypeDef" SET "defaultAnnualStaff" = "defaultAnnual" WHERE "defaultAnnualStaff" = 0;
 
 -- Maternity never costs pay, whatever the balance says.
+--
+-- Matched on the NAME only. `builtin` is the `LeaveType` enum — SICK, CASUAL,
+-- EARNED, UNPAID, OTHER — and there is no MATERNITY in it: Postgres rejects
+-- the literal outright with `invalid input value for enum`, which fails the
+-- whole migration rather than skipping the clause. A school that keeps
+-- maternity does it as a named type, which is exactly what this matches.
 UPDATE "LeaveTypeDef" SET "neverDeduct" = true
-WHERE "builtin" = 'MATERNITY' OR lower("name") LIKE '%maternity%' OR lower("name") LIKE '%bereave%';
+WHERE lower("name") LIKE '%maternity%' OR lower("name") LIKE '%bereave%';
 
 -- ── 5. half-day precision on the money side ────────────────────────────────
 -- A second integer rather than making these Decimal: Prisma serialises
