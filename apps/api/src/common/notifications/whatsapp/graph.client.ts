@@ -15,11 +15,45 @@ export interface WhatsAppConfig {
   graphVersion: string;
 }
 
+/**
+ * Why the WABA id is checked here.
+ *
+ * Both ids are long digit strings that sit next to each other in Meta's UI
+ * and in our own docs, and pasting the account id where the NUMBER id goes
+ * is the easy mistake. Nothing complains: the config looks present, the
+ * channel reports itself configured, the settings screen shows a plausible
+ * id — and every send dies at Meta with code 100 "Object with ID … does not
+ * exist", which reads like a permissions problem rather than a typo.
+ *
+ * That is exactly what staging was doing, silently, until somebody asked why
+ * WhatsApp had never worked. A sending number is never the business account,
+ * so the two being equal is always wrong and is worth refusing outright.
+ */
 export function whatsAppConfig(env: NodeJS.ProcessEnv = process.env): WhatsAppConfig | null {
   const token = env.WHATSAPP_TOKEN?.trim();
   const phoneNumberId = env.WHATSAPP_PHONE_NUMBER_ID?.trim();
   if (!token || !phoneNumberId) return null;
-  return { token, phoneNumberId, wabaId: env.WHATSAPP_WABA_ID?.trim() || null, graphVersion: env.WHATSAPP_GRAPH_VERSION?.trim() || 'v21.0' };
+  const wabaId = env.WHATSAPP_WABA_ID?.trim() || null;
+  if (wabaId && phoneNumberId === wabaId) return null;
+  return { token, phoneNumberId, wabaId, graphVersion: env.WHATSAPP_GRAPH_VERSION?.trim() || 'v21.0' };
+}
+
+/**
+ * Why the channel is idle, in words a person can act on.
+ *
+ * `whatsAppConfig` returning null is the only signal the channel has, and
+ * "not configured" sent everybody to check a token that was fine.
+ */
+export function whatsAppConfigProblem(env: NodeJS.ProcessEnv = process.env): string | null {
+  const token = env.WHATSAPP_TOKEN?.trim();
+  const phoneNumberId = env.WHATSAPP_PHONE_NUMBER_ID?.trim();
+  const wabaId = env.WHATSAPP_WABA_ID?.trim() || null;
+  if (!token) return 'WHATSAPP_TOKEN is not set.';
+  if (!phoneNumberId) return 'WHATSAPP_PHONE_NUMBER_ID is not set.';
+  if (wabaId && phoneNumberId === wabaId) {
+    return 'WHATSAPP_PHONE_NUMBER_ID is the same as WHATSAPP_WABA_ID. The sending number is not the business account — take the phone number id from WhatsApp Manager → Phone numbers, not the account id. Every send fails with Meta code 100 until this is fixed.';
+  }
+  return null;
 }
 
 export class WhatsAppApiError extends Error {

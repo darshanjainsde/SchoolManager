@@ -2,7 +2,7 @@ import { Logger } from '@nestjs/common';
 import type { PrismaClient } from '@skoolos/db';
 import type { NotificationChannel, NotificationMessage } from './notification.types';
 import { toE164 } from './whatsapp/phone';
-import { sendTemplate, whatsAppConfig, WhatsAppApiError, type SendResult, type WhatsAppConfig } from './whatsapp/graph.client';
+import { sendTemplate, whatsAppConfig, WhatsAppApiError, type SendResult, type WhatsAppConfig, whatsAppConfigProblem } from './whatsapp/graph.client';
 import { templateFor, type WhatsAppTemplate } from './whatsapp/templates';
 
 /**
@@ -78,7 +78,10 @@ export class WhatsAppChannel implements NotificationChannel {
     if (!cfg) {
       if (!this.warnedUnconfigured) {
         this.warnedUnconfigured = true;
-        this.logger.warn('WhatsApp is not configured (WHATSAPP_TOKEN / WHATSAPP_PHONE_NUMBER_ID); channel is idle.');
+        // Say WHICH thing is wrong. "Not configured" sent everybody to check
+        // a token that was fine, while the real fault was the account id
+        // pasted in where the number id goes.
+        this.logger.warn(`WhatsApp is idle — ${whatsAppConfigProblem() ?? 'WHATSAPP_TOKEN / WHATSAPP_PHONE_NUMBER_ID are not set.'}`);
       }
       return false;
     }

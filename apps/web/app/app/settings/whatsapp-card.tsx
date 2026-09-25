@@ -24,7 +24,7 @@ interface Delivery {
 }
 interface WhatsAppSettingsResponse {
   settings: { enabled: boolean; phoneNumberId: string | null };
-  platform: { configured: boolean; senderPhoneNumberId: string | null };
+  platform: { configured: boolean; senderPhoneNumberId: string | null; problem?: string | null };
   templates: { kind: string; name: string; body: string }[];
   thisMonth: Record<string, number>;
   recent: Delivery[];
@@ -83,6 +83,15 @@ export function WhatsAppCard() {
               phone on WhatsApp, from {d.settings.phoneNumberId ? 'your own number' : 'the Sckools number'}. Each message names your school.
               {!d.platform.configured ? ' The platform number is not connected yet; nothing goes out until it is.' : ''}
             </p>
+
+            {/* Not "not configured" — WHICH thing is wrong. A school staring
+                at a dead switch cannot tell a missing token from an id pasted
+                into the wrong box, and both look identical from here. */}
+            {d.platform.problem ? (
+              <p className="sk-state err" data-testid="wa-problem" style={{ marginTop: 6 }}>
+                {d.platform.problem}
+              </p>
+            ) : null}
 
             <label className="sk-lab" style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', textTransform: 'none', letterSpacing: 0, fontSize: 13.5, color: 'var(--sk-ink)' }}>
               <input type="checkbox" checked={on} disabled={update.isPending} onChange={(e) => update.mutate(e.target.checked)} data-testid="whatsapp-toggle" style={{ width: 18, height: 18, accentColor: 'var(--sk-brand)' }} />
