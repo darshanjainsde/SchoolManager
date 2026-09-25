@@ -28,6 +28,7 @@ export const AUTHZ_REVIEWED: string[] = [
   // PRO school without the override 403s on every route in the module.
   "GET /payroll/overview",
   "GET /payroll/leave",
+  "GET /payroll/payslips/:id/document",
   "POST /payroll/leave/apply",
   "POST /payroll/leave/policy",
   "GET /payroll/grades",
@@ -65,6 +66,7 @@ export const AUTHZ_REVIEWED: string[] = [
   "GET /me/pay/details",
   "POST /me/pay/details",
   "GET /me/pay/payslips/:id",
+  "GET /me/pay/payslips/:id/document",
   "POST /me/pay/declaration",
   "GET /me/pay/statement",
   // ── The Press ───────────────────────────────────────────────────────────

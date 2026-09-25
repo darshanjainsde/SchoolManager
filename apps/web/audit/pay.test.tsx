@@ -159,6 +159,37 @@ const slip = (i: number, name: string) => ({
   ],
 });
 
+/** The printable payslip, with the LONGEST realistic values: a full Indian
+ *  name, a crore-scale figure, and a line name that runs the width. It is a
+ *  paper layout with nowrap figures, so a phone is exactly where it breaks. */
+const PAYSLIP_DOC = {
+  id: 'slip-1', periodLabel: 'September 2026', periodYear: 2026, periodMonth: 9,
+  person: {
+    name: 'Rajeshwari Balasubramanian', designation: 'Post Graduate Teacher \u2014 Physics',
+    kind: 'TEACHER', pan: 'ABCDE1234F', uan: '100123456789', bankAccountLast4: '4821',
+    joinedOn: '2019-06-01T00:00:00.000Z',
+  },
+  lines: [
+    { key: 'basic', name: 'Basic', kind: 'EARNING', amountMinor: 2_402_400 },
+    { key: 'hra', name: 'House rent allowance', kind: 'EARNING', amountMinor: 960_960 },
+    { key: 'conveyance', name: 'Conveyance allowance', kind: 'EARNING', amountMinor: 160_000 },
+    { key: 'special', name: 'Special allowance', kind: 'EARNING', amountMinor: 1_441_440 },
+    { key: 'arrears', name: 'Arrears \u00b7 April to June', kind: 'EARNING', amountMinor: 1_802_400 },
+    { key: 'pf', name: 'Provident fund', kind: 'DEDUCTION', amountMinor: 180_000 },
+    { key: 'pt', name: 'Professional tax', kind: 'DEDUCTION', amountMinor: 20_000 },
+    { key: 'tds', name: 'Income tax deducted at source', kind: 'DEDUCTION', amountMinor: 711_027 },
+    { key: 'lwp', name: 'Leave without pay', kind: 'DEDUCTION', amountMinor: 59_500 },
+    { key: 'pf_er', name: 'Provident fund \u2014 school', kind: 'EMPLOYER_COST', amountMinor: 180_000 },
+    { key: 'esi_er', name: 'ESI \u2014 school', kind: 'EMPLOYER_COST', amountMinor: 54_000 },
+  ],
+  daysInMonth: 30, daysPaid: 27, lopHalfDays: 1,
+  grossMinor: 6_767_200, deductionMinor: 970_527, netMinor: 5_796_673, employerCostMinor: 234_000,
+  incomeTaxMinor: 711_027, taxRegime: 'OLD',
+  ytdGrossMinor: 2_34_74_000_00, ytdTaxMinor: 4_266_162,
+  paidOn: null, school: { name: 'Raffles Primary School, Jaipur' },
+  rulesAsAt: '2026-09-22T00:00:00.000Z', packVersion: 'IN-2026.09.22',
+};
+
 /** A real roll: enough rows that a panel appended below the table is far
  *  under the fold, which is exactly the defect being measured. */
 const RUN_DETAIL = {
@@ -186,6 +217,7 @@ beforeEach(() => {
     if (p === '/payroll/access') return ACCESS;
     if (p === '/payroll/runs') return [{ id: 'run-1', periodYear: 2026, periodMonth: 9, status: 'APPROVED', headcount: 40, grossMinor: 1_921_92_000, employerCostMinor: 9_36_000, netMinor: 1_818_12_000 }];
     if (p.startsWith('/payroll/runs/')) return RUN_DETAIL;
+    if (/^\/payroll\/payslips\/.*\/document$/.test(p)) return PAYSLIP_DOC;
     if (p.startsWith('/manage/leave-policy/types')) return LEAVE_TYPES;
     return [];
   }) as never);

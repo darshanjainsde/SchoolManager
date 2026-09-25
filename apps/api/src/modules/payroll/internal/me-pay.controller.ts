@@ -10,6 +10,7 @@ import { AuditService } from '../../../common/audit/audit.service';
 import { PayMeService } from './pay-me.service';
 import { PayPeopleService } from './pay-people.service';
 import { PayStatutoryService } from './pay-statutory.service';
+import { PayslipDocService } from './payslip-doc.service';
 import { PayDetailsDto, SaveDeclarationDto } from './payroll.dto';
 
 /**
@@ -29,6 +30,7 @@ export class MePayController {
     private readonly me: PayMeService,
     private readonly people: PayPeopleService,
     private readonly statutory: PayStatutoryService,
+    private readonly payslipDocs: PayslipDocService,
     private readonly tenant: TenantContextService,
     private readonly audit: AuditService,
   ) {}
@@ -43,6 +45,18 @@ export class MePayController {
   @Get('payslips/:id')
   payslip(@CurrentUser() u: SchoolJwtPayload, @Param('id', ParseUUIDPipe) id: string) {
     return this.me.payslip(this.sid(), u.sub, id);
+  }
+
+  /**
+   * My own payslip as a printable document — the page a teacher or a staff
+   * member prints, or saves as a PDF, for a bank or a landlord.
+   *
+   * Byte for byte the document the office prints from the console: one
+   * definition, so the two copies can never drift apart.
+   */
+  @Get('payslips/:id/document')
+  payslipDocument(@CurrentUser() u: SchoolJwtPayload, @Param('id', ParseUUIDPipe) id: string) {
+    return this.payslipDocs.forSelf(this.sid(), u.sub, id);
   }
 
   /**

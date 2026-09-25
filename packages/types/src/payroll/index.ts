@@ -1,6 +1,7 @@
 export * from './pack';
 export * from './maths';
 export * from './leave';
+export * from './payslip-doc';
 import { INDIA_PACK } from './india';
 import type { CountryCode, PayPack } from './pack';
 

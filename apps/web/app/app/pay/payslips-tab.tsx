@@ -1,11 +1,13 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { QueryError } from '@/components/ui/query-state';
+import { PayslipSheet } from '@/components/pay/payslip-sheet';
 import { Drawer } from './drawer';
 import { Card, CardBody, CardHead, EmptyRow, RunPill, TableWrap, Td, Th, monthName, rupees } from './ui';
+import { isPayslipDoc, type PayslipDoc } from '@skoolos/types';
 import type { Payslip, RunDetail, RunRow } from './types';
 
 /** PAYSLIPS — any month, any person, exactly as it was paid. */
@@ -85,7 +87,7 @@ export default function PayslipsTab() {
           onClose={() => setOpenSlip(null)}
           footer={<button type="button" className="sk-btn" onClick={() => setOpenSlip(null)}>Close</button>}
         >
-          <SlipBody slip={openSlip} />
+          <PayslipDrawerBody payslipId={openSlip.id} fallback={<SlipBody slip={openSlip} />} />
         </Drawer>
       ) : null}
     </div>
@@ -154,4 +156,24 @@ function Ledger({ title, lines, total, totalLabel }: { title: string; lines: { k
       </div>
     </div>
   );
+}
+
+/**
+ * The printable document, fetched rather than rebuilt here.
+ *
+ * The server assembles it once for both the console and `/me`, so the copy
+ * the office prints and the copy the teacher prints are the same document.
+ * While it is loading — or on an older API that has no such route — the
+ * screen falls back to the summary it already had, which is a worse payslip
+ * but never an empty drawer.
+ */
+function PayslipDrawerBody({ payslipId, fallback }: { payslipId: string; fallback: ReactNode }) {
+  const host = useHost();
+  const api = useApi({ audience: 'school', hostHeader: host });
+  const q = useQuery({
+    queryKey: ['payslip-doc', payslipId], enabled: !!host, retry: false,
+    queryFn: () => api.get<PayslipDoc>(`/payroll/payslips/${payslipId}/document`),
+  });
+  if (isPayslipDoc(q.data)) return <PayslipSheet doc={q.data} />;
+  return <>{fallback}</>;
 }

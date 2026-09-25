@@ -19,7 +19,7 @@ const audit = { record: jest.fn() };
 const controller = () =>
   new PayrollController(
     null as never, null as never, null as never, null as never, null as never,
-    null as never, null as never,
+    null as never, null as never, null as never,
     { requireTenant: () => ({ schoolId: SCHOOL }) } as never,
     audit as never,
   );
