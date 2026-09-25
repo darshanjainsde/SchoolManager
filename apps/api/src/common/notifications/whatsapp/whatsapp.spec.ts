@@ -1,6 +1,6 @@
 import { toE164, forGraph } from './phone';
 import { whatsAppConfig, whatsAppConfigProblem } from './graph.client';
-import { EXTRA_SUBMISSIONS, HELLO_WORLD, SUBMISSIONS, TEMPLATE_NAMES, coverPendingTemplate, param, placeholderCount, templateFor, verifyCodeTemplate } from './templates';
+import { EXTRA_SUBMISSIONS, HELLO_WORLD, SUBMISSIONS, TEMPLATE_NAMES, coverPendingTemplate, param, placeholderCount, templateFor, testNoticeTemplate, verifyCodeTemplate } from './templates';
 import type { NotificationKind, NotificationMessage } from '../notification.types';
 
 describe('toE164', () => {
@@ -160,6 +160,38 @@ describe('the sending number is never the business account', () => {
   it('names a missing token and a missing number separately', () => {
     expect(whatsAppConfigProblem({ WHATSAPP_PHONE_NUMBER_ID: '1' } as NodeJS.ProcessEnv)).toMatch(/WHATSAPP_TOKEN/);
     expect(whatsAppConfigProblem({ WHATSAPP_TOKEN: 'EAAx' } as NodeJS.ProcessEnv)).toMatch(/WHATSAPP_PHONE_NUMBER_ID/);
+  });
+});
+
+/**
+ * The test button broke the day the school got a real number.
+ *
+ * `hello_world` is Meta's own sample and is REFUSED off their public test
+ * numbers with code 131058 — so "Send test" worked all through setup and
+ * failed exactly when somebody used it in anger.
+ */
+describe('the test send has a template that works on a real number', () => {
+  it('fills an APPROVED template of the school’s own', () => {
+    const t = testNoticeTemplate('Raffles Primary School');
+    expect(t.name).toBe(TEMPLATE_NAMES.ABSENCE_NOTICE);
+    expect(t.language).not.toBe('en_US');
+  });
+
+  it('matches the placeholder count Meta approved', () => {
+    // A mismatch is code 132000, which would swap one broken test for another.
+    const t = testNoticeTemplate('Raffles Primary School');
+    expect(t.params).toHaveLength(placeholderCount(SUBMISSIONS.ABSENCE_NOTICE.body));
+  });
+
+  it('reads as a test, so nobody thinks a child is absent', () => {
+    const t = testNoticeTemplate('Raffles Primary School');
+    const sentence = SUBMISSIONS.ABSENCE_NOTICE.body.replace(/\{\{(\d)\}\}/g, (_m, i) => t.params[Number(i) - 1]);
+    expect(sentence).toMatch(/This is a WhatsApp test/);
+    expect(sentence).toMatch(/Please ignore/);
+  });
+
+  it('names the school, so the receiver knows who sent it', () => {
+    expect(testNoticeTemplate('Raffles Primary School').params[0]).toBe('Raffles Primary School');
   });
 });
 

@@ -5,6 +5,8 @@ import { withTenant } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
 import { WhatsAppChannel } from '../../common/notifications/whatsapp.channel';
 import { whatsAppConfig, whatsAppConfigProblem } from '../../common/notifications/whatsapp/graph.client';
+import { codeFromError, failureAdvice, failureBlame } from '../../common/notifications/whatsapp/failure';
+import { testNoticeTemplate } from '../../common/notifications/whatsapp/templates';
 import { toE164 } from '../../common/notifications/whatsapp/phone';
 import { HELLO_WORLD, SUBMISSIONS, TEMPLATE_NAMES } from '../../common/notifications/whatsapp/templates';
 
@@ -51,7 +53,12 @@ export class WhatsAppSettingsService {
         },
         templates: Object.entries(TEMPLATE_NAMES).map(([kind, name]) => ({ kind, name, body: SUBMISSIONS[kind as keyof typeof SUBMISSIONS].body })),
         thisMonth,
-        recent: recent.map((r) => ({ ...r, phone: maskPhone(r.phone) })),
+        // Each failure says WHOSE problem it is, so a school is not sent to
+        // ring seven parents about an expired token of ours.
+        recent: recent.map((r) => {
+          const blame = r.status === 'FAILED' ? failureBlame(codeFromError(r.error)) : null;
+          return { ...r, phone: maskPhone(r.phone), blame, advice: blame ? failureAdvice(blame) : null };
+        }),
       };
     });
   }
@@ -74,8 +81,25 @@ export class WhatsAppSettingsService {
     const phone = toE164(to);
     if (!phone) throw new ApiError('BAD_PHONE', 'That does not look like a mobile number.', 400);
     const settings = await this.channel.settingsFor(schoolId);
+
+    // `hello_world` is Meta's own sample and the clearest thing to receive —
+    // but it is REFUSED on a real number with code 131058, "Hello World
+    // templates can only be sent from the Public Test Numbers". So the test
+    // button worked on the test number and broke the moment the school got a
+    // live one, which is exactly when somebody presses it.
+    //
+    // Try it, and fall back to one of the school's own approved templates.
+    // The fallback proves more anyway: it is the same path a real notice
+    // takes, through a template Meta has actually reviewed.
     const ok = await this.channel.deliver(cfg, schoolId, phone, 'TEST', HELLO_WORLD, settings.phoneNumberId);
-    return { ok, phone: maskPhone(phone) };
+    if (ok) return { ok, phone: maskPhone(phone), template: HELLO_WORLD.name };
+
+    // Through the tenant transaction — the school's own name needs no RLS
+    // bypass, and every bypass has to be justified on a reviewed list.
+    const school = await withTenant(schoolId, (tx) => tx.school.findFirst({ where: { id: schoolId }, select: { name: true } }));
+    const fallback = testNoticeTemplate(school?.name ?? 'Your school');
+    const okFallback = await this.channel.deliver(cfg, schoolId, phone, 'TEST', fallback, settings.phoneNumberId);
+    return { ok: okFallback, phone: maskPhone(phone), template: fallback.name };
   }
 }
 
