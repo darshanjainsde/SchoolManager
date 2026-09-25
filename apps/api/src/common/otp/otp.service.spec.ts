@@ -103,3 +103,58 @@ describe('OtpService', () => {
     });
   });
 });
+
+/**
+ * A CODE THAT WAS NEVER SENT MUST NOT COST A MINUTE.
+ *
+ * Reported from staging with a screenshot: pressing "Send code" showed
+ *   "A code was sent less than a minute ago. Check WhatsApp, or wait a moment."
+ * while the send had FAILED (132001 — the account has no authentication
+ * template). There was no code and nothing to check, and the person was
+ * locked out of retrying for a minute by a message that was not true.
+ *
+ * `sentVia` is written only after a sender actually carried the code, so the
+ * limits count delivered codes.
+ */
+describe('the rate limit counts codes that were actually sent', () => {
+  const senders = { enabledNames: jest.fn().mockReturnValue(['whatsapp']), fanOut: jest.fn() };
+  const svc = () => new OtpService(senders as never);
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    otp.findFirst.mockResolvedValue(null);
+    otp.count.mockResolvedValue(0);
+    otp.create.mockResolvedValue({});
+    otp.update.mockResolvedValue({});
+  });
+
+  it('asks only about challenges a sender carried', async () => {
+    senders.fanOut.mockResolvedValue({ sentVia: ['whatsapp'], failures: [], nothingEnabled: false });
+    await svc().start('VERIFY_PHONE', PHONE, { schoolId: SCHOOL });
+    for (const call of [...otp.findFirst.mock.calls, ...otp.count.mock.calls]) {
+      expect(call[0].where.sentVia).toEqual({ isEmpty: false });
+    }
+  });
+
+  it('lets a person try again at once when nothing carried the code', async () => {
+    // The failed attempt writes a challenge row, but with no `sentVia` — so
+    // the next call does not see it as "a code was sent a moment ago".
+    senders.fanOut.mockResolvedValue({
+      sentVia: [], nothingEnabled: false,
+      failures: [{ name: 'whatsapp', code: 132001, reason: 'the code template is not approved on this WhatsApp account' }],
+    });
+    await expect(svc().start('VERIFY_PHONE', PHONE, { schoolId: SCHOOL })).rejects.toThrow(/not switched on yet|password/i);
+
+    // Second attempt: the ledger has that un-sent row, and it is ignored.
+    otp.findFirst.mockResolvedValue(null);
+    senders.fanOut.mockResolvedValue({ sentVia: ['sms'], failures: [], nothingEnabled: false });
+    await expect(svc().start('VERIFY_PHONE', PHONE, { schoolId: SCHOOL })).resolves.toMatchObject({ sentVia: ['sms'] });
+  });
+
+  it('still holds a real code to one a minute', async () => {
+    // The limit must keep working for codes that DID go out.
+    otp.findFirst.mockResolvedValue({ createdAt: new Date() });
+    await expect(svc().start('LOGIN', PHONE, { schoolId: SCHOOL })).rejects.toThrow(/less than a minute ago/);
+  });
+});
+

@@ -52,9 +52,18 @@ export class OtpService {
     const db = getPlatformPrisma();
     const now = Date.now();
     const [latest, lastHour, lastDay] = await Promise.all([
-      db.otpChallenge.findFirst({ where: { phone, purpose }, orderBy: { createdAt: 'desc' }, select: { createdAt: true } }),
-      db.otpChallenge.count({ where: { phone, purpose, createdAt: { gt: new Date(now - 3_600_000) } } }),
-      db.otpChallenge.count({ where: { phone, purpose, createdAt: { gt: new Date(now - 86_400_000) } } }),
+      // `sentVia` is written ONLY after a sender actually carried the code, so
+      // this counts codes that reached somebody. A challenge whose send failed
+      // must not start a cooldown: there is nobody to spam, and making the
+      // person wait a minute for a message that was never sent — while telling
+      // them to "check WhatsApp" — is the product lying to them.
+      db.otpChallenge.findFirst({
+        where: { phone, purpose, sentVia: { isEmpty: false } },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true },
+      }),
+      db.otpChallenge.count({ where: { phone, purpose, sentVia: { isEmpty: false }, createdAt: { gt: new Date(now - 3_600_000) } } }),
+      db.otpChallenge.count({ where: { phone, purpose, sentVia: { isEmpty: false }, createdAt: { gt: new Date(now - 86_400_000) } } }),
     ]);
     if (latest && now - latest.createdAt.getTime() < OTP_RESEND_AFTER_MS) {
       throw new ApiError('OTP_RATE_LIMITED', 'A code was sent less than a minute ago. Check WhatsApp, or wait a moment.', 429, 'phone');
