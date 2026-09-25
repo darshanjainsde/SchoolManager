@@ -8,7 +8,7 @@ import { whatsAppConfig, whatsAppConfigProblem } from '../../common/notification
 import { codeFromError, failureAdvice, failureBlame } from '../../common/notifications/whatsapp/failure';
 import { testNoticeTemplate } from '../../common/notifications/whatsapp/templates';
 import { toE164 } from '../../common/notifications/whatsapp/phone';
-import { HELLO_WORLD, SUBMISSIONS, TEMPLATE_NAMES } from '../../common/notifications/whatsapp/templates';
+import { SUBMISSIONS, TEMPLATE_NAMES } from '../../common/notifications/whatsapp/templates';
 
 /**
  * The school's side of the WhatsApp channel: one switch, an optional own
@@ -74,7 +74,7 @@ export class WhatsAppSettingsService {
     return this.get(schoolId);
   }
 
-  /** `hello_world` to one number: the smoke test an admin runs from the page. */
+  /** One approved template to one number: the smoke test an admin runs from the page. */
   async sendTest(schoolId: string, to: string) {
     const cfg = whatsAppConfig();
     if (!cfg) throw new ApiError('WHATSAPP_NOT_CONFIGURED', 'WhatsApp is not set up on the platform yet.', 409);
@@ -82,24 +82,25 @@ export class WhatsAppSettingsService {
     if (!phone) throw new ApiError('BAD_PHONE', 'That does not look like a mobile number.', 400);
     const settings = await this.channel.settingsFor(schoolId);
 
-    // `hello_world` is Meta's own sample and the clearest thing to receive —
-    // but it is REFUSED on a real number with code 131058, "Hello World
-    // templates can only be sent from the Public Test Numbers". So the test
-    // button worked on the test number and broke the moment the school got a
-    // live one, which is exactly when somebody presses it.
+    // ONE SEND, through a template Meta has approved for this school.
     //
-    // Try it, and fall back to one of the school's own approved templates.
-    // The fallback proves more anyway: it is the same path a real notice
-    // takes, through a template Meta has actually reviewed.
-    const ok = await this.channel.deliver(cfg, schoolId, phone, 'TEST', HELLO_WORLD, settings.phoneNumberId);
-    if (ok) return { ok, phone: maskPhone(phone), template: HELLO_WORLD.name };
-
+    // It used to send `hello_world`, Meta's own sample — which is REFUSED off
+    // their public test numbers with code 131058. So the button worked all
+    // through setup and broke the day the school got a live number.
+    //
+    // The first fix tried `hello_world` and fell back to a real template.
+    // That worked, and left a FAILED row in the school's ledger on EVERY
+    // test, for a probe nobody asked for — a school counting its failures
+    // should never be shown one the product caused itself. So there is no
+    // probe: the test sends the school's own approved template, which proves
+    // more anyway. It is the same path a real notice takes.
+    //
     // Through the tenant transaction — the school's own name needs no RLS
     // bypass, and every bypass has to be justified on a reviewed list.
     const school = await withTenant(schoolId, (tx) => tx.school.findFirst({ where: { id: schoolId }, select: { name: true } }));
-    const fallback = testNoticeTemplate(school?.name ?? 'Your school');
-    const okFallback = await this.channel.deliver(cfg, schoolId, phone, 'TEST', fallback, settings.phoneNumberId);
-    return { ok: okFallback, phone: maskPhone(phone), template: fallback.name };
+    const template = testNoticeTemplate(school?.name ?? 'Your school');
+    const ok = await this.channel.deliver(cfg, schoolId, phone, 'TEST', template, settings.phoneNumberId);
+    return { ok, phone: maskPhone(phone), template: template.name };
   }
 }
 
