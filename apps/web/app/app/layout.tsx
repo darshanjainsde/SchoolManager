@@ -1,4 +1,5 @@
 'use client';
+import { SwitchProfile } from '@/components/switch-profile';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -153,6 +154,34 @@ function GroupedNav({
   );
 }
 
+/**
+ * The person's door: initials in a circle + their name, straight to
+ * /app/profile. Sits above the theme toggle in both sidebars so it is where
+ * the eye already goes for "me" things (log out lives just below).
+ */
+function ProfileDoor({ name, pathname, collapsed = false, onNavigate }: { name: string | null; pathname: string; collapsed?: boolean; onNavigate?: () => void }) {
+  const initials = (name ?? '').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('') || 'ME';
+  const active = pathname === '/app/profile';
+  return (
+    <Link
+      href="/app/profile"
+      onClick={onNavigate}
+      title={collapsed ? (name ?? 'My profile') : undefined}
+      aria-label={collapsed ? 'My profile' : undefined}
+      aria-current={active ? 'page' : undefined}
+      data-testid="profile-door"
+      className={cn(
+        'mb-2 flex w-full items-center rounded-lg text-sm hover:bg-white/5',
+        collapsed ? 'justify-center py-2' : 'gap-3 px-3 py-2',
+        active && 'bg-white/10',
+      )}
+    >
+      <span aria-hidden="true" className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[11px] font-bold" style={{ background: 'var(--sk-brand)', color: '#fff' }}>{initials}</span>
+      {!collapsed && <span className="min-w-0 truncate">{name ?? 'My profile'}</span>}
+    </Link>
+  );
+}
+
 export default function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -213,7 +242,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   // `role` gates the console itself — see the redirect effect below.
   const { data: me } = useQuery({
     queryKey: ['me', host],
-    queryFn: () => api.get<{ features?: string[]; role?: string }>('/auth/me'),
+    queryFn: () => api.get<{ features?: string[]; role?: string; name?: string | null }>('/auth/me'),
     enabled: hydrated && isSchoolHost(host) && hasSession && audience === 'school',
     staleTime: 5 * 60_000,
   });
@@ -411,6 +440,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             </nav>
 
             <div className="border-t border-white/10 p-4">
+              <ProfileDoor name={me?.name ?? null} pathname={pathname} onNavigate={() => setDrawerOpen(false)} />
+              <div className="skosx mb-2"><SwitchProfile onDone={() => setDrawerOpen(false)} /></div>
               <div className="skosx mb-3">
                 <ThemeToggle />
               </div>
@@ -488,6 +519,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
         {/* Logout */}
         <div className={cn('border-t border-white/10', collapsed ? 'p-2' : 'p-4')}>
+          <ProfileDoor name={me?.name ?? null} pathname={pathname} collapsed={collapsed} />
+          {!collapsed && <div className="skosx mb-2"><SwitchProfile /></div>}
           {!collapsed && <div className="skosx mb-3"><ThemeToggle /></div>}
           <button
             onClick={handleLogout}

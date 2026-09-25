@@ -1,10 +1,14 @@
+import { maskPhone } from '../../common/otp/phone-identity';
+export { maskPhone };
 import { Injectable } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
 import { WhatsAppChannel } from '../../common/notifications/whatsapp.channel';
-import { whatsAppConfig } from '../../common/notifications/whatsapp/graph.client';
+import { whatsAppConfig, whatsAppConfigProblem } from '../../common/notifications/whatsapp/graph.client';
+import { codeFromError, failureAdvice, failureBlame } from '../../common/notifications/whatsapp/failure';
+import { testNoticeTemplate } from '../../common/notifications/whatsapp/templates';
 import { toE164 } from '../../common/notifications/whatsapp/phone';
-import { HELLO_WORLD, SUBMISSIONS, TEMPLATE_NAMES } from '../../common/notifications/whatsapp/templates';
+import { SUBMISSIONS, TEMPLATE_NAMES } from '../../common/notifications/whatsapp/templates';
 
 /**
  * The school's side of the WhatsApp channel: one switch, an optional own
@@ -39,10 +43,22 @@ export class WhatsAppSettingsService {
       for (const g of since) thisMonth[g.status] = g._count._all;
       return {
         settings: { enabled: settings?.enabled ?? false, phoneNumberId: settings?.phoneNumberId ?? null },
-        platform: { configured: this.channel.configured, senderPhoneNumberId: whatsAppConfig()?.phoneNumberId ?? null },
+        platform: {
+          configured: this.channel.configured,
+          senderPhoneNumberId: whatsAppConfig()?.phoneNumberId ?? null,
+          // WHY it is idle, not just that it is. A school staring at a dead
+          // switch cannot tell a missing token from an id pasted in the
+          // wrong box, and both look like "configured" from here.
+          problem: whatsAppConfigProblem(),
+        },
         templates: Object.entries(TEMPLATE_NAMES).map(([kind, name]) => ({ kind, name, body: SUBMISSIONS[kind as keyof typeof SUBMISSIONS].body })),
         thisMonth,
-        recent: recent.map((r) => ({ ...r, phone: maskPhone(r.phone) })),
+        // Each failure says WHOSE problem it is, so a school is not sent to
+        // ring seven parents about an expired token of ours.
+        recent: recent.map((r) => {
+          const blame = r.status === 'FAILED' ? failureBlame(codeFromError(r.error)) : null;
+          return { ...r, phone: maskPhone(r.phone), blame, advice: blame ? failureAdvice(blame) : null };
+        }),
       };
     });
   }
@@ -58,15 +74,33 @@ export class WhatsAppSettingsService {
     return this.get(schoolId);
   }
 
-  /** `hello_world` to one number: the smoke test an admin runs from the page. */
+  /** One approved template to one number: the smoke test an admin runs from the page. */
   async sendTest(schoolId: string, to: string) {
     const cfg = whatsAppConfig();
     if (!cfg) throw new ApiError('WHATSAPP_NOT_CONFIGURED', 'WhatsApp is not set up on the platform yet.', 409);
     const phone = toE164(to);
     if (!phone) throw new ApiError('BAD_PHONE', 'That does not look like a mobile number.', 400);
     const settings = await this.channel.settingsFor(schoolId);
-    const ok = await this.channel.deliver(cfg, schoolId, phone, 'TEST', HELLO_WORLD, settings.phoneNumberId);
-    return { ok, phone: maskPhone(phone) };
+
+    // ONE SEND, through a template Meta has approved for this school.
+    //
+    // It used to send `hello_world`, Meta's own sample — which is REFUSED off
+    // their public test numbers with code 131058. So the button worked all
+    // through setup and broke the day the school got a live number.
+    //
+    // The first fix tried `hello_world` and fell back to a real template.
+    // That worked, and left a FAILED row in the school's ledger on EVERY
+    // test, for a probe nobody asked for — a school counting its failures
+    // should never be shown one the product caused itself. So there is no
+    // probe: the test sends the school's own approved template, which proves
+    // more anyway. It is the same path a real notice takes.
+    //
+    // Through the tenant transaction — the school's own name needs no RLS
+    // bypass, and every bypass has to be justified on a reviewed list.
+    const school = await withTenant(schoolId, (tx) => tx.school.findFirst({ where: { id: schoolId }, select: { name: true } }));
+    const template = testNoticeTemplate(school?.name ?? 'Your school');
+    const ok = await this.channel.deliver(cfg, schoolId, phone, 'TEST', template, settings.phoneNumberId);
+    return { ok, phone: maskPhone(phone), template: template.name };
   }
 }
 
@@ -76,10 +110,3 @@ function monthStart(): Date {
 }
 
 /** +919876543210 → +91 98••• •3210 — the office recognises it; a screenshot does not leak it. */
-export function maskPhone(e164: string): string {
-  const d = e164.replace(/^\+/, '');
-  if (d.length < 8) return e164;
-  const cc = d.slice(0, d.length - 10) || '';
-  const n = d.slice(-10);
-  return `+${cc} ${n.slice(0, 2)}••• •${n.slice(-4)}`.replace(/\s+/g, ' ').trim();
-}

@@ -24,7 +24,11 @@ A guardian's number is often shared by two or three children, so every notice AB
 |---|---|---|
 | **Photo** (the Tassel-S) | `node scripts/whatsapp-profile.mjs docs/whatsapp/profile-photo.png` with `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `META_APP_ID` in the shell — or WhatsApp Manager → Phone numbers → the number → Profile | Works on the test number today. `docs/whatsapp/profile-photo.png` = the Tassel-S dark tile (S #818CF8, tassel #FBBF24 on #0B1020), the user's pick on 2026-09-21. The brand kit lives in `~/Downloads/Sckools Brand`; the source of truth is `apps/web/components/brand/sckools-logo.tsx`. The web favicon files (`public/icon-512.png`, `app/icon.svg`) are NOT the logo (no tassel) — do not reuse them. Also sets the about line, description, website, email. |
 | **Name** "Sckools" | WhatsApp Manager → Phone numbers → the number → Display name | Only on a real number; the test number keeps Meta's name. Meta reviews it against the business — "Sckools" is the GST trade name, so it matches. A display name that does not match the verified business is refused. |
-| **Blue tick** | WhatsApp Manager → the number → "Request Official Business Account" (free, rarely granted) — or Meta Verified for business on WhatsApp (paid subscription, India) | Needs business verification first. Not a prerequisite for anything above: templates, buttons and the name work without it. |
+| **Green tick / Official Business Account** | WhatsApp Manager → the number → "Request Official Business Account" (free, granted on notability) — or **Meta Verified for business** (paid monthly, available in India) | Needs business verification first. **This is what puts "Sckools" on the chat instead of +91 95999 15010.** Checked on the live number 25 Sep 2026: `verified_name: Sckools`, `name_status: AVAILABLE_WITHOUT_REVIEW`, `is_official_business_account: false` — and a real recipient saw the NUMBER. Without the tick the display name shows only inside the business profile, after the recipient taps the header. Templates and buttons do work without it. |
+
+## Phone login (design 2026-09-21)
+
+`sckools_verify_code` carries every one-time code: login (`POST /auth/otp/request` → `verify` → `choose` when a number opens several profiles), password reset (`forgot-password` now also starts a code when the login has a phone; `reset-with-otp` sets the password), and proving a number on a profile. One engine (`apps/api/src/common/otp`), every enabled sender (WhatsApp now, SMS when the MSG91 keys exist). Limits: one code a minute, three an hour, ten a day per phone and purpose; 10 minutes; 5 tries. Admins never log in by code — their profile appears only in a password session's *Switch profile* list. Spec: `docs/superpowers/specs/2026-09-21-whatsapp-identity-and-actions-design.md`.
 
 ## Actions and identity (the second batch)
 
@@ -45,12 +49,14 @@ Until a template is approved, sends of that kind fail with Meta code 132001 and 
 | Variable | Value |
 |---|---|
 | `WHATSAPP_TOKEN` | temporary token today; the permanent system-user token after verification |
-| `WHATSAPP_PHONE_NUMBER_ID` | `1357286177463978` (test number) today; the production number's id later |
-| `WHATSAPP_WABA_ID` | `2126847704608094` |
+| `WHATSAPP_PHONE_NUMBER_ID` | **`1415040705015934`** — the live number +91 95999 15010 (the old test number was `1357286177463978`) |
+| `WHATSAPP_WABA_ID` | **`1615192556803051`** — the "Sckools" account the live number sits on. The old `2126847704608094` is the Test account and still holds the test number. Templates belong to the ACCOUNT, so moving here meant submitting them all again. |
 | `META_APP_ID` | `3216485048535315` |
 | `META_APP_SECRET` | App settings → Basic → Show |
 | `WHATSAPP_WEBHOOK_VERIFY_TOKEN` | any long random string; paste the same in Meta's webhook screen |
 | `WHATSAPP_GRAPH_VERSION` | optional, default `v21.0` |
+| `MSG91_AUTH_KEY` | optional — with the template id below, one-time codes ALSO go by SMS (DLT). Unset = WhatsApp only. |
+| `MSG91_OTP_TEMPLATE_ID` | the DLT-approved OTP template with one `##OTP##` variable |
 
 Webhook: `https://api.sckools.com/webhooks/whatsapp` (staging: `https://api.test.sckools.com/webhooks/whatsapp`), subscribe to `messages`.
 
@@ -63,3 +69,44 @@ Webhook: `https://api.sckools.com/webhooks/whatsapp` (staging: `https://api.test
 | **Family** | `guardianPhone` on the student record, as the office typed it | no verification; one number shared by siblings gets ONE copy of a broadcast (same words within a minute are sent once) and one copy per child of per-child notices (absence, remark) |
 
 Every tap is recorded (`WhatsAppInbound`, keyed by Meta's message id — a retried webhook is a no-op), and every send in the ledger (`WhatsAppDelivery`).
+
+## Submitting the templates
+
+```
+WHATSAPP_WABA_ID=1615192556803051 node scripts/whatsapp-templates.mjs --dry   # see what would go
+WHATSAPP_WABA_ID=1615192556803051 node scripts/whatsapp-templates.mjs         # send them
+WHATSAPP_WABA_ID=1615192556803051 node scripts/whatsapp-verify.mjs            # read back what Meta has
+```
+
+The script reads the bodies out of `apps/api/src/common/notifications/whatsapp/templates.ts`,
+not out of this table, so an approved template can never drift from the shape the code sends.
+It skips names that are already there. The token comes from `~/.sckools-whatsapp-token` and is
+never printed.
+
+**Two of Meta's content rules cost us a full round of rejections on 2026-09-22.** A body may not
+START or END with a `{{n}}` variable — every one of ours opened with the school's name — and a
+body needs enough words for the number of variables it carries. The bodies in `templates.ts`
+were rewritten for both, with the parameter ORDER unchanged, so `templateFor` still lines up.
+
+**`sckools_verify_code` cannot be created through the API on this account.** Meta answers
+`Application does not have permission for this action` (subcode 2388185) for anything in the
+AUTHENTICATION category, while every UTILITY template on the same token goes through. This is an
+account-level entitlement, not a bug in the payload: a bare authentication template with no
+buttons is refused the same way. Until it exists, one-time codes cannot go out over WhatsApp.
+**Confirmed 2026-09-23: WhatsApp Manager refuses it too**, with the same words in a dialog
+("Cannot create message template — This WhatsApp Business account does not have permission to
+create message template"). So it is not an API payload problem and there is no UI workaround:
+it is an account entitlement only Meta can lift. Everything else on the account is healthy —
+verified, APPROVED, ACTIVE, payment added, and eleven UTILITY templates submitted fine on the
+same token minutes earlier.
+
+**What to do:** open Meta Direct Support from WhatsApp Manager (Help → Support) and ask them to
+enable the AUTHENTICATION template category for WABA `1615192556803051`. Say that utility
+templates submit without trouble on the same account, which tells them immediately it is a
+category entitlement rather than a policy problem with the business.
+
+**What it costs meanwhile:** login by one-time code cannot go out on WhatsApp. Password login is
+unaffected, and `/auth/otp/request` now answers "Signing in by code is not switched on yet.
+Please sign in with your password instead." rather than asking people to try again forever
+(Meta 132001 is treated as permanent, not transient). SMS would also carry the code the moment
+`MSG91_AUTH_KEY` and `MSG91_OTP_TEMPLATE_ID` are set, without needing Meta at all.

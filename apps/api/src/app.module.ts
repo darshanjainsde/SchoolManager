@@ -14,6 +14,7 @@ import { RedisModule } from './common/redis/redis.module';
 import { StorageModule } from './common/storage/storage.module';
 import { MailModule } from './common/mail/mail.module';
 import { NotificationModule } from './common/notifications/notification.module';
+import { OtpModule } from './common/otp/otp.module';
 import { AuditInterceptor } from './common/audit/audit.interceptor';
 import { AuthModule } from './modules/auth';
 import { TenancyModule } from './modules/tenancy';
@@ -27,6 +28,7 @@ import { PublicModule } from './modules/public';
 import { PortalModule } from './modules/portal';
 import { LibraryModule } from './modules/library';
 import { SportsModule } from './modules/sports';
+import { PayrollModule } from './modules/payroll';
 import { DirectoryModule } from './modules/directory/directory.module';
 import { AlumniModule } from './modules/alumni';
 import { MarketingModule } from './modules/marketing';
@@ -78,6 +80,7 @@ import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storag
     StorageModule,
     MailModule,
     NotificationModule,
+    OtpModule,
     EventBusModule,
     HealthModule,
 
@@ -94,6 +97,7 @@ import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storag
     PortalModule,
     LibraryModule,
     SportsModule,
+    PayrollModule,
     WhatsAppModule,
     MailWebhooksModule,
     DirectoryModule,

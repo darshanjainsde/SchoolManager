@@ -1,6 +1,7 @@
 import type { Role, Session } from './session';
+import { homeTabFor, jobFor } from './worker-nav';
 
-export function portalForRole(role: Role): '/(family)/(tabs)/home' | '/(staff)/(tabs)/home' | '/(worker)/today' {
+export function portalForRole(role: Role): '/(family)/(tabs)/home' | '/(staff)/(tabs)/home' | '/(worker)/(tabs)/today' {
   switch (role) {
     case 'STUDENT': return '/(family)/(tabs)/home';
     case 'TEACHER': return '/(staff)/(tabs)/home';
@@ -15,7 +16,7 @@ export function portalForRole(role: Role): '/(family)/(tabs)/home' | '/(staff)/(
     // it's the teacher+admin portal, not a "staff" one), which is exactly
     // the "wrong portal" gap this exists to close. See web's parallel fix
     // (apps/web/lib/role-routes.ts) for the same STAFF-portal split.
-    case 'STAFF': return '/(worker)/today';
+    case 'STAFF': return '/(worker)/(tabs)/today';
     // The library counter is a desk: search a child, type a book number, hand
     // the book over. It lives on the web console. Until `LIBRARIAN` was added
     // to `Role` this case did not exist and the switch fell off its end,
@@ -26,6 +27,17 @@ export function portalForRole(role: Role): '/(family)/(tabs)/home' | '/(staff)/(
     case 'LIBRARIAN': throw new Error('The library counter is on the web console.');
     case 'OWNER': throw new Error('Owner accounts use the web console.');
   }
+}
+
+/**
+ * Where THIS session lands. Only STAFF differs from `portalForRole`: the
+ * worker portal has three desks, and a sports teacher opens on the meet, a
+ * librarian on the counter (lib/worker-nav.ts). Throws for the web-only
+ * roles exactly as `portalForRole` does.
+ */
+export function portalForSession(s: Pick<Session, 'role' | 'staffRole' | 'features'>): string {
+  const base = portalForRole(s.role);
+  return s.role === 'STAFF' ? `/(worker)/(tabs)/${homeTabFor(jobFor(s))}` : base;
 }
 
 // Pure bootstrap decision for app/index.tsx. A persisted session whose role
@@ -41,7 +53,7 @@ export function portalForRole(role: Role): '/(family)/(tabs)/home' | '/(staff)/(
 export function resolveStartRoute(session: Session | null): string {
   if (session) {
     try {
-      return portalForRole(session.role);
+      return portalForSession(session);
     } catch {
       // fall through to the gate below
     }

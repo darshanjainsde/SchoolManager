@@ -1,5 +1,6 @@
 import { toE164, forGraph } from './phone';
-import { EXTRA_SUBMISSIONS, HELLO_WORLD, SUBMISSIONS, TEMPLATE_NAMES, coverPendingTemplate, param, placeholderCount, templateFor, verifyCodeTemplate } from './templates';
+import { whatsAppConfig, whatsAppConfigProblem } from './graph.client';
+import { EXTRA_SUBMISSIONS, HELLO_WORLD, SUBMISSIONS, TEMPLATE_NAMES, coverPendingTemplate, param, placeholderCount, templateFor, testNoticeTemplate, verifyCodeTemplate } from './templates';
 import type { NotificationKind, NotificationMessage } from '../notification.types';
 
 describe('toE164', () => {
@@ -40,6 +41,24 @@ const MESSAGES: { [K in NotificationKind]: NotificationMessage & { kind: K } } =
   LEAVE_DECIDED: { kind: 'LEAVE_DECIDED', payload: { schoolName: 'Raffles', leaveId: 'l1', decision: 'REJECTED', dates: 'Mon 22 Sep 2026', byName: null } },
   COVER_ASSIGNED: { kind: 'COVER_ASSIGNED', payload: { schoolName: 'Raffles', substitutionId: 's1', when: 'Mon 22 Sep, period 3 (10:15–11:00)', className: '9-A', subjectName: null, originalTeacherName: 'Priya Nair', ackPayload: 'ca:s1:sig' } },
 };
+
+describe('a missing template is a permanent refusal, not a blip', () => {
+  it('names Meta 132001 separately so the login screen can send people to the password door', async () => {
+    const { WhatsAppOtpSender } = await import('../../otp/otp-senders');
+    const channel = { configured: true, deliverWith: async () => ({ ok: false, code: 132001 }) };
+    const sender = new WhatsAppOtpSender(channel as never);
+    const r = await sender.send('+919876543210', '482911', { schoolId: 's1', purpose: 'LOGIN' });
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/not approved on this WhatsApp account/);
+  });
+
+  it('still calls an ordinary failure an ordinary failure', async () => {
+    const { WhatsAppOtpSender } = await import('../../otp/otp-senders');
+    const channel = { configured: true, deliverWith: async () => ({ ok: false, code: 500 }) };
+    const sender = new WhatsAppOtpSender(channel as never);
+    expect((await sender.send('+919876543210', '1', { schoolId: 's1', purpose: 'LOGIN' })).reason).toBe('WhatsApp did not deliver');
+  });
+});
 
 describe('templateFor ↔ SUBMISSIONS', () => {
   it.each(Object.keys(MESSAGES) as NotificationKind[])('%s: params match the body placeholders, and the name is the registered one', (kind) => {
@@ -100,3 +119,79 @@ describe('templateFor ↔ SUBMISSIONS', () => {
     for (const [name, sub] of Object.entries(EXTRA_SUBMISSIONS)) expect(sub.samples).toHaveLength(placeholderCount(sub.body));
   });
 });
+
+/**
+ * THE MISCONFIGURATION THAT MADE WHATSAPP "NOT WORK" FOR DAYS.
+ *
+ * Staging had `WHATSAPP_PHONE_NUMBER_ID` set to the WABA id. Everything
+ * looked configured — the settings screen showed a plausible id — and every
+ * send died at Meta with code 100 "Object with ID … does not exist", which
+ * reads like a permissions problem rather than a paste into the wrong box.
+ * Reproduced against the live Graph API on 25 Sep 2026 before this was
+ * written; the correct phone number id sends fine.
+ */
+describe('the sending number is never the business account', () => {
+  const base = { WHATSAPP_TOKEN: 'EAAtoken', WHATSAPP_WABA_ID: '1615192556803051' };
+
+  it('refuses a config whose phone number id IS the WABA id', () => {
+    const env = { ...base, WHATSAPP_PHONE_NUMBER_ID: '1615192556803051' } as NodeJS.ProcessEnv;
+    expect(whatsAppConfig(env)).toBeNull();
+  });
+
+  it('says which box the wrong id is in', () => {
+    const env = { ...base, WHATSAPP_PHONE_NUMBER_ID: '1615192556803051' } as NodeJS.ProcessEnv;
+    expect(whatsAppConfigProblem(env)).toMatch(/same as WHATSAPP_WABA_ID/);
+    expect(whatsAppConfigProblem(env)).toMatch(/code 100/);
+  });
+
+  it('accepts the real pairing', () => {
+    const env = { ...base, WHATSAPP_PHONE_NUMBER_ID: '1415040705015934' } as NodeJS.ProcessEnv;
+    expect(whatsAppConfig(env)?.phoneNumberId).toBe('1415040705015934');
+    expect(whatsAppConfigProblem(env)).toBeNull();
+  });
+
+  it('still works for a school that has no WABA id set', () => {
+    // The check must not turn a working install off.
+    const env = { WHATSAPP_TOKEN: 'EAAtoken', WHATSAPP_PHONE_NUMBER_ID: '1415040705015934' } as NodeJS.ProcessEnv;
+    expect(whatsAppConfig(env)?.phoneNumberId).toBe('1415040705015934');
+    expect(whatsAppConfigProblem(env)).toBeNull();
+  });
+
+  it('names a missing token and a missing number separately', () => {
+    expect(whatsAppConfigProblem({ WHATSAPP_PHONE_NUMBER_ID: '1' } as NodeJS.ProcessEnv)).toMatch(/WHATSAPP_TOKEN/);
+    expect(whatsAppConfigProblem({ WHATSAPP_TOKEN: 'EAAx' } as NodeJS.ProcessEnv)).toMatch(/WHATSAPP_PHONE_NUMBER_ID/);
+  });
+});
+
+/**
+ * The test button broke the day the school got a real number.
+ *
+ * `hello_world` is Meta's own sample and is REFUSED off their public test
+ * numbers with code 131058 — so "Send test" worked all through setup and
+ * failed exactly when somebody used it in anger.
+ */
+describe('the test send has a template that works on a real number', () => {
+  it('fills an APPROVED template of the school’s own', () => {
+    const t = testNoticeTemplate('Raffles Primary School');
+    expect(t.name).toBe(TEMPLATE_NAMES.ABSENCE_NOTICE);
+    expect(t.language).not.toBe('en_US');
+  });
+
+  it('matches the placeholder count Meta approved', () => {
+    // A mismatch is code 132000, which would swap one broken test for another.
+    const t = testNoticeTemplate('Raffles Primary School');
+    expect(t.params).toHaveLength(placeholderCount(SUBMISSIONS.ABSENCE_NOTICE.body));
+  });
+
+  it('reads as a test, so nobody thinks a child is absent', () => {
+    const t = testNoticeTemplate('Raffles Primary School');
+    const sentence = SUBMISSIONS.ABSENCE_NOTICE.body.replace(/\{\{(\d)\}\}/g, (_m, i) => t.params[Number(i) - 1]);
+    expect(sentence).toMatch(/This is a WhatsApp test/);
+    expect(sentence).toMatch(/Please ignore/);
+  });
+
+  it('names the school, so the receiver knows who sent it', () => {
+    expect(testNoticeTemplate('Raffles Primary School').params[0]).toBe('Raffles Primary School');
+  });
+});
+

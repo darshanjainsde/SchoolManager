@@ -1,0 +1,12 @@
+/* The payslip's print rules — the same three iron rules the receipt and the
+   Press use. `#payslip-print` is a DIRECT child of <body> (BodyPrintPortal)
+   and is hidden on screen; `body.payslip-printing` is set for the length of
+   the print only. A container nested in the app tree prints blank pages,
+   because every other direct child of body is hidden during a print. */
+#payslip-print { display: none; }
+@media print {
+  @page { size: A4; margin: 14mm; }
+  body.payslip-printing > * { display: none !important; }
+  body.payslip-printing > #payslip-print { display: block !important; }
+  html, body { background: #fff !important; }
+}

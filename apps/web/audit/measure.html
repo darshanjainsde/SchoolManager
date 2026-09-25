@@ -3,7 +3,7 @@
 #out{padding:12px;white-space:pre-wrap;line-height:1.5}iframe{position:fixed;left:-9999px;top:0;border:0}</style>
 </head><body><div id="out">measuring…</div>
 <script>
-const WIDTHS=[390,414,768,1024,1280];
+const WIDTHS=[360,390,414,768,1024,1280];
 // ?file=./screens-portal.html measures a different rendered set (default: the sports desk).
 const FILE=new URLSearchParams(location.search).get('file')||'./screens.html';
 const log=[];
@@ -22,21 +22,83 @@ function audit(doc,win,w){
     // 1. overflows the viewport and is NOT inside a horizontal scroller
     if(r.right>vw+0.5&&!inScroller(e)&&!scrolls(e))
       R.push(`${panel} | OVERFLOW ${Math.round(r.right)}>${vw} | ${e.tagName.toLowerCase()}.${(e.className||'').toString().split(' ')[0]} | "${(e.textContent||'').trim().slice(0,40)}"`);
-    // 2. text clipped: content wider than the box, box does not scroll, no ellipsis
+    // 2. text clipped: content wider than the box, box does not scroll, no ellipsis.
+    //    An <input>/<textarea> is exempt: its value scrolls inside it BY
+    //    DESIGN, and the reader can move the caret through it. Flagging that
+    //    made every field holding a long value a false finding.
     const s=win.getComputedStyle(e);
-    if(e.children.length===0&&e.scrollWidth>e.clientWidth+1&&!scrolls(e)&&s.textOverflow!=='ellipsis'&&e.clientWidth>0)
+    const editable=/^(input|textarea)$/i.test(e.tagName);
+    if(e.children.length===0&&e.scrollWidth>e.clientWidth+1&&!scrolls(e)&&s.textOverflow!=='ellipsis'&&e.clientWidth>0&&!e.classList.contains('sr-only')&&!editable)
       R.push(`${panel} | CLIPPED ${e.scrollWidth}>${e.clientWidth} | ${e.tagName.toLowerCase()}.${(e.className||'').toString().split(' ')[0]} | "${(e.textContent||'').trim().slice(0,40)}"`);
-    // 3. tap targets under 24px on touch widths
+    // 3. RAGGED COLUMNS: two rows of one list whose cells start at different x.
+    //    The defect that made every hand-rolled list look broken — a flex row
+    //    with a `flex: 1` spacer lets each row's text decide where its controls
+    //    land. Measured, not eyeballed: same list, same column, different left.
+    // (handled once per list below, not per element)
+    // 4. an overlay outside the theme: a dialog whose background resolved to nothing
+    //    (tokens live on .skosx; a portal on bare <body> gets none), or one that
+    //    sits INSIDE main, where an ancestor transform will re-anchor it.
+    if(e.getAttribute('role')==='dialog'){
+      const bg=s.backgroundColor;
+      if(!bg||bg==='rgba(0, 0, 0, 0)'||bg==='transparent') R.push(`${panel} | DIALOG NO BACKGROUND (outside .skosx?) | ${e.getAttribute('aria-label')||''}`);
+      if(e.closest('main')) R.push(`${panel} | DIALOG INSIDE MAIN (will be trapped by .sk-anim transform) | ${e.getAttribute('aria-label')||''}`);
+    }
+    // 4. tap targets under 24px on touch widths
     if(w<=414&&/^(button|a|input|select)$/i.test(e.tagName)&&(r.height<24||r.width<24)&&r.height>0)
       R.push(`${panel} | TAP ${Math.round(r.width)}x${Math.round(r.height)} | ${e.tagName.toLowerCase()}.${(e.className||'').toString().split(' ')[0]} | "${(e.textContent||'').trim().slice(0,30)}"`);
+  }
+  // 5. WHAT A CLICK REVEALED, AND WHETHER ANYONE CAN SEE IT.
+  //    "Open" on the payslip list appended a card BELOW a 40-row table:
+  //    thousands of pixels under the fold, nothing moved in the viewport, and
+  //    the button read as broken. A screenshot cannot tell that apart from a
+  //    working panel, so the harness records what appeared and this checks it
+  //    is actually on screen. A dialog is exempt — it is fixed by definition.
+  for(const sec of doc.querySelectorAll('.audit-panel[data-revealed-kind]')){
+    const panel=sec.dataset.panel||'?';
+    const kind=sec.dataset.revealedKind;
+    if(kind==='none'){
+      R.push(`${panel} | CLICK REVEALED NOTHING — the control did nothing, or the screen never loaded`);
+      continue;
+    }
+    if(kind!=='inline') continue;
+    for(const e of sec.querySelectorAll('[data-revealed]')){
+      const r=e.getBoundingClientRect();
+      if(r.height===0&&r.width===0) continue;
+      // The page is measured unscrolled, so anything a click reveals has to
+      // be reachable from where the reader already is.
+      if(r.top>win.innerHeight)
+        R.push(`${panel} | REVEALED BELOW THE FOLD: top ${Math.round(r.top)} > viewport ${win.innerHeight} | ${e.tagName.toLowerCase()}.${(e.className||'').toString().split(' ')[0]} | use an Overlay, or open it beside the control`);
+    }
+  }
+  // Ragged columns, per list.
+  for(const list of doc.querySelectorAll('.sk-rowlist')){
+    const rows=[...list.querySelectorAll(':scope > .sk-rowline')];
+    if(rows.length<2) continue;
+    const cols=rows.map(r=>[...r.querySelectorAll(':scope > .sk-rowcell')].map(c=>Math.round(c.getBoundingClientRect().left)));
+    const n=Math.min(...cols.map(c=>c.length));
+    for(let c=0;c<n;c++){
+      const xs=cols.map(r=>r[c]);
+      const spread=Math.max(...xs)-Math.min(...xs);
+      if(spread>1){
+        const panel=list.closest('.audit-panel')?.dataset.panel||'?';
+        R.push(`${panel} | RAGGED column ${c+1} varies by ${spread}px across ${rows.length} rows | the list must own the tracks`);
+      }
+    }
   }
   return R;
 }
 (async()=>{
   for(const w of WIDTHS){
     const f=document.createElement('iframe');
-    f.width=w;f.height=900;f.src=FILE;document.body.appendChild(f);
+    // Cache-busted: a regenerated screens file behind a cached iframe measured the OLD build once.
+    f.width=w;f.height=900;f.src=FILE+(FILE.includes('?')?'&':'?')+'t='+Date.now();document.body.appendChild(f);
     await new Promise(r=>f.onload=r);
+    // This measures LAYOUT, not motion. Chrome does not tick animations in an
+    // off-screen iframe, so a running entrance animation sits frozen on its
+    // FIRST frame — a drawer measured entirely outside the viewport at every
+    // width, a frame no user sees. Switch motion off, as reduced-motion does,
+    // and measure the resting layout.
+    f.contentDocument.head.insertAdjacentHTML('beforeend','<style>*{animation:none!important;transition:none!important}</style>');
     await new Promise(r=>setTimeout(r,250));
     const R=audit(f.contentDocument,f.contentWindow,w);
     const uniq=[...new Set(R)];

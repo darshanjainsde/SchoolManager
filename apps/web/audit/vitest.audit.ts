@@ -6,7 +6,16 @@ import { fileURLToPath } from 'node:url';
 
 export default defineConfig({
   plugins: [react()],
-  test: { environment: 'node', globals: true, include: ['audit/**/*.test.tsx'] },
+  test: {
+    // node by default (the sports renderer is pure renderToStaticMarkup); the
+    // Pay renderer is hook-driven and opts into jsdom with a file pragma, so
+    // the setup file has to be available to it.
+    environment: 'node',
+    setupFiles: ['./test/setup.ts'],
+    globals: true,
+    include: ['audit/**/*.test.tsx'],
+    testTimeout: 20000,
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('../', import.meta.url)),

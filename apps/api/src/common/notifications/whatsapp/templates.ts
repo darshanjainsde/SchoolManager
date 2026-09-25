@@ -59,6 +59,27 @@ export function coverPendingTemplate(schoolName: string, gaps: number): WhatsApp
 /** Meta's sample template on every new number — the pipeline smoke test. */
 export const HELLO_WORLD: WhatsAppTemplate = { name: 'hello_world', language: 'en_US', params: [] };
 
+/**
+ * The test send's fallback, for a school on a REAL number.
+ *
+ * `hello_world` is refused off Meta's public test numbers (code 131058), so
+ * the test button has to prove the pipeline with a template of the school's
+ * own that Meta has approved. The absence notice is the one every school has,
+ * and the wording below is written so nobody who receives it thinks a child
+ * is actually absent.
+ */
+export function testNoticeTemplate(schoolName: string): WhatsAppTemplate {
+  return {
+    name: TEMPLATE_NAMES.ABSENCE_NOTICE,
+    language: TEMPLATE_LANGUAGE,
+    params: [
+      param(schoolName),
+      param('This is a WhatsApp test — nobody'),
+      param('today. Please ignore it'),
+    ],
+  };
+}
+
 /** A template parameter Meta will accept, whatever the office typed. */
 export function param(value: unknown, fallback = '—'): string {
   const s = String(value ?? '')
@@ -161,50 +182,66 @@ export function templateFor(message: NotificationMessage, ctx: TemplateContext =
 }
 
 /**
- * The bodies to submit in WhatsApp Manager (category UTILITY, language
- * English). `{{n}}` placeholders correspond 1:1 to `templateFor`'s params —
- * the spec counts them. Sample values are what Meta's reviewer sees.
+ * The bodies to submit (category UTILITY, language English). `{{n}}`
+ * placeholders correspond 1:1 to `templateFor`'s params — the spec counts
+ * them. Sample values are what Meta's reviewer sees.
+ *
+ * TWO OF META'S RULES SHAPE EVERY BODY HERE, and both were learnt the hard
+ * way: all twelve were refused on 2026-09-22 when they were first submitted.
+ *
+ *   1. A body may not START or END with a variable. Every one of these used
+ *      to open with `{{1}}` (the school's name), which reads naturally and is
+ *      not allowed. Each now opens with a few words of its own.
+ *   2. A body needs enough text for the number of variables it carries, so a
+ *      terse line with six of them is refused too.
+ *
+ * Variables also appear in ascending order in the text now. That is not a
+ * written rule, but a body that jumps {{1}} {{3}} {{2}} is one a reviewer has
+ * to stop and think about, and two of these did.
+ *
+ * `scripts/whatsapp-templates.mjs` reads THIS object to submit them, so what
+ * Meta approves can never drift from what `templateFor` sends.
  */
 export const SUBMISSIONS: Record<NotificationKind, { body: string; samples: string[]; buttons?: string[] }> = {
   TEST_SCHEDULED: {
-    body: '{{1}}: {{2}} has a {{3}} test, "{{4}}", on {{5}}. Open the Sckools app for the details.',
+    body: 'A message from {{1}}. {{2}} has a {{3}} test, "{{4}}", on {{5}}. Open the Sckools app to see the syllabus and the timing.',
     samples: ['Raffles Public School', 'Ravi Sharma (5-B)', 'Mathematics', 'Unit test 2', 'Mon 6 Oct 2026'],
   },
   TEST_REMINDER: {
-    body: 'Reminder from {{1}}: {{2}} has the {{3}} test "{{4}}" on {{5}} — that is {{6}}.',
+    body: 'A reminder from {{1}}. {{2}} has the {{3}} test "{{4}}" on {{5}}, which is {{6}}. Open the Sckools app to see what to prepare.',
     samples: ['Raffles Public School', 'Ravi Sharma (5-B)', 'Mathematics', 'Unit test 2', 'Mon 6 Oct 2026', 'in 3 days'],
   },
   RESULTS_PUBLISHED: {
-    body: '{{1}} has published the results of the {{2}} test "{{3}}" for {{4}}. Open the Sckools app to see the marks.',
+    body: 'The results are out at {{1}}. Marks for the {{2}} test "{{3}}" are ready for {{4}}. Open the Sckools app to see them.',
     samples: ['Raffles Public School', 'Mathematics', 'Unit test 2', 'Ravi Sharma (5-B)'],
   },
   ABSENCE_NOTICE: {
-    body: '{{1}}: {{2}} was marked absent on {{3}}. If this is a mistake, please tell the school office.',
+    body: 'A message from {{1}}. {{2}} was marked absent on {{3}}. If this is a mistake, please tell the school office.',
     samples: ['Raffles Public School', 'Ravi Sharma', 'Thu 18 Sep 2026'],
   },
   ANNOUNCEMENT: {
-    body: 'Announcement from {{1}} for {{2}} — {{3}}: {{4}}',
+    body: 'An announcement from {{1}}, for {{2}}. The subject is {{3}}. {{4}} You can read this again in the Sckools app.',
     samples: ['Raffles Public School', 'Ravi Sharma (5-B)', 'PTM on Saturday', 'Parent–teacher meeting this Saturday, 10 am to 1 pm, in the school hall.'],
   },
   DIARY_REMARK: {
-    body: '{{1}}: {{2}} ({{3}}) has a remark from {{4}} dated {{5}}: "{{6}}". Please read and sign it in the Sckools app.',
+    body: 'A diary note from {{1}}. {{2}} of class {{3}} has a remark from {{4}}, dated {{5}}. It says: "{{6}}". Please read and sign it in the Sckools app.',
     samples: ['Raffles Public School', 'Ravi Sharma', '5-B', 'Priya Nair', 'Thu 18 Sep 2026', 'Homework not done for three days.'],
   },
   LOW_ATTENDANCE: {
-    body: '{{1}}: {{2}} ({{3}}) has {{4}}% attendance for {{5}}, below the {{6}}% the school expects. Please make sure they attend.',
+    body: 'An attendance notice from {{1}}. {{2}} of class {{3}} has {{4}} per cent attendance for {{5}}, below the {{6}} per cent the school expects. Please make sure they attend.',
     samples: ['Raffles Public School', 'Ravi Sharma', '5-B', '68', '1 Jul 2026 – 18 Sep 2026', '75'],
   },
   LEAVE_APPLIED: {
-    body: '{{1}}: {{2}} has applied for leave on {{3}} ({{4}} days). Reason: {{5}}. {{6}} periods would need cover. Approve or reject below; you can also do this in the console.',
+    body: 'A leave request at {{1}}. {{2}} has applied for leave on {{3}}, which is {{4}} days. The reason given is {{5}}. {{6}} periods would need cover. Approve or reject below, or do it in the console.',
     samples: ['Raffles Public School', 'Priya Nair', 'Mon 22 – Tue 23 Sep 2026', '2', 'Family function', '5'],
     buttons: ['Approve', 'Reject'],
   },
   LEAVE_DECIDED: {
-    body: '{{1}}: your leave for {{3}} has been {{2}} by {{4}}. Open the Sckools app for the details.',
+    body: 'A message from {{1}}. Your leave has been {{2}} for {{3}}, by {{4}}. Open the Sckools app for the details.',
     samples: ['Raffles Public School', 'approved', 'Mon 22 – Tue 23 Sep 2026', 'Darshan Jain'],
   },
   COVER_ASSIGNED: {
-    body: '{{1}}: you are covering {{3}} ({{4}}) on {{2}}, for {{5}}. Tap below to confirm you have seen this.',
+    body: 'A cover duty at {{1}}. On {{2}} you are covering class {{3}} for {{4}}, in place of {{5}}. Tap below to confirm you have seen this.',
     samples: ['Raffles Public School', 'Mon 22 Sep, period 3 (10:15–11:00)', '9-A', 'Mathematics', 'Priya Nair'],
     buttons: ['Got it'],
   },
@@ -220,7 +257,7 @@ export const EXTRA_SUBMISSIONS: Record<string, { category: 'AUTHENTICATION' | 'U
   },
   [COVER_PENDING]: {
     category: 'UTILITY',
-    body: '{{1}}: {{2}} periods still need cover after the leave you approved. Open the console to assign teachers.',
+    body: 'A message from {{1}}. {{2}} periods still need cover after the leave you approved. Open the console to assign teachers.',
     samples: ['Raffles Public School', '3'],
   },
 };

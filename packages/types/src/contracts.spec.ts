@@ -131,7 +131,7 @@ describe('shared portal contracts', () => {
   it('a LeaveApplication admits every declared type and status', () => {
     const leave: LeaveApplication = {
       id: 'l1', type: 'SICK', startDate: '2026-07-20', endDate: '2026-07-22',
-      reason: null, status: 'PENDING', createdAt: '2026-07-19T00:00:00.000Z',
+      reason: null, status: 'PENDING', halfDay: false, createdAt: '2026-07-19T00:00:00.000Z',
     };
     expect(leave.status).toBe('PENDING');
   });

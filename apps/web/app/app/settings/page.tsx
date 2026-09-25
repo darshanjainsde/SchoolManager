@@ -9,7 +9,6 @@ import { useHost } from '@/components/use-host';
 import { EmailSettingsCard } from './email-card';
 import { TvCard } from './tv-card';
 import { WhatsAppCard } from './whatsapp-card';
-import { PhoneCard } from '@/components/phone-card';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -1035,8 +1034,6 @@ export default function SettingsPage() {
         {/* ── WhatsApp ──────────────────────────────────────────────────── */}
         <WhatsAppCard />
 
-        {/* ── The admin's own number: where requests arrive with buttons ─── */}
-        <PhoneCard role="admin" />
 
         <TvCard />
 

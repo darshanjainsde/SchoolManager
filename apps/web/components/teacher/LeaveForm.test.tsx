@@ -25,6 +25,8 @@ describe('LeaveForm', () => {
       startDate: '2026-08-01',
       endDate: '2026-08-03',
       reason: 'Family event',
+      // Three dates cannot be a half day, so the control is not even offered.
+      halfDay: false,
     });
   });
 
@@ -73,5 +75,37 @@ describe('LeaveForm', () => {
 
     await user.click(button);
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('offers a half day only when the leave is one date', async () => {
+    const onSubmit = vi.fn();
+    render(<LeaveForm isSubmitting={false} onSubmit={onSubmit} />);
+
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-08-10' } });
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-08-12' } });
+    expect(screen.queryByLabelText(/half day/i)).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-08-10' } });
+    expect(screen.getByLabelText(/half day/i)).toBeInTheDocument();
+  });
+
+  it('sends the half day, and takes it back when the dates stop agreeing', async () => {
+    // The DB CHECKs that a half day is one day. If the control could stay
+    // ticked while the end date moved, the apply would be refused by a
+    // constraint instead of by a screen.
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    render(<LeaveForm isSubmitting={false} onSubmit={onSubmit} />);
+
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-08-10' } });
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-08-10' } });
+    await user.click(screen.getByLabelText(/half day/i));
+    await user.click(screen.getByRole('button', { name: 'Submit request' }));
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ halfDay: true }));
+
+    onSubmit.mockClear();
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-08-11' } });
+    await user.click(screen.getByRole('button', { name: 'Submit request' }));
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ halfDay: false }));
   });
 });

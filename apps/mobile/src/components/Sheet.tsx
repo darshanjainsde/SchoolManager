@@ -1,13 +1,6 @@
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEffect, useState, type PropsWithChildren, type ReactNode } from 'react';
-import {
-  AccessibilityInfo,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  Text,
-  View,
-} from 'react-native';
+import { AccessibilityInfo, KeyboardAvoidingView, Modal, Platform, Pressable, Text, View, ScrollView } from 'react-native';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 
@@ -60,11 +53,12 @@ export function Sheet({
     };
   }, []);
 
+  const insets = useSafeAreaInsets();
   return (
     <Modal visible={open} transparent animationType={reduced ? 'fade' : 'slide'} onRequestClose={onClose}>
       <KeyboardAvoidingView
         style={{ flex: 1, justifyContent: 'flex-end' }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <Pressable
           testID={backdropTestID}
@@ -81,7 +75,8 @@ export function Sheet({
             borderTopRightRadius: tokens.radius.sheet,
             paddingHorizontal: 14,
             paddingTop: 8,
-            paddingBottom: 18,
+            // Clear the gesture strip / home indicator (UI audit 2026-09-22, #20).
+            paddingBottom: Math.max(insets.bottom, 18),
             maxHeight,
             shadowColor: tokens.color.ink,
             shadowOpacity: 0.3,
@@ -117,7 +112,12 @@ export function Sheet({
           {subtitle ? (
             <Text style={{ fontSize: 12, color: tokens.color.sub, marginBottom: 10 }}>{subtitle}</Text>
           ) : null}
-          {children}
+          {/* The body scrolls inside the cap; the footer stays pinned. A tall
+              form (the fee claim: five fields + Send) used to clip its own
+              submit button at the OS large-font setting (UI audit #6). */}
+          <ScrollView keyboardShouldPersistTaps="handled" bounces={false} style={{ flexShrink: 1 }}>
+            {children}
+          </ScrollView>
           {footer ? <View style={{ marginTop: 10 }}>{footer}</View> : null}
         </View>
       </KeyboardAvoidingView>

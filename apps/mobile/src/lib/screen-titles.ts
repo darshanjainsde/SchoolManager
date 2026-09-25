@@ -16,6 +16,11 @@
  */
 const TITLES: Record<string, string> = {
   appearance: 'Appearance',
+  meets: 'Meet',
+  member: 'Reader',
+  counter: 'Counter',
+  rules: 'Rules book',
+  salary: 'My pay',
   assignments: 'Assignments',
   class: 'Class',
   birthdays: 'Birthdays',
@@ -29,6 +34,7 @@ const TITLES: Record<string, string> = {
   notifications: 'Notifications',
   password: 'Change password',
   phone: 'My WhatsApp number',
+  switch: 'Switch profile',
   post: 'Announcements',
   receipt: 'Receipt',
   'report-cards': 'Report cards',

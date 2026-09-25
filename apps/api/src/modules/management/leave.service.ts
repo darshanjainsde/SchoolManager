@@ -17,6 +17,7 @@ type LeaveApplicationRow = {
   endDate: Date;
   reason: string | null;
   status: string;
+  halfDay?: boolean;
   createdAt: Date;
 };
 
@@ -36,6 +37,7 @@ export class LeaveService {
       endDate: a.endDate.toISOString(),
       reason: a.reason,
       status: a.status as LeaveApplication['status'],
+      halfDay: a.halfDay ?? false,
       createdAt: a.createdAt.toISOString(),
     };
   }
@@ -50,11 +52,16 @@ export class LeaveService {
     if (dto.endDate < dto.startDate) {
       throw new ApiError('VALIDATION', 'endDate must be on or after startDate', 400, 'endDate');
     }
+    // The DB carries this as a CHECK. Refusing it here means the person is
+    // told what is wrong instead of being shown a constraint violation.
+    if (dto.halfDay && dto.endDate !== dto.startDate) {
+      throw new ApiError('VALIDATION', 'A half day is one day. Pick the same date for both, or turn the half day off.', 400, 'halfDay');
+    }
 
     return withTenant(schoolId, async (tx) => {
-      const teacher = await tx.teacher.findFirst({ where: { schoolId, userId: callerUserId } });
-      if (!teacher) {
-        throw new ApiError('NOT_A_TEACHER', 'Only teachers can apply for leave', 403);
+      const person = await LeaveService.personFor(tx, schoolId, callerUserId);
+      if (!person) {
+        throw new ApiError('NOT_A_TEACHER', 'Only a teacher or a staff member can apply for leave', 403);
       }
 
       // Link the application to the school's own leave-type row (if the
@@ -67,27 +74,62 @@ export class LeaveService {
       const created = await tx.leaveApplication.create({
         data: {
           schoolId,
-          teacherId: teacher.id,
+          // Exactly one of these, enforced by `LeaveApplication_one_person`.
+          teacherId: person.kind === 'TEACHER' ? person.id : null,
+          staffId: person.kind === 'STAFF' ? person.id : null,
           type: dto.type,
           typeDefId: typeDef?.id ?? null,
           startDate: new Date(dto.startDate),
           endDate: new Date(dto.endDate),
+          halfDay: dto.halfDay ?? false,
           reason: dto.reason,
         },
       });
-      await this.tellAdminsApplied(tx, schoolId, created.id, teacher, dto.startDate, dto.endDate, dto.reason ?? null);
+      await this.tellAdminsApplied(tx, schoolId, created.id, person, dto.startDate, dto.endDate, dto.reason ?? null);
       return LeaveService.toRow(created);
     });
+  }
+
+  /**
+   * WHO IS ASKING — a teacher, a staff member, or neither.
+   *
+   * Leave used to be a teachers-only idea, so every read resolved
+   * `Teacher.userId` and a driver simply had no way in. A school's leave
+   * policy covers everybody it employs, and pay deducts for everybody, so the
+   * question this answers is "which person record is this login", not "which
+   * teacher". A login that is both is a teacher first: that is the record
+   * with a timetable to cover.
+   */
+  private static async personFor(
+    tx: TenantTx,
+    schoolId: string,
+    userId: string,
+  ): Promise<{ kind: 'TEACHER' | 'STAFF'; id: string; firstName: string; lastName: string | null } | null> {
+    const teacher = await tx.teacher.findFirst({
+      where: { schoolId, userId },
+      select: { id: true, firstName: true, lastName: true },
+    });
+    if (teacher) return { kind: 'TEACHER', ...teacher };
+    const staff = await tx.staff.findFirst({
+      where: { schoolId, userId, isActive: true },
+      select: { id: true, firstName: true, lastName: true },
+    });
+    return staff ? { kind: 'STAFF', ...staff } : null;
+  }
+
+  /** The one-person filter for whichever record this login turned out to be. */
+  private static whereIs(person: { kind: 'TEACHER' | 'STAFF'; id: string }) {
+    return person.kind === 'TEACHER' ? { teacherId: person.id } : { staffId: person.id };
   }
 
   /** The caller's own leave applications, most recent first. */
   async mine(schoolId: string, callerUserId: string): Promise<LeaveApplication[]> {
     return withTenant(schoolId, async (tx) => {
-      const teacher = await tx.teacher.findFirst({ where: { schoolId, userId: callerUserId } });
-      if (!teacher) return [];
+      const person = await LeaveService.personFor(tx, schoolId, callerUserId);
+      if (!person) return [];
 
       const rows = await tx.leaveApplication.findMany({ take: LIST_CEILING.ACTIVITY,
-        where: { schoolId, teacherId: teacher.id },
+        where: { schoolId, ...LeaveService.whereIs(person) },
         orderBy: { createdAt: 'desc' },
       });
       return rows.map(LeaveService.toRow);
@@ -98,10 +140,10 @@ export class LeaveService {
    *  of the teacher "Requests" badge (see `RequestsController`). */
   async pendingCount(schoolId: string, callerUserId: string): Promise<number> {
     return withTenant(schoolId, async (tx) => {
-      const teacher = await tx.teacher.findFirst({ where: { schoolId, userId: callerUserId } });
-      if (!teacher) return 0;
+      const person = await LeaveService.personFor(tx, schoolId, callerUserId);
+      if (!person) return 0;
       return tx.leaveApplication.count({
-        where: { schoolId, teacherId: teacher.id, status: 'PENDING' },
+        where: { schoolId, ...LeaveService.whereIs(person), status: 'PENDING' },
       });
     });
   }
@@ -122,16 +164,31 @@ export class LeaveService {
       });
       if (apps.length === 0) return [];
 
-      const teacherIds = [...new Set(apps.map((a) => a.teacherId))];
-      const teachers = await tx.teacher.findMany({ take: LIST_CEILING.STRUCTURE,
-        where: { id: { in: teacherIds } },
-        select: { id: true, firstName: true, lastName: true },
-      });
-      const byId = new Map(teachers.map((t) => [t.id, t]));
+      // A row belongs to a teacher OR a staff member — never both, never
+      // neither (a CHECK enforces it). Both names are joined in JS, the way
+      // this file already joined the teacher's.
+      const teacherIds = apps.map((a) => a.teacherId).filter((id): id is string => !!id);
+      const staffIds = apps.map((a) => a.staffId).filter((id): id is string => !!id);
+      const [teachers, staff] = await Promise.all([
+        teacherIds.length
+          ? tx.teacher.findMany({ take: LIST_CEILING.STRUCTURE, where: { id: { in: [...new Set(teacherIds)] } }, select: { id: true, firstName: true, lastName: true } })
+          : Promise.resolve([]),
+        staffIds.length
+          ? tx.staff.findMany({ take: LIST_CEILING.STRUCTURE, where: { id: { in: [...new Set(staffIds)] } }, select: { id: true, firstName: true, lastName: true, role: true } })
+          : Promise.resolve([]),
+      ]);
+      const byTeacher = new Map(teachers.map((t) => [t.id, t]));
+      const byStaff = new Map(staff.map((s) => [s.id, s]));
 
       return apps.map((a) => {
-        const t = byId.get(a.teacherId);
-        return { ...a, teacherName: t ? `${t.firstName} ${t.lastName}` : 'Unknown teacher' };
+        const t = a.teacherId ? byTeacher.get(a.teacherId) : null;
+        const s = a.staffId ? byStaff.get(a.staffId) : null;
+        const who = t ?? s;
+        return {
+          ...a,
+          personKind: a.staffId ? ('STAFF' as const) : ('TEACHER' as const),
+          teacherName: who ? `${who.firstName} ${who.lastName}`.trim() : 'Unknown',
+        };
       });
     });
   }
@@ -190,14 +247,18 @@ export class LeaveService {
       const dates = dateRangeInclusive(toDateStr(app.startDate), toDateStr(app.endDate));
       const todayStr = todayIstDateStr(new Date());
 
+      // Substitutions and the staff-attendance mark are TEACHER work: a driver
+      // has no timetable to cover and no class waiting for one. A staff leave
+      // is approved and that is the whole of it.
+      const teacherId = app.teacherId;
       let gaps = 0;
       const gapIds: string[] = [];
-      for (const dateStr of dates) {
+      for (const dateStr of teacherId ? dates : []) {
         const weekday = isoWeekdayOf(dateStr);
         const date = new Date(dateStr);
 
         const slots = await tx.timetableSlot.findMany({ take: LIST_CEILING.ACTIVITY,
-          where: { schoolId, teacherId: app.teacherId, dayOfWeek: weekday, effectiveTo: null },
+          where: { schoolId, teacherId: teacherId!, dayOfWeek: weekday, effectiveTo: null },
           select: { classSectionId: true, periodId: true },
         });
 
@@ -213,7 +274,7 @@ export class LeaveService {
               classSectionId: slot.classSectionId,
               periodId: slot.periodId,
               date,
-              originalTeacherId: app.teacherId,
+              originalTeacherId: teacherId!,
               reason: 'leave',
             },
           });
@@ -222,7 +283,7 @@ export class LeaveService {
         }
 
         if (dateStr >= todayStr) {
-          await this.markOnLeaveIfDue(tx, schoolId, app.teacherId, date, adminUserId);
+          await this.markOnLeaveIfDue(tx, schoolId, teacherId!, date, adminUserId);
         }
       }
 
@@ -290,8 +351,10 @@ export class LeaveService {
       if (!app) throw new NotFoundException('Leave application not found');
 
       if (callerRole !== 'SCHOOL_ADMIN') {
-        const teacher = await tx.teacher.findFirst({ where: { schoolId, userId: callerUserId } });
-        if (!teacher || teacher.id !== app.teacherId) {
+        const person = await LeaveService.personFor(tx, schoolId, callerUserId);
+        const isMine = person !== null
+          && (person.kind === 'TEACHER' ? person.id === app.teacherId : person.id === app.staffId);
+        if (!isMine) {
           throw new ApiError('LEAVE_CANCEL_FORBIDDEN', 'You can only cancel your own leave', 403);
         }
       }
@@ -311,14 +374,16 @@ export class LeaveService {
         (d) => d >= todayStr,
       );
 
-      for (const dateStr of dates) {
+      // Same split as approve: only a teacher has substitutions to unwind.
+      const cancelTeacherId = app.teacherId;
+      for (const dateStr of cancelTeacherId ? dates : []) {
         const date = new Date(dateStr);
 
         await tx.substitution.deleteMany({
-          where: { schoolId, originalTeacherId: app.teacherId, date },
+          where: { schoolId, originalTeacherId: cancelTeacherId!, date },
         });
 
-        const mark = await tx.staffAttendance.findFirst({ where: { schoolId, teacherId: app.teacherId, date } });
+        const mark = await tx.staffAttendance.findFirst({ where: { schoolId, teacherId: cancelTeacherId!, date } });
         if (mark && mark.status === 'ON_LEAVE') {
           await tx.staffAttendance.delete({ where: { id: mark.id } });
         }
@@ -490,7 +555,7 @@ export class LeaveService {
     return `${fmt(start, false)} – ${fmt(end, true)}`;
   }
 
-  private async tellAdminsApplied(tx: TenantTx, schoolId: string, leaveId: string, teacher: { id: string; firstName: string; lastName: string | null }, startDate: string, endDate: string, reason: string | null): Promise<void> {
+  private async tellAdminsApplied(tx: TenantTx, schoolId: string, leaveId: string, person: { kind: 'TEACHER' | 'STAFF'; id: string; firstName: string; lastName: string | null }, startDate: string, endDate: string, reason: string | null): Promise<void> {
     const [school, admins] = await Promise.all([
       tx.school.findFirst({ where: { id: schoolId }, select: { name: true } }),
       resolveAdminRecipients(tx, schoolId),
@@ -499,10 +564,14 @@ export class LeaveService {
     const dates = dateRangeInclusive(startDate, endDate);
     // How many of the teacher's active periods fall on the leave's weekdays.
     const weekdays = [...new Set(dates.map(isoWeekdayOf))];
-    const perWeekday = await tx.timetableSlot.groupBy({ by: ['dayOfWeek'], where: { schoolId, teacherId: teacher.id, dayOfWeek: { in: weekdays }, effectiveTo: null }, _count: { _all: true } });
+    // Only a teacher has periods to cover. A driver's leave is just as real,
+    // but asking the timetable about a staff id would join on nothing.
+    const perWeekday = person.kind === 'TEACHER'
+      ? await tx.timetableSlot.groupBy({ by: ['dayOfWeek'], where: { schoolId, teacherId: person.id, dayOfWeek: { in: weekdays }, effectiveTo: null }, _count: { _all: true } })
+      : [];
     const countByDay = new Map(perWeekday.map((g) => [g.dayOfWeek, g._count._all]));
     const periodsAffected = dates.reduce((n, d) => n + (countByDay.get(isoWeekdayOf(d)) ?? 0), 0);
-    const teacherName = `${teacher.firstName} ${teacher.lastName ?? ''}`.trim();
+    const teacherName = `${person.firstName} ${person.lastName ?? ''}`.trim();
     const label = LeaveService.datesLabel(startDate, endDate);
     const payload = { schoolName: school?.name ?? 'Your school', leaveId, teacherName, dates: label, days: dates.length, reason, periodsAffected };
     const title = `${teacherName} has applied for leave`;
@@ -513,9 +582,13 @@ export class LeaveService {
     }
   }
 
-  private async tellTeacherDecided(tx: TenantTx, schoolId: string, app: { id: string; teacherId: string; startDate: Date; endDate: Date }, decision: 'APPROVED' | 'REJECTED', adminUserId: string): Promise<void> {
+  private async tellTeacherDecided(tx: TenantTx, schoolId: string, app: { id: string; teacherId: string | null; staffId: string | null; startDate: Date; endDate: Date }, decision: 'APPROVED' | 'REJECTED', adminUserId: string): Promise<void> {
+    // Either kind of person hears back. A driver who is told nothing has to
+    // walk to the office to find out, which is the thing this replaces.
     const [teacher, school] = await Promise.all([
-      tx.teacher.findFirst({ where: { id: app.teacherId, schoolId }, select: { userId: true } }),
+      app.teacherId
+        ? tx.teacher.findFirst({ where: { id: app.teacherId, schoolId }, select: { userId: true } })
+        : tx.staff.findFirst({ where: { id: app.staffId!, schoolId }, select: { userId: true } }),
       tx.school.findFirst({ where: { id: schoolId }, select: { name: true } }),
     ]);
     if (!teacher?.userId) return;

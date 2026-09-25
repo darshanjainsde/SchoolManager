@@ -2,11 +2,8 @@ import { createHash, randomInt } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { getPlatformPrisma } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
-import { WhatsAppChannel } from '../../common/notifications/whatsapp.channel';
-import { sendTemplate } from '../../common/notifications/whatsapp/graph.client';
-import { toE164 } from '../../common/notifications/whatsapp/phone';
-import { verifyCodeTemplate, VERIFY_CODE } from '../../common/notifications/whatsapp/templates';
-import { maskPhone } from './whatsapp-settings.service';
+import { OtpSenders } from '../../common/otp/otp-senders';
+import { maskPhone, toE164 } from '../../common/otp/phone-identity';
 
 /**
  * "This WhatsApp number is mine" — a six-digit code sent to the number ON
@@ -31,7 +28,7 @@ const hashCode = (code: string, userId: string) => createHash('sha256').update(`
 
 @Injectable()
 export class PhoneVerifyService {
-  constructor(private readonly channel: WhatsAppChannel) {}
+  constructor(private readonly senders: OtpSenders) {}
 
   async status(schoolId: string, userId: string) {
     const u = await getPlatformPrisma().user.findFirst({ where: { id: userId, schoolId }, select: { phone: true, phoneVerifiedAt: true, phonePending: true, phoneOtpExpiresAt: true } });
@@ -42,7 +39,7 @@ export class PhoneVerifyService {
       verifiedAt: u?.phoneVerifiedAt?.toISOString() ?? null,
       pending: pendingUntil && u?.phonePending ? maskPhone(u.phonePending) : null,
       pendingUntil: pendingUntil?.toISOString() ?? null,
-      platformReady: this.channel.configured,
+      platformReady: this.senders.enabledNames().length > 0,
     };
   }
 
@@ -63,10 +60,34 @@ export class PhoneVerifyService {
       where: { id: userId },
       data: { phonePending: phone, phoneOtpHash: hashCode(code, userId), phoneOtpExpiresAt: new Date(Date.now() + CODE_TTL_MS), phoneOtpAttempts: 0 },
     });
-    const sent = await this.channel.deliverWith(schoolId, phone, 'VERIFY_CODE', VERIFY_CODE, (cfg, pnid, f) => sendTemplate(cfg, phone, verifyCodeTemplate(code), { phoneNumberId: pnid, fetchImpl: f }));
-    if (!sent.ok) {
-      // Leave the pending state so a retry after the cooldown works; say why.
-      const why = sent.code === 131026 ? 'That number is not on WhatsApp.' : sent.code === null ? 'WhatsApp is not set up on the platform yet.' : 'WhatsApp could not deliver the code just now.';
+    // Every enabled sender carries it (WhatsApp today, SMS when DLT clears).
+    const sent = await this.senders.fanOut(phone, code, { schoolId, purpose: 'VERIFY_PHONE' });
+    if (sent.sentVia.length === 0) {
+      // NOTHING WAS SENT, so nothing may be held against the next try.
+      //
+      // This used to keep the pending state "so a retry after the cooldown
+      // works" — which meant a failed send locked the person out for a minute
+      // and the lock-out said "A code was sent less than a minute ago. Check
+      // WhatsApp." There was no code and nothing to check. Clearing it lets
+      // them try again at once, and the cooldown still applies to codes that
+      // actually went.
+      await db.user.update({
+        where: { id: userId },
+        data: { phonePending: null, phoneOtpHash: null, phoneOtpExpiresAt: null, phoneOtpAttempts: 0 },
+      }).catch(() => undefined);
+
+      const why = sent.nothingEnabled
+        ? 'One-time codes are not set up on the platform yet.'
+        : sent.failures.some((f) => f.code === 131026)
+          ? 'That number is not on WhatsApp.'
+          : sent.failures.some((f) => f.code === 131030)
+            ? 'This number is not on the WhatsApp test list yet. Add it in Meta (WhatsApp → API Setup → To) and try again in a minute.'
+            : sent.failures.some((f) => f.code === 132001)
+              // A permanent block, not a blip: WhatsApp has not approved the
+              // code template on this account, so retrying cannot help. Say so
+              // rather than inviting them to press the button again.
+              ? 'Confirming a number by WhatsApp is not switched on yet — WhatsApp has not approved our code message. Your admin can set the number for you in the meantime.'
+              : 'The code could not be delivered just now.';
       throw new ApiError('WHATSAPP_UNREACHABLE', why, 502, 'phone');
     }
     return { ok: true, pending: maskPhone(phone), expiresInSeconds: CODE_TTL_MS / 1000 };

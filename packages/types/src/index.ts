@@ -324,6 +324,8 @@ export interface LeaveApplication {
   endDate: string;
   reason: string | null;
   status: LeaveStatusValue;
+  /** A single date taken at half strength — costs half a day of balance and pay. */
+  halfDay: boolean;
   createdAt: string;
 }
 
@@ -336,8 +338,12 @@ export interface LeaveTypeDefRow {
   /** The built-in enum value this row mirrors; null for a school's custom type. */
   builtin: LeaveTypeValue | null;
   isPaid: boolean;
-  /** Days/year that "apply defaults" grants. 0 = no standing quota. */
+  /** Days/year that "apply defaults" grants a TEACHER. 0 = no standing quota. */
   defaultAnnual: number;
+  /** The same, for non-teaching staff — a driver rarely gets a teacher's quota. */
+  defaultAnnualStaff: number;
+  /** Never costs pay, whatever the balance says — maternity, bereavement. */
+  neverDeduct: boolean;
   /** Max unused days that survive a year close. 0 = lapse. */
   carryForwardCap: number;
   isActive: boolean;
@@ -356,7 +362,7 @@ export interface LeaveAllocationCell {
 /** Mirrors LeavePolicyService.grid — `GET /manage/leave-policy/allocations`. */
 export interface LeaveAllocationGrid {
   academicYear: { id: string; name: string };
-  types: Pick<LeaveTypeDefRow, 'id' | 'name' | 'isPaid' | 'defaultAnnual' | 'carryForwardCap'>[];
+  types: Pick<LeaveTypeDefRow, 'id' | 'name' | 'isPaid' | 'defaultAnnual' | 'defaultAnnualStaff' | 'neverDeduct' | 'carryForwardCap'>[];
   teachers: { id: string; name: string; cells: LeaveAllocationCell[] }[];
 }
 
@@ -604,6 +610,7 @@ export function assertNotificationOutboxKind(
 export * from './sports/catalogue';
 export * from './sports/maths';
 export * from './sports/perms';
+export * from './payroll';
 export * from './fees/receipt';
 
 export const NOTIFICATION_KINDS = [

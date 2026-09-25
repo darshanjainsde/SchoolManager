@@ -43,7 +43,7 @@ export function LibraryShell({
         </div>
       </header>
 
-      <nav className="sk-tabs sk-lib-tabs" aria-label="Library sections">
+      <nav className="sk-tabs" aria-label="Library sections">
         {LIBRARY_SECTIONS.map((s) => {
           const href = sectionHref(base, s.seg);
           const active = isSectionActive(pathname, base, href);

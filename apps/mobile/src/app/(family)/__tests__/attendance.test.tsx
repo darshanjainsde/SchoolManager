@@ -1,3 +1,6 @@
+import { formatDate } from '@/lib/portal';
+import { store } from '@/lib/cache-store';
+import { FRESH_MS } from '@/lib/query';
 import { render, fireEvent, waitFor, act, within } from '@testing-library/react-native';
 import Attendance from '../(tabs)/attendance';
 import { api, ApiError } from '@/lib/api';
@@ -51,7 +54,7 @@ it('renders the stat row and the month grid from the real AttendanceSummary shap
   expect(await findByTestId('stat-absent')).toHaveTextContent('1');
   expect(await findByTestId('stat-late')).toHaveTextContent('0');
   // The Recent list renders raw dates from the summary.
-  expect(await findByText('2026-07-01')).toBeTruthy();
+  expect(await findByText(formatDate('2026-07-01'))).toBeTruthy();
 });
 
 it('shows the stat boxes matching the summary the server returned', async () => {
@@ -209,12 +212,15 @@ describe('fetch states', () => {
     (api.request as jest.Mock).mockResolvedValueOnce(
       summaryFor('2026-07', [{ date: '2026-07-05', status: 'PRESENT' }]),
     );
+    // A focus within 30 s shows the cached answer (lib/query FRESH_MS); a real
+    // background stint is longer, so age every cached entry past the window.
+    for (const entry of store.values()) entry.at -= FRESH_MS + 1;
     expect(capturedFocusEffect).toBeDefined();
     await act(async () => {
       capturedFocusEffect?.();
     });
 
-    await findByText('2026-07-05');
+    await findByText(formatDate('2026-07-05'));
     // Confirms the refetch used the currently-shown month, not a bare
     // no-param request that would silently re-default server-side.
     expect(api.request).toHaveBeenLastCalledWith('/me/attendance?month=2026-07');

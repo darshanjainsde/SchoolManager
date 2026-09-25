@@ -77,16 +77,20 @@ export default function ReportCard() {
             <View style={{ borderTopWidth: 1.5, borderTopColor: tokens.color.ink, marginTop: 4 }}>
               <View style={{ flexDirection: 'row', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: tokens.color.line2 }}>
                 <Text style={[hdr(tokens), { flex: 1 }]}>Subject</Text>
-                <Text style={[hdr(tokens), { width: 74, textAlign: 'right' }]}>Marks</Text>
-                <Text style={[hdr(tokens), { width: 44, textAlign: 'right' }]}>%</Text>
-                <Text style={[hdr(tokens), { width: 40, textAlign: 'right' }]}>Grade</Text>
+                <Text style={[hdr(tokens), { minWidth: 62, textAlign: 'right' }]}>Marks</Text>
+                <Text style={[hdr(tokens), { minWidth: 34, textAlign: 'right' }]}>%</Text>
+                <Text style={[hdr(tokens), { minWidth: 36, textAlign: 'right' }]}>Grade</Text>
               </View>
               {snap.subjects.map((s, i) => (
                 <View key={s.subjectId} testID={`rc-subject-${s.subjectId}`} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 7, borderBottomWidth: i === snap.subjects.length - 1 ? 0 : 1, borderBottomColor: tokens.color.line }}>
-                  <Text style={{ flex: 1, minWidth: 0, fontSize: 13, color: tokens.color.ink }} numberOfLines={1}>{s.subjectName}</Text>
-                  <Text style={[num(tokens), { width: 74 }]}>{s.marks == null ? '—' : `${s.marks}/${s.countedMax ?? s.maxMarks}`}</Text>
-                  <Text style={[num(tokens), { width: 44 }]}>{s.pct == null ? '—' : `${Math.round(s.pct)}`}</Text>
-                  <Text style={[num(tokens), { width: 40, fontWeight: '700' }]}>{s.grade ?? '—'}</Text>
+                  {/* 158 dp of FIXED figure columns left "Social Science" ~144 dp
+                      on a 360 dp phone and clipped it, while the mono marks
+                      overflowed their own box at a large font (UI audit #12).
+                      The figures now grow and the subject wraps instead. */}
+                  <Text style={{ flex: 1, minWidth: 0, fontSize: 13, color: tokens.color.ink, paddingRight: 6 }} numberOfLines={2}>{s.subjectName}</Text>
+                  <Text style={[num(tokens), { minWidth: 62, flexShrink: 0 }]}>{s.marks == null ? '—' : `${s.marks}/${s.countedMax ?? s.maxMarks}`}</Text>
+                  <Text style={[num(tokens), { minWidth: 34, flexShrink: 0 }]}>{s.pct == null ? '—' : `${Math.round(s.pct)}`}</Text>
+                  <Text style={[num(tokens), { minWidth: 36, flexShrink: 0, fontWeight: '700' }]}>{s.grade ?? '—'}</Text>
                 </View>
               ))}
             </View>

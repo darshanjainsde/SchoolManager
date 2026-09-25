@@ -12,6 +12,9 @@ import { isSchoolHost, exampleSchoolHost } from '@/lib/hosts';
 import { homeForRole } from '@/lib/role-routes';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { SwitchProfile } from '@/components/switch-profile';
+import Link from 'next/link';
+import { User } from 'lucide-react';
 import { LibraryShell } from '@/app/app/library/shell';
 import '../sk-theme.css';
 import { ConsoleSkeleton } from '@/components/console-skeleton';
@@ -110,7 +113,7 @@ export default function LibraryLayout({ children }: { children: ReactNode }) {
       <header className="sk-topbar shrink-0">
         {/* The shared topbar centres at 68rem for the phone-first portals; the
             library is a desk tool and uses the whole screen. */}
-        <div className="sk-topbar-inner" style={{ maxWidth: 'none' }}>
+        <div className="sk-topbar-inner" data-nodrawer style={{ maxWidth: 'none' }}>
           <SckoolsLogo variant="symbol" size={30} />
           <div className="sk-who">
             <div className="n">The library</div>
@@ -118,6 +121,15 @@ export default function LibraryLayout({ children }: { children: ReactNode }) {
           </div>
           <div style={{ flex: 1 }} />
           <ThemeToggle />
+          {/* The profile (WhatsApp number, password) is the one page every
+              staff kind shares — it lives under /staff, which lets a desk job
+              onto that page alone. Switch profile: the same number may also
+              be a parent's. */}
+          <Link href="/staff/profile" className="sk-signout" aria-label="My profile">
+            <User className="h-3.5 w-3.5" aria-hidden="true" />
+            <span className="hidden sm:inline">My profile</span>
+          </Link>
+          <SwitchProfile variant="bar" />
           <button className="sk-signout" onClick={handleLogout}>
             <LogOut className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Sign out</span>

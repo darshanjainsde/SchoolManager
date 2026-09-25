@@ -7,7 +7,7 @@ it.each([
   // STAFF gets its OWN group now — (staff) is actually the teacher portal
   // (misleadingly named), which a non-teaching staff login must never land
   // in. See roles.ts's portalForRole doc.
-  ['STAFF', '/(worker)/today'],
+  ['STAFF', '/(worker)/(tabs)/today'],
 ] as const)('%s → %s', (role, path) => {
   expect(portalForRole(role)).toBe(path);
 });
@@ -58,5 +58,19 @@ describe('resolveStartRoute', () => {
   // gate, host cache or not — the identifier resolves the school by itself.
   it('routes to the gate when there is no session', () => {
     expect(resolveStartRoute(null)).toBe('/(auth)/login');
+  });
+});
+
+describe('portalForSession — the worker portal has three desks', () => {
+  const { portalForSession } = jest.requireActual('../roles') as typeof import('../roles');
+  const base = { accessToken: 'a', refreshToken: 'r', schoolHost: 'x.sckools.com', displayName: 'S' };
+  it('a sports teacher lands on the desk, a librarian on the counter, other staff on Today', () => {
+    expect(portalForSession({ ...base, role: 'STAFF', staffRole: 'SPORTS', features: ['SPORTS'] })).toBe('/(worker)/(tabs)/desk');
+    expect(portalForSession({ ...base, role: 'STAFF', staffRole: 'LIBRARIAN', features: ['LIBRARY'] })).toBe('/(worker)/(tabs)/counter');
+    expect(portalForSession({ ...base, role: 'STAFF', staffRole: 'OFFICE', features: [] })).toBe('/(worker)/(tabs)/today');
+  });
+  it('non-staff roles are unchanged', () => {
+    expect(portalForSession({ ...base, role: 'TEACHER' })).toBe('/(staff)/(tabs)/home');
+    expect(portalForSession({ ...base, role: 'STUDENT' })).toBe('/(family)/(tabs)/home');
   });
 });

@@ -58,3 +58,30 @@ describe('WhatsAppCard', () => {
     await waitFor(() => expect(api.post).toHaveBeenCalledWith('/manage/whatsapp-settings/test', { to: '98765 43210' }));
   });
 });
+
+/**
+ * "WhatsApp is not working" was true for days on staging because the phone
+ * number id held the WABA id. Nothing said so: the switch looked fine and
+ * every send died at Meta with a permissions-shaped error.
+ */
+describe('why WhatsApp is idle', () => {
+  it('tells the school WHICH id is wrong, not just that it is off', async () => {
+    stub({
+      ...BASE,
+      platform: {
+        configured: false, senderPhoneNumberId: '1615192556803051',
+        problem: 'WHATSAPP_PHONE_NUMBER_ID is the same as WHATSAPP_WABA_ID. The sending number is not the business account.',
+      },
+    });
+    renderWithProviders(<WhatsAppCard />);
+    expect(await screen.findByTestId('wa-problem')).toHaveTextContent(/same as WHATSAPP_WABA_ID/);
+  });
+
+  it('says nothing when the platform is healthy', async () => {
+    stub({ ...BASE, platform: { configured: true, senderPhoneNumberId: '1415040705015934', problem: null } });
+    renderWithProviders(<WhatsAppCard />);
+    await screen.findByTestId('whatsapp-toggle');
+    expect(screen.queryByTestId('wa-problem')).toBeNull();
+  });
+});
+

@@ -185,6 +185,17 @@ export type ErrorCode =
   | 'PHONE_CODE_COOLDOWN'
   /** Another login of the school already verified that number — 409. */
   | 'PHONE_TAKEN'
+  /** One-time codes (login, reset, verify): too many asked for this phone, or asked again within a minute. */
+  | 'OTP_RATE_LIMITED'
+  /** No sender could deliver the code (not on WhatsApp, SMS not enabled, platform not set up). */
+  | 'OTP_UNDELIVERABLE'
+  | 'OTP_EXPIRED'
+  | 'OTP_WRONG'
+  /** Five wrong tries on one code. */
+  | 'OTP_LOCKED'
+  | 'OTP_CHALLENGE_UNKNOWN'
+  /** The target login does not share this session's phone identity. */
+  | 'PROFILE_NOT_SWITCHABLE'
   /** No live code, or too many wrong tries — 400 / 429. */
   | 'PHONE_CODE_EXPIRED'
   /** The code typed is not the one sent — 400. */
@@ -251,7 +262,22 @@ export type ErrorCode =
   | 'UNDECIDED_STUDENTS'
   // ── Sports wing ──
   /** Not the sports teacher (Staff.role SPORTS) nor a school admin. 403. */
+  /** The signed-in admin does not hold the salary right — 403. */
+  | 'NOT_SALARY_ADMIN'
+  /** The school's country has no pay rule book yet — 400. */
+  | 'SALARY_NO_PACK'
+  /** The structure breaks the Code on Wages 50% rule — 400. */
+  | 'SALARY_WAGE_SHARE'
+  /** The split's parts add to MORE than the agreed gross, so it cannot be paid — 400. */
+  | 'SALARY_OVERSHOOT'
+  /** A pay run that is locked cannot be changed — 409. */
+  | 'PAY_RUN_LOCKED'
+  /** The run is not in a state where that step is legal — 409. */
+  | 'PAY_RUN_STATE'
+  /** Nobody has a pay structure, so there is nothing to run — 400. */
+  | 'PAY_RUN_EMPTY'
   | 'NOT_SPORTS_DESK'
+  | 'NOT_LEAVE_DESK'
   /** The sports teacher's permission list does not include this action. 403. */
   | 'SPORTS_PERM'
   /** Bands overlap, are empty or malformed. 400. */

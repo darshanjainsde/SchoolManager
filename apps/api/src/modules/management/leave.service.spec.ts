@@ -2,6 +2,9 @@ import 'reflect-metadata';
 
 const txMock = {
   teacher: { findFirst: jest.fn(), findMany: jest.fn() },
+  // Leave is no longer a teachers-only idea: every read resolves the caller
+  // to a Teacher OR a Staff row, so the mock has to answer for both.
+  staff: { findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
   leaveTypeDef: { findFirst: jest.fn() },
   leaveApplication: { create: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
   timetableSlot: { findMany: jest.fn(), findFirst: jest.fn(), groupBy: jest.fn().mockResolvedValue([]) },
@@ -85,11 +88,16 @@ describe('LeaveService', () => {
 
       const result = await svc.apply(SCHOOL, TEACHER_USER, dto);
 
-      expect(txMock.teacher.findFirst).toHaveBeenCalledWith({ where: { schoolId: SCHOOL, userId: TEACHER_USER } });
+      expect(txMock.teacher.findFirst).toHaveBeenCalledWith({
+        where: { schoolId: SCHOOL, userId: TEACHER_USER },
+        select: { id: true, firstName: true, lastName: true },
+      });
       expect(txMock.leaveApplication.create).toHaveBeenCalledWith({
         data: {
           schoolId: SCHOOL,
           teacherId: TEACHER,
+          staffId: null,
+          halfDay: false,
           type: 'SICK',
           // No LeaveTypeDef configured (pre-policy school) → null, resolved
           // later through the enum when balances are computed.
@@ -129,6 +137,7 @@ describe('LeaveService', () => {
 
     it('throws NOT_A_TEACHER when the caller has no linked Teacher row', async () => {
       txMock.teacher.findFirst.mockResolvedValue(null);
+      txMock.staff.findFirst.mockResolvedValue(null);
 
       await expect(svc.apply(SCHOOL, 'admin-only-user', dto)).rejects.toMatchObject({
         response: { code: 'NOT_A_TEACHER' },
@@ -373,7 +382,10 @@ describe('LeaveService', () => {
 
       const result = await svc.cancel(SCHOOL, LEAVE_ID, TEACHER_USER, 'TEACHER');
 
-      expect(txMock.teacher.findFirst).toHaveBeenCalledWith({ where: { schoolId: SCHOOL, userId: TEACHER_USER } });
+      expect(txMock.teacher.findFirst).toHaveBeenCalledWith({
+        where: { schoolId: SCHOOL, userId: TEACHER_USER },
+        select: { id: true, firstName: true, lastName: true },
+      });
       expect(result).toEqual({ status: 'CANCELLED', restoredDates: 0 });
     });
 
@@ -550,7 +562,7 @@ describe('LeaveService', () => {
         expect.objectContaining({ where: { schoolId: SCHOOL, status: 'PENDING' } }),
       );
       expect(result).toEqual([
-        { id: LEAVE_ID, teacherId: TEACHER, status: 'PENDING', teacherName: 'Asha Rao' },
+        { id: LEAVE_ID, teacherId: TEACHER, status: 'PENDING', teacherName: 'Asha Rao', personKind: 'TEACHER' },
       ]);
     });
 

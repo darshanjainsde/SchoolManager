@@ -243,3 +243,69 @@ describe('things this audit checked and found already correct', () => {
     expect(code(css)).not.toMatch(/\b100vw\b/);
   });
 });
+
+/**
+ * THE SECTION-STRIP ALIGNMENT GUARD.
+ *
+ * `.sk-tabs` was written for the phone-first portals, where it lives in a
+ * FULL-BLEED topbar and centres itself at 68rem to line up with
+ * `.sk-topbar-inner`. Inside a page — under a left-aligned pagehead, above
+ * left-aligned cards — that same rule floats the whole strip to the right on
+ * any screen wider than 68rem.
+ *
+ * Library and Sports each corrected it with a private class. Pay, Students and
+ * Alumni did not, and shipped with the strip starting a couple of hundred
+ * pixels right of the card beneath it. The default is now the page shape and
+ * the topbar carries the correction, which is the way round that makes the
+ * next page right without anybody remembering anything.
+ */
+describe('a section strip lines up with the page it sits in', () => {
+  const plain = code(css).match(/^\.sk-tabs\s*\{[^}]*\}/m)?.[0] ?? '';
+  const inTopbar = code(css).match(/\.sk-topbar\s+\.sk-tabs\s*\{[^}]*\}/)?.[0] ?? '';
+
+  it('plain .sk-tabs imposes no width of its own', () => {
+    expect(plain, '.sk-tabs has no unconditional rule').toBeTruthy();
+    expect(plain).toMatch(/max-width:\s*none/);
+    expect(plain, 'margin: 0 auto centres the strip away from the page column').not.toMatch(/margin:\s*0\s+auto/);
+  });
+
+  it('the 68rem centring belongs to the topbar', () => {
+    expect(inTopbar, 'no .sk-topbar .sk-tabs rule — the portals lost their alignment').toBeTruthy();
+    expect(inTopbar).toMatch(/max-width:\s*68rem/);
+    expect(inTopbar).toMatch(/margin:\s*0\s+auto/);
+  });
+
+  it('no page re-adds a centring correction of its own', () => {
+    // Three classes doing the same job is how they drift apart.
+    expect(code(css)).not.toMatch(/\.sk-tabs\.[a-z-]+\s*\{[^}]*max-width:\s*none/);
+  });
+});
+
+/**
+ * THE STACKED-LABEL GUARD.
+ *
+ * `.sk-row .nm` and `.sk-row .meta` carry no `display` of their own, because
+ * every caller in the console happens to wrap them in a `<div>` and gets block
+ * layout for free. Borrow the same class names with a `<span>` — which the Pay
+ * rows did — and the two run together with no space at all: "Aarav
+ * MehtaTeacher", "TeacherTeacher · 55 people".
+ *
+ * No DOM test can catch it: `textContent` concatenates identically whether the
+ * children are inline or block, so every assertion on the row's text passes.
+ * It is visible only in pixels, which is why it reaches a person first. The
+ * class must therefore own its own layout rather than depend on which element
+ * a caller happened to reach for.
+ */
+describe('a name above its subtitle stacks, whatever element holds it', () => {
+  const rule = (sel: string) => code(css).match(new RegExp(`\\${sel}\\s*\\{[^}]*\\}`))?.[0] ?? '';
+
+  it.each(['.sk-payrow .nm', '.sk-payrow .meta'])('%s declares its own display', (sel) => {
+    const r = rule(sel);
+    expect(r, `${sel} has no rule at all`).toBeTruthy();
+    expect(
+      r,
+      `${sel} inherits its display from whatever element the caller used. A <span> makes the ` +
+        'name and the subtitle run together with no space. Declare display: block.',
+    ).toMatch(/display:\s*block/);
+  });
+});

@@ -18,6 +18,57 @@
  * this becomes a list of good intentions.
  */
 export const AUTHZ_REVIEWED: string[] = [
+  // ── Salary ──────────────────────────────────────────────────────────────
+  // payroll-authz.e2e-spec.ts: every admin route refuses anonymous, STUDENT,
+  // TEACHER and STAFF, and admits only an admin who HOLDS the per-user salary
+  // right — "is an admin" is deliberately not enough here. `/me/pay/*` admits
+  // a teacher and a non-teaching staff member to their OWN record and can
+  // never be pointed at anybody else (the caller is resolved from their own
+  // user id, never from a parameter). The SALARY feature is in no tier, so a
+  // PRO school without the override 403s on every route in the module.
+  "GET /payroll/overview",
+  "GET /payroll/leave",
+  "GET /payroll/payslips/:id/document",
+  "POST /payroll/leave/apply",
+  "POST /payroll/leave/policy",
+  "GET /payroll/grades",
+  "GET /payroll/grades/suggest",
+  "POST /payroll/grades",
+  "POST /payroll/grades/preview",
+  "POST /payroll/grades/raise",
+  "POST /payroll/grades/assign",
+  "POST /payroll/grades/:id/remove",
+  "GET /payroll/settings",
+  "POST /payroll/settings",
+  "GET /payroll/components",
+  "POST /payroll/components",
+  "GET /payroll/people",
+  "GET /payroll/people/:kind/:id",
+  "GET /payroll/people/:kind/:id/details",
+  "POST /payroll/people/:kind/:id/details",
+  "POST /payroll/people/preview",
+  "POST /payroll/people/structure",
+  "GET /payroll/access",
+  "POST /payroll/access",
+  "GET /payroll/runs",
+  "POST /payroll/runs",
+  "GET /payroll/runs/:id",
+  "POST /payroll/runs/:id/calculate",
+  "POST /payroll/runs/:id/approve",
+  "POST /payroll/runs/:id/lock",
+  "POST /payroll/runs/:id/paid",
+  "GET /payroll/runs/:id/files/:what",
+  "GET /payroll/adjustments",
+  "POST /payroll/adjustments",
+  "GET /payroll/statutory/calendar",
+  "GET /payroll/statement/:kind/:id",
+  "GET /me/pay",
+  "GET /me/pay/details",
+  "POST /me/pay/details",
+  "GET /me/pay/payslips/:id",
+  "GET /me/pay/payslips/:id/document",
+  "POST /me/pay/declaration",
+  "GET /me/pay/statement",
   // ── The Press ───────────────────────────────────────────────────────────
   // press-authz.e2e-spec.ts: every office route refuses anonymous / STUDENT /
   // TEACHER and admits SCHOOL_ADMIN + STAFF; the portal routes are proven
@@ -306,7 +357,6 @@ export const AUTHZ_REVIEWED: string[] = [
   "PUT /site/admissions/steps",
   "PUT /site/courses/:id",
   "PUT /site/courses/:id/fee",
-  "PUT /site/hall-of-fame/:courseId",
   "PUT /site/homepage",
   "PUT /site/profile",
   "PUT /site/social",
@@ -381,6 +431,26 @@ export const AUTHZ_REVIEWED: string[] = [
  * would defeat the entire point, which is that new code cannot slip through
  * unexamined. Moving a route out of this list means: decide who may call it,
  * write the assertion, move the string.
+ *
+ * ── 21 Sep 2026: it grew by 82, and that is the finding ────────────────────
+ *
+ * The rule above was already broken when this was written. `route-coverage`
+ * lives in `test:e2e`, and `test:e2e` is not in `ci.yml` — the CI job has no
+ * database, so it runs lint, typecheck, boundary, build and the UNIT tests and
+ * nothing else. `library-ci.yml` stands up a Postgres for exactly this reason;
+ * the school API never got the equivalent job. So this guard last ran when
+ * somebody ran it by hand, and in the meantime the whole Sports wing, the
+ * session-rollover routes, Celebrations, Records and the owner lead desk were
+ * mounted without ever reaching either list.
+ *
+ * Adding them here is the lesser of two wrongs. The alternative is leaving the
+ * suite red, and a red suite is how it got ignored in the first place. They are
+ * in the weak list, not the strong one, so the debt is counted rather than
+ * hidden: 233 of 528 routes have a guard on them and no assertion saying who
+ * may call them.
+ *
+ * What actually fixes this is the `api-e2e` job added alongside — the guard
+ * running on every push is the only version of it that means anything.
  */
 export const AUTHZ_UNREVIEWED: string[] = [
   "DELETE /manage/class-notes/:id",
@@ -534,4 +604,117 @@ export const AUTHZ_UNREVIEWED: string[] = [
   "PUT /manage/school/working-days",
   "PUT /manage/students/:id",
   "PUT /owner/marketing-config",
+
+  // Mounted while the guard was not running — see the note above.
+
+  // The phone-login, WhatsApp and email-delivery work, mounted on `staging`
+  // while the guard still was not running. Listed here rather than in
+  // AUTHZ_REVIEWED because nobody has written the assertions yet, and four of
+  // them are unauthenticated BY DESIGN — the two webhooks and the two OTP
+  // entry points — which is the set most worth a second reader.
+  "DELETE /me/phone",
+  "GET /auth/otp/ready",
+  "GET /auth/profiles",
+  "GET /manage/whatsapp-settings",
+  "GET /me/phone",
+  "GET /webhooks/whatsapp",
+  "PATCH /me/profile",
+  "POST /auth/otp/choose",
+  "POST /auth/otp/request",
+  "POST /auth/otp/verify",
+  "POST /auth/reset-with-otp",
+  "POST /auth/switch",
+  "POST /manage/email-check",
+  "POST /manage/email-settings/unsuppress",
+  "POST /manage/whatsapp-settings/test",
+  "POST /me/phone/request",
+  "POST /me/phone/verify",
+  "POST /webhooks/resend",
+  "POST /webhooks/whatsapp",
+  "PUT /manage/whatsapp-settings",
+  "GET /internal/cron/fee-due-soon",
+  "GET /me/fees/receipts/:paymentId",
+  "POST /internal/cron/fee-due-soon",
+  "DELETE /sports/houses/:id",
+  "DELETE /sports/tournaments/:id",
+  "DELETE /sports/tournaments/:id/venues/:venueId",
+  "GET /internal/cron/session-start",
+  "GET /manage/sessions",
+  "GET /manage/sessions/:yearId/register",
+  "GET /manage/sessions/plan",
+  "GET /manage/sessions/plan/library",
+  "GET /manage/sessions/plan/review",
+  "GET /manage/sessions/plan/students",
+  "GET /manage/students/:id/clearance",
+  "GET /manage/teachers/:id/release-impact",
+  "GET /me/birthdays",
+  "GET /me/home",
+  "GET /me/sports",
+  "GET /owner/leads/:id",
+  "GET /owner/speed",
+  "GET /public/birthdays",
+  "GET /public/records",
+  "GET /site/celebrations",
+  "GET /site/celebrations/preview",
+  "GET /site/records",
+  "GET /site/records/lines",
+  "GET /sports/admin/coaches",
+  "GET /sports/houses",
+  "GET /sports/houses/:id/members",
+  "GET /sports/houses/ledger",
+  "GET /sports/me",
+  "GET /sports/records",
+  "GET /sports/records/attempts",
+  "GET /sports/records/history",
+  "GET /sports/roster",
+  "GET /sports/settings",
+  "GET /sports/tournaments",
+  "GET /sports/tournaments/:id",
+  "PATCH /manage/sessions/plan",
+  "PATCH /sports/admin/coaches/:staffId",
+  "PATCH /sports/houses/:id",
+  "PATCH /sports/settings",
+  "PATCH /sports/tournaments/:id",
+  "PATCH /sports/tournaments/:id/events/:eventId/day",
+  "PATCH /sports/tournaments/:id/events/day",
+  "PATCH /sports/tournaments/:id/heats/:heatId/slot",
+  "PATCH /sports/tournaments/:id/matches/:matchId/slot",
+  "POST /internal/cron/session-start",
+  "POST /manage/sessions/plan",
+  "POST /manage/sessions/plan/cancel",
+  "POST /manage/sessions/plan/decisions/defaults",
+  "POST /manage/sessions/plan/library/last-due",
+  "POST /manage/sessions/plan/library/remind",
+  "POST /manage/sessions/plan/start",
+  "POST /manage/sessions/plan/structure/copy",
+  "POST /manage/sessions/plan/timetable/copy",
+  "POST /manage/staff/:id/reactivate",
+  "POST /manage/staff/:id/release",
+  "POST /manage/students/:id/leave",
+  "POST /manage/students/:id/readmit",
+  "POST /manage/teachers/:id/reactivate",
+  "POST /owner/leads/:id/activities",
+  "POST /sports/heats/:id/marks",
+  "POST /sports/houses",
+  "POST /sports/houses/:id/points",
+  "POST /sports/houses/assign",
+  "POST /sports/matches/:id/score",
+  "POST /sports/records",
+  "POST /sports/records/:id/void",
+  "POST /sports/records/attempts",
+  "POST /sports/records/attempts/:id/decide",
+  "POST /sports/tournaments",
+  "POST /sports/tournaments/:id/finish",
+  "POST /sports/tournaments/:id/move-group",
+  "POST /sports/tournaments/:id/publish",
+  "POST /sports/tournaments/:id/refit",
+  "POST /sports/tournaments/:id/shift",
+  "POST /sports/tournaments/:id/venues",
+  "POST /sports/tournaments/:id/venues/:venueId/clear",
+  "PUT /manage/sessions/plan/decisions",
+  "PUT /site/celebrations",
+  "PUT /site/hall-of-fame/groups",
+  "PUT /site/hall-of-fame/groups/:groupId/:year",
+  "PUT /site/hall-of-fame/settings",
+  "PUT /site/records",
 ];

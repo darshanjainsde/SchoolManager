@@ -17,6 +17,8 @@ interface Delivery {
   phone: string;
   kind: string;
   status: 'QUEUED' | 'SENT' | 'DELIVERED' | 'READ' | 'FAILED';
+  blame?: 'SETUP' | 'RECIPIENT' | 'CONTENT' | 'UNKNOWN' | null;
+  advice?: string | null;
   error: string | null;
   createdAt: string;
   deliveredAt: string | null;
@@ -24,7 +26,7 @@ interface Delivery {
 }
 interface WhatsAppSettingsResponse {
   settings: { enabled: boolean; phoneNumberId: string | null };
-  platform: { configured: boolean; senderPhoneNumberId: string | null };
+  platform: { configured: boolean; senderPhoneNumberId: string | null; problem?: string | null };
   templates: { kind: string; name: string; body: string }[];
   thisMonth: Record<string, number>;
   recent: Delivery[];
@@ -64,6 +66,9 @@ export function WhatsAppCard() {
   const sent = d ? Object.entries(d.thisMonth).reduce((n, [, c]) => n + c, 0) : 0;
   const read = d?.thisMonth.READ ?? 0;
   const failed = d?.thisMonth.FAILED ?? 0;
+  // Most failures are ours — a lapsed token, a wrong id, a template Meta has
+  // not approved. A school can do nothing about any of those.
+  const ours = (d?.recent ?? []).some((r) => r.blame === 'SETUP' || r.blame === 'CONTENT');
 
   return (
     <div className="sk-card" data-testid="whatsapp-card">
@@ -84,6 +89,15 @@ export function WhatsAppCard() {
               {!d.platform.configured ? ' The platform number is not connected yet; nothing goes out until it is.' : ''}
             </p>
 
+            {/* Not "not configured" — WHICH thing is wrong. A school staring
+                at a dead switch cannot tell a missing token from an id pasted
+                into the wrong box, and both look identical from here. */}
+            {d.platform.problem ? (
+              <p className="sk-state err" data-testid="wa-problem" style={{ marginTop: 6 }}>
+                {d.platform.problem}
+              </p>
+            ) : null}
+
             <label className="sk-lab" style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', textTransform: 'none', letterSpacing: 0, fontSize: 13.5, color: 'var(--sk-ink)' }}>
               <input type="checkbox" checked={on} disabled={update.isPending} onChange={(e) => update.mutate(e.target.checked)} data-testid="whatsapp-toggle" style={{ width: 18, height: 18, accentColor: 'var(--sk-brand)' }} />
               Send notices to families on WhatsApp
@@ -92,7 +106,13 @@ export function WhatsAppCard() {
             <div className="wa-figs" data-testid="whatsapp-month">
               <div className="f"><div className="k">This month</div><div className="n">{sent}</div><div className="h">messages</div></div>
               <div className="f" data-tone={read ? 'good' : undefined}><div className="k">Read</div><div className="n">{read}</div><div className="h">{sent ? `${Math.round((100 * read) / sent)}% of sent` : '—'}</div></div>
-              <div className="f" data-tone={failed ? 'bad' : undefined}><div className="k">Failed</div><div className="n">{failed}</div><div className="h">{failed ? 'numbers to fix' : 'none'}</div></div>
+              <div className="f" data-tone={failed ? 'bad' : undefined}>
+                <div className="k">Failed</div><div className="n">{failed}</div>
+                {/* It counted MESSAGES and called them "numbers to fix", so
+                    six failures from an expired token of ours read as six
+                    parents to ring. Say whose problem it is instead. */}
+                <div className="h">{failed ? (ours ? 'a setup problem, not the families' : 'numbers to check') : 'none'}</div>
+              </div>
             </div>
 
             <form className="wa-test" onSubmit={(e) => { e.preventDefault(); if (testTo.trim()) test.mutate(testTo.trim()); }}>
@@ -112,7 +132,15 @@ export function WhatsAppCard() {
                     <span className="k">{KIND_WORDS[r.kind] ?? r.kind}</span>
                     <span className="p">{r.phone}</span>
                     <span className="sk-pill" data-tone={STATUS_TONE[r.status]} title={r.error ?? undefined}>{STATUS_WORD[r.status]}{r.status === 'READ' && r.readAt ? ` ${when(r.readAt).split(', ')[1] ?? ''}` : ''}</span>
-                    {r.error ? <span className="e">{r.error}</span> : null}
+                    {r.error ? (
+                      <span className="e">
+                        {r.error}
+                        {/* Meta's own words are the evidence; this is what to
+                            DO about them. A school reading "Object with ID …
+                            does not exist" has no way to know it is ours. */}
+                        {r.advice ? <em style={{ display: 'block', fontStyle: 'normal', opacity: 0.8 }}>{r.advice}</em> : null}
+                      </span>
+                    ) : null}
                   </div>
                 ))}
               </div>

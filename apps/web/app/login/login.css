@@ -596,3 +596,21 @@
     transition: none !important;
   }
 }
+
+/* ── Phone door: mode switch, the code field, the chooser ── */
+.gh-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 12px; background: rgba(255, 255, 255, 0.08); margin-bottom: 14px; }
+.gh-mode { font: inherit; font-size: 13px; font-weight: 600; padding: 8px 10px; border-radius: 9px; border: 0; background: transparent; color: rgba(255, 255, 255, 0.72); cursor: pointer; min-height: 36px; }
+.gh-mode[aria-checked='true'] { background: rgba(255, 255, 255, 0.92); color: var(--gh-p, #1f2937); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18); }
+.gh-mode:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.gh-code { font-family: ui-monospace, Menlo, monospace; font-size: 22px; letter-spacing: 0.35em; text-align: center; }
+.gh-otp-links { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.gh-otp-links .gh-forgot { margin: 0; background: none; border: 0; padding: 0; cursor: pointer; font: inherit; }
+.gh-otp-links .gh-forgot:disabled { opacity: 0.55; cursor: default; }
+.gh-choices { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 14px; }
+.gh-choice { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; font: inherit; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.18); background: rgba(255, 255, 255, 0.08); color: inherit; cursor: pointer; min-height: 56px; }
+.gh-choice:hover, .gh-choice:focus-visible { background: rgba(255, 255, 255, 0.16); outline: none; border-color: rgba(255, 255, 255, 0.5); }
+.gh-choice:disabled { opacity: 0.6; cursor: default; }
+.gh-choice-av { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 13px; background: rgba(255, 255, 255, 0.92); color: var(--gh-p, #1f2937); flex: none; }
+.gh-choice-t { display: flex; flex-direction: column; min-width: 0; }
+.gh-choice-t b { font-size: 14.5px; }
+.gh-choice-t small { font-size: 12px; opacity: 0.8; }

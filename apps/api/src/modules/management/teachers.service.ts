@@ -1,3 +1,4 @@
+import { toE164 } from '../../common/otp/phone-identity';
 import { randomBytes } from 'node:crypto';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { getPlatformPrisma, withTenant } from '@skoolos/db';
@@ -113,7 +114,8 @@ export class TeachersService {
     try {
       return await withTenant(schoolId, (tx) =>
         tx.teacher.create({
-          data: { ...dto, schoolId },
+          // phoneE164 is the office number normalised — the phone login's index.
+          data: { ...dto, phoneE164: toE164(dto.phone), schoolId },
         }),
       );
     } catch (e) {
@@ -125,7 +127,7 @@ export class TeachersService {
   async update(schoolId: string, id: string, dto: UpdateTeacherDto) {
     try {
       return await withTenant(schoolId, (tx) =>
-        tx.teacher.update({ where: { id }, data: dto }),
+        tx.teacher.update({ where: { id }, data: { ...dto, ...(dto.phone !== undefined ? { phoneE164: toE164(dto.phone) } : {}) } }),
       );
     } catch (e) {
       if (isP2025(e)) throw new NotFoundException('Teacher not found');

@@ -1,4 +1,5 @@
 import {
+  Receipt,
   LayoutDashboard,
   ClipboardCheck,
   BookOpen,
@@ -51,4 +52,5 @@ export const NAV_ITEMS: {
   { href: '/teacher/library', label: 'Library', icon: Library, requiredFeature: 'LIBRARY' },
   { href: '/teacher/requests', label: 'Requests', icon: CalendarOff },
   { href: '/teacher/holidays', label: 'Holidays', icon: CalendarRange },
+  { href: '/teacher/pay', label: 'My pay', icon: Receipt, requiredFeature: 'SALARY' },
 ];
