@@ -59,6 +59,27 @@ export function coverPendingTemplate(schoolName: string, gaps: number): WhatsApp
 /** Meta's sample template on every new number — the pipeline smoke test. */
 export const HELLO_WORLD: WhatsAppTemplate = { name: 'hello_world', language: 'en_US', params: [] };
 
+/**
+ * The test send's fallback, for a school on a REAL number.
+ *
+ * `hello_world` is refused off Meta's public test numbers (code 131058), so
+ * the test button has to prove the pipeline with a template of the school's
+ * own that Meta has approved. The absence notice is the one every school has,
+ * and the wording below is written so nobody who receives it thinks a child
+ * is actually absent.
+ */
+export function testNoticeTemplate(schoolName: string): WhatsAppTemplate {
+  return {
+    name: TEMPLATE_NAMES.ABSENCE_NOTICE,
+    language: TEMPLATE_LANGUAGE,
+    params: [
+      param(schoolName),
+      param('This is a WhatsApp test — nobody'),
+      param('today. Please ignore it'),
+    ],
+  };
+}
+
 /** A template parameter Meta will accept, whatever the office typed. */
 export function param(value: unknown, fallback = '—'): string {
   const s = String(value ?? '')
