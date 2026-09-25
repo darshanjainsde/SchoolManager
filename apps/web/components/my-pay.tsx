@@ -1,9 +1,11 @@
 'use client';
 import { useState } from 'react';
+import { isPayslipDoc, type PayslipDoc } from '@skoolos/types';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { QueryError } from '@/components/ui/query-state';
+import { PayslipSheet } from '@/components/pay/payslip-sheet';
 import { PayDetailsCard } from '@/components/pay-details-card';
 import { monthName, rupees, toMinor } from '@/app/app/pay/ui';
 import type { PayLine } from '@/app/app/pay/types';
@@ -61,7 +63,7 @@ export function MyPay() {
                 No payslip yet. One appears here the month your school finishes its first pay run.
               </p>
             ) : null}
-            {open ? <Slip slip={open} /> : null}
+            {open ? <OpenSlip slip={open} /> : null}
           </div>
         </div>
 
@@ -280,4 +282,28 @@ function DeclarationCard({ pay }: { pay: MyPay }) {
       </div>
     </div>
   );
+}
+
+/**
+ * THE PAYSLIP A PERSON OPENED — the real document, with Print and Download
+ * on it, because those are the two things anybody ever wants from a payslip.
+ *
+ * It is FETCHED, not rebuilt from the summary: the server assembles one
+ * payslip for the console and for `/me`, so what a teacher takes to a bank is
+ * what the office has. Not hidden behind a disclosure either — a control
+ * nobody can see is a control that does not exist, which is the whole lesson
+ * of the payslip that used to open 17,000px down the page.
+ *
+ * While it loads, and on an older API with no such route, the summary below
+ * still renders: a worse payslip, never an empty card.
+ */
+function OpenSlip({ slip }: { slip: MySlip }) {
+  const host = useHost();
+  const api = useApi({ audience: 'school', hostHeader: host });
+  const q = useQuery({
+    queryKey: ['my-payslip-doc', slip.id], enabled: !!host, retry: false,
+    queryFn: () => api.get<PayslipDoc>(`/me/pay/payslips/${slip.id}/document`),
+  });
+  if (isPayslipDoc(q.data)) return <PayslipSheet doc={q.data} />;
+  return <Slip slip={slip} />;
 }

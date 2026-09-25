@@ -7,6 +7,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { writeFileSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { appCss } from './app-css';
 import { Programme } from '@/components/sports/programme';
 import { Timetable } from '@/components/sports/timetable';
 import { PlanBoard } from '@/components/sports/plan-board';
@@ -100,7 +101,7 @@ it('writes the real screens for a browser to measure', () => {
     `<section class="audit-panel" data-panel="${name}"><h2 class="audit-h">${name}</h2>${renderToStaticMarkup(
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{node}</QueryClientProvider>,
     )}</section>`).join('\n');
-  const css = readFileSync(resolve(process.cwd(), 'app/sk-theme.css'), 'utf8');
+  const css = appCss();
   writeFileSync(resolve(process.cwd(), 'audit/screens.html'), `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>${css}</style>

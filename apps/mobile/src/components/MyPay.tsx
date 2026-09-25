@@ -3,8 +3,11 @@ import { Text, View } from 'react-native';
 import { ApiError } from '@/lib/api';
 import { useQuery } from '@/lib/query';
 import { Empty, ErrorState, Figure, Page, PageHeader, Pill, Screen, SectionTitle } from '@/components/ui';
-import { Row } from '@/components/desk';
+import { Button, Row } from '@/components/desk';
 import { LoadingRows } from '@/components/Loading';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import { isPayslipDoc, payslipFileName, payslipHtml, type PayslipDoc } from '@skoolos/types';
 import { PayDetails } from '@/components/PayDetails';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
@@ -117,6 +120,8 @@ export function MyPay({ title = 'My pay' }: { title?: string }) {
             </Page>
           )}
 
+          <SharePayslip payslipId={open.id} />
+
           <Page>
             <PageHeader title="This year" icon="results" />
             <Row first title="Earned so far" right={<Text style={{ fontFamily: font.mono, color: tokens.color.ink }}>{rupees(open.ytdGrossMinor)}</Text>} />
@@ -175,6 +180,61 @@ function Ledger({ title, icon, lines, total, totalLabel }: { title: string; icon
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: tokens.color.line2 }}>
         <Text style={{ fontWeight: '700', fontSize: 13.5, color: tokens.color.ink }}>{totalLabel}</Text>
         <Text style={{ fontFamily: font.mono, fontWeight: '700', fontSize: 13.5, color: tokens.color.ink }}>{rupees(total)}</Text>
+      </View>
+    </Page>
+  );
+}
+
+/**
+ * THE PAYSLIP AS A PDF, on the phone.
+ *
+ * Printed from the SAME document the web prints and the office prints — the
+ * server builds one payslip for everybody, so what a teacher sends to a bank
+ * from their phone is what the school has on file.
+ *
+ * Nothing leaves the phone until the person taps Share.
+ */
+function SharePayslip({ payslipId }: { payslipId: string }) {
+  const tokens = useTokens();
+  const q = useQuery<PayslipDoc>(`/me/pay/payslips/${payslipId}/document`);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  // An older API has no such route. Better to show nothing than a button
+  // that cannot work.
+  if (!isPayslipDoc(q.data)) return null;
+  const doc = q.data;
+
+  async function share() {
+    setBusy(true);
+    setProblem(null);
+    try {
+      const { uri } = await Print.printToFileAsync({ html: payslipHtml(doc) });
+      if (!(await Sharing.isAvailableAsync())) {
+        setProblem('Sharing isn\u2019t available on this phone.');
+        return;
+      }
+      await Sharing.shareAsync(uri, {
+        mimeType: 'application/pdf',
+        dialogTitle: payslipFileName(doc),
+        UTI: 'com.adobe.pdf',
+      });
+    } catch {
+      setProblem('Could not make the PDF \u2014 try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Page testID="pay-share">
+      <PageHeader title="Keep a copy" icon="fees" />
+      <View style={{ paddingHorizontal: 12, paddingBottom: 12, gap: 8 }}>
+        <Text style={{ fontSize: 12, lineHeight: 18, color: tokens.color.sub }}>
+          A PDF of this payslip \u2014 the same one your school has on file. Banks and landlords ask for it.
+        </Text>
+        <Button label={busy ? 'Making the PDF\u2026' : 'Save or share the PDF'} onPress={() => void share()} disabled={busy} testID="pay-share-pdf" />
+        {problem ? <Text style={{ fontSize: 12, color: tokens.color.red }}>{problem}</Text> : null}
       </View>
     </Page>
   );

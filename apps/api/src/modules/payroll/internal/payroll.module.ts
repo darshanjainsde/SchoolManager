@@ -11,6 +11,7 @@ import { PayPackService } from './pay-pack.service';
 import { PayPeopleService } from './pay-people.service';
 import { PayRunService } from './pay-run.service';
 import { PayStatutoryService } from './pay-statutory.service';
+import { PayslipDocService } from './payslip-doc.service';
 import { PayrollController } from './payroll.controller';
 import { SalaryGuard } from './salary.guard';
 
@@ -26,7 +27,7 @@ import { SalaryGuard } from './salary.guard';
 @Module({
   imports: [FeaturesModule, TenancyModule],
   controllers: [PayrollController, MePayController],
-  providers: [
+  providers: [PayslipDocService, 
     SalaryGuard,
     AuditService,
     PayPackService,

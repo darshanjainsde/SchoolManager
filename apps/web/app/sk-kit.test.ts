@@ -260,7 +260,7 @@ describe('no screen has gone back to hand-rolling what the kit provides', () => 
  * Only the LIST owning the tracks, with rows as `subgrid`, aligns them.
  */
 describe('the row grid', () => {
-  const css = readFileSync(join(__dirname, 'sk-theme.css'), 'utf8');
+  const css = readFileSync(resolve(webRoot, 'app/sk-theme.css'), 'utf8');
   const block = (sel: string) => {
     const i = css.indexOf(sel);
     return i === -1 ? '' : css.slice(i, css.indexOf('}', i));
@@ -286,6 +286,32 @@ describe('the row grid', () => {
     // would leave a subgrid row still reading three columns.
     const phone = css.slice(css.indexOf('@media (max-width: 560px)', css.indexOf('.sk-rowlist')));
     expect(phone.slice(0, 400)).toMatch(/\.sk-rowlist\s*\{[^}]*grid-template-columns:\s*1fr/);
+  });
+});
+
+/**
+ * WHAT A CLICK REVEALS MUST BE WHERE THE EYE IS.
+ *
+ * Payslips rendered the opened slip as a sibling card AFTER its table; with a
+ * real roll that put it ~17,700px below the fold, so "Open" changed nothing
+ * on screen and read as broken. The measured harness now reports REVEALED
+ * BELOW THE FOLD, and this is the cheap guard that fails first: a screen
+ * whose list opens a record does it in an Overlay.
+ */
+describe('a record opens where it was asked for', () => {
+  const dir = resolve(webRoot, 'app/app/pay');
+
+  it('every Pay screen that opens a record uses the overlay', () => {
+    const offenders: string[] = [];
+    for (const f of readdirSync(dir).filter((x) => x.endsWith('-tab.tsx'))) {
+      const src = readFileSync(join(dir, f), 'utf8');
+      // A list screen that holds a chosen record in state, but renders no
+      // overlay, is putting that record somewhere down the page.
+      const opensARecord = /setOpen\w*\(/.test(src) || /const \[open\w*, set/.test(src);
+      if (!opensARecord) continue;
+      if (!/<(Drawer|Overlay)\b/.test(src)) offenders.push(f);
+    }
+    expect(offenders, 'these open a record without an Overlay — it will land below the fold').toEqual([]);
   });
 });
 

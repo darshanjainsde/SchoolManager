@@ -19,6 +19,7 @@ import { PayOverviewService } from './pay-overview.service';
 import { PayPeopleService } from './pay-people.service';
 import { PayRunService } from './pay-run.service';
 import { PayStatutoryService } from './pay-statutory.service';
+import { PayslipDocService } from './payslip-doc.service';
 import {
   AdjustmentDto, ApplyLeaveLopDto, AssignGradeDto, GrantSalaryDto, LopPolicyDto, OpenRunDto, PayDetailsDto,
   PreviewGradeDto, PreviewStructureDto, RaiseGradeDto, SchoolPayCountryDto, SetStructureDto,
@@ -50,6 +51,7 @@ export class PayrollController {
     private readonly overviews: PayOverviewService,
     private readonly runs: PayRunService,
     private readonly statutory: PayStatutoryService,
+    private readonly payslipDocs: PayslipDocService,
     private readonly tenant: TenantContextService,
     private readonly audit: AuditService,
   ) {}
@@ -451,6 +453,18 @@ export class PayrollController {
       case 'register': return this.statutory.registerFile(schoolId, id);
       default: throw new ApiError('VALIDATION', 'No such file.', 400, 'what');
     }
+  }
+
+  /**
+   * Anybody's payslip as a printable document.
+   *
+   * The same shape `/me/pay/payslips/:id/document` returns, on purpose: the
+   * office's copy and the person's copy have to be one document, or a payslip
+   * taken to a bank is not evidence of anything.
+   */
+  @Get('payslips/:id/document')
+  payslipDocument(@Param('id', ParseUUIDPipe) id: string) {
+    return this.payslipDocs.forAdmin(this.sid(), id);
   }
 
   @Get('statement/:kind/:id')

@@ -1,10 +1,13 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { QueryError } from '@/components/ui/query-state';
+import { PayslipSheet } from '@/components/pay/payslip-sheet';
+import { Drawer } from './drawer';
 import { Card, CardBody, CardHead, EmptyRow, RunPill, TableWrap, Td, Th, monthName, rupees } from './ui';
+import { isPayslipDoc, type PayslipDoc } from '@skoolos/types';
 import type { Payslip, RunDetail, RunRow } from './types';
 
 /** PAYSLIPS — any month, any person, exactly as it was paid. */
@@ -72,7 +75,21 @@ export default function PayslipsTab() {
         </CardBody>
       </Card>
 
-      {openSlip ? <SlipCard slip={openSlip} onClose={() => setOpenSlip(null)} /> : null}
+      {/* A DRAWER, not a card appended after the table.
+          It shipped as a sibling below the list, and with 73 people that put
+          it thousands of pixels under the fold: clicking Open moved nothing
+          in the viewport, so the button read as broken. Whatever a control
+          reveals has to appear where the eye already is. */}
+      {openSlip ? (
+        <Drawer
+          title={openSlip.name}
+          subtitle={`${openSlip.designation} · ${monthName(detail.data?.run.periodMonth ?? 1)} ${detail.data?.run.periodYear ?? ''}`}
+          onClose={() => setOpenSlip(null)}
+          footer={<button type="button" className="sk-btn" onClick={() => setOpenSlip(null)}>Close</button>}
+        >
+          <PayslipDrawerBody payslipId={openSlip.id} fallback={<SlipBody slip={openSlip} />} />
+        </Drawer>
+      ) : null}
     </div>
   );
 }
@@ -82,21 +99,16 @@ export default function PayslipsTab() {
  * what reached the bank — and then what the school paid in on top, which is
  * the line most payslips leave out and the one that makes this one honest.
  */
-export function SlipCard({ slip, onClose }: { slip: Payslip; onClose?: () => void }) {
+export function SlipBody({ slip }: { slip: Payslip }) {
   const earnings = slip.lines.filter((l) => l.kind === 'EARNING');
   const deductions = slip.lines.filter((l) => l.kind === 'DEDUCTION');
   const employer = slip.lines.filter((l) => l.kind === 'EMPLOYER_COST');
   return (
-    <Card>
-      <CardHead>
-        <h3>{slip.name}</h3>
-        {onClose ? <button type="button" className="sk-btn" data-size="sm" onClick={onClose}>Close</button> : null}
-      </CardHead>
-      <CardBody className="grid gap-3">
+    <>
+      <div className="grid gap-3">
         <p className="sk-muted" style={{ fontSize: 12 }}>
-          {slip.designation}
-          {slip.daysPaid !== slip.daysInMonth ? ` · paid for ${slip.daysPaid} of ${slip.daysInMonth} days` : ''}
-          {` · ${slip.taxRegime === 'NEW' ? 'new tax regime' : 'old tax regime'}`}
+          {slip.daysPaid !== slip.daysInMonth ? `Paid for ${slip.daysPaid} of ${slip.daysInMonth} days · ` : ''}
+          {slip.taxRegime === 'NEW' ? 'New tax regime' : 'Old tax regime'}
         </p>
         <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))' }}>
           <Ledger title="Earned" lines={earnings} total={slip.grossMinor} totalLabel="Gross" />
@@ -123,8 +135,8 @@ export function SlipCard({ slip, onClose }: { slip: Payslip; onClose?: () => voi
         <p className="sk-muted" style={{ fontSize: 11.5 }}>
           This year so far: {rupees(slip.ytdGrossMinor)} earned, {rupees(slip.ytdTaxMinor)} tax.
         </p>
-      </CardBody>
-    </Card>
+      </div>
+    </>
   );
 }
 
@@ -144,4 +156,24 @@ function Ledger({ title, lines, total, totalLabel }: { title: string; lines: { k
       </div>
     </div>
   );
+}
+
+/**
+ * The printable document, fetched rather than rebuilt here.
+ *
+ * The server assembles it once for both the console and `/me`, so the copy
+ * the office prints and the copy the teacher prints are the same document.
+ * While it is loading — or on an older API that has no such route — the
+ * screen falls back to the summary it already had, which is a worse payslip
+ * but never an empty drawer.
+ */
+function PayslipDrawerBody({ payslipId, fallback }: { payslipId: string; fallback: ReactNode }) {
+  const host = useHost();
+  const api = useApi({ audience: 'school', hostHeader: host });
+  const q = useQuery({
+    queryKey: ['payslip-doc', payslipId], enabled: !!host, retry: false,
+    queryFn: () => api.get<PayslipDoc>(`/payroll/payslips/${payslipId}/document`),
+  });
+  if (isPayslipDoc(q.data)) return <PayslipSheet doc={q.data} />;
+  return <>{fallback}</>;
 }

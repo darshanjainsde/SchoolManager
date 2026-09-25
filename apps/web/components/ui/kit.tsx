@@ -44,6 +44,15 @@ import { useFocusTrap } from './use-focus-trap';
  *    name ("Bank account number9 to 18 digits…"). `Field` wires it through
  *    `aria-describedby`.
  *
+ *  · SOMETHING REVEALED WHERE NOBODY IS LOOKING. "Open" on the payslip list
+ *    appended a card BELOW a 40-row table — 17,000 pixels under the fold. The
+ *    click changed nothing in the viewport, so the button read as broken.
+ *    WHATEVER A CONTROL REVEALS MUST APPEAR WITHIN A SCREEN OF THE CONTROL:
+ *    use `Overlay` (fixed, focus-trapped, unmistakable), or open it inline
+ *    right beside the thing clicked. Never append it to the end of the page.
+ *    The harness records what each click revealed and `audit/measure.html`
+ *    reports REVEALED BELOW THE FOLD, so this is measured, not remembered.
+ *
  *  · AN OVERLAY THAT LOSES THE THEME OR THE VIEWPORT. Rendered inline it is
  *    re-anchored by `.sk-anim`'s transform; portalled to bare `<body>` every
  *    `--sk-*` token resolves to nothing, because they are scoped to `.skosx`.

@@ -314,7 +314,14 @@ a.sk-kpi:hover { transform: translateY(-2px); border-color: var(--sk-brand); }
 /* ---- cards ---- */
 .sk-grid2 { display: grid; grid-template-columns: 1fr; gap: 14px; }
 @media (min-width: 720px) { .sk-grid2 { grid-template-columns: 1fr 1fr; } }
-.sk-card { background: var(--sk-card); border: 1px solid var(--sk-line); border-radius: var(--sk-r); box-shadow: var(--sk-shadow); }
+/* `min-width: 0` is load-bearing. A card is almost always a grid or flex
+   item, and such an item defaults to `min-width: auto` — it refuses to
+   shrink below its own content. One card holding a `TableWrap` (min-width
+   620px) therefore grew to 654px inside a 292px column and took the whole
+   PAGE sideways on a phone, instead of letting the table scroll in its own
+   box. The scroller was correct; it was never given a width to scroll
+   within. Measured at 360px: doc scrollWidth 688 against a 360 viewport. */
+.sk-card { background: var(--sk-card); border: 1px solid var(--sk-line); border-radius: var(--sk-r); box-shadow: var(--sk-shadow); min-width: 0; }
 /* A row, so a header can carry an action on its right without the `.sp`
    spacer silently doing nothing (it was a block, so a title-plus-button
    header stacked the button underneath and left it full width). Wraps rather
