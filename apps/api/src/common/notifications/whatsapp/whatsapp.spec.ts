@@ -1,4 +1,5 @@
 import { toE164, forGraph } from './phone';
+import { whatsAppConfig, whatsAppConfigProblem } from './graph.client';
 import { EXTRA_SUBMISSIONS, HELLO_WORLD, SUBMISSIONS, TEMPLATE_NAMES, coverPendingTemplate, param, placeholderCount, templateFor, verifyCodeTemplate } from './templates';
 import type { NotificationKind, NotificationMessage } from '../notification.types';
 
@@ -118,3 +119,47 @@ describe('templateFor ↔ SUBMISSIONS', () => {
     for (const [name, sub] of Object.entries(EXTRA_SUBMISSIONS)) expect(sub.samples).toHaveLength(placeholderCount(sub.body));
   });
 });
+
+/**
+ * THE MISCONFIGURATION THAT MADE WHATSAPP "NOT WORK" FOR DAYS.
+ *
+ * Staging had `WHATSAPP_PHONE_NUMBER_ID` set to the WABA id. Everything
+ * looked configured — the settings screen showed a plausible id — and every
+ * send died at Meta with code 100 "Object with ID … does not exist", which
+ * reads like a permissions problem rather than a paste into the wrong box.
+ * Reproduced against the live Graph API on 25 Sep 2026 before this was
+ * written; the correct phone number id sends fine.
+ */
+describe('the sending number is never the business account', () => {
+  const base = { WHATSAPP_TOKEN: 'EAAtoken', WHATSAPP_WABA_ID: '1615192556803051' };
+
+  it('refuses a config whose phone number id IS the WABA id', () => {
+    const env = { ...base, WHATSAPP_PHONE_NUMBER_ID: '1615192556803051' } as NodeJS.ProcessEnv;
+    expect(whatsAppConfig(env)).toBeNull();
+  });
+
+  it('says which box the wrong id is in', () => {
+    const env = { ...base, WHATSAPP_PHONE_NUMBER_ID: '1615192556803051' } as NodeJS.ProcessEnv;
+    expect(whatsAppConfigProblem(env)).toMatch(/same as WHATSAPP_WABA_ID/);
+    expect(whatsAppConfigProblem(env)).toMatch(/code 100/);
+  });
+
+  it('accepts the real pairing', () => {
+    const env = { ...base, WHATSAPP_PHONE_NUMBER_ID: '1415040705015934' } as NodeJS.ProcessEnv;
+    expect(whatsAppConfig(env)?.phoneNumberId).toBe('1415040705015934');
+    expect(whatsAppConfigProblem(env)).toBeNull();
+  });
+
+  it('still works for a school that has no WABA id set', () => {
+    // The check must not turn a working install off.
+    const env = { WHATSAPP_TOKEN: 'EAAtoken', WHATSAPP_PHONE_NUMBER_ID: '1415040705015934' } as NodeJS.ProcessEnv;
+    expect(whatsAppConfig(env)?.phoneNumberId).toBe('1415040705015934');
+    expect(whatsAppConfigProblem(env)).toBeNull();
+  });
+
+  it('names a missing token and a missing number separately', () => {
+    expect(whatsAppConfigProblem({ WHATSAPP_PHONE_NUMBER_ID: '1' } as NodeJS.ProcessEnv)).toMatch(/WHATSAPP_TOKEN/);
+    expect(whatsAppConfigProblem({ WHATSAPP_TOKEN: 'EAAx' } as NodeJS.ProcessEnv)).toMatch(/WHATSAPP_PHONE_NUMBER_ID/);
+  });
+});
+

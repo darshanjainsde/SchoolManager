@@ -4,7 +4,7 @@ import { Injectable } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
 import { WhatsAppChannel } from '../../common/notifications/whatsapp.channel';
-import { whatsAppConfig } from '../../common/notifications/whatsapp/graph.client';
+import { whatsAppConfig, whatsAppConfigProblem } from '../../common/notifications/whatsapp/graph.client';
 import { toE164 } from '../../common/notifications/whatsapp/phone';
 import { HELLO_WORLD, SUBMISSIONS, TEMPLATE_NAMES } from '../../common/notifications/whatsapp/templates';
 
@@ -41,7 +41,14 @@ export class WhatsAppSettingsService {
       for (const g of since) thisMonth[g.status] = g._count._all;
       return {
         settings: { enabled: settings?.enabled ?? false, phoneNumberId: settings?.phoneNumberId ?? null },
-        platform: { configured: this.channel.configured, senderPhoneNumberId: whatsAppConfig()?.phoneNumberId ?? null },
+        platform: {
+          configured: this.channel.configured,
+          senderPhoneNumberId: whatsAppConfig()?.phoneNumberId ?? null,
+          // WHY it is idle, not just that it is. A school staring at a dead
+          // switch cannot tell a missing token from an id pasted in the
+          // wrong box, and both look like "configured" from here.
+          problem: whatsAppConfigProblem(),
+        },
         templates: Object.entries(TEMPLATE_NAMES).map(([kind, name]) => ({ kind, name, body: SUBMISSIONS[kind as keyof typeof SUBMISSIONS].body })),
         thisMonth,
         recent: recent.map((r) => ({ ...r, phone: maskPhone(r.phone) })),
