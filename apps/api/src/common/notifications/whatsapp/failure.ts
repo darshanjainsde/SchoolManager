@@ -21,6 +21,7 @@ export function failureBlame(code: number | null | undefined): FailureBlame {
     case 131030:  // recipient not on the allow-list (the account is still in development)
     case 133010:  // the number is not registered
     case 131031:  // the account has been restricted
+    case 131058:  // hello_world sent from a number that is not a public test number
       return 'SETUP';
     // Ours, but about the message we asked for rather than the connection.
     case 132000:  // the number of variables does not match the template

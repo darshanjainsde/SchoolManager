@@ -11,6 +11,7 @@ describe('whose problem a WhatsApp failure is', () => {
     expect(failureBlame(190)).toBe('SETUP');     // token expired — 6 of staging's 8
     expect(failureBlame(100)).toBe('SETUP');     // the WABA id as a sender
     expect(failureBlame(131030)).toBe('SETUP');  // still on the test allow-list
+    expect(failureBlame(131058)).toBe('SETUP');  // hello_world off a public test number
   });
 
   it('blames the template when Meta has not approved it', () => {
