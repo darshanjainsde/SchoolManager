@@ -19,12 +19,28 @@ export class PublicSiteController {
   /**
    * Unauthenticated, host-resolved public site data.
    * Generous throttle: 300 requests per 60 s per IP.
+   *
+   * CACHED, like its two siblings below. This is the one response in the whole
+   * API that is byte-identical for every visitor to a school: no session, no
+   * pupil, nothing per-person in it. It was nonetheless answering `no-store`,
+   * because the blanket header in `configure-app.ts` is the right default for
+   * an API where everything else IS per-person — so this endpoint had to opt
+   * out, and never had.
+   *
+   * A minute in any shared cache, then stale for ten while it refreshes: a
+   * school that edits its website sees the change within the minute, and no
+   * visitor ever waits on the origin to find out the page has not changed.
+   * The server-rendered school site is already covered by Next's own data
+   * cache; this is what the browser and the edge get, which is what the
+   * birthday wall and the website preview fetch directly.
    */
   @Public()
   @Throttle({ default: { limit: 300, ttl: 60_000 } })
   @Get('site')
-  site() {
-    return this.publicSite.getSite();
+  async site(@Res({ passthrough: true }) res: Response) {
+    const r = await this.publicSite.getSite();
+    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=60, stale-while-revalidate=600');
+    return r;
   }
 
   /**

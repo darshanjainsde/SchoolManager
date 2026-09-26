@@ -1401,6 +1401,28 @@ export interface DashboardPulse {
     series: { date: string; count: number }[];
   };
   roll: { students: number; teachers: number; classes: number };
+  /**
+   * Whether each first-run setup step has been done.
+   *
+   * The console home used to answer these six questions by DOWNLOADING each
+   * collection and asking whether the array was empty — every academic year,
+   * period, subject, class, teacher and, worst of all, every student on the
+   * roll (measured at 227 KB per 500 children) to render six tick marks. They
+   * are six existence checks and they ride along with the pulse the page was
+   * already asking for.
+   *
+   * Optional because the web deploys before the API: a console talking to the
+   * older API gets `undefined` and hides the checklist, which is right — six
+   * wrong red crosses on an established school would be worse than nothing.
+   */
+  setup?: {
+    year: boolean;
+    periods: boolean;
+    subjects: boolean;
+    classes: boolean;
+    teachers: boolean;
+    students: boolean;
+  };
 }
 
 // ── Press Orders (print fulfilment) ──────────────────────────────────────────

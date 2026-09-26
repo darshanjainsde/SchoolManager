@@ -125,11 +125,17 @@ export default function PeopleTab({ base }: { base: string }) {
     onError: (e: Error) => setError(e.message),
   });
 
+  // The staff roll is walked three times to draw this screen — the selection,
+  // the "on pay" tally, the roll itself. Each one is memoised so a keystroke
+  // or a tick does not re-walk the whole roll, and they sit above the early
+  // return because a hook may not be conditional.
+  const rows = useMemo(() => people.data ?? [], [people.data]);
+  const pickedPeople = useMemo(() => rows.filter((p) => picked.has(p.id)), [rows, picked]);
+  const onPayCount = useMemo(() => rows.filter((p) => p.pay).length, [rows]);
+
   if (people.isError) return <QueryError error={people.error} onRetry={people.refetch} className="py-8" />;
 
-  const rows = people.data ?? [];
   const gradeList = grades.data ?? [];
-  const pickedPeople = rows.filter((p) => picked.has(p.id));
 
   const toggle = (id: string) => {
     const next = new Set(picked);
@@ -171,7 +177,7 @@ export default function PeopleTab({ base }: { base: string }) {
         <CardHead>
           <h3>People</h3>
           <span className="flex flex-wrap items-center gap-2">
-            <span className="sk-muted">{rows.length} on the roll · {rows.filter((p) => p.pay).length} on pay</span>
+            <span className="sk-muted">{rows.length} on the roll · {onPayCount} on pay</span>
             {picked.size > 0 && gradeList.length > 0 ? (
               <button type="button" className="sk-btn sk-press" data-variant="primary" onClick={() => setBulkOpen(true)}>
                 Put {picked.size} on a grade

@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
@@ -167,12 +167,18 @@ export default function GradesTab({ base }: { base: string }) {
     onError: (e: Error) => setError(e.message),
   });
 
+  // Both totals walk the whole grade list, so they are computed once per
+  // change of the data rather than on every render — and above the early
+  // return, because a hook may not sit behind a conditional.
+  const rows = useMemo(() => grades.data ?? [], [grades.data]);
+  const { total, onPay } = useMemo(() => ({
+    total: rows.reduce((a, g) => a + g.monthlyMinor, 0),
+    onPay: rows.reduce((a, g) => a + g.headcount, 0),
+  }), [rows]);
+
   if (grades.isError) return <QueryError error={grades.error} onRetry={grades.refetch} className="py-8" />;
 
-  const rows = grades.data ?? [];
   const s = settings.data;
-  const total = rows.reduce((a, g) => a + g.monthlyMinor, 0);
-  const onPay = rows.reduce((a, g) => a + g.headcount, 0);
 
   return (
     <div className="sk-paystack">

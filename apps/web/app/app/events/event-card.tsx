@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { EventArt, guessArt, type ArtKey } from './event-art';
+import { optimised } from '@/lib/img';
 
 export type EventScope = 'SCHOOL' | 'NETWORK';
 export type EventStatus = 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -87,7 +88,7 @@ export function EventCard({
           /* A tenant-uploaded URL on an arbitrary host: next/image would need
              every school's domain in remotePatterns, which is not knowable. */
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={event.coverUrl} alt="" data-focus={event.coverFocus ?? 'middle'} loading="lazy" decoding="async" />
+          <img src={optimised(event.coverUrl, 828)} alt="" data-focus={event.coverFocus ?? 'middle'} loading="lazy" decoding="async" />
         ) : (
           <EventArt kind={artOf(event)} />
         )}

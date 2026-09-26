@@ -25,7 +25,7 @@ import SiteMotion from './site-motion';
 import { themeRootProps } from './site-theme';
 import ContactSection from './sections/ContactSection';
 import FooterSection from './sections/FooterSection';
-import { FestiveRibbon, FestiveSymbols } from './sections/FestiveLayer';
+import { FestiveDress, FestiveRibbon, FestiveSymbols } from './sections/FestiveLayer';
 import PageBlocks from './sections/PageBlocks';
 import {
   buildCustomCss,
@@ -226,7 +226,11 @@ export default function PublicSite({ data, view = 'home', page, birthdays = null
             {aboutImageUrl || principalPhotoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={(aboutImageUrl ?? principalPhotoUrl)!}
+                // Painted in a half-width band 320px tall, so ask for roughly
+                // twice that. A principal's photo arrives straight off a phone
+                // and was being served at full camera resolution on every one
+                // of the school's ten public pages.
+                src={optimised((aboutImageUrl ?? principalPhotoUrl)!, 1080)}
                 alt={aboutImageUrl ? `About ${schoolName}` : principalName ?? 'Principal'}
                 className="w-full h-full object-cover"
               loading="lazy" decoding="async" />
@@ -238,7 +242,7 @@ export default function PublicSite({ data, view = 'home', page, birthdays = null
             <div className="ps-card ps-soft absolute -bottom-6 -right-4 rounded-2xl p-4 w-56">
               <div className="flex items-center gap-3">
                 {principalPhotoUrl && (
-                  <img src={principalPhotoUrl} alt={principalName} className="h-11 w-11 rounded-full object-cover flex-shrink-0" loading="lazy" decoding="async" />
+                  <img src={optimised(principalPhotoUrl, 96)} alt={principalName} className="h-11 w-11 rounded-full object-cover flex-shrink-0" loading="lazy" decoding="async" />
                 )}
                 <div>
                   <div className="ps-head text-sm font-bold">{principalName}</div>
@@ -323,7 +327,7 @@ export default function PublicSite({ data, view = 'home', page, birthdays = null
               <div className="mx-auto h-20 w-20 rounded-full overflow-hidden ps-logo-bg grid place-items-center text-2xl font-semibold text-white">
                 {person.photoUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={person.photoUrl} alt={person.name} className="h-full w-full object-cover" loading="lazy" decoding="async" />
+                  <img src={optimised(person.photoUrl, 256)} alt={person.name} className="h-full w-full object-cover" loading="lazy" decoding="async" />
                 ) : (
                   person.name.charAt(0)
                 )}
@@ -508,7 +512,16 @@ export default function PublicSite({ data, view = 'home', page, birthdays = null
           <BirthdayTeaser style="RIBBON" data={birthdays} href="/birthdays" />
         )}
         {showRecordsBand && recordsLayout === 'STRIP' && records && <RecordsTeaser book={records} layout="STRIP" />}
-        <HeroSection data={data} enquireHref={enquireHref} hasAbout={hasAbout} brandColor2={brandColor2} />
+        <HeroSection
+          data={data}
+          enquireHref={enquireHref}
+          hasAbout={hasAbout}
+          brandColor2={brandColor2}
+          // Drawn HERE, on the server, and passed into the client hero as a
+          // slot: the scenes are static SVG, so this keeps every festival's
+          // artwork out of the browser's download.
+          dress={<FestiveDress fest={fest} imageUrl={data.profile?.festiveImageUrl ?? null} />}
+        />
       </div>
 
       {/* ── HOME BANDS (each defined once in homeBands; the admin's saved

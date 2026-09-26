@@ -8,6 +8,7 @@ import { BackToFees } from '@/components/fees/back-to-fees';
 import { useHost } from '@/components/use-host';
 import type { PaymentSetup } from '@/lib/fees';
 import { QueryError } from '@/components/ui/query-state';
+import { optimised } from '@/lib/img';
 
 /**
  * How parents can pay.
@@ -282,7 +283,7 @@ function ParentPreview({
             </div>
             {qrUrl && (
               <div className="flex items-center gap-2">
-                <img src={qrUrl} alt="" width={60} height={60} className="rounded-[8px] border"
+                <img src={optimised(qrUrl, 128)} alt="" width={60} height={60} className="rounded-[8px] border"
                      style={{ borderColor: 'var(--sk-line-2)' }} />
                 <p className="text-[10.5px]" style={{ color: 'var(--sk-ink-3)' }}>
                   Scan with any UPI app.<br /><strong>Amount is not pre-filled.</strong>

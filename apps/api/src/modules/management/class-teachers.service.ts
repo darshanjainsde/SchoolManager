@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { withTenant } from '@skoolos/db';
+import { withTenant, type TenantTx } from '@skoolos/db';
 import type { ClassTeacherDesk, ClassTeacherRow } from '@skoolos/types';
 import { ApiError } from '../../common/errors/api-error';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
@@ -110,7 +110,7 @@ export class ClassTeachersService {
 
   /** Assign, move or clear one section's class teacher, and date the change. */
   async assign(schoolId: string, classSectionId: string, teacherId: string | null, byUserId: string): Promise<ClassTeacherRow> {
-    await withTenant(schoolId, async (tx) => {
+    return withTenant(schoolId, async (tx) => {
       const section = await tx.classSection.findFirst({ where: { id: classSectionId, schoolId }, select: { id: true, classTeacherId: true, academicYearId: true } });
       if (!section) throw new ApiError('NOT_FOUND', 'That class is not in this school.', 404, 'classSectionId');
       if (teacherId) {
@@ -120,7 +120,9 @@ export class ClassTeachersService {
           throw new ApiError('VALIDATION', 'That teacher has left the school. Pick a teacher who is still here.', 400, 'teacherId');
         }
       }
-      if (section.classTeacherId === teacherId) return;
+      if (section.classTeacherId === teacherId) {
+        return this.rowAfterWrite(tx, schoolId, section.academicYearId, classSectionId);
+      }
 
       const now = new Date();
       // Close the standing record before opening the next one, so the history
@@ -135,12 +137,62 @@ export class ClassTeachersService {
         });
       }
       await tx.classSection.update({ where: { id: classSectionId }, data: { classTeacherId: teacherId } });
-    });
 
-    const desk = await this.desk(schoolId);
-    const row = desk.rows.find((r) => r.classSectionId === classSectionId);
-    if (!row) throw new ApiError('NOT_FOUND', 'That class is not in this session.', 404, 'classSectionId');
-    return row;
+      return this.rowAfterWrite(tx, schoolId, section.academicYearId, classSectionId);
+    });
+  }
+
+  /**
+   * The one row that changed, read back inside the write's own transaction.
+   *
+   * This used to call `desk()` again: a SECOND tenant transaction that read
+   * every section, every teacher, the previous session and the whole roll —
+   * to return a single row that the screen then threw away, because it
+   * refetches the desk anyway. On a dropdown change that is the desk computed
+   * twice. Three small seeks say the same thing.
+   */
+  private async rowAfterWrite(
+    tx: TenantTx,
+    schoolId: string,
+    academicYearId: string,
+    classSectionId: string,
+  ): Promise<ClassTeacherRow> {
+    const section = await tx.classSection.findFirst({
+      where: { id: classSectionId, schoolId },
+      select: { id: true, name: true, classTeacherId: true, grade: { select: { name: true, order: true } } },
+    });
+    if (!section) throw new ApiError('NOT_FOUND', 'That class is not in this session.', 404, 'classSectionId');
+
+    const label = `${section.grade.name} ${section.name}`.trim();
+    const [students, teacher, alsoHeld] = await Promise.all([
+      tx.student.count({ where: { schoolId, classSectionId } }),
+      section.classTeacherId
+        ? tx.teacher.findFirst({
+            where: { id: section.classTeacherId, schoolId, status: 'ACTIVE' },
+            select: { id: true, firstName: true, lastName: true },
+          })
+        : Promise.resolve(null),
+      section.classTeacherId
+        ? tx.classSection.findMany({
+            where: { schoolId, academicYearId, classTeacherId: section.classTeacherId, id: { not: classSectionId } },
+            take: LIST_CEILING.STRUCTURE,
+            select: { name: true, grade: { select: { name: true } } },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    return {
+      classSectionId: section.id,
+      label,
+      gradeName: section.grade.name,
+      sectionName: section.name,
+      gradeOrder: section.grade.order,
+      students,
+      // A teacher who has LEFT reads as unassigned here for the same reason it
+      // does on the desk: the column keeps them, the school does not.
+      teacher: teacher ? { id: teacher.id, name: `${teacher.firstName} ${teacher.lastName}`.trim() } : null,
+      alsoHolds: alsoHeld.map((sec) => `${sec.grade.name} ${sec.name}`.trim()),
+    };
   }
 
   /**

@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { ApiError } from '@/lib/api';
+import { optimised } from '@/lib/img';
 import type {
   AlumniListResult,
   AlumniSummary,
@@ -1206,7 +1207,7 @@ function GiftsTab({ onChanged }: { onChanged: () => void }) {
                                 <a className="sk-btn" href={a.url} target="_blank" rel="noreferrer">Open the bill</a>
                               ) : (
                                 /* eslint-disable-next-line @next/next/no-img-element */
-                                <img src={a.url} alt={a.caption ?? a.kind.toLowerCase()} loading="lazy"
+                                <img src={optimised(a.url, 828)} alt={a.caption ?? a.kind.toLowerCase()} loading="lazy"
                                   style={{ width: '100%', borderRadius: 9, display: 'block' }} />
                               )}
                               <button type="button"

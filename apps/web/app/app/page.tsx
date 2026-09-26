@@ -58,42 +58,21 @@ export default function DashboardPage() {
   const host = useHost();
   const api = useApi({ audience: 'school', hostHeader: host });
 
-  const yearsQuery = useQuery({
-    queryKey: ['dash-years'],
-    queryFn: () => api.get<AcademicYear[]>('/manage/years'),
-    enabled: !!host,
-    staleTime: 60_000,
-  });
-  const periodsQuery = useQuery({
-    queryKey: ['dash-periods'],
-    queryFn: () => api.get<Period[]>('/manage/periods'),
-    enabled: !!host,
-    staleTime: 60_000,
-  });
-  const subjectsQuery = useQuery({
-    queryKey: ['dash-subjects'],
-    queryFn: () => api.get<Subject[]>('/manage/subjects'),
-    enabled: !!host,
-    staleTime: 60_000,
-  });
-  const classesQuery = useQuery({
-    queryKey: ['dash-classes'],
-    queryFn: () => api.get<ClassRow[]>('/manage/classes'),
-    enabled: !!host,
-    staleTime: 60_000,
-  });
-  const teachersQuery = useQuery({
-    queryKey: ['dash-teachers'],
-    queryFn: () => api.get<Teacher[]>('/manage/teachers'),
-    enabled: !!host,
-    staleTime: 60_000,
-  });
-  const studentsQuery = useQuery({
-    queryKey: ['dash-students'],
-    queryFn: () => api.get<Student[] | { items: Student[] }>('/manage/students'),
-    enabled: !!host,
-    staleTime: 60_000,
-  });
+  // THE SIX SETUP TICKS USED TO COST SIX WHOLE COLLECTIONS.
+  //
+  // This page asked "has the school added students yet?" by downloading every
+  // student on the roll and checking `length > 0` — measured at 227 KB per 500
+  // children, so a real school shipped megabytes to draw a tick. The same held
+  // for years, periods, subjects, classes and teachers. Six requests, six
+  // whole tables, six answers that are each one bit.
+  //
+  // Worse than the bytes: each was a separate request, and a burst of ten
+  // concurrent calls makes the platform start extra serverless instances. The
+  // ones that cold-start cost about two seconds — measured on this very page,
+  // where /manage/subjects took 2,071 ms in the burst and 209 ms on its own.
+  // Cutting the burst is what makes the page feel fast, not the payload.
+  //
+  // The pulse this page already asks for now carries all six as booleans.
   const pulseQuery = useQuery({
     queryKey: ['pulse', host], enabled: !!host,
     queryFn: () => api.get<DashboardPulse>('/manage/pulse'),
@@ -117,13 +96,11 @@ export default function DashboardPage() {
   });
 
 
-  const years = yearsQuery.data ?? [];
-  const periods = periodsQuery.data ?? [];
-  const subjects = subjectsQuery.data ?? [];
-  const classes = classesQuery.data ?? [];
-  const teachers = teachersQuery.data ?? [];
-  const studentsRaw = studentsQuery.data;
-  const students = Array.isArray(studentsRaw) ? studentsRaw : (studentsRaw?.items ?? []);
+  // `setup` is absent when the console is talking to an API that predates it
+  // (the web deploys before the API). Hiding the checklist for those few
+  // minutes is right: six red crosses on a school that finished setting up
+  // months ago would be worse than showing nothing.
+  const setup = pulseQuery.data?.setup ?? null;
 
   // A resource that errors resolves to an empty array above, so a step just
   // reads as "not done yet" rather than crashing the page.
@@ -134,42 +111,42 @@ export default function DashboardPage() {
       helper: 'Define the current school year so records have somewhere to live.',
       href: '/app/settings',
       // Any year is enough, but a year marked "current" satisfies it too.
-      done: years.some((y) => y.isCurrent) || years.length > 0,
+      done: setup?.year ?? false,
     },
     {
       key: 'periods',
       label: 'Add class periods (bell times)',
       helper: 'Set up the daily schedule blocks your classes will run in.',
       href: '/app/settings',
-      done: periods.length > 0,
+      done: setup?.periods ?? false,
     },
     {
       key: 'subjects',
       label: 'Add grades & subjects',
       helper: 'Create the grade levels and subjects your school teaches.',
       href: '/app/classes/structure',
-      done: subjects.length > 0,
+      done: setup?.subjects ?? false,
     },
     {
       key: 'classes',
       label: 'Create classes',
       helper: 'Set up class sections for each grade.',
       href: '/app/classes',
-      done: classes.length > 0,
+      done: setup?.classes ?? false,
     },
     {
       key: 'teachers',
       label: 'Add teachers',
       helper: 'Invite teachers so they can take attendance and record results.',
       href: '/app/teachers',
-      done: teachers.length > 0,
+      done: setup?.teachers ?? false,
     },
     {
       key: 'students',
       label: 'Add students',
       helper: 'Enroll students and assign them to their classes.',
       href: '/app/students',
-      done: students.length > 0,
+      done: setup?.students ?? false,
     },
     {
       key: 'timetable',
@@ -178,20 +155,13 @@ export default function DashboardPage() {
       href: '/app/timetable',
       // No endpoint to check timetable entries directly — once classes exist
       // the timetable is buildable, so we treat that as this step's signal.
-      done: classes.length > 0,
+      done: setup?.classes ?? false,
     },
   ];
 
   const doneCount = steps.filter((s) => s.done).length;
   const allDone = doneCount === steps.length;
-  const anySetupLoading = [
-    yearsQuery,
-    periodsQuery,
-    subjectsQuery,
-    classesQuery,
-    teachersQuery,
-    studentsQuery,
-  ].some((q) => q.isLoading);
+  const anySetupLoading = pulseQuery.isLoading;
 
   return (
     // NOTE ON THE VIEW FADE: the pitch's `wfade` — "this view just arrived" —

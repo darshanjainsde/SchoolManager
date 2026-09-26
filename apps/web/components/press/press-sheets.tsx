@@ -1,5 +1,6 @@
 'use client';
 import { classInWords, dateInWords } from '@/lib/press';
+import { optimised } from '@/lib/img';
 import type {
   CertificateSnapshot,
   GradeBand,
@@ -56,7 +57,7 @@ function Masthead({ school, line2 }: { school: ReportCardSnapshot['school']; lin
     <div style={{ display: 'flex', alignItems: 'center', gap: '5mm', borderBottom: `0.8mm solid ${BRAND}`, paddingBottom: '3mm' }}>
       {school.logoUrl ? (
         // eslint-disable-next-line @next/next/no-img-element -- print sheet: a fixed-size crest, not a responsive image
-        <img src={school.logoUrl} alt="" style={{ width: '16mm', height: '16mm', objectFit: 'contain' }} />
+        <img src={optimised(school.logoUrl, 384)} alt="" style={{ width: '16mm', height: '16mm', objectFit: 'contain' }} />
       ) : null}
       <div style={{ minWidth: 0 }}>
         <div style={{ fontWeight: 800, fontSize: '15pt', color: BRAND, letterSpacing: '0.02em' }}>{school.name}</div>

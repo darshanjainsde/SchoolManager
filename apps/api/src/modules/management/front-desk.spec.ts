@@ -8,6 +8,12 @@ const txMock = {
   enquiry: { findMany: jest.fn(), count: jest.fn() },
   classSection: { count: jest.fn() },
   academicYear: { findFirst: jest.fn() },
+  // The pulse also answers the console home's six setup ticks now, so the
+  // three the roll counts cannot cover are probed here. Each is a findFirst on
+  // an id — an index seek that stops at the first row — which replaced the six
+  // whole-collection downloads the landing screen used to make.
+  period: { findFirst: jest.fn() },
+  subject: { findFirst: jest.fn() },
   libraryIssue: { findMany: jest.fn() },
 };
 const withTenantMock = jest.fn((_s: string, fn: (tx: unknown) => unknown) => fn(txMock));
@@ -138,6 +144,39 @@ describe('PulseService', () => {
     ]);
     expect(out.attendance.todayPct).toBe(95);
     expect(out.fees).toBeNull(); // no FEES feature
+  });
+
+  it('answers the six setup ticks, so the console home stops downloading six collections', async () => {
+    // The landing screen used to GET /manage/years, /periods, /subjects,
+    // /classes, /teachers and /students in full, purely to ask `length > 0`.
+    // /manage/students alone is about 227 kB per 500 children. Worse than the
+    // bytes: ten concurrent calls make the platform start extra serverless
+    // instances, and a cold one costs ~2 s — measured on that page, where
+    // /manage/subjects took 2,071 ms in the burst and 209 ms on its own.
+    txMock.academicYear.findFirst.mockResolvedValue({ id: 'y1' });
+    txMock.period.findFirst.mockResolvedValue({ id: 'p1' });
+    txMock.subject.findFirst.mockResolvedValue(null);
+    txMock.student.count.mockResolvedValue(412);
+    txMock.teacher.count.mockResolvedValue(0);
+    txMock.classSection.count.mockResolvedValue(14);
+
+    const svc = new PulseService(features(['MANAGEMENT']), feeQuery);
+    const out = await svc.pulse(SCHOOL, NOW);
+
+    expect(out.setup).toEqual({
+      year: true,
+      periods: true,
+      subjects: false,
+      classes: true,
+      teachers: false,
+      students: true,
+    });
+    // Three of the six ride on counts the pulse already had; only three
+    // extra reads were added, and each stops at the first matching row.
+    for (const probe of [txMock.academicYear.findFirst, txMock.period.findFirst, txMock.subject.findFirst]) {
+      expect(probe).toHaveBeenCalledTimes(1);
+      expect(probe.mock.calls[0][0]).toEqual({ where: {}, select: { id: true } });
+    }
   });
 
   it('splits enquiries 7/7 on the IST calendar and counts the uncontacted', async () => {

@@ -122,12 +122,22 @@ describe('StudentsService.list', () => {
     });
   });
 
-  it('keeps the full row + classSection include for the admin projection', async () => {
+  it('sends the admin projection a chosen field list, not every column', async () => {
+    // This used to assert the opposite — `include`, no `select` — which is
+    // what shipped all 36 of Student's scalars to draw a seven-column table:
+    // both parents' names, nationality, category, previous school, the PEN id,
+    // the E.164 phone twin, who last changed the status and when. About
+    // 1,082 B per row against 365 B for what the screen renders, so a
+    // two-thousand-child school sent roughly 2.1 MB to list its roll.
     await svc.list(SCHOOL, { projection: 'full' });
 
     const args = txMock.student.findMany.mock.calls[0][0];
-    expect(args.select).toBeUndefined();
-    expect(args.include).toEqual({
+    expect(args.include).toBeUndefined();
+    expect(args.select).toEqual({
+      id: true, admissionNo: true, firstName: true, lastName: true, email: true,
+      classSectionId: true, rollNo: true, guardianName: true, guardianPhone: true,
+      photoAssetId: true, userId: true, status: true, leftOn: true,
+      alumniBatch: true, dob: true, showOnWebsite: true, photoConsent: true,
       classSection: { select: { name: true, grade: { select: { name: true } } } },
     });
     expect(args.where).toEqual({ schoolId: SCHOOL, status: 'ACTIVE' });

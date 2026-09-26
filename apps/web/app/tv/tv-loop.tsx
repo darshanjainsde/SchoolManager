@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { TvScreen } from '@skoolos/types';
 import { useHydrated } from '@/lib/use-hydrated';
+import { optimised } from '@/lib/img';
 
 /**
  * The loop itself: a handful of full-screen panels rotating on a slow clock.
@@ -110,7 +111,7 @@ export function TvLoop({ initial, tvKey }: { initial: TvScreen; tvKey: string })
       <header style={{ display: 'flex', alignItems: 'center', gap: fluid(10, 18), padding: `${fluid(14, 28)} ${fluid(16, 44)} ${fluid(10, 18)}` }}>
         {s.school.logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- kiosk crest, fixed box
-          <img src={s.school.logoUrl} alt="" style={{ width: fluid(38, 56), height: fluid(38, 56), flex: 'none', objectFit: 'contain' }} />
+          <img src={optimised(s.school.logoUrl, 128)} alt="" style={{ width: fluid(38, 56), height: fluid(38, 56), flex: 'none', objectFit: 'contain' }} />
         ) : null}
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontSize: fluid(19, 30), fontWeight: 800, letterSpacing: '-0.01em' }}>{s.school.name}</div>
@@ -183,7 +184,7 @@ export function TvLoop({ initial, tvKey }: { initial: TvScreen; tvKey: string })
           <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: 12, minHeight: 0 }}>
             {panel.items.slice(0, 6).map((url, i) => (
               // eslint-disable-next-line @next/next/no-img-element -- kiosk collage from the school's own gallery
-              <img key={i} src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 14, minHeight: 0 }} />
+              <img key={i} src={optimised(url, 1920)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 14, minHeight: 0 }} />
             ))}
           </div>
         )}

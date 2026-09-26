@@ -1,4 +1,5 @@
 import { normalizePageBlocks } from '../site-variants';
+import { optimised } from '@/lib/img';
 
 /**
  * Renderer for an admin-built page's typed blocks. The block set is CLOSED on
@@ -56,7 +57,7 @@ export default function PageBlocks({ blocks }: { blocks: unknown }) {
               <div key={i} className="reveal ps-panel ps-pgblock-imgtext" style={delay}>
                 {b.url ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={b.url} alt="" className="h-40 w-full object-cover ps-panel-sm" loading="lazy" decoding="async" />
+                  <img src={optimised(b.url, 1200)} alt="" className="h-40 w-full object-cover ps-panel-sm" loading="lazy" decoding="async" />
                 ) : (
                   <div className="h-40 w-full ps-brandgrad ps-panel-sm grid place-items-center text-4xl text-white">🏫</div>
                 )}

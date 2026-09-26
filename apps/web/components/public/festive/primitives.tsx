@@ -13,6 +13,7 @@
  * the school's own upload.
  */
 import type { CSSProperties, ReactNode } from 'react';
+import { optimised } from '@/lib/img';
 
 type P = { x?: number; y?: number; size?: number; style?: CSSProperties; className?: string; delay?: number };
 // `scale` (the individual transform property), not transform: scale(), so a
@@ -185,7 +186,7 @@ export function ArtFrame({ src, alt, credit, width = 150, garland = true, lamps 
     <figure className={`ps-fest-frame ${p.className ?? ''}`} style={{ ...at(p), width, margin: 0 }} data-art={alt}>
       <div className="ps-fest-frame-arch" style={{ width, height: h }}>
         {/* Decorative inside an aria-hidden dress; the painting's name travels in data-art for tests and tooling. */}
-        <img src={src} alt="" decoding="async" fetchPriority="low" width={width} height={h} />
+        <img src={optimised(src, width * 2)} alt="" decoding="async" fetchPriority="low" width={width} height={h} />
       </div>
       {garland && <Toran width={width + 24} x={-12} y={-4} />}
       {lamps && (

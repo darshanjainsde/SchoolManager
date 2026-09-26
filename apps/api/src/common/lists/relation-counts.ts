@@ -95,10 +95,17 @@ export async function unreadCountsByThread(
 export async function commentCountsByConcern(
   tx: TenantTx,
   schoolId: string,
+  concernIds: string[],
 ): Promise<Map<string, number>> {
+  // Bounded by the rows actually being drawn, not by the school's whole
+  // history: the Complaint Box shows at most one page of concerns, while the
+  // comment table grows for as long as the school uses the product. Counting
+  // every comment ever written to put a number on twenty rows is work that
+  // gets slower every term for no gain.
+  if (concernIds.length === 0) return new Map();
   const rows = await tx.concernComment.groupBy({
     by: ['concernId'],
-    where: { schoolId },
+    where: { schoolId, concernId: { in: concernIds } },
     _count: { _all: true },
   });
   return toMap(rows as Tally<'concernId'>, 'concernId');

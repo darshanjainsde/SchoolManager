@@ -1,10 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { optimised } from '@/lib/img';
 import type { PublicSiteData } from '@/lib/public-api';
-import { normalizeFestiveTheme } from '../site-variants';
-import { FestiveDress } from './FestiveLayer';
 import { rgba } from '../site-utils';
 // Pure helpers live in hero-model.ts with NO client boundary, so a server
 // component may call them. Deliberately not re-exported from here: a re-export
@@ -246,17 +244,23 @@ export default function HeroSection({
   enquireHref,
   hasAbout,
   brandColor2,
+  dress = null,
 }: {
   data: PublicSiteData;
   enquireHref: string;
   hasAbout: boolean;
   brandColor2: string;
+  /**
+   * The festive scene, already rendered by the SERVER component above us and
+   * handed down as a slot. It is pure SVG with no state, so drawing it here
+   * would drag all twenty-two festivals' artwork across this 'use client'
+   * boundary and into every visitor's download — for one festival a year.
+   * As a slot it renders to HTML on the server and ships no JavaScript.
+   */
+  dress?: ReactNode;
 }) {
   const layout = resolveHeroLayout(data);
   const images = heroImagesOf(data);
-  // The festive dress sits inside the band, over its background, under its copy.
-  const fest = normalizeFestiveTheme(data.profile?.festiveTheme);
-  const dress = <FestiveDress fest={fest} imageUrl={data.profile?.festiveImageUrl ?? null} />;
   const heroUrl = images[0] ?? null;
   const brand = data.profile?.brandColorPrimary ?? '#2f6b4f';
   const center = (data.profile?.heroTextAlign ?? 'LEFT') === 'CENTER';

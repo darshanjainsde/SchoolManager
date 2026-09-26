@@ -8,6 +8,7 @@ import SchoolChrome from '@/components/public/SchoolChrome';
 import PlatformBlogNav from '@/components/blog/PlatformBlogNav';
 import BlogBlocks from '@/components/blog/BlogBlocks';
 import '@/components/blog/blog.css';
+import { optimised } from '@/lib/img';
 
 interface Props { params: Promise<{ slug: string }> }
 
@@ -89,7 +90,7 @@ function ArticleBody({ post }: { post: BlogPostFull }) {
           // filling it with the headline makes it an intentional banner instead.
           <header className="blog-hero-cover">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={post.heroImageUrl} alt="" width={1600} height={800} />
+            <img src={optimised(post.heroImageUrl, 1600)} alt="" width={1600} height={800} />
             <div className="blog-hero-cover-text">
               <span className="blog-meta">{meta}</span>
               <h1>{post.title}</h1>

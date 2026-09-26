@@ -11,6 +11,7 @@ import {
   TET_STATUSES,
 } from '@skoolos/types';
 import { EmailHint } from '@/components/use-email-check';
+import { optimised } from '@/lib/img';
 
 /**
  * THE TEACHER RECORD, AS A FORM.
@@ -229,7 +230,7 @@ export default function TeacherForm({ title, initial = {}, photoUrl, onSave, isS
         {/* Photo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           {previewUrl ? (
-            <img src={previewUrl} alt="Teacher photo" style={{ height: 56, width: 56, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--sk-line)' }} />
+            <img src={optimised(previewUrl, 112)} alt="Teacher photo" style={{ height: 56, width: 56, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--sk-line)' }} />
           ) : (
             <span className="sk-muted" style={{ fontSize: 12.5 }}>{init.photoAssetId ? 'Photo set — upload to replace.' : 'No photo yet.'}</span>
           )}

@@ -117,9 +117,14 @@ export default function SportsLayout({ children }: { children: ReactNode }) {
       </header>
 
       <main className="sk-anim min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 pb-6 pt-4 md:px-6 md:py-6">
-        <SportsShell base="/sports" subtitle="Tournaments, the Book of Records and the house table.">
-          {children}
-        </SportsShell>
+        {/* The same 68rem column every other standalone desk uses. Without it
+            a counter form ran the full width of a 2000px monitor, while the
+            teacher and staff portals beside it sat in a centred column. */}
+        <div className="mx-auto w-full max-w-[68rem]">
+          <SportsShell base="/sports" subtitle="Tournaments, the Book of Records and the house table.">
+            {children}
+          </SportsShell>
+        </div>
       </main>
     </div>
   );
