@@ -288,7 +288,13 @@
    fit, instead of forcing the page wider than the screen. The min() matters:
    a bare minmax(min(100%, 200px), 1fr) still overflows a container narrower than 200px. */
 .sk-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 11px; }
-@media (min-width: 900px) { .sk-kpis { grid-template-columns: repeat(4, 1fr); } }
+/* Four columns were hard-coded here, so a hub with THREE figures drew three
+   tiles and left the fourth column empty — the row stopped a quarter short of
+   the card beneath it, which is what read as "not aligned" on the Complaint
+   Box. `auto-fit` collapses the tracks nobody fills, so two, three or four
+   figures each fill the row edge to edge; the 220px floor keeps a fifth from
+   squeezing in beside them. */
+@media (min-width: 900px) { .sk-kpis { grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); } }
 .sk-kpi {
   background: var(--sk-card); border: 1px solid var(--sk-line); border-radius: var(--sk-r);
   padding: 14px 15px; box-shadow: var(--sk-shadow); display: flex; flex-direction: column; gap: 3px;
@@ -572,7 +578,14 @@ a.sk-kpi:hover { transform: translateY(-2px); border-color: var(--sk-brand); }
 @media (prefers-color-scheme: dark) { .sk-nav[data-active="true"] { color: #211d45; } }
 .sk-nav .ic { width: 18px; height: 18px; flex: none; }
 .sk-side-foot { margin-top: auto; }
-.sk-content { flex: 1; min-width: 0; padding: 26px 30px 56px; max-width: 1120px; overflow-x: hidden; }
+/* ONE CONTENT COLUMN, shared with `.sk-main` above.
+   The teacher portal capped itself at 1120px and then left every spare pixel
+   on ONE side: measured at a 1600px window, 236px of dead space on the right
+   and none on the left, because a `flex: 1` item with a max-width grows to the
+   cap and stops rather than centring. Staff and the family portal were already
+   centred at 68rem, so the two shells disagreed about both the width and where
+   the slack goes. They are the same column now. */
+.sk-content { flex: 1; min-width: 0; padding: 22px 20px 56px; max-width: 68rem; margin-inline: auto; overflow-x: hidden; }
 @media (max-width: 640px) {
   .sk-side { display: none; }
   .sk-content { padding: 20px; }
@@ -4577,7 +4590,19 @@ button.sk-hubdoor:hover { transform: translateY(-2px); border-color: var(--sk-br
    line; an h1 followed by a p used to share it too, which put the subtitle
    beside the title on 36 pages and under it on the rest. The p takes the
    whole next line; pages that wrap h1+p in a <div> were already right. */
-.sk-pagehead > h1 + p { flex: 1 0 100%; margin-top: -6px; max-width: 64ch; }
+.sk-pagehead > h1 + p {
+  flex: 1 0 100%;
+  margin-top: -6px;
+  /* The line length is capped with PADDING, not max-width, and that is the
+     whole point of this rule. Flex decides where a line breaks using the
+     flex-basis CLAMPED BY max-width, so `max-width: 64ch` quietly shrank this
+     item's hypothetical size to 544px — small enough to sit beside a short
+     title — and the `flex-basis: 100%` that was meant to force the break never
+     got to. Measured on the live teacher portal: the box was 544px and shared
+     the title's line; with the cap moved to padding it is 1060px, breaks onto
+     its own line, and the text still stops at 64ch. */
+  padding-right: max(0px, calc(100% - 64ch));
+}
 
 /* ── Library home: the counter's three doors as buttons ── */
 .sk-libactions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

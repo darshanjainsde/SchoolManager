@@ -70,6 +70,53 @@ function audit(doc,win,w){
         R.push(`${panel} | REVEALED BELOW THE FOLD: top ${Math.round(r.top)} > viewport ${win.innerHeight} | ${e.tagName.toLowerCase()}.${(e.className||'').toString().split(' ')[0]} | use an Overlay, or open it beside the control`);
     }
   }
+  // ── The page head: the subtitle belongs UNDER the title ──
+  // `.sk-pagehead` is a wrapping flex row so a title and an action can share a
+  // line. An h1 followed by a p shared it too, on 25+ pages, because flex picks
+  // its line breaks from the flex-basis CLAMPED BY max-width — so a readability
+  // cap of 64ch silently shrank the subtitle to 544px, small enough to sit
+  // beside a short title, and the `flex-basis: 100%` never got to break.
+  for(const head of doc.querySelectorAll('.sk-pagehead')){
+    const h1=head.querySelector(':scope > h1');
+    const p=h1&&h1.nextElementSibling&&h1.nextElementSibling.tagName==='P'?h1.nextElementSibling:null;
+    if(!h1||!p) continue;
+    const a=h1.getBoundingClientRect(),b=p.getBoundingClientRect();
+    if(a.height===0||b.height===0) continue;
+    if(Math.abs(a.top-b.top)<16){
+      const panel=head.closest('.audit-panel')?.dataset.panel||'?';
+      R.push(`${panel} | SUBTITLE BESIDE THE TITLE | .sk-pagehead > h1 + p | cap the line with padding-right, never max-width — max-width stops the flex line from breaking`);
+    }
+  }
+  // ── A row of figures fills its row, whatever the count ──
+  // Measured on the LAST TILE, never the grid container: the container is full
+  // width either way, and the empty track sits INSIDE it. Checking the
+  // container's right edge cannot see this bug at all — it was written that
+  // way first and reported CLEAN against a row that stopped 265px short.
+  for(const kpis of doc.querySelectorAll('.sk-kpis')){
+    const card=kpis.parentElement?.querySelector('.sk-hublist, .sk-card');
+    const tiles=[...kpis.children].filter(t=>t.getBoundingClientRect().width>0);
+    if(!card||tiles.length<2) continue;
+    const cardR=card.getBoundingClientRect().right;
+    const lastR=Math.max(...tiles.map(t=>t.getBoundingClientRect().right));
+    const short=Math.round(cardR-lastR);
+    if(short>4&&Math.abs(kpis.getBoundingClientRect().right-cardR)<4){
+      const panel=kpis.closest('.audit-panel')?.dataset.panel||'?';
+      R.push(`${panel} | FIGURE ROW STOPS ${short}px SHORT of the card below it | ${tiles.length} tiles in a fixed-column grid | use auto-fit so the tracks nobody fills collapse`);
+    }
+  }
+  // ── The content column is centred, not pinned to one side ──
+  // A `flex: 1` item with a max-width grows to the cap and stops, leaving every
+  // spare pixel on one side: 236px of dead space down the right of the teacher
+  // portal at 1600px, and none on the left.
+  for(const main of doc.querySelectorAll('main.sk-content, main.sk-main')){
+    const r=main.getBoundingClientRect();
+    if(r.width===0) continue;
+    const left=Math.round(r.left),right=Math.round(win.innerWidth-r.right);
+    if(Math.abs(left-right)>4&&right>24){
+      const panel=main.closest('.audit-panel')?.dataset.panel||'?';
+      R.push(`${panel} | COLUMN OFF-CENTRE: ${left}px left, ${right}px right | ${main.className} | add margin-inline: auto`);
+    }
+  }
   // Ragged columns, per list.
   for(const list of doc.querySelectorAll('.sk-rowlist')){
     const rows=[...list.querySelectorAll(':scope > .sk-rowline')];

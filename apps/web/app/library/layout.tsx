@@ -138,9 +138,14 @@ export default function LibraryLayout({ children }: { children: ReactNode }) {
       </header>
 
       <main className="sk-anim min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 pb-6 pt-4 md:px-6 md:py-6">
-        <LibraryShell base="/library" subtitle="Circulation, the reading hall and fines.">
-          {children}
-        </LibraryShell>
+        {/* The same 68rem column every other standalone desk uses. Without it
+            a counter form ran the full width of a 2000px monitor, while the
+            teacher and staff portals beside it sat in a centred column. */}
+        <div className="mx-auto w-full max-w-[68rem]">
+          <LibraryShell base="/library" subtitle="Circulation, the reading hall and fines.">
+            {children}
+          </LibraryShell>
+        </div>
       </main>
     </div>
   );
