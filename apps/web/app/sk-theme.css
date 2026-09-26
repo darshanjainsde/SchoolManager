@@ -2554,7 +2554,7 @@ html[data-theme='light'] .sk-eh-tick[aria-pressed="true"] > .box::after { border
   background: var(--sk-card); border-radius: 11px; padding: 8px 11px; }
 .sk-scan:focus-within { border-color: var(--sk-brand); }
 .sk-scan > svg { flex: none; color: var(--sk-ink-3); }
-.sk-scan > input { border: 0; background: none; color: var(--sk-ink); font: inherit; font-size: 13px;
+.sk-scan > input { min-height: 24px; border: 0; background: none; color: var(--sk-ink); font: inherit; font-size: 13px;
   width: 100%; outline: none; font-family: var(--sk-mono); }
 .sk-scan > input::placeholder { font-family: inherit; color: var(--sk-ink-3); }
 
@@ -4063,7 +4063,14 @@ html[data-theme='light'] .skosx { color-scheme: light; }
 .ph-hint { font-size: 11.5px; color: var(--sk-ink-3); }
 
 /* ── My profile (admin): four cards on a two-column grid that stacks on a phone ── */
-.mp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 14px; align-items: start; }
+/* Two COLUMNS, each a stack — not one auto-fit grid. Four cards of different
+   heights in a 3-up grid left the fourth alone under the first with a hole
+   beside it; two stacks fill top to bottom with no holes at any width. */
+.mp-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); gap: 16px; align-items: start; }
+.mp-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.mp-form .ph-row { display: flex; gap: 8px; align-items: center; }
+.mp-lede { margin: 0 0 4px; font-size: 13.5px; color: var(--sk-ink-2); }
+.mp-form .ph-row .sk-input { flex: 1 1 auto; min-width: 0; }
 .mp-form { display: flex; flex-direction: column; gap: 6px; }
 .mp-form .sk-input { width: 100%; box-sizing: border-box; }
 .mp-who { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
@@ -4074,6 +4081,15 @@ html[data-theme='light'] .skosx { color-scheme: light; }
 .mp-pref { display: flex; align-items: flex-start; gap: 10px; padding: 9px 0; border-top: 1px solid var(--sk-line); cursor: pointer; }
 .mp-prefs li:first-child .mp-pref { border-top: 0; }
 .mp-pref input { margin-top: 3px; width: 18px; height: 18px; accent-color: var(--sk-brand); flex: none; }
+/* A finger, not a mouse: a native checkbox ignores padding, so on a touch
+   screen the BOX grows to the 24px floor and a negative margin pulls the row
+   back to where it was. (ui-mistake-ledger: padding-ignored-on-a-native-form-control.) */
+/* Both queries: a real phone reports a coarse pointer, and the audit harness
+   measures at 360-414 with a mouse — a rule only a finger can trigger is a
+   rule nothing can check. */
+@media (pointer: coarse), (max-width: 560px) {
+  .mp-pref input { width: 24px; height: 24px; margin-top: 0; margin-left: -3px; margin-right: -3px; }
+}
 .mp-pref span { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .mp-pref b { font-size: 13.5px; font-weight: 600; }
 .mp-pref small { font-size: 12px; color: var(--sk-ink-3); }
@@ -4544,3 +4560,24 @@ button.sk-hubdoor:hover { transform: translateY(-2px); border-color: var(--sk-br
 /* The "▶ How it works" chip at the end of the Pay tab strip. */
 .sk-tab.sk-tab-guide { margin-left: auto; color: var(--sk-brand-2); font-weight: 650; }
 .sk-tab.sk-tab-guide:hover { color: var(--sk-brand); }
+
+
+/* ── ScrollBox (components/ui/kit.tsx): a long list scrolls inside its box ── */
+.sk-scrollbox {
+  max-height: min(var(--sk-scroll-max, 420px), calc(100vh - 220px));
+  overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; scrollbar-width: thin;
+  border-top: 1px solid var(--sk-line); border-bottom: 1px solid var(--sk-line);
+  padding-right: 6px; margin-right: -6px; min-width: 0;
+}
+.sk-scrollbox:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: 2px; border-radius: 6px; }
+.sk-scrollbox > .sk-row:first-child { border-top: 0; }
+
+/* ── Page head: the subtitle sits UNDER the title on every page ──
+   .sk-pagehead is a wrapping flex row so a title and an action can share a
+   line; an h1 followed by a p used to share it too, which put the subtitle
+   beside the title on 36 pages and under it on the rest. The p takes the
+   whole next line; pages that wrap h1+p in a <div> were already right. */
+.sk-pagehead > h1 + p { flex: 1 0 100%; margin-top: -6px; max-width: 64ch; }
+
+/* ── Library home: the counter's three doors as buttons ── */
+.sk-libactions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

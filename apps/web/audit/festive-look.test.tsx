@@ -9,10 +9,12 @@ import { describe, it, expect, vi } from 'vitest';
 import { writeFileSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-vi.mock('next/font/google', () => {
-  const face = (name: string) => () => ({ className: `f-${name}`, variable: `--f-${name}`, style: { fontFamily: name } });
-  return { Inter: face('inter'), Fraunces: face('fraunces'), Poppins: face('poppins'), Nunito: face('nunito'), Playfair_Display: face('playfair'), Space_Grotesk: face('grotesk'), Montserrat: face('montserrat'), Lora: face('lora') };
-});
+// The faces are self-hosted now (lib/fonts.ts → next/font/local), but the
+// loader is still a build-time-only API: outside `next build` it does not
+// exist, so the module that imports it is stubbed here.
+vi.mock('next/font/local', () => ({
+  default: ({ variable }: { variable: string }) => ({ className: variable.replace('--f-', 'f-'), variable, style: { fontFamily: variable } }),
+}));
 import PublicSite from '@/components/public/PublicSite';
 import { siteData } from './public-site-render.test';
 

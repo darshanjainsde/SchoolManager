@@ -24,12 +24,15 @@ import PressOrdersPage from '@/app/app/press/orders/page';
 import OnboardingPage from '@/app/app/onboarding/page';
 import HomeTab from '@/app/app/pay/home-tab';
 import { PayShell } from '@/app/app/pay/shell';
+import AdminProfilePage from '@/app/app/profile/page';
+import LibraryDashboardTab from '@/app/app/library/dashboard-tab';
 
 vi.mock('@/lib/use-api', () => ({ useApi: vi.fn() }));
 vi.mock('@/components/use-host', () => ({ useHost: vi.fn() }));
 vi.mock('@/lib/use-hydrated', () => ({ useHydrated: () => true }));
 const params = new URLSearchParams();
-vi.mock('next/navigation', () => ({ usePathname: () => '/app/pay', useRouter: () => ({ replace: vi.fn() }), useSearchParams: () => params }));
+vi.mock('next/navigation', () => ({ usePathname: () => '/app/pay', useRouter: () => ({ replace: vi.fn(), push: vi.fn() }), useSearchParams: () => params }));
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 const NAMES = ['Saanvi Krishnamurthy', 'Rajeshwari Balasubramanian', 'Mohammed Irfan Qureshi', 'Lakshmi Venkataraman', 'Aadhya Venkataraghavan', 'Priya Nair', 'Kabir Singh Shekhawat', 'Aarav Mehta'];
 
@@ -101,6 +104,15 @@ const PAY_READY = {
 };
 const PAY_FRESH = { ...PAY_READY, setup: { countryCode: 'IN', gradeCount: 0, rosterSize: 450, onPay: 0, notOnPay: 450, ready: false }, run: null, exceptions: [], recent: [], previousTotalMinor: null };
 
+const PROFILE = {
+  userId: 'u1', role: 'SCHOOL_ADMIN', email: 'srikant.misra@raffles.sckools.com', name: 'Srikant Misra',
+  notifyPrefs: { leave: true, register: true, fees: true, enquiry: false, summary: true },
+};
+const LIBRARY = {
+  counts: { totalCopies: 12_480, totalTitles: 4_212, lostCopies: 37, outNow: 1_318, dueSoon: 214, finesCollectedRupees: 24_500, finesDueRupees: 8_640 },
+  outNow: [], dueSoon: [], today: '2026-09-26',
+};
+
 let overview: unknown = PAY_READY;
 beforeEach(() => {
   vi.mocked(useHost).mockReturnValue('raffles.sckools.com');
@@ -115,6 +127,9 @@ beforeEach(() => {
       if (p === '/manage/onboarding/status') return ONBOARDING_STATUS;
       if (p === '/payroll/settings') return SETTINGS;
       if (p === '/payroll/overview') return overview;
+      if (p === '/me/profile') return PROFILE;
+      if (p === '/me/phone') return { phone: null, verified: false };
+      if (p === '/library/dashboard') return LIBRARY;
       return [];
     }),
     post: vi.fn(), put: vi.fn(), patch: vi.fn(), del: vi.fn(),
@@ -154,6 +169,8 @@ it('writes the real hub screens for a browser to measure', async () => {
     ['Reports & Documents', <ReportsDocumentsPage />],
     ['Print Store', <PressOrdersPage />],
     ['Onboarding', <OnboardingPage />],
+    ['My profile', <AdminProfilePage />],
+    ['Library home', <LibraryDashboardTab base="/app/library" />],
     ['Pay home · month', <PayShell base="/app/pay" subtitle="What the school pays, and what it files."><HomeTab base="/app/pay" /></PayShell>],
     ['Pay home · guide open', <PayShell base="/app/pay" subtitle="What the school pays, and what it files."><HomeTab base="/app/pay" /></PayShell>,
       (h) => [...h.querySelectorAll('button')].find((b) => /How Pay works/.test(b.textContent ?? ''))?.click()],

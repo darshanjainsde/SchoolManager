@@ -1,12 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
 
-// site-theme reaches @/lib/fonts, which is next/font/google — a build-time-only
+// site-theme reaches @/lib/fonts, which is next/font/local — a build-time-only
 // API whose loaders are not functions outside `next build`. Nothing here needs
 // a real font file, only each family resolving to something.
-vi.mock('next/font/google', () => {
-  const face = (name: string) => () => ({ className: `f-${name}`, variable: `--f-${name}`, style: { fontFamily: name } });
-  return { Inter: face('inter'), Fraunces: face('fraunces'), Poppins: face('poppins'), Nunito: face('nunito'), Playfair_Display: face('playfair'), Space_Grotesk: face('grotesk'), Montserrat: face('montserrat'), Lora: face('lora') };
-});
+// The faces are self-hosted now (lib/fonts.ts → next/font/local), but the
+// loader is still a build-time-only API: outside `next build` it does not
+// exist, so the module that imports it is stubbed here.
+vi.mock('next/font/local', () => ({
+  default: ({ variable }: { variable: string }) => ({ className: variable.replace('--f-', 'f-'), variable, style: { fontFamily: variable } }),
+}));
 import type { CSSProperties } from 'react';
 import type { PublicSiteData } from '@/lib/public-api';
 import { themeRootProps } from './site-theme';

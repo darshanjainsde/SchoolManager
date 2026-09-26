@@ -1,4 +1,5 @@
 'use client';
+import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -40,7 +41,9 @@ export default function CounterTab() {
   const api = useApi({ audience: 'school', hostHeader: host });
   const qc = useQueryClient();
 
-  const [mode, setMode] = useState<Mode>('out');
+  // The home's doors land here with the mode already chosen (?mode=back).
+  const params = useSearchParams();
+  const [mode, setMode] = useState<Mode>(params?.get('mode') === 'back' ? 'back' : 'out');
 
   // ── Give out state ──
   const [memberQ, setMemberQ] = useState('');

@@ -1,97 +1,116 @@
-import {
-  Inter,
-  Fraunces,
-  Poppins,
-  Nunito,
-  Playfair_Display,
-  Space_Grotesk,
-  Montserrat,
-  Lora,
-} from 'next/font/google';
+import localFont from 'next/font/local';
 
 /**
- * The display families a school can pick for its public site.
+ * The display families a school can pick for its public site — SELF-HOSTED.
  *
- * These used to be fetched at runtime from fonts.googleapis.com via a <link>
- * rendered inside PublicSite — a render-blocking request to a third-party
- * origin on every school page, after the HTML had already started painting.
- * next/font self-hosts them, emits the preload links in <head>, and inlines
- * the @font-face rules, so there is no extra connection and no FOUT window.
+ * WHY THE FILES ARE IN THE REPO. These were `next/font/google`, which fetches
+ * every family's CSS and woff2 from fonts.googleapis.com **at build time**.
+ * That makes Google's availability a dependency of every deploy: when one of
+ * those requests hiccups, the loader's regex finds nothing, and the whole
+ * build dies with `An error occurred in next/font — Cannot read properties of
+ * null (reading '1')`. It happened twice in one afternoon: once locally, and
+ * once on the staging deploy of PR #122. Nothing in the repo had changed.
+ *
+ * `next/font/local` reads the same woff2 files off disk, emits the same
+ * @font-face rules and the same CSS variables, and preloads nothing it is not
+ * told to — so the output is unchanged and the network is out of the build.
+ * `assets/fonts/*.woff2` are the LATIN subsets Google itself serves (see
+ * scripts/fetch-fonts.mjs for the exact fetch), 25 files, ~836 KB in the repo
+ * and nothing extra on the wire.
  *
  * The choice is per-tenant data, not known at build time, so every family's
  * @font-face rule ships on every page. Only Inter preloads, because it is the
  * one family EVERY page uses — the consoles, the login screens and the
  * fallback stack. Every display family sets `preload: false`, so its
  * @font-face sits inert in the CSS and the browser downloads it only when a
- * school actually selects it.
- *
- * Preloading all four originals cost 152 KB of woff2 on every response, on
- * every host, whether or not the school had chosen that family — measured as
- * seven `Link: rel=preload` files, three of them 36-48 KB. Inter alone is
- * ~31 KB. `display: 'swap'` means a school on Poppins still paints its text
- * immediately in the fallback and swaps when the file lands, so nothing is
- * hidden waiting on a font. All are subset to latin and limited to the
- * weights the theme uses.
+ * school actually selects it. `display: 'swap'` means a school on Poppins
+ * still paints its text immediately in the fallback and swaps when the file
+ * lands, so nothing is hidden waiting on a font.
  */
-const inter = Inter({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
+
+const inter = localFont({
+  src: [
+    { path: '../assets/fonts/inter-400.woff2', weight: '400', style: 'normal' },
+    { path: '../assets/fonts/inter-500.woff2', weight: '500', style: 'normal' },
+    { path: '../assets/fonts/inter-600.woff2', weight: '600', style: 'normal' },
+    { path: '../assets/fonts/inter-700.woff2', weight: '700', style: 'normal' },
+  ],
   variable: '--f-inter',
   display: 'swap',
 });
 
-const fraunces = Fraunces({
-  subsets: ['latin'],
-  weight: ['400', '700'],
+const fraunces = localFont({
+  src: [
+    { path: '../assets/fonts/fraunces-400.woff2', weight: '400', style: 'normal' },
+    { path: '../assets/fonts/fraunces-700.woff2', weight: '700', style: 'normal' },
+  ],
   variable: '--f-fraunces',
   display: 'swap',
   preload: false,
 });
 
-const poppins = Poppins({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
+const poppins = localFont({
+  src: [
+    { path: '../assets/fonts/poppins-400.woff2', weight: '400', style: 'normal' },
+    { path: '../assets/fonts/poppins-500.woff2', weight: '500', style: 'normal' },
+    { path: '../assets/fonts/poppins-600.woff2', weight: '600', style: 'normal' },
+    { path: '../assets/fonts/poppins-700.woff2', weight: '700', style: 'normal' },
+  ],
   variable: '--f-poppins',
   display: 'swap',
   preload: false,
 });
 
-const nunito = Nunito({
-  subsets: ['latin'],
-  weight: ['400', '600', '700', '800'],
+const nunito = localFont({
+  src: [
+    { path: '../assets/fonts/nunito-400.woff2', weight: '400', style: 'normal' },
+    { path: '../assets/fonts/nunito-600.woff2', weight: '600', style: 'normal' },
+    { path: '../assets/fonts/nunito-700.woff2', weight: '700', style: 'normal' },
+    { path: '../assets/fonts/nunito-800.woff2', weight: '800', style: 'normal' },
+  ],
   variable: '--f-nunito',
   display: 'swap',
   preload: false,
 });
 
-// ── Added families (loaded on demand — preload:false) ──
-const playfair = Playfair_Display({
-  subsets: ['latin'],
-  weight: ['400', '700'],
+const playfair = localFont({
+  src: [
+    { path: '../assets/fonts/playfair-400.woff2', weight: '400', style: 'normal' },
+    { path: '../assets/fonts/playfair-700.woff2', weight: '700', style: 'normal' },
+  ],
   variable: '--f-playfair',
   display: 'swap',
   preload: false,
 });
 
-const spaceGrotesk = Space_Grotesk({
-  subsets: ['latin'],
-  weight: ['400', '500', '700'],
+const spaceGrotesk = localFont({
+  src: [
+    { path: '../assets/fonts/space-grotesk-400.woff2', weight: '400', style: 'normal' },
+    { path: '../assets/fonts/space-grotesk-500.woff2', weight: '500', style: 'normal' },
+    { path: '../assets/fonts/space-grotesk-700.woff2', weight: '700', style: 'normal' },
+  ],
   variable: '--f-space-grotesk',
   display: 'swap',
   preload: false,
 });
 
-const montserrat = Montserrat({
-  subsets: ['latin'],
-  weight: ['400', '600', '700'],
+const montserrat = localFont({
+  src: [
+    { path: '../assets/fonts/montserrat-400.woff2', weight: '400', style: 'normal' },
+    { path: '../assets/fonts/montserrat-600.woff2', weight: '600', style: 'normal' },
+    { path: '../assets/fonts/montserrat-700.woff2', weight: '700', style: 'normal' },
+  ],
   variable: '--f-montserrat',
   display: 'swap',
   preload: false,
 });
 
-const lora = Lora({
-  subsets: ['latin'],
-  weight: ['400', '600', '700'],
+const lora = localFont({
+  src: [
+    { path: '../assets/fonts/lora-400.woff2', weight: '400', style: 'normal' },
+    { path: '../assets/fonts/lora-600.woff2', weight: '600', style: 'normal' },
+    { path: '../assets/fonts/lora-700.woff2', weight: '700', style: 'normal' },
+  ],
   variable: '--f-lora',
   display: 'swap',
   preload: false,
