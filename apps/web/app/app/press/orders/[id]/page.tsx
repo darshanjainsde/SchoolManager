@@ -103,7 +103,7 @@ export default function PressOrderPage() {
   });
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-5">
+    <div className="flex flex-col gap-5">
       <Link href="/app/press/orders" className="sk-seelink" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
         <ArrowLeft size={13} aria-hidden="true" /> Print Store
       </Link>

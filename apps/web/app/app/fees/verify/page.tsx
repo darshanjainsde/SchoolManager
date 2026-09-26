@@ -98,7 +98,7 @@ function Verify() {
   const mismatches = rows.data?.filter((r) => r.amountMatchesBill === false).length ?? 0;
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-4">
+    <div className="flex flex-col gap-4">
       <BackToFees />
       <header className="sk-pagehead flex items-end justify-between">
         <div>

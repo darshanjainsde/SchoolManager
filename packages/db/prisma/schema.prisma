@@ -450,6 +450,7 @@ model School {
   sportsSettings         SportsSettings?
   whatsAppSettings       WhatsAppSettings?
   whatsAppDeliveries     WhatsAppDelivery[]
+  onboardingImports OnboardingImport[]
   emailDeliveries        EmailDelivery[]
   emailSuppressions      EmailSuppression[]
   whatsAppInbounds       WhatsAppInbound[]
@@ -5112,4 +5113,24 @@ model TaxDeclaration {
   @@index([schoolId, taxYear])
   @@index([teacherId])
   @@index([staffId])
+}
+
+/// One row per bulk import the Onboarding tab ran — what file, how many rows,
+/// what happened. The tab's "Imports" list and its "Last import" tile read this.
+model OnboardingImport {
+  id             String   @id @default(uuid()) @db.Uuid
+  schoolId       String   @db.Uuid
+  /// teachers | students | classes
+  kind           String
+  fileName       String
+  /// Rows in the file after the example row was dropped.
+  rows           Int
+  created        Int
+  skipped        Int      @default(0)
+  failed         Int      @default(0)
+  academicYearId String?  @db.Uuid
+  createdAt      DateTime @default(now())
+  school         School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, createdAt])
 }

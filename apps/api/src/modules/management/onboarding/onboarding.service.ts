@@ -40,6 +40,14 @@ export interface ImportPreview {
   skipped?: number;
 }
 export interface ImportResult { created: number; skipped: number; failed: RowIssue[] }
+export interface OnboardingImportRow {
+  id: string; kind: SheetKind; fileName: string; rows: number; created: number; skipped: number; failed: number; createdAt: string;
+}
+export interface OnboardingStatus {
+  year: { id: string; name: string } | null;
+  grades: number; sections: number; teachers: number; students: number;
+  imports: OnboardingImportRow[];
+}
 
 const MAX_ROWS = 5000;
 
@@ -111,7 +119,26 @@ export class OnboardingService {
 
   async export(schoolId: string, kind: SheetKind): Promise<Buffer> {
     const wb = new Workbook();
-    const sheet = wb.addWorksheet('Data', { views: [{ state: 'frozen', ySplit: 1 }] });
+    await this.fillExportSheet(wb, 'Data', schoolId, kind);
+    return Buffer.from(await wb.xlsx.writeBuffer());
+  }
+
+  /**
+   * The whole school in one workbook — classes, teachers, students on three
+   * sheets, each in its template's layout so any one of them re-imports.
+   * The Onboarding header's "Export everything", and the file a school keeps
+   * as its own backup.
+   */
+  async exportAll(schoolId: string): Promise<Buffer> {
+    const wb = new Workbook();
+    await this.fillExportSheet(wb, 'Classes', schoolId, 'classes');
+    await this.fillExportSheet(wb, 'Teachers', schoolId, 'teachers');
+    await this.fillExportSheet(wb, 'Students', schoolId, 'students');
+    return Buffer.from(await wb.xlsx.writeBuffer());
+  }
+
+  private async fillExportSheet(wb: Workbook, name: string, schoolId: string, kind: SheetKind): Promise<void> {
+    const sheet = wb.addWorksheet(name, { views: [{ state: 'frozen', ySplit: 1 }] });
     const cols = COLUMNS[kind];
     sheet.columns = cols.map((c) => ({ header: c.header, key: c.key, width: c.width ?? 16 }));
     sheet.getRow(1).font = { bold: true };
@@ -132,7 +159,34 @@ export class OnboardingService {
         return v ?? '';
       }));
     }
-    return Buffer.from(await wb.xlsx.writeBuffer());
+  }
+
+  // ── status: what the school has, and what it imported ────────────────────
+
+  /**
+   * The Onboarding home's numbers and its import history. Counts are for the
+   * CURRENT session where a thing belongs to one (classes, students); the
+   * teacher roll is school-wide.
+   */
+  async status(schoolId: string): Promise<OnboardingStatus> {
+    return withTenant(schoolId, async (tx) => {
+      const year = await tx.academicYear.findFirst({ where: { schoolId, isCurrent: true }, select: { id: true, name: true } });
+      const [grades, sections, teachers, students, imports] = await Promise.all([
+        tx.grade.count({ where: { schoolId } }),
+        year ? tx.classSection.count({ where: { schoolId, academicYearId: year.id } }) : Promise.resolve(0),
+        tx.teacher.count({ where: { schoolId } }),
+        year ? tx.student.count({ where: { schoolId, classSection: { academicYearId: year.id } } }) : Promise.resolve(0),
+        tx.onboardingImport.findMany({ where: { schoolId }, orderBy: { createdAt: 'desc' }, take: 10 }),
+      ]);
+      return {
+        year,
+        grades, sections, teachers, students,
+        imports: imports.map((i) => ({
+          id: i.id, kind: i.kind as SheetKind, fileName: i.fileName, rows: i.rows,
+          created: i.created, skipped: i.skipped, failed: i.failed, createdAt: i.createdAt.toISOString(),
+        })),
+      };
+    });
   }
 
   // ── import: parse → check → (confirm) create ─────────────────────────────
@@ -244,7 +298,7 @@ export class OnboardingService {
   }
 
   /** Confirm: only after a clean preview. Re-checks, then creates through the console's own services. */
-  async import(schoolId: string, kind: SheetKind, file: Buffer, opts: { academicYearId?: string }): Promise<ImportResult> {
+  async import(schoolId: string, kind: SheetKind, file: Buffer, opts: { academicYearId?: string; fileName?: string }): Promise<ImportResult> {
     const pre = await this.preview(schoolId, kind, file, opts);
     if (pre.issues.length) throw new BadRequestException(`${pre.issues.length} problem(s) remain — fix the file and upload it again. Nothing was imported.`);
     const failed: RowIssue[] = [];
@@ -279,7 +333,23 @@ export class OnboardingService {
         }
       });
     }
+    // The log row is written AFTER the rows, outside their transactions: a
+    // failed log write must never undo an import, and a school reads this
+    // list to answer "did that file go in?" — so it records what happened,
+    // including the rows that were refused.
+    await this.log(schoolId, {
+      kind, fileName: (opts.fileName ?? `${kind}.xlsx`).slice(0, 200),
+      rows: pre.rows.length, created, skipped, failed: failed.length,
+      academicYearId: opts.academicYearId || null,
+    });
     return { created, skipped, failed };
+  }
+
+  /** Writes the import log row; never throws — a lost log line must not read as a failed import. */
+  private async log(schoolId: string, data: { kind: SheetKind; fileName: string; rows: number; created: number; skipped: number; failed: number; academicYearId: string | null }) {
+    try {
+      await withTenant(schoolId, (tx) => tx.onboardingImport.create({ data: { schoolId, ...data } }));
+    } catch { /* logged nowhere on purpose: the import itself succeeded */ }
   }
 
   // ── helpers ──────────────────────────────────────────────────────────────

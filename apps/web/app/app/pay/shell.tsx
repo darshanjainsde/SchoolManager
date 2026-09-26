@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
+import { Play } from 'lucide-react';
 import { PAY_SECTIONS, isSectionActive, sectionHref } from './nav-items';
 
 export function PayShell({ base, subtitle, children }: { base: string; subtitle: string; children: ReactNode }) {
@@ -28,6 +29,11 @@ export function PayShell({ base, subtitle, children }: { base: string; subtitle:
             </Link>
           );
         })}
+        {/* The guide, reachable from EVERY tab — it lived at the bottom of one
+            screen and nobody knew it was there. Opens on the home, inline. */}
+        <Link href={`${base}?guide=1`} className="sk-tab sk-tab-guide" data-active={false}>
+          <Play size={12} fill="currentColor" aria-hidden="true" /> How it works
+        </Link>
       </nav>
       {children}
     </div>

@@ -8,6 +8,8 @@ const txMock = {
   teacher: { findMany: jest.fn() },
   student: { findMany: jest.fn() },
   grade: { findMany: jest.fn(), count: jest.fn(), create: jest.fn() },
+  onboardingImport: { create: jest.fn(), findMany: jest.fn() },
+  teacherCount: undefined,
 };
 jest.mock('@skoolos/db', () => ({
   ...jest.requireActual('@skoolos/db'),
@@ -153,8 +155,10 @@ describe('the import', () => {
   });
   it('creates teachers through the console’s own service, with the record typed the way the DTO expects', async () => {
     const file = await xlsx(H(TEACHER_COLUMNS), [['Rajeshwari', 'Balasubramanian', 'r.b@school.test', '9876543210', '9876543210', 'yes', 'FEMALE', '1988-03-14', '', '', 'PGT', 'Science', 'PERMANENT', '2019-06-01', '', '', '', '', '', '', '11']]);
-    const res = await svc.import(SCHOOL, 'teachers', file, {});
+    const res = await svc.import(SCHOOL, 'teachers', file, { fileName: 'teachers-sept.xlsx' });
     expect(res).toEqual({ created: 1, skipped: 0, failed: [] });
+    // The log row says what went in — and the file it came from.
+    expect(txMock.onboardingImport.create).toHaveBeenCalledWith({ data: expect.objectContaining({ schoolId: SCHOOL, kind: 'teachers', fileName: 'teachers-sept.xlsx', rows: 1, created: 1, failed: 0 }) });
     expect(teachers.create).toHaveBeenCalledWith(SCHOOL, expect.objectContaining({
       firstName: 'Rajeshwari', whatsappOptIn: true, designation: 'PGT', experienceYears: 11, joinedOn: '2019-06-01',
     }));
