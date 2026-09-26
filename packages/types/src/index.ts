@@ -1642,3 +1642,4 @@ export const EVENT_COVER_FOCUS = ['top', 'middle', 'bottom'] as const;
 export type EventCoverFocus = (typeof EVENT_COVER_FOCUS)[number];
 export * from './countries';
 export * from './country-pack';
+export * from './teacher-record';

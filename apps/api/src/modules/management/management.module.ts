@@ -48,6 +48,8 @@ import { PressModule } from '../press';
 import { FeesModule } from '../fees';
 import { BellController } from './bell.controller';
 import { LeaveController, SubstitutionController } from './leave.controller';
+import { OnboardingController } from './onboarding/onboarding.controller';
+import { OnboardingService } from './onboarding/onboarding.service';
 import { LeavePolicyService } from './leave-policy.service';
 import { LeavePolicyController } from './leave-policy.controller';
 import { HolidaysService } from './holidays.service';
@@ -76,8 +78,9 @@ import { SeatingController } from './seating.controller';
 
 @Module({
   imports: [AuthModule, FeaturesModule, TenancyModule, PressModule, FeesModule, AlumniModule, LibraryModule],
-  providers: [LeaveDeskGuard, EmailSettingsService, CatalogService, TeachersService, StaffService, ClassesService, StudentsService, StudentLifecycleService, SessionsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, ExamRemindersService, NotificationOutboxService, CronSecretGuard, LoginInviteService, LeaveService, BellService, ConsoleSearchService, PulseService, StudentReportService, LeavePolicyService, HolidaysService, ClassNotesService, RegisterChangeService, AssignmentsService, MessagesService, NotificationsService, PhotoService, DiaryService, AttendanceBarService, RoomsService, SeatingService],
+  providers: [LeaveDeskGuard, EmailSettingsService, CatalogService, TeachersService, StaffService, ClassesService, StudentsService, StudentLifecycleService, SessionsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, ExamRemindersService, NotificationOutboxService, CronSecretGuard, LoginInviteService, LeaveService, BellService, ConsoleSearchService, PulseService, StudentReportService, LeavePolicyService, HolidaysService, ClassNotesService, RegisterChangeService, AssignmentsService, MessagesService, NotificationsService, PhotoService, DiaryService, AttendanceBarService, RoomsService, SeatingService, OnboardingService],
   controllers: [
+    OnboardingController,
     SessionsController,
     SessionsCronController,
     CatalogController,

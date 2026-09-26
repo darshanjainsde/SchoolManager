@@ -572,7 +572,11 @@ export default function StudentsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [classFilter, setClassFilter] = useState('');
-  const [showPast, setShowPast] = useState(false);
+  // Which session the register shows. '' until the sessions load, then the
+  // current one. A past session is just another option here — the old "show
+  // past sessions" checkbox is gone, and so is the one dropdown that grew by
+  // (sessions × classes) every year.
+  const [yearFilter, setYearFilter] = useState('');
   const [search, setSearch] = useState('');
   // Id of the student added in this session, so their row can be seen landing
   // in the register rather than just being there on the next render.
@@ -618,16 +622,19 @@ export default function StudentsPage() {
   const currentYear = years.find((y) => y.isCurrent) ?? null;
   const openYears = years.filter((y) => y.isCurrent || sessionsQuery.data?.plan?.toYearId === y.id);
   const openYearIds = new Set(openYears.map((y) => y.id));
-  const hasPastYears = years.some((y) => !openYearIds.has(y.id));
-  const classesShown = (classesQuery.data ?? []).filter((c) => showPast || !c.academicYear || openYearIds.has(c.academicYear.id));
+  const pastYears = years.filter((y) => !openYearIds.has(y.id));
+  // The session in force for the list: the picked one, else the current one.
+  const yearShown = yearFilter || currentYear?.id || '';
+  // Only the picked session's classes — never every session's at once.
+  const classesShown = (classesQuery.data ?? []).filter((c) => !c.academicYear || !yearShown || c.academicYear.id === yearShown);
 
   const studentsQuery = useQuery({
-    queryKey: ['mng-students', classFilter, statusTab, showPast ? 'past' : (currentYear?.id ?? 'all')],
+    queryKey: ['mng-students', classFilter, statusTab, yearShown || 'all'],
     queryFn: () => {
       const params = new URLSearchParams({ status: statusTab });
       if (classFilter) params.set('classSectionId', classFilter);
-      // Past sessions stay out of the default list — the register of the year that is running.
-      else if (!showPast && statusTab === 'active' && currentYear) params.set('academicYearId', currentYear.id);
+      // The register of ONE session: the picked one, or the year that is running.
+      else if (yearShown && statusTab === 'active') params.set('academicYearId', yearShown);
       return api.get<Student[]>(`/manage/students?${params.toString()}`);
     },
     staleTime: 30_000,
@@ -1024,33 +1031,49 @@ export default function StudentsPage() {
           placeholder="Search a name, an admission number or a guardian…"
           aria-label="Search students"
         />
+        {/* Two pickers, not one. A single dropdown of "session › class" grows
+            by (sessions × classes) every year — a school on its eighth session
+            with twenty classes would scroll a list of 160. Session first,
+            then that session's classes: each list stays the size of one year. */}
+        {years.length > 0 && (
+          <select
+            id="session-filter"
+            className="sk-input sk-toolbar-pick"
+            value={yearShown}
+            onChange={(e) => {
+              setYearFilter(e.target.value);
+              setClassFilter('');
+            }}
+            aria-label="Session shown"
+          >
+            {openYears.map((y) => (
+              <option key={y.id} value={y.id}>
+                {y.name}{y.isCurrent ? ' · current' : ' · next'}
+              </option>
+            ))}
+            {pastYears.length > 0 && (
+              <optgroup label="Past sessions">
+                {pastYears.map((y) => (
+                  <option key={y.id} value={y.id}>{y.name}</option>
+                ))}
+              </optgroup>
+            )}
+          </select>
+        )}
         <select
           id="class-filter"
-          className="sk-input"
-          style={{ maxWidth: 240, width: 'auto' }}
+          className="sk-input sk-toolbar-pick"
           value={classFilter}
           onChange={(e) => setClassFilter(e.target.value)}
-          aria-label="Filter by class"
+          aria-label="Class"
         >
           <option value="">All classes</option>
-          {Array.from(new Map(classesShown.map((c) => [c.academicYear?.id ?? '', c.academicYear?.name ?? ''])).entries()).map(([yid, yname]) => (
-            <optgroup key={yid || 'none'} label={yname || 'Classes'}>
-              {classesShown
-                .filter((c) => (c.academicYear?.id ?? '') === yid)
-                .map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.grade.name} — {c.name}
-                  </option>
-                ))}
-            </optgroup>
+          {classesShown.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.grade.name} — {c.name}
+            </option>
           ))}
         </select>
-        {hasPastYears && (
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, whiteSpace: 'nowrap' }}>
-            <input type="checkbox" checked={showPast} onChange={(e) => { setShowPast(e.target.checked); setClassFilter(''); }} />
-            Show past sessions
-          </label>
-        )}
         {search.trim() ? (
           <span className="count">
             {students.length} of {allStudents.length}

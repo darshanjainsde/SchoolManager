@@ -27,6 +27,22 @@ export interface ReleaseImpact {
 
 export type { TeacherProfile };
 
+
+/** The onboarding record's DATE columns. They arrive as 'YYYY-MM-DD' strings
+ *  (a form field, a spreadsheet cell) and Prisma wants Date for @db.Date. An
+ *  empty string means "clear it", which the form sends when a date is wiped. */
+const TEACHER_DATE_FIELDS = ['dob', 'joinedOn', 'tetValidTill', 'policeVerifiedOn', 'medicalFitnessOn', 'pocsoTrainedOn'] as const;
+type TeacherDateKey = (typeof TEACHER_DATE_FIELDS)[number];
+export function teacherRecordData<T extends object>(dto: T): Omit<T, TeacherDateKey> & Partial<Record<TeacherDateKey, Date | null>> {
+  const out = { ...dto } as Record<string, unknown>;
+  for (const k of TEACHER_DATE_FIELDS) {
+    if (!(k in out)) continue;
+    const v = out[k];
+    out[k] = typeof v === 'string' && v.trim() ? new Date(v) : v === '' ? null : v;
+  }
+  return out as Omit<T, TeacherDateKey> & Partial<Record<TeacherDateKey, Date | null>>;
+}
+
 @Injectable()
 export class TeachersService {
   constructor(
@@ -114,8 +130,9 @@ export class TeachersService {
     try {
       return await withTenant(schoolId, (tx) =>
         tx.teacher.create({
-          // phoneE164 is the office number normalised — the phone login's index.
-          data: { ...dto, phoneE164: toE164(dto.phone), schoolId },
+          // phoneE164 is the office number normalised — the phone login's index;
+          // whatsappPhoneE164 is the number an inbound WhatsApp action resolves.
+          data: { ...teacherRecordData(dto), phoneE164: toE164(dto.phone), whatsappPhoneE164: toE164(dto.whatsappPhone), schoolId },
         }),
       );
     } catch (e) {
@@ -127,7 +144,14 @@ export class TeachersService {
   async update(schoolId: string, id: string, dto: UpdateTeacherDto) {
     try {
       return await withTenant(schoolId, (tx) =>
-        tx.teacher.update({ where: { id }, data: { ...dto, ...(dto.phone !== undefined ? { phoneE164: toE164(dto.phone) } : {}) } }),
+        tx.teacher.update({
+          where: { id },
+          data: {
+            ...teacherRecordData(dto),
+            ...(dto.phone !== undefined ? { phoneE164: toE164(dto.phone) } : {}),
+            ...(dto.whatsappPhone !== undefined ? { whatsappPhoneE164: toE164(dto.whatsappPhone) } : {}),
+          },
+        }),
       );
     } catch (e) {
       if (isP2025(e)) throw new NotFoundException('Teacher not found');
