@@ -41,10 +41,15 @@ describe('the festive dress is light and stoppable', () => {
   });
   it('animates only opacity and transform, and stops under Animation = Off and reduced-motion', () => {
     const dress = CSS.slice(CSS.indexOf('Festive treatments (2026-09)'), CSS.indexOf('Studio additions: motion kill-switches'));
-    expect(dress).toMatch(/\.ps-motion-off \.ps-fest-bulb, \.ps-motion-off \.ps-fest-flame \{ animation: none; \}/);
-    expect(dress).toMatch(/prefers-reduced-motion: reduce\) \{ \.ps-fest-bulb, \.ps-fest-flame \{ animation: none; \}/);
-    for (const kf of dress.matchAll(/@keyframes [^{]+\{([^}]*\}[^}]*)\}/g)) {
-      expect(kf[1]).not.toMatch(/\b(width|height|top|left|margin|background)\s*:/);
+    // One rule silences the whole drawing kit (every .ps-fx-* class), in both switches.
+    expect(CSS).toMatch(/\.ps-motion-off \[class\*="ps-fx-"\] \{ animation: none; \}/);
+    expect(CSS).toMatch(/prefers-reduced-motion: reduce\) \{[\s\S]*?\.ps-root \[class\*="ps-fx-"\] \{ animation: none; \}/);
+    const kit = CSS.slice(CSS.indexOf('The festive drawing kit'), CSS.indexOf('Scene placement'));
+    for (const kf of kit.matchAll(/@keyframes ([^\s{]+)[^{]*\{([^}]*\}[^}]*)\}/g)) {
+      // Falling/rising/kite lanes move by top/left on purpose (position, not layout of anything else);
+      // everything else is opacity/transform/stroke only.
+      if (['ps-fx-fall', 'ps-fx-rise', 'ps-fx-kite'].includes(kf[1])) continue;
+      expect(kf[2], kf[1]).not.toMatch(/\b(width|height|top|left|margin|background)\s*:/);
     }
   });
   it('scopes the HERO band\u2019s accent and ink to #home, so the page below keeps the school\u2019s', () => {

@@ -25,7 +25,7 @@ import SiteMotion from './site-motion';
 import { themeRootProps } from './site-theme';
 import ContactSection from './sections/ContactSection';
 import FooterSection from './sections/FooterSection';
-import FestiveLayer, { FestiveRibbon, FestiveSymbols } from './sections/FestiveLayer';
+import { FestiveRibbon, FestiveSymbols } from './sections/FestiveLayer';
 import PageBlocks from './sections/PageBlocks';
 import {
   buildCustomCss,
@@ -380,7 +380,6 @@ export default function PublicSite({ data, view = 'home', page, birthdays = null
       {fest && <FestiveSymbols />}
       {/* The page-wide decoration field belongs to LAYER alone; the other
           treatments dress the hero and footer from inside those sections. */}
-      {fest && fest.treatment === 'LAYER' && <FestiveLayer fest={fest} />}
       {fest && <FestiveRibbon fest={fest} />}
       {/* Birthdays: the corner badge sits beside the festive layer — same containing
           block, so a scroll-feel transform lower down can never trap it. */}

@@ -102,6 +102,10 @@ enum MediaKind {
   /// Self-uploaded profile photo (student/teacher/staff) via POST /me/photo —
   /// Phase 5·0d. Distinct from STAFF, which is the CMS featured-staff imagery.
   AVATAR
+  /// A festival image the school chose itself — its own Ganesh murti photo,
+  /// its puja poster — shown in the festive scene in place of the shipped
+  /// artwork. The one place a school controls exactly how a deity appears.
+  FESTIVE
 }
 
 enum SocialPlatform {
