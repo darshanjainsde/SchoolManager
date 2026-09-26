@@ -62,6 +62,32 @@ describe('a row of figures', () => {
   });
 });
 
+describe('a form label', () => {
+  it('owns its line, on a <label> as much as on a <p>', () => {
+    // `.sk-lab` sets font and colour and no display, so it inherited the
+    // element's own: block on the <p> and <div> that use it, inline on the 62
+    // <label>s. Beside a bare inline-block control the pair shared a line and
+    // the label centred against the field — the family's "Raise a concern"
+    // form as the owner photographed it. Scoped to `label` because the 150
+    // <span class="sk-lab"> uses are chips inside flex rows and are correct.
+    expect(css).toMatch(/label\.sk-lab \{[^}]*display:\s*block/);
+  });
+
+  it('leaves the span form of the class alone', () => {
+    expect(css).not.toMatch(/^\.sk-lab \{[^}]*display:/m);
+  });
+});
+
+describe('the family concern form', () => {
+  it('is a column whose controls all fill it', () => {
+    // They were 138px, 166px and 178px inside a 1,047px card — three boxes
+    // sized to their own content, which reads as three unrelated fields.
+    const form = rule('.sk-conraise {');
+    expect(form).toMatch(/max-width:\s*34rem/);
+    expect(css).toMatch(/\.sk-conraise \.sk-input \{[^}]*width:\s*100%/);
+  });
+});
+
 describe('the content column', () => {
   const content = rule('.sk-content {');
 
