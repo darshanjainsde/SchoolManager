@@ -41,6 +41,20 @@ export function fmtDay(iso: string | Date): string {
   });
 }
 
+/**
+ * A rounded percentage below 1 reads as "we have collected nothing" — ₹12,600
+ * against ₹2.23 crore is 0.056%, which rounds to a flat 0 on a school that has
+ * genuinely taken money.
+ */
+export function collectedLabel(collectedMinor: number, billedMinor: number): string {
+  if (billedMinor <= 0) return 'nothing billed yet';
+  const pct = (collectedMinor / billedMinor) * 100;
+  if (pct === 0) return '0% collected';
+  if (pct < 1) return 'under 1% collected';
+  if (pct < 10) return `${pct.toFixed(1)}% collected`;
+  return `${Math.round(pct)}% collected`;
+}
+
 // ── API shapes ───────────────────────────────────────────────────────────────
 
 export type FeeFrequency = 'PER_TERM' | 'ANNUAL' | 'ONE_TIME';
@@ -161,6 +175,18 @@ export interface PaymentRow {
   } | null;
   /** Pre-computed by the API so the clerk never does arithmetic. */
   amountMatchesBill: boolean | null;
+}
+
+/** `GET /manage/fees/payments/recent` — the Fees home's last few claims, any status. */
+export interface RecentPaymentRow {
+  id: string;
+  status: FeePaymentStatus;
+  method: FeePaymentMethod;
+  amountMinor: number;
+  paidOn: string;
+  submittedAt: string;
+  receiptNumber: string | null;
+  student: { id: string; name: string; className: string | null };
 }
 
 export interface CollectionSummary {

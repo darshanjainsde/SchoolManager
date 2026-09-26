@@ -6,14 +6,17 @@ import { Download, FileSpreadsheet, Upload, CheckCircle2, AlertTriangle } from '
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { saveBlob } from '@/lib/save-blob';
+import { fmtDay } from '@/lib/fees';
+import { HubKpi, HubKpis, HubList, HubPage } from '@/components/ui/hub';
+import { Cell, Row, RowTitle } from '@/components/ui/kit';
 
 /**
  * ONBOARDING — the things that take a new school days, done from a sheet.
  *
- * Three kinds, each with a template to download, a filled file to check, and
- * an import that only runs once the check is clean. The same tab exports
- * what the school has today, in the same layout, so a school can round-trip:
- * export, edit in Excel, re-import next session.
+ * A hub (components/ui/hub.tsx): the numbers say what the school has on
+ * file today, the three sheets sit in the order a school needs them with a
+ * tick once that kind of data exists, and the import log answers "did that
+ * file go in?" without opening Students to count.
  *
  * Nothing on this page updates or deletes: import is additive, and the
  * preview shows every problem before a row is written.
@@ -24,11 +27,18 @@ const KINDS: { kind: Kind; title: string; what: string; needsSession: boolean }[
   { kind: 'teachers', title: 'Teachers', what: 'Names, contact, post, qualifications, TET, safety checks. Only the names are required.', needsSession: false },
   { kind: 'students', title: 'Students', what: 'The roll for one session: admission number, names, class and section, guardian. New session? Export last year, edit, import here.', needsSession: true },
 ];
+const KIND_LABEL: Record<Kind, string> = { classes: 'Classes & sections', teachers: 'Teachers', students: 'Students' };
 
 interface Issue { row: number; column: string; message: string }
 interface Preview { kind: Kind; total: number; ok: number; issues: Issue[]; sample: Record<string, unknown>[]; skipped?: number }
 interface ImportResult { created: number; skipped: number; failed: Issue[] }
 interface SessionYear { id: string; name: string; isCurrent: boolean }
+interface ImportLogRow { id: string; kind: Kind; fileName: string; rows: number; created: number; skipped: number; failed: number; createdAt: string }
+interface OnboardingStatus {
+  year: { id: string; name: string } | null;
+  grades: number; sections: number; teachers: number; students: number;
+  imports: ImportLogRow[];
+}
 
 export default function OnboardingPage() {
   const host = useHost();
@@ -39,33 +49,91 @@ export default function OnboardingPage() {
     queryFn: () => api.get<{ years?: SessionYear[] }>('/manage/sessions'),
     staleTime: 60_000, refetchOnWindowFocus: false, enabled: !!host,
   });
+  const status = useQuery({
+    queryKey: ['onboarding-status', host],
+    queryFn: () => api.get<OnboardingStatus>('/manage/onboarding/status'),
+    refetchOnWindowFocus: false, enabled: !!host,
+  });
   const years = sessions.data?.years ?? [];
   const current = years.find((y) => y.isCurrent) ?? null;
+  const st = status.data;
+  const imports = st?.imports ?? [];
+  const last = imports[0] ?? null;
+
+  const exportAll = useMutation({
+    mutationFn: async () => {
+      const { blob, filename } = await api.download('/manage/onboarding/export/all');
+      saveBlob(blob, filename ?? 'sckools-school.xlsx');
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const have: Record<Kind, number> = { classes: st?.sections ?? 0, teachers: st?.teachers ?? 0, students: st?.students ?? 0 };
 
   return (
-    <div className="sk-page">
-      <header className="sk-pagehead sk-wrap-sm" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-        <div>
-          <h1>Onboarding</h1>
-          <p>Set a school up from spreadsheets: download a template, fill it in Excel, check it, import. Export the same sheets any time.</p>
-        </div>
-      </header>
+    <HubPage
+      title="Onboarding"
+      subtitle="Set a school up from spreadsheets: download a template, fill it in Excel, check it, import. Export the same sheets any time."
+      action={
+        <button className="sk-btn sk-press" disabled={exportAll.isPending} onClick={() => exportAll.mutate()}>
+          <Download className="h-3.5 w-3.5" aria-hidden="true" />{exportAll.isPending ? 'Preparing…' : 'Export everything'}
+        </button>
+      }
+    >
+      {status.isError && <p className="sk-state err">The counts could not load. The sheets below still work.</p>}
+      {st && (
+        <HubKpis>
+          <HubKpi href="/app/classes" label={st.year ? `Sections · ${st.year.name}` : 'Sections'} value={st.sections.toLocaleString('en-IN')} hint={`${st.grades} ${st.grades === 1 ? 'class' : 'classes'}`} tone={st.sections ? 'good' : undefined} />
+          <HubKpi href="/app/teachers" label="Teachers on roll" value={st.teachers.toLocaleString('en-IN')} hint={st.teachers ? 'names, posts, safety checks' : 'none yet — the second sheet'} tone={st.teachers ? 'good' : undefined} />
+          <HubKpi href="/app/students" label={st.year ? `Students · ${st.year.name}` : 'Students on roll'} value={st.students.toLocaleString('en-IN')} hint={st.students ? 'placed in their sections' : 'none yet — the third sheet'} tone={st.students ? 'good' : undefined} />
+          <HubKpi
+            label="Last import" value={last ? KIND_LABEL[last.kind] : '—'}
+            hint={last ? `${last.created.toLocaleString('en-IN')} added · ${fmtDay(last.createdAt)}` : 'nothing imported yet'}
+            tone={last && last.failed ? 'warn' : undefined}
+          />
+        </HubKpis>
+      )}
 
       <div style={{ display: 'grid', gap: 16 }}>
-        {KINDS.map((k) => (
-          <KindCard key={k.kind} {...k} api={api} years={years} defaultYearId={current?.id ?? ''} onImported={() => {
+        {KINDS.map((k, i) => (
+          <KindCard key={k.kind} {...k} step={i + 1} have={st ? have[k.kind] : null} api={api} years={years} defaultYearId={current?.id ?? ''} onImported={() => {
             void queryClient.invalidateQueries({ queryKey: ['mng-teachers'] });
             void queryClient.invalidateQueries({ queryKey: ['mng-students'] });
             void queryClient.invalidateQueries({ queryKey: ['mng-classes'] });
+            void queryClient.invalidateQueries({ queryKey: ['onboarding-status'] });
           }} />
         ))}
       </div>
-    </div>
+
+      <HubList
+        title="Imports" label="Imports"
+        columns="minmax(0, 1.6fr) minmax(0, 1fr) auto auto"
+        count={imports.length}
+        empty={status.isLoading ? 'Looking for imports…' : 'No file has been imported yet. Every import you run is listed here — the file, how many rows went in, and any that were refused.'}
+      >
+        {imports.map((r) => (
+          <Row key={r.id}>
+            <Cell><RowTitle title={r.fileName} sub={KIND_LABEL[r.kind]} /></Cell>
+            <Cell>
+              <RowTitle
+                title={`${r.created.toLocaleString('en-IN')} added`}
+                sub={[r.skipped ? `${r.skipped} skipped` : null, r.failed ? `${r.failed} refused` : null].filter(Boolean).join(' · ') || `${r.rows} ${r.rows === 1 ? 'row' : 'rows'}`}
+                tone={r.failed ? 'warn' : undefined}
+              />
+            </Cell>
+            <Cell align="end"><span className="sk-pill" data-tone={r.failed ? 'warn' : 'good'}>{r.failed ? 'Partly' : 'Imported'}</span></Cell>
+            <Cell align="end"><span className="sk-muted" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{fmtDay(r.createdAt)}</span></Cell>
+          </Row>
+        ))}
+      </HubList>
+    </HubPage>
   );
 }
 
-function KindCard({ kind, title, what, needsSession, api, years, defaultYearId, onImported }: {
-  kind: Kind; title: string; what: string; needsSession: boolean;
+function KindCard({ kind, title, what, needsSession, step, have, api, years, defaultYearId, onImported }: {
+  kind: Kind; title: string; what: string; needsSession: boolean; step: number;
+  /** How many of this kind the school has on file; null while unknown. */
+  have: number | null;
   api: ReturnType<typeof useApi>; years: SessionYear[]; defaultYearId: string; onImported: () => void;
 }) {
   const [yearId, setYearId] = useState('');
@@ -109,9 +177,17 @@ function KindCard({ kind, title, what, needsSession, api, years, defaultYearId, 
   const rowsOf = (p: Preview) => p.sample.length ? Object.keys(p.sample[0]).filter((k) => k !== 'row' && k !== 'classSectionId' && k !== '__skip') : [];
 
   return (
-    <section className="sk-card">
+    <section className="sk-card" data-step={step} data-state={have === null ? undefined : have > 0 ? 'done' : 'todo'}>
       <div className="sk-card-h" style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-        <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><FileSpreadsheet className="h-4 w-4" aria-hidden="true" />{title}</h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flexWrap: 'wrap' }}>
+          <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><FileSpreadsheet className="h-4 w-4" aria-hidden="true" />{title}</h3>
+          {/* "On file" is a fact, not a step state: this kind of data exists,
+              whether it came from a sheet or was typed in. Beside the heading,
+              not inside it, so the heading's name stays the title alone. */}
+          {have !== null && (
+            <span className="sk-pill" data-tone={have > 0 ? 'good' : 'neutral'} data-testid={`${kind}-on-file`}>{have > 0 ? `${have.toLocaleString('en-IN')} on file` : 'none yet'}</span>
+          )}
+        </div>
         <div className="sk-actions">
           <button className="sk-btn sk-press" disabled={download.isPending} onClick={() => download.mutate('template')}><Download className="h-3.5 w-3.5" />Blank template</button>
           <button className="sk-btn sk-press" disabled={download.isPending} onClick={() => download.mutate('export')}><Download className="h-3.5 w-3.5" />Export what we have</button>

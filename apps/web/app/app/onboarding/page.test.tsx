@@ -6,9 +6,19 @@ import OnboardingPage from './page';
 
 const download = vi.fn();
 const postForm = vi.fn();
+const STATUS = {
+  year: { id: 'y1', name: '2026-27' },
+  grades: 14, sections: 32, teachers: 73, students: 1812,
+  imports: [
+    { id: 'i2', kind: 'students', fileName: 'students-2026-27.xlsx', rows: 414, created: 412, skipped: 0, failed: 2, createdAt: '2026-09-24T09:00:00.000Z' },
+    { id: 'i1', kind: 'teachers', fileName: 'teachers.xlsx', rows: 73, created: 73, skipped: 0, failed: 0, createdAt: '2026-09-18T09:00:00.000Z' },
+  ],
+};
 vi.mock('@/lib/use-api', () => ({
   useApi: () => ({
-    get: vi.fn().mockResolvedValue({ years: [{ id: 'y1', name: '2026-27', isCurrent: true }, { id: 'y0', name: '2025-26', isCurrent: false }] }),
+    get: vi.fn((path: string) => path.includes('/onboarding/status')
+      ? Promise.resolve(STATUS)
+      : Promise.resolve({ years: [{ id: 'y1', name: '2026-27', isCurrent: true }, { id: 'y0', name: '2025-26', isCurrent: false }] })),
     download: (...a: unknown[]) => download(...a),
     postForm: (...a: unknown[]) => postForm(...a),
   }),
@@ -35,7 +45,32 @@ describe('the Onboarding tab', () => {
   it('offers the three sheets in the order a school needs them: classes, then teachers, then students', async () => {
     renderPage();
     const titles = (await screen.findAllByRole('heading', { level: 3 })).map((h) => h.textContent);
-    expect(titles).toEqual(['Classes & sections', 'Teachers', 'Students']);
+    // The three sheets first; the import log's own heading follows them.
+    expect(titles.slice(0, 3)).toEqual(['Classes & sections', 'Teachers', 'Students']);
+  });
+
+  it('is a hub: the numbers on file, an "on file" mark beside each sheet, the import log, and one export of everything', async () => {
+    const user = userEvent.setup({ delay: null });
+    renderPage();
+    // Numbers, each linking to the desk it counts.
+    expect(await screen.findByRole('link', { name: /Sections · 2026-27/ })).toHaveAttribute('href', '/app/classes');
+    expect(screen.getByRole('link', { name: /Teachers on roll/ })).toHaveTextContent('73');
+    expect(screen.getByRole('link', { name: /Students · 2026-27/ })).toHaveTextContent('1,812');
+    expect(screen.getByText('Last import').closest('.sk-kpi')).toHaveTextContent('Students');
+    // The mark sits beside the heading, not inside its name.
+    expect(screen.getByTestId('students-on-file')).toHaveTextContent('1,812 on file');
+    expect(screen.getByRole('heading', { name: 'Students' })).toBeInTheDocument();
+    // The log, newest first, naming what was refused.
+    const log = screen.getByRole('list', { name: 'Imports' });
+    const rows = within(log).getAllByRole('listitem');
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveTextContent('students-2026-27.xlsx');
+    expect(rows[0]).toHaveTextContent('2 refused');
+    expect(rows[0]).toHaveTextContent('Partly');
+    expect(rows[1]).toHaveTextContent('Imported');
+    // One file for the whole school.
+    await user.click(screen.getByRole('button', { name: /Export everything/ }));
+    await waitFor(() => expect(download).toHaveBeenCalledWith('/manage/onboarding/export/all'));
   });
 
   it('downloads a blank template and an export through the authenticated client, and hands the file to the browser under the server’s name', async () => {

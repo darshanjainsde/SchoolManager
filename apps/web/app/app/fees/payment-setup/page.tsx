@@ -61,7 +61,7 @@ export default function PaymentSetupPage() {
   if (setup.isLoading || !setup.data) return <p className="sk-state">Loading payment settings…</p>;
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-5">
+    <div className="flex flex-col gap-5">
       <BackToFees />
       <header className="sk-pagehead">
         <h1>How can parents pay?</h1>

@@ -177,7 +177,7 @@ export default function PressBatchPage() {
   const snapshots = useMemo(() => (b ? students.map((s) => toSnapshot(b, s)) : []), [b, students]);
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-5">
+    <div className="flex flex-col gap-5">
       <header className="sk-pagehead sk-wrap-sm" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
         <div>
           <Link href="/app/press" className="sk-seelink" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
