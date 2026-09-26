@@ -9,8 +9,8 @@
 // behind it, and a local build the same afternoon. The files are in the repo
 // now; this keeps them there.
 import { describe, it, expect } from 'vitest';
-import { readFileSync, existsSync, statSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readFileSync, existsSync, statSync, readdirSync } from 'node:fs';
+import { resolve, join } from 'node:path';
 
 const src = readFileSync(resolve(process.cwd(), 'lib/fonts.ts'), 'utf8');
 
@@ -19,10 +19,19 @@ describe('the site fonts are self-hosted', () => {
     // The import, not the prose: the comment above it explains why google is gone.
     expect(src).not.toMatch(/from 'next\/font\/google'/);
     expect(src).toMatch(/from 'next\/font\/local'/);
-    // And nowhere else in the app either.
-    const { execSync } = require('node:child_process');
-    const hits = execSync("grep -rl --exclude=*.test.* --exclude=*.spec.* \"from 'next/font/google'\" app components lib || true", { encoding: 'utf8' }).trim();
-    expect(hits, 'a module still loads a font from Google at build time').toBe('');
+    // And nowhere else in the app either. Walked in-process rather than
+    // shelled out: a `require` in a TS file fails the Next build's own lint.
+    const hits: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) { if (entry.name !== 'node_modules') walk(full); continue; }
+        if (!/\.tsx?$/.test(entry.name) || /\.(test|spec)\./.test(entry.name)) continue;
+        if (readFileSync(full, 'utf8').includes("from 'next/font/google'")) hits.push(full);
+      }
+    };
+    for (const dir of ['app', 'components', 'lib']) walk(resolve(process.cwd(), dir));
+    expect(hits, 'a module still loads a font from Google at build time').toEqual([]);
   });
 
   it('every face it declares exists on disk and is a real woff2', () => {

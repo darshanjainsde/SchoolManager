@@ -11,6 +11,7 @@ import {
 } from '@skoolos/types';
 import { ApiError } from '../../common/errors/api-error';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
+import { commentCountsByConcern } from '../../common/lists/relation-counts';
 import { resolveAdminRecipients } from '../../common/notifications/recipients';
 
 /** Who is asking, and therefore what they may see and do. */
@@ -64,13 +65,19 @@ export class ConcernsService {
         if (viewer.kind === 'ADMIN') where.readByOfficeAt = null;
         else if (viewer.kind === 'TEACHER') where.readByTeacherAt = null;
       }
-      const rows = await tx.concern.findMany({
-        where,
-        take: LIST_CEILING.ACTIVITY,
-        orderBy: [{ lastActivityAt: 'desc' }],
-        include: this.rowInclude(),
-      });
-      return rows.map((r) => this.toRow(r, viewer));
+      // The tallies come from a tenant-scoped groupBy, never Prisma's relation
+      // `_count`: that one aggregates every comment on the platform to draw
+      // one school's box (see common/lists/relation-counts.ts).
+      const [rows, comments] = await Promise.all([
+        tx.concern.findMany({
+          where,
+          take: LIST_CEILING.ACTIVITY,
+          orderBy: [{ lastActivityAt: 'desc' }],
+          include: this.rowInclude(),
+        }),
+        commentCountsByConcern(tx, schoolId),
+      ]);
+      return rows.map((r) => this.toRow(r, viewer, comments.get(r.id) ?? 0));
     });
   }
 
@@ -150,7 +157,7 @@ export class ConcernsService {
         }));
 
       return {
-        ...this.toRow(row, viewer),
+        ...this.toRow(row, viewer, row.comments.length),
         body: row.body,
         attachments: row.attachmentIds.map((aid) => ({ id: aid, url: '' })),
         comments,
@@ -217,10 +224,10 @@ export class ConcernsService {
     });
 
     await this.notifyRaised(schoolId, id);
-    const rows = await this.list(schoolId, { kind: 'ADMIN', userId }, {});
-    const row = rows.find((r) => r.id === id);
-    // The family's own view of what they just wrote, not the office's.
-    return row ?? (await this.detail(schoolId, { kind: 'FAMILY', userId }, id));
+    // The family's OWN view of what they just wrote — the same shape their
+    // list will show, with the school's side of it (nothing yet) already
+    // filtered the way a family sees it.
+    return this.detail(schoolId, { kind: 'FAMILY', userId }, id);
   }
 
   /** A reply the family sees, or a note only the school does. */
@@ -352,11 +359,10 @@ export class ConcernsService {
       student: { select: { id: true, firstName: true, lastName: true, classSection: { select: { name: true, grade: { select: { name: true } } } } } },
       assignedTeacher: { select: { id: true, firstName: true, lastName: true } },
       raisedBy: { select: { name: true, email: true } },
-      _count: { select: { comments: true } },
     } as const;
   }
 
-  private toRow(r: ConcernRecord, viewer: Viewer): ConcernRow {
+  private toRow(r: ConcernRecord, viewer: Viewer, commentCount: number): ConcernRow {
     return {
       id: r.id,
       status: r.status as ConcernStatus,
@@ -375,7 +381,7 @@ export class ConcernsService {
       },
       assignedTeacher: r.assignedTeacher ? { id: r.assignedTeacher.id, name: `${r.assignedTeacher.firstName} ${r.assignedTeacher.lastName}`.trim() } : null,
       raisedBy: { name: r.raisedBy.name ?? r.raisedBy.email, role: r.raisedByRole as ConcernAuthorRole },
-      commentCount: r._count.comments,
+      commentCount,
     };
   }
 
@@ -456,5 +462,4 @@ type ConcernRecord = {
   student: { id: string; firstName: string; lastName: string; classSection: { name: string; grade: { name: string } } | null };
   assignedTeacher: { id: string; firstName: string; lastName: string } | null;
   raisedBy: { name: string | null; email: string };
-  _count: { comments: number };
 };

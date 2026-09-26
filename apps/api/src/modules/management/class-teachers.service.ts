@@ -3,6 +3,7 @@ import { withTenant } from '@skoolos/db';
 import type { ClassTeacherDesk, ClassTeacherRow } from '@skoolos/types';
 import { ApiError } from '../../common/errors/api-error';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
+import { studentCountsBySection } from '../../common/lists/relation-counts';
 
 /**
  * CLASS TEACHERS — the one desk that says who owns each section.
@@ -34,14 +35,16 @@ export class ClassTeachersService {
         return { academicYear: null, rows: [], teachers: [], counts: { sections: 0, assigned: 0, unassigned: 0, holdingMoreThanOne: 0 }, previousYear: null };
       }
 
-      const [sections, teachers, previous] = await Promise.all([
+      // Roll sizes come from a tenant-scoped groupBy, never Prisma's relation
+      // `_count` — that one aggregates EVERY school's students to draw one
+      // school's list (see common/lists/relation-counts.ts).
+      const [sections, teachers, previous, studentCounts] = await Promise.all([
         tx.classSection.findMany({
           where: { schoolId, academicYearId: year.id },
           take: LIST_CEILING.STRUCTURE,
           select: {
             id: true, name: true, classTeacherId: true,
             grade: { select: { name: true, order: true } },
-            _count: { select: { students: true } },
           },
           orderBy: [{ grade: { order: 'asc' } }, { name: 'asc' }],
         }),
@@ -56,6 +59,7 @@ export class ClassTeachersService {
           select: { id: true, name: true, startDate: true },
           orderBy: { startDate: 'desc' },
         }),
+        studentCountsBySection(tx, schoolId),
       ]);
 
       const label = (s: { name: string; grade: { name: string } }) => `${s.grade.name} ${s.name}`.trim();
@@ -75,7 +79,7 @@ export class ClassTeachersService {
           gradeName: s.grade.name,
           sectionName: s.name,
           gradeOrder: s.grade.order,
-          students: s._count.students,
+          students: studentCounts.get(s.id) ?? 0,
           // A teacher who has LEFT stays on the section in the database (the
           // column is SetNull only on delete) but must not read as a live
           // owner — the row shows unassigned, which is what it is.

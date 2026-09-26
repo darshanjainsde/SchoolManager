@@ -10,6 +10,8 @@ const txMock = {
   classSection: { findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn(), count: jest.fn() },
   teacher: { findMany: jest.fn(), findFirst: jest.fn() },
   classTeacherAssignment: { updateMany: jest.fn(), create: jest.fn() },
+  // Roll sizes come from a tenant-scoped groupBy now, not a relation _count.
+  student: { groupBy: jest.fn() },
 };
 jest.mock('@skoolos/db', () => ({
   ...jest.requireActual('@skoolos/db'),
@@ -31,8 +33,8 @@ const YEAR = { id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', name: '2026-27' };
 const PRIYA = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
 const IRFAN = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 
-const section = (id: string, grade: string, name: string, order: number, classTeacherId: string | null, students = 30) => ({
-  id, name, classTeacherId, grade: { name: grade, order }, _count: { students },
+const section = (id: string, grade: string, name: string, order: number, classTeacherId: string | null) => ({
+  id, name, classTeacherId, grade: { name: grade, order },
 });
 
 let svc: ClassTeachersService;
@@ -46,6 +48,10 @@ beforeEach(() => {
     { id: IRFAN, firstName: 'Mohammed Irfan', lastName: 'Qureshi' },
   ]);
   txMock.classSection.count.mockResolvedValue(0);
+  txMock.student.groupBy.mockResolvedValue([
+    { classSectionId: 's1', _count: { _all: 28 } },
+    { classSectionId: 's2', _count: { _all: 30 } },
+  ]);
 });
 
 describe('the desk', () => {
@@ -58,6 +64,9 @@ describe('the desk', () => {
     ]);
     const desk = await svc.desk(SCHOOL);
     expect(desk.counts).toEqual({ sections: 4, assigned: 3, unassigned: 1, holdingMoreThanOne: 1 });
+    // A section with no groupBy row means zero children, not a missing number.
+    expect(desk.rows.find((r) => r.classSectionId === 's1')!.students).toBe(28);
+    expect(desk.rows.find((r) => r.classSectionId === 's4')!.students).toBe(0);
     // The doubling is SAID, on the row, rather than refused.
     expect(desk.rows.find((r) => r.classSectionId === 's1')!.alsoHolds).toEqual(['LKG B']);
     expect(desk.rows.find((r) => r.classSectionId === 's3')!.alsoHolds).toEqual([]);

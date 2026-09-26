@@ -9,7 +9,7 @@ import 'reflect-metadata';
  */
 const txMock = {
   concern: { findMany: jest.fn(), findFirst: jest.fn(), create: jest.fn(), update: jest.fn(), count: jest.fn(), groupBy: jest.fn() },
-  concernComment: { create: jest.fn() },
+  concernComment: { create: jest.fn(), groupBy: jest.fn() },
   student: { findFirst: jest.fn() },
   classSection: { findFirst: jest.fn() },
   teacher: { findFirst: jest.fn() },
@@ -43,7 +43,6 @@ const row = (over: Record<string, unknown> = {}) => ({
   student: { id: STUDENT_ID, firstName: 'Aarav', lastName: 'Mehta', classSection: { name: 'B', grade: { name: '7' } } },
   assignedTeacher: { id: TEACHER_ID, firstName: 'Mohammed Irfan', lastName: 'Qureshi' },
   raisedBy: { name: 'Priya Mehta', email: 'priya@example.test' },
-  _count: { comments: 2 },
   comments: [],
   ...over,
 });
@@ -58,6 +57,7 @@ beforeEach(() => {
   txMock.concern.findMany.mockResolvedValue([]);
   txMock.concern.count.mockResolvedValue(0);
   txMock.concern.groupBy.mockResolvedValue([]);
+  txMock.concernComment.groupBy.mockResolvedValue([{ concernId: CONCERN_ID, _count: { _all: 2 } }]);
 });
 
 describe('who can see what — the query, not a filter in a screen', () => {
