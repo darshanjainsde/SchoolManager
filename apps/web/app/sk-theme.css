@@ -670,7 +670,14 @@ a.sk-kpi:hover { transform: translateY(-2px); border-color: var(--sk-brand); }
 .sk-pagehead p { color: var(--sk-ink-3); font-size: 13.5px; margin-top: 4px; }
 
 /* ---- class / entity cards ---- */
-.sk-cardgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 13px; }
+/* 260, not 240: a card's action row (two text buttons + two icon buttons) is
+   ~230px, and on a wide monitor auto-fill parks every column at the minimum —
+   which is exactly where the buttons ran out of the teacher cards. */
+.sk-cardgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 13px; }
+/* A row of actions inside a card. Wraps at any width — a button that does not
+   fit goes to the next line, never past the card's edge. */
+.sk-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-width: 0; }
+.sk-actions > * { max-width: 100%; }
 .sk-entity {
   display: flex; align-items: center; gap: 12px; background: var(--sk-card); border: 1px solid var(--sk-line);
   border-radius: var(--sk-r); padding: 15px; box-shadow: var(--sk-shadow); text-decoration: none; color: inherit;
@@ -2838,6 +2845,11 @@ html[data-theme='light'] .sk-eh-tick[aria-pressed="true"] > .box::after { border
 .sk-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
 .sk-toolbar .grow { flex: 1 1 240px; min-width: 0; }
 .sk-toolbar .count { font-size: 12px; color: var(--sk-ink-3); margin-left: auto; white-space: nowrap; }
+/* A picker in the toolbar: shares the row on a laptop, takes a full line on a
+   phone. min-width: 0 so a long class name cannot push the row sideways; the
+   select then ellipsises its current option instead. */
+.sk-toolbar .sk-toolbar-pick { flex: 1 1 160px; min-width: 0; max-width: 280px; }
+@media (max-width: 640px) { .sk-toolbar .sk-toolbar-pick { max-width: none; } }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    THE OWNER CONSOLE  (/platform)

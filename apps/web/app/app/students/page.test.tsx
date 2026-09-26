@@ -352,10 +352,64 @@ describe('Sessions on the Students page', () => {
     await user.selectOptions(screen.getByLabelText('Session'), 'y2');
     expect(classSelect().getByRole('option', { name: '6 — B' })).toBeInTheDocument();
     expect(screen.queryByText(/Admitting for 2026-27\?/)).toBeNull();
-    // The class filter groups by session name.
-    expect(screen.getByRole('group', { name: '2025-26' })).toBeInTheDocument();
-    expect(screen.getByRole('group', { name: '2026-27' })).toBeInTheDocument();
     // The default list is the running year's register.
     expect(api.get).toHaveBeenCalledWith(expect.stringContaining('academicYearId=y1'));
+  });
+
+  it('filters the register with TWO pickers — a session, then that session\u2019s classes — never one list of every session\u2019s classes', async () => {
+    const userEvent = (await import('@testing-library/user-event')).default;
+    const { within } = await import('@testing-library/react');
+    const api = mockApi({
+      get: vi.fn((url: string) => {
+        if (url.startsWith('/manage/sessions')) {
+          return Promise.resolve({
+            years: [
+              { id: 'y0', name: '2024-25', isCurrent: false },
+              { id: 'y1', name: '2025-26', isCurrent: true },
+              { id: 'y2', name: '2026-27', isCurrent: false },
+            ],
+            plan: { id: 'p1', status: 'DRAFT', toYearId: 'y2' },
+          });
+        }
+        if (url.startsWith('/manage/classes')) {
+          return Promise.resolve([
+            { id: 'p4a', name: 'A', grade: { name: '4' }, academicYear: { id: 'y0', name: '2024-25', isCurrent: false } },
+            { id: 'f5b', name: 'B', grade: { name: '5' }, academicYear: { id: 'y1', name: '2025-26', isCurrent: true } },
+            { id: 't6b', name: 'B', grade: { name: '6' }, academicYear: { id: 'y2', name: '2026-27', isCurrent: false } },
+          ]);
+        }
+        if (url.startsWith('/auth/me')) return Promise.resolve({ features: ['MANAGEMENT'] });
+        return Promise.resolve([]);
+      }),
+    });
+    vi.mocked(useApi).mockReturnValue(api as never);
+    const user = userEvent.setup({ delay: null });
+    renderWithProviders(<StudentsPage />);
+
+    const session = (await screen.findByLabelText('Session shown')) as HTMLSelectElement;
+    const klass = () => within(screen.getByLabelText('Class'));
+    // Opens on the running session; the class list is that session's only.
+    expect(session.value).toBe('y1');
+    expect(klass().getByRole('option', { name: '5 — B' })).toBeInTheDocument();
+    expect(klass().queryByRole('option', { name: '6 — B' })).toBeNull();
+    expect(klass().queryByRole('option', { name: '4 — A' })).toBeNull();
+    // No session › class groups anywhere in the class picker.
+    expect(klass().queryAllByRole('group')).toHaveLength(0);
+    // Past sessions are options under their own heading, not a checkbox.
+    expect(within(session).getByRole('group', { name: 'Past sessions' })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Show past sessions/)).toBeNull();
+
+    // Pick the next session: the class list follows, the class choice resets, the register re-queries by that year.
+    await user.selectOptions(screen.getByLabelText('Class'), 'f5b');
+    await user.selectOptions(session, 'y2');
+    expect(klass().getByRole('option', { name: '6 — B' })).toBeInTheDocument();
+    expect(klass().queryByRole('option', { name: '5 — B' })).toBeNull();
+    expect((screen.getByLabelText('Class') as HTMLSelectElement).value).toBe('');
+    expect(api.get).toHaveBeenCalledWith(expect.stringContaining('academicYearId=y2'));
+
+    // A past session is reachable the same way.
+    await user.selectOptions(session, 'y0');
+    expect(klass().getByRole('option', { name: '4 — A' })).toBeInTheDocument();
+    expect(api.get).toHaveBeenCalledWith(expect.stringContaining('academicYearId=y0'));
   });
 });

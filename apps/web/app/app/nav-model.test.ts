@@ -13,7 +13,7 @@ const EVERY_ROUTE = [
   '/app/website', '/app/blog', '/app/events',
   '/app/enquiries',
   '/app/students', '/app/teachers', '/app/staff', '/app/classes',
-      '/app/sessions', '/app/jobs',
+      '/app/sessions', '/app/onboarding', '/app/jobs',
   '/app/staff-attendance', '/app/leave', '/app/requests',
   '/app/timetable', '/app/availability',
   '/app/exam-hall', '/app/press', '/app/press/orders',

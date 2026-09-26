@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { getPlatformPrisma, resolveFeatures, Prisma, DEFAULT_COURSES } from '@skoolos/db';
 import { countryPack } from '@skoolos/types';
+import { buildSnapshot } from './school-snapshot';
 import { randomBytes } from 'node:crypto';
 import { PasswordService } from '../../auth';
 import { FeatureResolverService } from '../../features';
@@ -110,6 +111,17 @@ export class OwnerSchoolsService {
       features: [...resolveFeatures(s.tier as 'BASIC' | 'STANDARD' | 'PRO', s.featureOverrides)],
       domains: s.domains.map((d) => ({ hostname: d.hostname, status: d.status, isPrimary: d.isPrimary })),
     };
+  }
+
+  /** See school-snapshot.ts. Platform client: an owner action across every tenant table. */
+  async snapshot(id: string) {
+    const db = getPlatformPrisma();
+    try {
+      return await buildSnapshot(db as unknown as Parameters<typeof buildSnapshot>[0], id);
+    } catch (e) {
+      if ((e as Error).message === 'School not found') throw new NotFoundException(`School ${id} not found`);
+      throw e;
+    }
   }
 
   async create(dto: CreateSchoolDto): Promise<{ id: string; slug: string; tempPassword: string }> {

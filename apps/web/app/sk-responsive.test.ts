@@ -309,3 +309,24 @@ describe('a name above its subtitle stacks, whatever element holds it', () => {
     ).toMatch(/display:\s*block/);
   });
 });
+
+describe('a card’s action row can never leave the card', () => {
+  const css = readFileSync(join(__dirname, 'sk-theme.css'), 'utf8');
+  it('.sk-actions wraps at EVERY width, not only below a phone breakpoint', () => {
+    const rule = css.match(/\.sk-actions \{([^}]*)\}/)?.[1] ?? '';
+    expect(rule).toMatch(/flex-wrap:\s*wrap/);
+    expect(rule).toMatch(/min-width:\s*0/);
+  });
+  it('the card grid’s column floor clears a row of two text buttons and two icon buttons', () => {
+    // 240px was the floor when the buttons ran out of the teacher cards on a
+    // wide monitor, where auto-fill parks every column at the minimum.
+    const m = css.match(/\.sk-cardgrid \{[^}]*minmax\(min\(100%, (\d+)px\)/);
+    expect(Number(m?.[1])).toBeGreaterThanOrEqual(260);
+  });
+  it('the teacher card uses .sk-actions for its buttons, not the phone-only wrap', () => {
+    const page = readFileSync(join(__dirname, 'app/teachers/page.tsx'), 'utf8');
+    const card = page.slice(page.indexOf("className={teacher.id === justAddedId"), page.indexOf('</div>\n            ),', page.indexOf("className={teacher.id === justAddedId")));
+    expect(card).toContain('className="sk-actions"');
+    expect(card).not.toMatch(/className="sk-wrap-sm"/);
+  });
+});

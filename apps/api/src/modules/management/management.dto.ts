@@ -20,7 +20,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { RESULT_STATUSES, STUDENT_CATEGORIES } from '@skoolos/types';
+import { BLOOD_GROUPS, EMPLOYMENT_TYPES, GENDERS, POLICE_VERIFICATION, RESULT_STATUSES, STUDENT_CATEGORIES, TEACHER_DESIGNATIONS, TET_STATUSES, codesOf } from '@skoolos/types';
 import {
   ASSIGNMENT_ATTACHMENT_KINDS,
   AssignmentAttachmentKind,
@@ -196,6 +196,38 @@ export class CreateTeacherDto {
   bio?: string;
 
   // `isActive` mirrors `status` and is written only by release / reactivate.
+  // ── Onboarding record — every field optional; lists come from @skoolos/types ──
+  @IsOptional() @IsIn(codesOf(GENDERS)) gender?: string;
+  @IsOptional() @IsDateString() dob?: string;
+  @IsOptional() @IsIn([...BLOOD_GROUPS]) bloodGroup?: string;
+  @IsOptional() @IsString() @Length(0, 30) whatsappPhone?: string;
+  @IsOptional() @IsBoolean() whatsappOptIn?: boolean;
+  @IsOptional() @IsString() @Length(0, 40) employeeCode?: string;
+  @IsOptional() @IsIn(codesOf(TEACHER_DESIGNATIONS)) designation?: string;
+  @IsOptional() @IsString() @Length(0, 80) department?: string;
+  @IsOptional() @IsIn(codesOf(EMPLOYMENT_TYPES)) employmentType?: string;
+  @IsOptional() @IsDateString() joinedOn?: string;
+  @IsOptional() @IsString() @Length(0, 120) highestQualification?: string;
+  @IsOptional() @IsString() @Length(0, 60) professionalQualification?: string;
+  @IsOptional() @IsIn(codesOf(TET_STATUSES)) tetStatus?: string;
+  @IsOptional() @IsString() @Length(0, 60) tetCertificateNo?: string;
+  @IsOptional() @IsDateString() tetValidTill?: string;
+  @IsOptional() @IsString() @Length(0, 120) specialisation?: string;
+  @IsOptional() @IsInt() @Min(0) @Max(60) experienceYears?: number;
+  @IsOptional() @IsString() @Length(0, 160) previousSchool?: string;
+  @IsOptional() @IsString() @Length(0, 160) addressLine1?: string;
+  @IsOptional() @IsString() @Length(0, 160) addressLine2?: string;
+  @IsOptional() @IsString() @Length(0, 80) city?: string;
+  @IsOptional() @IsString() @Length(0, 80) region?: string;
+  @IsOptional() @IsString() @Length(0, 12) postalCode?: string;
+  @IsOptional() @IsString() @Length(0, 120) emergencyContactName?: string;
+  @IsOptional() @IsString() @Length(0, 30) emergencyContactPhone?: string;
+  @IsOptional() @IsString() @Length(0, 40) emergencyContactRelation?: string;
+  @IsOptional() @IsIn(codesOf(POLICE_VERIFICATION)) policeVerification?: string;
+  @IsOptional() @IsDateString() policeVerifiedOn?: string;
+  @IsOptional() @IsDateString() medicalFitnessOn?: string;
+  @IsOptional() @IsDateString() pocsoTrainedOn?: string;
+
 }
 
 export class UpdateTeacherDto {
@@ -230,6 +262,38 @@ export class UpdateTeacherDto {
   bio?: string;
 
   // `isActive` mirrors `status` and is written only by release / reactivate.
+  // ── Onboarding record — every field optional; lists come from @skoolos/types ──
+  @IsOptional() @IsIn(codesOf(GENDERS)) gender?: string;
+  @IsOptional() @IsDateString() dob?: string;
+  @IsOptional() @IsIn([...BLOOD_GROUPS]) bloodGroup?: string;
+  @IsOptional() @IsString() @Length(0, 30) whatsappPhone?: string;
+  @IsOptional() @IsBoolean() whatsappOptIn?: boolean;
+  @IsOptional() @IsString() @Length(0, 40) employeeCode?: string;
+  @IsOptional() @IsIn(codesOf(TEACHER_DESIGNATIONS)) designation?: string;
+  @IsOptional() @IsString() @Length(0, 80) department?: string;
+  @IsOptional() @IsIn(codesOf(EMPLOYMENT_TYPES)) employmentType?: string;
+  @IsOptional() @IsDateString() joinedOn?: string;
+  @IsOptional() @IsString() @Length(0, 120) highestQualification?: string;
+  @IsOptional() @IsString() @Length(0, 60) professionalQualification?: string;
+  @IsOptional() @IsIn(codesOf(TET_STATUSES)) tetStatus?: string;
+  @IsOptional() @IsString() @Length(0, 60) tetCertificateNo?: string;
+  @IsOptional() @IsDateString() tetValidTill?: string;
+  @IsOptional() @IsString() @Length(0, 120) specialisation?: string;
+  @IsOptional() @IsInt() @Min(0) @Max(60) experienceYears?: number;
+  @IsOptional() @IsString() @Length(0, 160) previousSchool?: string;
+  @IsOptional() @IsString() @Length(0, 160) addressLine1?: string;
+  @IsOptional() @IsString() @Length(0, 160) addressLine2?: string;
+  @IsOptional() @IsString() @Length(0, 80) city?: string;
+  @IsOptional() @IsString() @Length(0, 80) region?: string;
+  @IsOptional() @IsString() @Length(0, 12) postalCode?: string;
+  @IsOptional() @IsString() @Length(0, 120) emergencyContactName?: string;
+  @IsOptional() @IsString() @Length(0, 30) emergencyContactPhone?: string;
+  @IsOptional() @IsString() @Length(0, 40) emergencyContactRelation?: string;
+  @IsOptional() @IsIn(codesOf(POLICE_VERIFICATION)) policeVerification?: string;
+  @IsOptional() @IsDateString() policeVerifiedOn?: string;
+  @IsOptional() @IsDateString() medicalFitnessOn?: string;
+  @IsOptional() @IsDateString() pocsoTrainedOn?: string;
+
 }
 
 // ── Staff (non-teaching) ────────────────────────────────────────────────────

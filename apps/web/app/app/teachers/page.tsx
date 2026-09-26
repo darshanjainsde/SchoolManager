@@ -6,6 +6,7 @@ import { Plus, Trash2, Upload, Pencil, X, KeyRound, CheckCircle2, Send, UserMinu
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import ReleaseSheet from './release-sheet';
+import TeacherForm, { toRecordBody, type TeacherRecordInput } from './teacher-form';
 import { EmailHint } from '@/components/use-email-check';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -21,6 +22,15 @@ interface Teacher {
   primarySubjectId?: string | null;
   bio?: string | null;
   isActive: boolean;
+  /** The onboarding record — every field optional; see teacher-form.tsx. */
+  gender?: string | null; dob?: string | null; bloodGroup?: string | null;
+  whatsappPhone?: string | null; whatsappOptIn?: boolean;
+  employeeCode?: string | null; designation?: string | null; department?: string | null; employmentType?: string | null; joinedOn?: string | null;
+  highestQualification?: string | null; professionalQualification?: string | null; tetStatus?: string | null; tetCertificateNo?: string | null; tetValidTill?: string | null;
+  specialisation?: string | null; experienceYears?: number | null; previousSchool?: string | null;
+  addressLine1?: string | null; addressLine2?: string | null; city?: string | null; region?: string | null; postalCode?: string | null;
+  emergencyContactName?: string | null; emergencyContactPhone?: string | null; emergencyContactRelation?: string | null;
+  policeVerification?: string | null; policeVerifiedOn?: string | null; medicalFitnessOn?: string | null; pocsoTrainedOn?: string | null;
   /** Active Roster: `isActive` mirrors this; LEFT rows carry `leftOn`. */
   status?: 'ACTIVE' | 'LEFT';
   leftOn?: string | null;
@@ -97,22 +107,6 @@ function ringBlur(e: FocusEvent<HTMLElement>) {
 
 // ── Add / Edit form ──────────────────────────────────────────────────────────
 
-interface TeacherFormProps {
-  title: string;
-  initial?: Partial<Teacher>;
-  photoUrl?: string | null;
-  onSave: (data: {
-    firstName: string;
-    lastName: string;
-    email: string;
-    photoAssetId: string | null;
-  }) => void;
-  isSaving: boolean;
-  onCancel: () => void;
-  onPhotoUpload: (file: File) => void;
-  isUploadingPhoto: boolean;
-  uploadedPhotoUrl: string | null;
-}
 
 /**
  * Confirms an invite was sent. Never shows a password — the teacher sets their
@@ -211,139 +205,6 @@ function InviteSentModal({
   );
 }
 
-function TeacherForm({
-  title,
-  initial = {},
-  photoUrl,
-  onSave,
-  isSaving,
-  onCancel,
-  onPhotoUpload,
-  isUploadingPhoto,
-  uploadedPhotoUrl,
-}: TeacherFormProps) {
-  const [firstName, setFirstName] = useState(initial.firstName ?? '');
-  const [lastName, setLastName] = useState(initial.lastName ?? '');
-  const [email, setEmail] = useState(initial.email ?? '');
-  const photoInputRef = useRef<HTMLInputElement>(null);
-
-  const previewUrl = uploadedPhotoUrl ?? photoUrl;
-
-  return (
-    <div className="sk-card" style={{ maxWidth: 560 }}>
-      <div className="sk-card-h">
-        <h3>{title}</h3>
-      </div>
-      <div className="sk-card-b">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Field label="First name" htmlFor="tf-first">
-            <input
-              id="tf-first"
-              style={fieldStyle}
-              onFocus={ringFocus}
-              onBlur={ringBlur}
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-              placeholder="Jane"
-            />
-          </Field>
-          <Field label="Last name" htmlFor="tf-last">
-            <input
-              id="tf-last"
-              style={fieldStyle}
-              onFocus={ringFocus}
-              onBlur={ringBlur}
-              value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
-              placeholder="Smith"
-            />
-          </Field>
-        </div>
-        <Field label="Email (optional — needed to create their login)" htmlFor="tf-email">
-          <input
-            id="tf-email"
-            type="email"
-            style={fieldStyle}
-            onFocus={ringFocus}
-            onBlur={ringBlur}
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="jane.smith@school.com"
-          />
-          <EmailHint value={email} onFix={setEmail} />
-        </Field>
-
-        {/* Photo upload */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <span className="sk-lab">Photo (optional)</span>
-          {previewUrl ? (
-            <img
-              src={previewUrl}
-              alt="Teacher photo"
-              style={{
-                height: 72,
-                width: 72,
-                borderRadius: '50%',
-                objectFit: 'cover',
-                border: '1px solid var(--sk-line)',
-              }}
-            />
-          ) : initial.photoAssetId ? (
-            <p className="sk-muted" style={{ margin: 0, fontStyle: 'italic' }}>
-              Photo set — upload to replace.
-            </p>
-          ) : (
-            <p className="sk-muted" style={{ margin: 0 }}>
-              No photo set.
-            </p>
-          )}
-          <input
-            ref={photoInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) onPhotoUpload(f);
-              e.target.value = '';
-            }}
-          />
-          <button
-            type="button"
-            className="sk-btn sk-press"
-            style={{ alignSelf: 'flex-start' }}
-            disabled={isUploadingPhoto}
-            onClick={() => photoInputRef.current?.click()}
-          >
-            <Upload className="h-4 w-4" />
-            {isUploadingPhoto ? 'Uploading…' : previewUrl || initial.photoAssetId ? 'Replace photo' : 'Upload photo'}
-          </button>
-        </div>
-
-        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-          <button
-            className="sk-btn sk-press"
-            data-variant="primary"
-            onClick={() =>
-              onSave({
-                firstName: firstName.trim(),
-                lastName: lastName.trim(),
-                email: email.trim(),
-                photoAssetId: initial.photoAssetId ?? null,
-              })
-            }
-            disabled={isSaving || !firstName.trim() || !lastName.trim()}
-          >
-            {isSaving ? 'Saving…' : 'Save'}
-          </button>
-          <button className="sk-btn sk-press" onClick={onCancel}>
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
@@ -397,12 +258,7 @@ export default function TeachersPage() {
 
   // ── Mutations ─────────────────────────────────────────────────────────────
   const addMutation = useMutation({
-    mutationFn: (body: {
-      firstName: string;
-      lastName: string;
-      email?: string;
-      photoAssetId?: string | null;
-    }) => api.post<Teacher>('/manage/teachers', body),
+    mutationFn: (body: Record<string, unknown>) => api.post<Teacher>('/manage/teachers', body),
     onSuccess: (created) => {
       // Which card is the new one — see `sk-pinin` on the grid below.
       setJustAddedId(created?.id ?? null);
@@ -415,13 +271,7 @@ export default function TeachersPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, ...body }: {
-      id: string;
-      firstName: string;
-      lastName: string;
-      email?: string;
-      photoAssetId?: string | null;
-    }) => api.put<Teacher>(`/manage/teachers/${id}`, body),
+    mutationFn: ({ id, ...body }: { id: string } & Record<string, unknown>) => api.put<Teacher>(`/manage/teachers/${id}`, body),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['mng-teachers'] });
       setEditId(null);
@@ -577,14 +427,7 @@ export default function TeachersPage() {
         <div style={{ marginBottom: 18 }}>
           <TeacherForm
             title="Add teacher"
-            onSave={({ firstName, lastName, email, photoAssetId }) =>
-              addMutation.mutate({
-                firstName,
-                lastName,
-                email: email || undefined,
-                photoAssetId: addPhotoAssetId ?? photoAssetId,
-              })
-            }
+            onSave={(record: TeacherRecordInput) => addMutation.mutate({ ...toRecordBody(record), photoAssetId: addPhotoAssetId ?? record.photoAssetId ?? null })}
             isSaving={addMutation.isPending}
             onCancel={() => {
               setShowAdd(false);
@@ -618,15 +461,7 @@ export default function TeachersPage() {
                 title="Edit teacher"
                 initial={teacher}
                 photoUrl={teacher.photoAssetId ? (photoUrlMap[teacher.photoAssetId] ?? null) : null}
-                onSave={({ firstName, lastName, email }) =>
-                  updateMutation.mutate({
-                    id: teacher.id,
-                    firstName,
-                    lastName,
-                    email: email || undefined,
-                    photoAssetId: editPhotoAssetId ?? teacher.photoAssetId ?? null,
-                  })
-                }
+                onSave={(record: TeacherRecordInput) => updateMutation.mutate({ id: teacher.id, ...toRecordBody(record), photoAssetId: editPhotoAssetId ?? teacher.photoAssetId ?? null })}
                 isSaving={updateMutation.isPending}
                 onCancel={() => {
                   setEditId(null);
@@ -691,7 +526,11 @@ export default function TeachersPage() {
                     </div>
                   </div>
                 </div>
-                <div className="sk-wrap-sm" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {/* .sk-actions wraps at EVERY width. This row used to wrap only
+                    below a phone breakpoint, and on a wide monitor the grid's
+                    columns sit at their 240px minimum — where three buttons do
+                    not fit on one line, so they ran out of the card. */}
+                <div className="sk-actions">
                   {teacher.userId ? (
                     <button
                       className="sk-btn sk-press"

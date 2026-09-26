@@ -26,8 +26,7 @@ import {
   Wallet,
   Receipt,
   CalendarRange,
-  UserRound,
-} from 'lucide-react';
+  UserRound, FileSpreadsheet } from 'lucide-react';
 
 /**
  * The admin sidebar's shape — approved 2 Sept 2026 after the flat list hit 22
@@ -87,6 +86,7 @@ export const NAV_MODEL: NavEntry[] = [
       { href: '/app/staff', label: 'Staff', icon: UserCog, requiredFeature: 'MANAGEMENT' },
       { href: '/app/classes', label: 'Classes', icon: School, requiredFeature: 'MANAGEMENT' },
       { href: '/app/sessions', label: 'Sessions', icon: CalendarRange, requiredFeature: 'MANAGEMENT' },
+      { href: '/app/onboarding', label: 'Onboarding', icon: FileSpreadsheet, requiredFeature: 'MANAGEMENT' },
       { href: '/app/jobs', label: 'Jobs', icon: Briefcase, requiredFeature: 'HIRING' },
     ],
   },

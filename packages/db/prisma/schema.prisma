@@ -1121,6 +1121,51 @@ model Teacher {
   photoAssetId      String?          @db.Uuid
   primarySubjectId  String?          @db.Uuid
   bio               String?
+  // ── Onboarding record (2026-09). What an Indian private school keeps on
+  //    file for a teacher: CBSE Affiliation Bye-laws (qualification norms per
+  //    post, TET for classes I–VIII under RTE/NCTE), the safety circulars
+  //    (police verification, POCSO awareness) and plain HR practice. Every
+  //    field is optional — quick-add stays two names — and every enumerated
+  //    one is TEXT validated at write time (the Student.category pattern), so
+  //    a new designation is a list entry, not a migration.
+  gender                   String?
+  dob                      DateTime?  @db.Date
+  bloodGroup               String?
+  /// The number updates and actions go to. May differ from `phone` (the office
+  /// number). Normalised twin below is the index a WhatsApp action resolves.
+  whatsappPhone            String?
+  whatsappPhoneE164        String?
+  whatsappOptIn            Boolean    @default(false)
+  employeeCode             String?
+  /// PRT | TGT | PGT | PRINCIPAL | VICE_PRINCIPAL | COORDINATOR | LIBRARIAN | COUNSELLOR | PET | SPECIAL_EDUCATOR | OTHER
+  designation              String?
+  department               String?
+  /// PERMANENT | PROBATION | CONTRACT | PART_TIME | GUEST
+  employmentType           String?
+  joinedOn                 DateTime?  @db.Date
+  highestQualification     String?
+  /// B.Ed / D.El.Ed / B.El.Ed / M.Ed / NTT / none — the professional degree the post requires.
+  professionalQualification String?
+  /// NONE | CTET | STATE_TET | NOT_REQUIRED — mandatory for classes I–VIII (RTE s.23, NCTE 2010).
+  tetStatus                String?
+  tetCertificateNo         String?
+  tetValidTill             DateTime?  @db.Date
+  specialisation           String?
+  experienceYears          Int?
+  previousSchool           String?
+  addressLine1             String?
+  addressLine2             String?
+  city                     String?
+  region                   String?
+  postalCode               String?
+  emergencyContactName     String?
+  emergencyContactPhone    String?
+  emergencyContactRelation String?
+  /// PENDING | CLEARED | NOT_REQUIRED — the safety circulars ask for it before a teacher meets children.
+  policeVerification       String?
+  policeVerifiedOn         DateTime?  @db.Date
+  medicalFitnessOn         DateTime?  @db.Date
+  pocsoTrainedOn           DateTime?  @db.Date
   isActive          Boolean          @default(true)
   /// Lifecycle (Active Roster). `isActive` above mirrors `status === ACTIVE`.
   status            StaffStatus      @default(ACTIVE)
@@ -1145,6 +1190,7 @@ model Teacher {
   @@index([userId])
   @@index([schoolId, status])
   @@index([phoneE164])
+  @@index([whatsappPhoneE164])
 }
 
 model TeacherSubject {
