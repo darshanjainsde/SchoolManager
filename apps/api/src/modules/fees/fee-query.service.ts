@@ -50,6 +50,47 @@ export class FeeQueryService {
     );
   }
 
+  /**
+   * The Fees home's "Latest payments": the last few claims of ANY status,
+   * newest first. A lighter read than the verify desk — no late-fee
+   * arithmetic, no proof URLs — because the home only says who, how much,
+   * and where it stands.
+   */
+  async recentPayments(schoolId: string, limit = 8) {
+    const take = Math.max(1, Math.min(limit, 50));
+    return withTenant(schoolId, async (tx) => {
+      const rows = await tx.feePayment.findMany({
+        where: { schoolId },
+        select: {
+          id: true, status: true, method: true, amountMinor: true, paidOn: true, submittedAt: true,
+          student: {
+            select: {
+              id: true, firstName: true, lastName: true,
+              classSection: { select: { name: true, grade: { select: { name: true } } } },
+            },
+          },
+          receipt: { select: { number: true } },
+        },
+        orderBy: { submittedAt: 'desc' },
+        take,
+      });
+      return rows.map((p) => ({
+        id: p.id,
+        status: p.status,
+        method: p.method,
+        amountMinor: p.amountMinor,
+        paidOn: p.paidOn,
+        submittedAt: p.submittedAt,
+        receiptNumber: p.receipt?.number ?? null,
+        student: {
+          id: p.student.id,
+          name: `${p.student.firstName} ${p.student.lastName}`.trim(),
+          className: p.student.classSection ? `${p.student.classSection.grade.name} ${p.student.classSection.name}`.trim() : null,
+        },
+      }));
+    });
+  }
+
   /** The verify desk. Payments awaiting a decision, newest claim first. */
   async paymentsToVerify(schoolId: string, status: 'SUBMITTED' | 'VERIFIED' | 'REJECTED' | 'REVERSED' = 'SUBMITTED') {
     return withTenant(schoolId, async (tx) => {

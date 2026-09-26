@@ -33,6 +33,21 @@ export class OnboardingController {
     res.send(buf);
   }
 
+  /** The home's numbers and the import history. */
+  @Get('status')
+  status() {
+    return this.onboarding.status(this.sid());
+  }
+
+  /** Before export/:kind on purpose — "all" is not a sheet kind. */
+  @Get('export/all')
+  async exportAll(@Res() res: Response) {
+    const buf = await this.onboarding.exportAll(this.sid());
+    res.setHeader('Content-Type', XLSX);
+    res.setHeader('Content-Disposition', `attachment; filename="sckools-school-${new Date().toISOString().slice(0, 10)}.xlsx"`);
+    res.send(buf);
+  }
+
   @Get('export/:kind')
   async export(@Param('kind') k: string, @Res() res: Response) {
     const kind = this.kind(k);
@@ -56,6 +71,6 @@ export class OnboardingController {
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 12 * 1024 * 1024 } }))
   async import(@Param('kind') k: string, @UploadedFile() file: Express.Multer.File, @Query('academicYearId') academicYearId?: string, @Body() _body?: unknown) {
     if (!file) throw new BadRequestException('Attach the filled-in workbook as "file".');
-    return this.onboarding.import(this.sid(), this.kind(k), file.buffer, { academicYearId });
+    return this.onboarding.import(this.sid(), this.kind(k), file.buffer, { academicYearId, fileName: file.originalname });
   }
 }
