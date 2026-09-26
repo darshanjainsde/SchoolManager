@@ -42,10 +42,21 @@ export type IconName =
   | 'mail'
   | 'phone'
   | 'palette'
-  | 'key';
+  | 'key'
+  // The Complaint Box: a speech bubble with a raised mark inside it — the
+  // family saying "look at this", not an alarm.
+  | 'concern';
 
 /** `body` is the filled silhouette; `lines` are the strokes drawn over it. */
 const PATHS: Record<IconName, { body: string; lines: string[] }> = {
+  concern: {
+    body: 'M4.6 6.3A1.8 1.8 0 0 1 6.4 4.5h11.2a1.8 1.8 0 0 1 1.8 1.8v7.6a1.8 1.8 0 0 1-1.8 1.8H10l-4.2 3.3a.6.6 0 0 1-1-.47v-2.83a1.8 1.8 0 0 1-.2-.8Z',
+    lines: [
+      'M4.6 6.3A1.8 1.8 0 0 1 6.4 4.5h11.2a1.8 1.8 0 0 1 1.8 1.8v7.6a1.8 1.8 0 0 1-1.8 1.8H10l-4.2 3.3a.6.6 0 0 1-1-.47v-2.83a1.8 1.8 0 0 1-.2-.8Z',
+      'M12 7.6v3.5',
+      'M12 13.2h.01',
+    ],
+  },
   take: {
     body: 'M5.5 6.5A1 1 0 0 1 6.5 5.5h11a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1Z',
     lines: [

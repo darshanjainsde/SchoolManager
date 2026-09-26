@@ -177,6 +177,41 @@ export function RowGroup({ title, caption, children }: { title: ReactNode; capti
   );
 }
 
+/* ── long lists ─────────────────────────────────────────────────────────── */
+
+/**
+ * A long list that scrolls INSIDE a box of fixed height, so the panel it
+ * lives in stays where it is on the screen and the page does not grow by
+ * thirty rows every time a list opens.
+ *
+ * THE RULE: a list of more than ~8 rows that sits beside or under something
+ * the reader is still using goes in a ScrollBox, and the thing OUTSIDE the
+ * box says how long it is ("28 teachers free") — a scrolling region must name
+ * its own size, or the reader cannot tell there is more. The box is keyboard-
+ * reachable (tabIndex) and a labelled region for screen readers. Styles:
+ * `.sk-scrollbox` in sk-theme.css; the height caps at the viewport so a
+ * sticky panel never scrolls off the bottom of the screen.
+ */
+export function ScrollBox({ children, max = 420, label, className = '' }: {
+  children: ReactNode;
+  /** Height cap in px; the box also never exceeds the viewport minus the chrome. */
+  max?: number;
+  label: string;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`sk-scrollbox ${className}`.trim()}
+      style={{ '--sk-scroll-max': `${max}px` } as CSSProperties}
+      role="region"
+      aria-label={label}
+      tabIndex={0}
+    >
+      {children}
+    </div>
+  );
+}
+
 /* ── forms ──────────────────────────────────────────────────────────────── */
 
 /**

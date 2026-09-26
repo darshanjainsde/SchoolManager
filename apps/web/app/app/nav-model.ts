@@ -15,6 +15,7 @@ import {
   Inbox,
   LayoutDashboard,
   Megaphone,
+  MessageSquareWarning,
   Newspaper,
   NotebookPen,
   Printer,
@@ -22,6 +23,7 @@ import {
   Settings,
   Store,
   UserCog,
+  UserCheck,
   Users,
   Wallet,
   Receipt,
@@ -76,6 +78,7 @@ export const NAV_MODEL: NavEntry[] = [
     kind: 'group', key: 'admissions', label: 'Admissions', icon: Inbox,
     items: [
       { href: '/app/enquiries', label: 'Enquiries', icon: Inbox, requiredFeature: 'ENQUIRY' },
+      { href: '/app/concerns', label: 'Complaint Box', icon: MessageSquareWarning, requiredFeature: 'MANAGEMENT' },
     ],
   },
   {
@@ -85,6 +88,7 @@ export const NAV_MODEL: NavEntry[] = [
       { href: '/app/teachers', label: 'Teachers', icon: GraduationCap, requiredFeature: 'MANAGEMENT' },
       { href: '/app/staff', label: 'Staff', icon: UserCog, requiredFeature: 'MANAGEMENT' },
       { href: '/app/classes', label: 'Classes', icon: School, requiredFeature: 'MANAGEMENT' },
+      { href: '/app/class-teachers', label: 'Class teachers', icon: UserCheck, requiredFeature: 'MANAGEMENT' },
       { href: '/app/sessions', label: 'Sessions', icon: CalendarRange, requiredFeature: 'MANAGEMENT' },
       { href: '/app/onboarding', label: 'Onboarding', icon: FileSpreadsheet, requiredFeature: 'MANAGEMENT' },
       { href: '/app/jobs', label: 'Jobs', icon: Briefcase, requiredFeature: 'HIRING' },

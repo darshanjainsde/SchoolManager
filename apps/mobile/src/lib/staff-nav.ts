@@ -68,6 +68,10 @@ export const HIDDEN_ROUTES = [
   '(tabs)/home/notifications',
   // Second edition — the teacher's own library shelf.
   '(tabs)/home/library',
+  // The Complaint Box (2026-09): what the families of this teacher's own
+  // class raised with them, and the one thread screen.
+  '(tabs)/home/concerns',
+  '(tabs)/home/concerns/[id]',
   '(tabs)/home/salary',
 ];
 
@@ -105,7 +109,8 @@ export interface MoreItem {
     | '/(staff)/(tabs)/home/holidays'
     | '/(staff)/(tabs)/home/post'
     | '/(staff)/(tabs)/home/library'
-    | '/(staff)/(tabs)/home/salary';
+    | '/(staff)/(tabs)/home/salary'
+    | '/(staff)/(tabs)/home/concerns';
   /** Icon-tile tint. Defaults to indigo when omitted. */
   tone?: MoreTone;
   /** The paid module this tool belongs to; Home draws it only when the school has it on. */
@@ -123,4 +128,5 @@ export const MORE_ITEMS: readonly MoreItem[] = [
   { label: 'Announcements', icon: 'notices', route: '/(staff)/(tabs)/home/post', tone: 'amber' },
   { label: 'Library', icon: 'library', route: '/(staff)/(tabs)/home/library', tone: 'indigo', feature: 'LIBRARY' },
   { label: 'My pay', icon: 'fees', route: '/(staff)/(tabs)/home/salary', tone: 'green', feature: 'SALARY' },
+  { label: 'Complaint Box', icon: 'concern', route: '/(staff)/(tabs)/home/concerns', tone: 'amber' },
 ];

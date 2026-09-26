@@ -1,4 +1,5 @@
 'use client';
+import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -30,7 +31,9 @@ export default function CatalogueTab() {
   const [q, setQ] = useState('');
   const dq = useDebounced(q);
   const [ticket, setTicket] = useState<Ticket | null>(null);
-  const [form, setForm] = useState<{ title: string; author: string; shelf: string } | null>(null);
+  // "Add a book" on the home lands here with the form already open (?add=1).
+  const params = useSearchParams();
+  const [form, setForm] = useState<{ title: string; author: string; shelf: string } | null>(params?.get('add') === '1' ? { title: '', author: '', shelf: 'C-2' } : null);
   const [formErr, setFormErr] = useState<string | null>(null);
 
   const hits = useQuery({

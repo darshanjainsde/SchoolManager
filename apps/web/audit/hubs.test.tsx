@@ -24,12 +24,17 @@ import PressOrdersPage from '@/app/app/press/orders/page';
 import OnboardingPage from '@/app/app/onboarding/page';
 import HomeTab from '@/app/app/pay/home-tab';
 import { PayShell } from '@/app/app/pay/shell';
+import AdminProfilePage from '@/app/app/profile/page';
+import ConcernsPage from '@/app/app/concerns/page';
+import ClassTeachersPage from '@/app/app/class-teachers/page';
+import LibraryDashboardTab from '@/app/app/library/dashboard-tab';
 
 vi.mock('@/lib/use-api', () => ({ useApi: vi.fn() }));
 vi.mock('@/components/use-host', () => ({ useHost: vi.fn() }));
 vi.mock('@/lib/use-hydrated', () => ({ useHydrated: () => true }));
 const params = new URLSearchParams();
-vi.mock('next/navigation', () => ({ usePathname: () => '/app/pay', useRouter: () => ({ replace: vi.fn() }), useSearchParams: () => params }));
+vi.mock('next/navigation', () => ({ usePathname: () => '/app/pay', useRouter: () => ({ replace: vi.fn(), push: vi.fn() }), useSearchParams: () => params }));
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 const NAMES = ['Saanvi Krishnamurthy', 'Rajeshwari Balasubramanian', 'Mohammed Irfan Qureshi', 'Lakshmi Venkataraman', 'Aadhya Venkataraghavan', 'Priya Nair', 'Kabir Singh Shekhawat', 'Aarav Mehta'];
 
@@ -101,6 +106,51 @@ const PAY_READY = {
 };
 const PAY_FRESH = { ...PAY_READY, setup: { countryCode: 'IN', gradeCount: 0, rosterSize: 450, onPay: 0, notOnPay: 450, ready: false }, run: null, exceptions: [], recent: [], previousTotalMinor: null };
 
+const PROFILE = {
+  userId: 'u1', role: 'SCHOOL_ADMIN', email: 'srikant.misra@raffles.sckools.com', name: 'Srikant Misra',
+  notifyPrefs: { leave: true, register: true, fees: true, enquiry: false, summary: true },
+};
+const LIBRARY = {
+  counts: { totalCopies: 12_480, totalTitles: 4_212, lostCopies: 37, outNow: 1_318, dueSoon: 214, finesCollectedRupees: 24_500, finesDueRupees: 8_640 },
+  outNow: [], dueSoon: [], today: '2026-09-26',
+};
+
+const CONCERN_COUNTS = { unread: 7, open: 19, withClassTeachers: 4, resolvedThisMonth: 41, medianDaysToResolve: 1.6, topCategory: 'BUS' };
+const CONCERNS = NAMES.map((name, i) => ({
+  id: `k${i}`, status: (['OPEN', 'IN_PROGRESS', 'RESOLVED', 'OPEN', 'RESOLVED', 'OPEN', 'IN_PROGRESS', 'RESOLVED'] as const)[i],
+  category: (['BUS', 'FEES', 'TEACHING', 'SAFETY', 'CANTEEN', 'FACILITIES', 'OTHER', 'BUS'] as const)[i],
+  audience: (i % 2 ? 'OFFICE' : 'CLASS_TEACHER') as 'OFFICE' | 'CLASS_TEACHER',
+  title: [
+    'School bus reached the stop twenty-five minutes late, twice this week, with no message',
+    'The fee bill shows last year\u2019s transport amount', 'Maths homework is not being checked',
+    'The side gate is open during the lunch hour', 'Canteen water cooler on the second floor is not working',
+    'Fan in 7 B has been out for a fortnight', 'Sports day timings clash with the exam', 'Bus route 4 skipped the stop',
+  ][i],
+  createdAt: `2026-09-${26 - i}T04:00:00.000Z`, lastActivityAt: `2026-09-${26 - i}T04:00:00.000Z`,
+  resolvedAt: null, escalatedAt: i === 5 ? '2026-09-22T04:00:00.000Z' : null, unread: i < 3,
+  student: { id: `s${i}`, name, className: ['Nursery A', '12 Commerce B', '7 B', '3 A', 'LKG Morning', '10 A', '11 Science A', '5 C'][i] },
+  assignedTeacher: i % 2 ? null : { id: 't1', name: 'Mohammed Irfan Qureshi' },
+  raisedBy: { name: `${name.split(' ')[0]}’s mother`, role: 'PARENT' as const },
+  commentCount: i,
+}));
+const CLASS_TEACHERS = {
+  academicYear: { id: 'y1', name: '2026-27' },
+  rows: [
+    { classSectionId: 's1', label: 'Nursery A', gradeName: 'Nursery', sectionName: 'A', gradeOrder: 0, students: 28, teacher: null, alsoHolds: [] },
+    { classSectionId: 's2', label: 'LKG A', gradeName: 'LKG', sectionName: 'A', gradeOrder: 1, students: 30, teacher: { id: 't2', name: 'Priya Nair' }, alsoHolds: ['LKG B'] },
+    { classSectionId: 's3', label: 'LKG B', gradeName: 'LKG', sectionName: 'B', gradeOrder: 1, students: 29, teacher: { id: 't2', name: 'Priya Nair' }, alsoHolds: ['LKG A'] },
+    { classSectionId: 's4', label: '7 B', gradeName: '7', sectionName: 'B', gradeOrder: 7, students: 41, teacher: { id: 't1', name: 'Mohammed Irfan Qureshi' }, alsoHolds: [] },
+    { classSectionId: 's5', label: '12 Commerce B', gradeName: '12 Commerce', sectionName: 'B', gradeOrder: 12, students: 44, teacher: { id: 't3', name: 'Rajeshwari Balasubramanian' }, alsoHolds: [] },
+  ],
+  teachers: [
+    { id: 't1', name: 'Mohammed Irfan Qureshi', sections: ['7 B'] },
+    { id: 't2', name: 'Priya Nair', sections: ['LKG A', 'LKG B'] },
+    { id: 't3', name: 'Rajeshwari Balasubramanian', sections: ['12 Commerce B'] },
+  ],
+  counts: { sections: 64, assigned: 58, unassigned: 6, holdingMoreThanOne: 2 },
+  previousYear: { id: 'y0', name: '2025-26', assigned: 61 },
+};
+
 let overview: unknown = PAY_READY;
 beforeEach(() => {
   vi.mocked(useHost).mockReturnValue('raffles.sckools.com');
@@ -115,6 +165,12 @@ beforeEach(() => {
       if (p === '/manage/onboarding/status') return ONBOARDING_STATUS;
       if (p === '/payroll/settings') return SETTINGS;
       if (p === '/payroll/overview') return overview;
+      if (p === '/me/profile') return PROFILE;
+      if (p === '/me/phone') return { phone: null, verified: false };
+      if (p === '/library/dashboard') return LIBRARY;
+      if (p === '/manage/concerns/counts') return CONCERN_COUNTS;
+      if (p.startsWith('/manage/concerns')) return CONCERNS;
+      if (p.startsWith('/manage/class-teachers')) return CLASS_TEACHERS;
       return [];
     }),
     post: vi.fn(), put: vi.fn(), patch: vi.fn(), del: vi.fn(),
@@ -154,6 +210,10 @@ it('writes the real hub screens for a browser to measure', async () => {
     ['Reports & Documents', <ReportsDocumentsPage />],
     ['Print Store', <PressOrdersPage />],
     ['Onboarding', <OnboardingPage />],
+    ['Complaint Box', <ConcernsPage />],
+    ['Class teachers', <ClassTeachersPage />],
+    ['My profile', <AdminProfilePage />],
+    ['Library home', <LibraryDashboardTab base="/app/library" />],
     ['Pay home · month', <PayShell base="/app/pay" subtitle="What the school pays, and what it files."><HomeTab base="/app/pay" /></PayShell>],
     ['Pay home · guide open', <PayShell base="/app/pay" subtitle="What the school pays, and what it files."><HomeTab base="/app/pay" /></PayShell>,
       (h) => [...h.querySelectorAll('button')].find((b) => /How Pay works/.test(b.textContent ?? ''))?.click()],

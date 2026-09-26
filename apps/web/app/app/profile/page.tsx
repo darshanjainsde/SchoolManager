@@ -66,74 +66,95 @@ export default function AdminProfilePage() {
   return (
     <div className="flex flex-col gap-6">
       <header className="sk-pagehead">
-        <h1>My profile</h1>
-        <p>Your name, your WhatsApp number, what reaches you there, and your password. School-wide settings live under Settings.</p>
+        <div>
+          <h1>My profile</h1>
+          <p>Your name, your WhatsApp number, what reaches you there, and your password. School-wide settings live under Settings.</p>
+        </div>
       </header>
 
       {q.isError ? <QueryError error={q.error} onRetry={q.refetch} className="py-6" /> : null}
 
-      <div className="mp-grid">
-        <div className="sk-card" data-testid="profile-you">
-          <div className="sk-card-h"><h3>You</h3>{d ? <span className="sk-pill" data-tone="neutral">{d.role === 'SCHOOL_ADMIN' ? 'Admin' : d.role}</span> : null}</div>
-          <div className="sk-card-b">
-            {q.isLoading || !d ? <p className="sk-state">Loading…</p> : (
-              <form className="mp-form" onSubmit={(e) => { e.preventDefault(); save.mutate({ name }); }}>
-                <div className="mp-who">
-                  <div className="mp-avatar" aria-hidden="true">{initials}</div>
-                  <div className="mp-who-t">
-                    <div className="nm" style={{ fontSize: 15.5 }}>{d.name || 'No name yet'}</div>
-                    <div className="mp-sub">{d.email}</div>
+      {/*
+        TWO COLUMNS, EACH A STACK — not one auto-fit grid.
+        Four cards of different heights in an auto-fit grid left the fourth
+        alone under the first with a hole beside it, which is what made this
+        page read as unfinished. Two stacks fill top to bottom at every width
+        and collapse to one column on a phone. You + your password on the
+        left (both about YOU); your number + what reaches it on the right
+        (both about WhatsApp) — the pairing is the reason for the split.
+      */}
+      <div className="mp-cols">
+        <div className="mp-col">
+          <section className="sk-card" data-testid="profile-you">
+            <div className="sk-card-h">
+              <h3>You</h3>
+              {d ? <span className="sk-pill" data-tone="neutral">{d.role === 'SCHOOL_ADMIN' ? 'Admin' : d.role}</span> : null}
+            </div>
+            <div className="sk-card-b">
+              {q.isLoading || !d ? <p className="sk-state">Loading…</p> : (
+                <form className="mp-form" onSubmit={(e) => { e.preventDefault(); save.mutate({ name }); }}>
+                  <div className="mp-who">
+                    <div className="mp-avatar" aria-hidden="true">{initials}</div>
+                    <div className="mp-who-t">
+                      <div className="nm" style={{ fontSize: 15.5 }}>{d.name || 'No name yet'}</div>
+                      <div className="mp-sub">{d.email}</div>
+                    </div>
                   </div>
+                  <label htmlFor="mp-name" className="sk-lab">Your name</label>
+                  <div className="ph-row">
+                    <input id="mp-name" className="sk-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Darshan Jain" maxLength={80} autoComplete="name" />
+                    <button type="submit" className="sk-btn" data-variant="primary" disabled={save.isPending || name.trim() === (d.name ?? '')}>{save.isPending ? 'Saving…' : 'Save'}</button>
+                  </div>
+                  <p className="ph-hint">Shown as &ldquo;approved by {name.trim() || 'you'}&rdquo; on leave and register decisions.</p>
+                </form>
+              )}
+            </div>
+          </section>
+
+          <section className="sk-card" data-testid="profile-password">
+            <div className="sk-card-h"><h3>Change password</h3></div>
+            <div className="sk-card-b">
+              <form className="mp-form" onSubmit={(e) => { e.preventDefault(); if (newPassword.length >= NEW_PASSWORD_MIN_LENGTH) changePassword.mutate(); }}>
+                <label htmlFor="mp-current" className="sk-lab">Current password</label>
+                <input id="mp-current" className="sk-input" type="password" autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
+                <label htmlFor="mp-new" className="sk-lab">New password</label>
+                <input id="mp-new" className="sk-input" type="password" autoComplete="new-password" minLength={NEW_PASSWORD_MIN_LENGTH} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+                <p className="ph-hint" style={{ margin: 0 }}>At least {NEW_PASSWORD_MIN_LENGTH} characters.</p>
+                <div>
+                  <button type="submit" className="sk-btn" data-variant="primary" disabled={changePassword.isPending || !currentPassword || newPassword.length < NEW_PASSWORD_MIN_LENGTH}>{changePassword.isPending ? 'Changing…' : 'Change password'}</button>
                 </div>
-                <label htmlFor="mp-name" className="sk-lab">Your name</label>
-                <div className="ph-row">
-                  <input id="mp-name" className="sk-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Darshan Jain" maxLength={80} autoComplete="name" />
-                  <button type="submit" className="sk-btn" data-variant="primary" disabled={save.isPending || name.trim() === (d.name ?? '')}>{save.isPending ? 'Saving…' : 'Save'}</button>
-                </div>
-                <p className="ph-hint">Shown as "approved by {name.trim() || 'you'}" on leave and register decisions.</p>
+                <p className="ph-hint">Forgot it? Sign out and use &ldquo;Forgot password&rdquo; — a code comes to your verified WhatsApp number.</p>
               </form>
-            )}
-          </div>
+            </div>
+          </section>
         </div>
 
-        <PhoneCard role="admin" />
+        <div className="mp-col">
+          <PhoneCard role="admin" />
 
-        <div className="sk-card" data-testid="profile-prefs">
-          <div className="sk-card-h"><h3>What reaches you on WhatsApp</h3></div>
-          <div className="sk-card-b">
-            <p style={{ margin: '0 0 8px', fontSize: 13.5, color: 'var(--sk-ink-2)' }}>Everything is on until you switch it off. Off here means app and email only.</p>
-            <ul className="mp-prefs">
-              {PREFS.map((p) => (
-                <li key={p.key}>
-                  <label className="mp-pref">
-                    <input
-                      type="checkbox"
-                      role="switch"
-                      aria-label={p.label}
-                      checked={d?.notifyPrefs[p.key] ?? true}
-                      disabled={!d || save.isPending}
-                      onChange={(e) => save.mutate({ notifyPrefs: { [p.key]: e.target.checked } })}
-                    />
-                    <span><b>{p.label}</b><small>{p.hint}</small></span>
-                  </label>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-
-        <div className="sk-card" data-testid="profile-password">
-          <div className="sk-card-h"><h3>Change password</h3></div>
-          <div className="sk-card-b">
-            <form className="mp-form" onSubmit={(e) => { e.preventDefault(); if (newPassword.length >= NEW_PASSWORD_MIN_LENGTH) changePassword.mutate(); }}>
-              <label htmlFor="mp-current" className="sk-lab">Current password</label>
-              <input id="mp-current" className="sk-input" type="password" autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
-              <label htmlFor="mp-new" className="sk-lab">New password</label>
-              <input id="mp-new" className="sk-input" type="password" autoComplete="new-password" minLength={NEW_PASSWORD_MIN_LENGTH} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
-              <div><button type="submit" className="sk-btn" data-variant="primary" disabled={changePassword.isPending || !currentPassword || newPassword.length < NEW_PASSWORD_MIN_LENGTH}>{changePassword.isPending ? 'Changing…' : 'Change password'}</button></div>
-              <p className="ph-hint">Forgot it? Sign out and use "Forgot password" — a code comes to your verified WhatsApp number.</p>
-            </form>
-          </div>
+          <section className="sk-card" data-testid="profile-prefs">
+            <div className="sk-card-h"><h3>What reaches you on WhatsApp</h3></div>
+            <div className="sk-card-b">
+              <p className="mp-lede">Everything is on until you switch it off. Off here means app and email only.</p>
+              <ul className="mp-prefs">
+                {PREFS.map((p) => (
+                  <li key={p.key}>
+                    <label className="mp-pref">
+                      <input
+                        type="checkbox"
+                        role="switch"
+                        aria-label={p.label}
+                        checked={d?.notifyPrefs[p.key] ?? true}
+                        disabled={!d || save.isPending}
+                        onChange={(e) => save.mutate({ notifyPrefs: { [p.key]: e.target.checked } })}
+                      />
+                      <span><b>{p.label}</b><small>{p.hint}</small></span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </section>
         </div>
       </div>
     </div>

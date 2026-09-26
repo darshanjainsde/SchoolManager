@@ -1,5 +1,6 @@
 'use client';
 import React, { useState, useMemo, useEffect } from 'react';
+import { ScrollBox } from '@/components/ui/kit';
 import { useQuery } from '@tanstack/react-query';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
@@ -109,6 +110,8 @@ export default function AvailabilityPage(): React.JSX.Element {
               default everyone pays for. */}
           {found.length > 0 && (
             <div data-testid="teacher-week" style={{ marginBottom: 18 }}>
+              <p className="sk-muted" style={{ margin: '0 0 8px', fontSize: 12.5 }}>{found.length} {found.length === 1 ? 'teacher matches' : 'teachers match'} — scroll for more</p>
+              <ScrollBox max={560} label={`${found.length} matching teachers`}>
               {found.map((t) => (
                 <div key={t.id} style={{ marginBottom: 14 }}>
                   <div className="nm" style={{ marginBottom: 6 }}>
@@ -144,6 +147,7 @@ export default function AvailabilityPage(): React.JSX.Element {
                   </div>
                 </div>
               ))}
+              </ScrollBox>
             </div>
           )}
 
@@ -221,7 +225,11 @@ export default function AvailabilityPage(): React.JSX.Element {
                         Everyone is teaching in this period. Try the hour either side.
                       </p>
                     ) : (
-                      selectedFree.map((t) => (
+                      /* The panel is sticky; a 40-name list inside it used to run
+                         past the bottom of the screen. The list scrolls in its own
+                         box and the line above says how many there are. */
+                      <ScrollBox max={460} label={`${selectedFree.length} teachers free`}>
+                      {selectedFree.map((t) => (
                         <div key={t.id} className="sk-row" data-testid={`free-${t.id}`}>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div className="nm">
@@ -243,7 +251,8 @@ export default function AvailabilityPage(): React.JSX.Element {
                             {(load.get(t.id) ?? 0) <= (model.medianLoad ?? 0) ? 'Lighter week' : 'Busier week'}
                           </span>
                         </div>
-                      ))
+                      ))}
+                      </ScrollBox>
                     )}
                   </>
                 ) : (

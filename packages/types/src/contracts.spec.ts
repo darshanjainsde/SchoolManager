@@ -175,6 +175,11 @@ describe('shared portal contracts', () => {
   it('declares exactly the NotificationOutbox kinds the API writes', () => {
     expect([...NOTIFICATION_OUTBOX_KINDS].sort()).toEqual([
       'ASSIGNMENT_POSTED',
+      // The Complaint Box: raised (to whoever the family chose), replied and
+      // resolved (back to the family).
+      'CONCERN_RAISED',
+      'CONCERN_REPLIED',
+      'CONCERN_RESOLVED',
       // A substitute told which class to cover.
       'COVER_ASSIGNED',
       'EXAM_SCHEDULED',

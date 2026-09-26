@@ -157,6 +157,17 @@ function toNotificationMessage(kind: NotificationOutboxKind, payload: unknown): 
       payload: { schoolName: p.schoolName, title: p.title, body: p.body, className: null },
     };
   }
+  if (kind === 'CONCERN_RAISED' || kind === 'CONCERN_REPLIED' || kind === 'CONCERN_RESOLVED') {
+    // The Complaint Box, to one reader (targetUserId): the class teacher or
+    // an admin when a family raises one, the family when the school answers.
+    // Renders through the generic single-reader ANNOUNCEMENT shape; the class
+    // slot names the desk, as the fee kinds do.
+    const p = payload as { schoolName: string; title: string; body: string };
+    return {
+      kind: 'ANNOUNCEMENT',
+      payload: { schoolName: p.schoolName, title: p.title, body: p.body, className: 'Complaint Box' },
+    };
+  }
   if (kind === 'MESSAGE_RECEIVED') {
     // Also renders through the EXISTING 'ANNOUNCEMENT' shape (no dedicated
     // template) — see MessageReceivedOutboxPayload. This row targets a single
