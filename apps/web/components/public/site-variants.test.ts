@@ -88,19 +88,20 @@ describe('defaults emit no class', () => {
     );
   });
 
-  it('festive: null stays null, layer decorates without a takeover class', () => {
+  it('festive: null stays null; LAYER names itself and never claims a takeover', () => {
     expect(normalizeFestiveTheme(null)).toBeNull();
     expect(normalizeFestiveTheme({ festival: 'NOT_A_FESTIVAL' })).toBeNull();
     expect(festiveClasses(null)).toBe('');
     const layer = normalizeFestiveTheme({ festival: 'DIWALI' })!;
+    expect(layer.treatment).toBe('LAYER');
     expect(layer.intensity).toBe('LAYER');
-    expect(festiveClasses(layer)).toBe('ps-fest');
+    expect(festiveClasses(layer)).toBe('ps-fest ps-fest-layer ps-fest-diwali');
+    // A row written before treatments existed: FULL on a night festival IS the night.
     const full = normalizeFestiveTheme({ festival: 'DIWALI', intensity: 'FULL' })!;
-    expect(festiveClasses(full)).toBe('ps-fest ps-fest-full ps-fest-diwali');
+    expect(full.treatment).toBe('NIGHT');
+    expect(festiveClasses(full)).toBe('ps-fest ps-fest-night ps-fest-diwali ps-fest-full');
   });
-});
 
-describe('the option lists agree with the class mappers', () => {
   it('every non-default option maps to a distinct class', () => {
     const scroll = SCROLL_FEELS.filter((o) => o.value !== 'CLASSIC').map((o) => scrollFeelClass(o.value));
     expect(new Set(scroll).size).toBe(scroll.length);
@@ -117,16 +118,14 @@ describe('the option lists agree with the class mappers', () => {
     }
   });
 
-  it('a full-intensity festival layers its extras without duplicating the choice', () => {
-    const f = normalizeFestiveTheme({ festival: 'DIWALI', variant: 'FIREWORKS', intensity: 'FULL' })!;
-    const sets = festiveDecorations(f);
-    expect(sets).toContain('FIREWORKS');
-    expect(sets).toContain('DIYAS');
-    expect(new Set(sets).size).toBe(sets.length);
+  it('only LAYER draws the decoration sets — the dressed treatments draw marks instead', () => {
+    const layer = normalizeFestiveTheme({ festival: 'DIWALI', variant: 'FIREWORKS' })!;
+    expect(festiveDecorations(layer)).toEqual(['FIREWORKS']);
+    for (const treatment of ['CHROME', 'HERO', 'WASH', 'NIGHT']) {
+      expect(festiveDecorations(normalizeFestiveTheme({ festival: 'DIWALI', treatment })!)).toEqual([]);
+    }
   });
-});
 
-describe('normalizeSectionVariants is defensive against arbitrary Json', () => {
   it('keeps only known sections, layouts and gestures', () => {
     const out = normalizeSectionVariants({
       stats: { layout: 'RINGS', gesture: 'FADE' },
@@ -362,6 +361,62 @@ describe('every festival decoration set has a renderer', () => {
     for (const f of FESTIVALS) {
       for (const v of f.variants) expect(known, `${f.value}.${v.value}`).toContain(v.value);
       for (const x of f.fullExtras) expect(known, `${f.value} extra ${x}`).toContain(x);
+    }
+  });
+});
+
+import { TREATMENTS, festivalsFor, treatmentsFor } from './site-variants';
+
+describe('festive treatments — the same five for every festival', () => {
+  it('names five, in loudness order', () => {
+    expect(TREATMENTS.map((t) => t.value)).toEqual(['LAYER', 'CHROME', 'HERO', 'WASH', 'NIGHT']);
+  });
+  it('every festival offers LAYER and CHROME; NIGHT only where a night surface exists or is declared', () => {
+    for (const f of FESTIVALS) {
+      const offered = treatmentsFor(f);
+      expect(offered).toContain('LAYER');
+      expect(offered).toContain('CHROME');
+      if (!f.treatments) expect(offered.includes('NIGHT')).toBe(!!f.fullSurface);
+    }
+    expect(treatmentsFor(FESTIVALS.find((f) => f.value === 'INDEPENDENCE')!)).not.toContain('NIGHT');
+    expect(treatmentsFor(FESTIVALS.find((f) => f.value === 'DIWALI')!)).toContain('NIGHT');
+  });
+  it('a treatment the festival does not offer falls to one it does, never to nothing', () => {
+    const t = normalizeFestiveTheme({ festival: 'INDEPENDENCE', treatment: 'NIGHT' })!;
+    expect(treatmentsFor(FESTIVALS.find((f) => f.value === 'INDEPENDENCE')!)).toContain(t.treatment);
+    expect(t.treatment).toBe('WASH');
+    const g = normalizeFestiveTheme({ festival: 'GANDHI', treatment: 'HERO' })!;
+    expect(g.treatment).toBe('LAYER');
+  });
+  it('old rows keep their shape: FULL without a night surface was a light retint, which is WASH', () => {
+    expect(normalizeFestiveTheme({ festival: 'HOLI', intensity: 'FULL' })!.treatment).toBe('WASH');
+    expect(normalizeFestiveTheme({ festival: 'HOLI', intensity: 'LAYER' })!.treatment).toBe('LAYER');
+    expect(normalizeFestiveTheme({ festival: 'HOLI' })!.treatment).toBe('LAYER');
+  });
+  it('an unknown treatment string is ignored, not trusted', () => {
+    expect(normalizeFestiveTheme({ festival: 'DIWALI', treatment: 'GLITTER' })!.treatment).toBe('LAYER');
+  });
+  it('WASH and NIGHT report FULL to readers written before treatments existed', () => {
+    expect(normalizeFestiveTheme({ festival: 'DIWALI', treatment: 'NIGHT' })!.intensity).toBe('FULL');
+    expect(normalizeFestiveTheme({ festival: 'DIWALI', treatment: 'WASH' })!.intensity).toBe('FULL');
+    expect(normalizeFestiveTheme({ festival: 'DIWALI', treatment: 'HERO' })!.intensity).toBe('LAYER');
+  });
+});
+
+describe('the country switch, as the Studio sees it', () => {
+  it('every festival in the catalogue is on India\u2019s calendar today', () => {
+    for (const f of FESTIVALS) expect(f.countries).toContain('IN');
+    expect(festivalsFor('IN').map((f) => f.value)).toEqual(FESTIVALS.map((f) => f.value));
+  });
+  it('a country with no pack of its own inherits India\u2019s festivals — the same for all countries, today', () => {
+    for (const c of ['AE', 'GB', 'NP', undefined, null, '']) {
+      expect(festivalsFor(c).map((f) => f.value)).toEqual(FESTIVALS.map((f) => f.value));
+    }
+  });
+  it('the Indian calendar covers the days a school actually marks', () => {
+    const keys = FESTIVALS.map((f) => f.value);
+    for (const k of ['DIWALI', 'NAVRATRI', 'HOLI', 'EID', 'INDEPENDENCE', 'REPUBLIC', 'DURGA', 'VASANT', 'UGADI', 'BAISAKHI', 'GURUNANAK', 'LOHRI', 'GANDHI', 'CHILDRENS', 'TEACHERS', 'GANESH', 'ONAM', 'SANKRANTI', 'RAKSHA', 'JANMASHTAMI', 'CHRISTMAS', 'NEWYEAR']) {
+      expect(keys).toContain(k);
     }
   });
 });

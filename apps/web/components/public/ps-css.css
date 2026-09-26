@@ -218,6 +218,28 @@
      .ps-panel is the only thing a band below the fold may draw itself with —
      a hardcoded radius or shadow down there is a place the shape cannot reach,
      which is the bug this control exists to fix. */
+  /* ── Two surfaces ──
+     Every word below the fold used to be a Tailwind slate utility written into
+     a section file — ~100 sites the festive takeover could not reach, which is
+     how a night palette ended up with slate-500 body copy at 3:1 on plum. The
+     utilities are remapped HERE, inside .ps-root only, to tokens that
+     themeRootProps sets inline. With no festival on, each token is exactly
+     the slate hex the utility always was, so this block repaints nothing;
+     a treatment then changes six numbers instead of a hundred class names.
+     The defaults below are the fallback for a page rendered by an older
+     themeRootProps that does not set them. */
+  .ps-root { --ps-text-strong: #1e293b; --ps-text: #475569; --ps-muted: #64748b; --ps-faint: #94a3b8;
+    --ps-accent-text: var(--ps1); --ps-accent2-text: var(--ps2);
+    --ps-hero-a: var(--paper); --ps-hero-b: var(--paper); --ps-hero-accent: var(--ps1); --ps-hero-accent-on: var(--ps1-on);
+    --ps-hero-ink: var(--ink); --ps-hero-text: var(--ps-text);
+    --ps-fest-glow: var(--ps2); }
+  .ps-root .text-slate-900, .ps-root .text-slate-800 { color: var(--ps-text-strong); }
+  .ps-root .text-slate-700, .ps-root .text-slate-600 { color: var(--ps-text); }
+  .ps-root .text-slate-500 { color: var(--ps-muted); }
+  .ps-root .text-slate-400 { color: var(--ps-faint); }
+  .ps-root .bg-white { background-color: var(--ps-card-bg); }
+  .ps-root .hover\:text-slate-900:hover { color: var(--ps-text-strong); }
+
   .ps-root { --ps-radius: 24px; --ps-radius-sm: 14px;
     --ps-card-bg: #fff;
     --ps-card-border: 1px solid rgba(28,45,36,.06);
@@ -1286,8 +1308,8 @@
     --ps-card-border: 1px solid color-mix(in srgb, var(--ps2) 26%, transparent);
     --ps-card-shadow: 0 18px 40px -20px rgba(0,0,0,.65);
     color: color-mix(in srgb, var(--ink) 72%, var(--paper)); }
-  .ps-fest-dark .text-slate-500, .ps-fest-dark .text-slate-600, .ps-fest-dark .text-slate-400,
-  .ps-fest-dark .text-slate-700 { color: color-mix(in srgb, var(--ink) 70%, var(--paper)); }
+  /* Body-text remap for the night surface now comes from the two-surface
+     tokens themeRootProps sets (--ps-text, --ps-muted…); nothing to do here. */
   .ps-fest-dark .ps-card { background: var(--ps-card-bg); border: var(--ps-card-border); }
   .ps-fest-dark .ps-navc-paper { background: color-mix(in srgb, var(--paper) 92%, transparent); }
   .ps-fest-dark .ps-nav-link, .ps-fest-dark .ps-nav-name { color: var(--ink); }
@@ -1296,6 +1318,64 @@
   .ps-fest-dark .ps-menu-card::before { background: color-mix(in srgb, var(--paper) 88%, #fff); }
   .ps-fest-dark .ps-menu-row-label { color: var(--ink); }
   .ps-fest-dark footer { border-color: color-mix(in srgb, var(--ps2) 25%, transparent); }
+
+  /* ── Festive treatments (2026-09) ──
+     Four of the five treatments dress the page with DRAWN marks placed in the
+     chrome — the hero band, the footer edge — never over body copy. Nothing
+     here is an image, a filter or a font: gradients, a few inline <symbol>s,
+     and opacity/transform-only motion that --motion and reduced-motion can
+     stop. The old page-wide overlay (.ps-fx) is now LAYER's alone. */
+  /* Placed AFTER a hero's background layers and BEFORE its copy, so document
+     order stacks it correctly without touching any sibling's positioning
+     (a sibling rule here would have re-positioned the photo layer). */
+  .ps-fest-dress { position: absolute; inset: 0; pointer-events: none; overflow: hidden; contain: paint; }
+  /* HERO: the band takes the festival's light gradient. Inside it, the brand
+     accent (eyebrow, primary button) becomes the festival's, resolved to read
+     on the band's darker stop — a scoped custom-property override, so the
+     inline `color: var(--ps1)` the sections already write picks it up. */
+  .ps-fest-hero #home { background: linear-gradient(135deg, var(--ps-hero-a) 0%, var(--ps-hero-b) 100%);
+    --ps1: var(--ps-hero-accent); --ps1-on: var(--ps-hero-accent-on);
+    --ink: var(--ps-hero-ink); --ps-text: var(--ps-hero-text); --ps-muted: var(--ps-hero-text); }
+  /* Bokeh: out-of-focus lights, denser to the right, dimming toward the copy.
+     Radial gradients, not blurred circles — one paint, no filter. */
+  .ps-fest-bokeh { position: absolute; inset: 0; opacity: calc(.55 + .35 * var(--motion));
+    background:
+      radial-gradient(circle at 88% 12%, color-mix(in srgb, var(--ps-fest-glow) 55%, #fff) 0 14px, transparent 42px),
+      radial-gradient(circle at 96% 52%, color-mix(in srgb, var(--ps-fest-glow) 50%, #fff) 0 11px, transparent 36px),
+      radial-gradient(circle at 70% 22%, color-mix(in srgb, var(--ps-fest-glow) 45%, #fff) 0 8px, transparent 28px),
+      radial-gradient(circle at 80% 68%, color-mix(in srgb, var(--ps-fest-glow) 45%, #fff) 0 6px, transparent 22px),
+      radial-gradient(circle at 60% 8%, color-mix(in srgb, var(--ps-fest-glow) 40%, #fff) 0 5px, transparent 18px),
+      radial-gradient(circle at 92% 86%, color-mix(in srgb, var(--ps-fest-glow) 40%, #fff) 0 9px, transparent 30px),
+      radial-gradient(circle at 40% 14%, color-mix(in srgb, var(--ps-fest-glow) 30%, #fff) 0 4px, transparent 14px),
+      radial-gradient(circle at 8% 70%, color-mix(in srgb, var(--ps-fest-glow) 22%, #fff) 0 6px, transparent 22px),
+      radial-gradient(circle at 20% 92%, color-mix(in srgb, var(--ps-fest-glow) 22%, #fff) 0 8px, transparent 26px);
+    -webkit-mask-image: linear-gradient(90deg, rgba(0,0,0,.35), #000 55%); mask-image: linear-gradient(90deg, rgba(0,0,0,.35), #000 55%); }
+  .ps-fest-night .ps-fest-bokeh { opacity: calc(.7 + .3 * var(--motion)); }
+  /* The bulb string: an <svg> sized to the band's top edge. */
+  .ps-fest-bulbs { position: absolute; left: 0; right: 0; top: 0; height: 34px; width: 100%; }
+  /* A floating pill/ghost nav sits fixed over the hero's top edge and hid the
+     string behind it (only the glow peeked out). When the nav floats over,
+     the string hangs from just below the bar instead. */
+  #ps-nav.ps-nav-float-over ~ [data-sec="hero"] .ps-fest-bulbs { top: 4.25rem; }
+  .ps-fest-bulb { animation: ps-fest-tw calc(2.1s / (var(--motion) + .06)) ease-in-out infinite alternate; }
+  @keyframes ps-fest-tw { from { opacity: .55; } to { opacity: 1; } }
+  /* The corner mark (rangoli + diya): bottom-right of the band, phone-sized on phones. */
+  .ps-fest-corner { position: absolute; right: -8px; bottom: -14px; width: clamp(120px, 24vw, 220px); height: auto; opacity: .9; }
+  .ps-fest-corner .ps-fest-rangoli { opacity: .22; }
+  .ps-fest-night .ps-fest-corner .ps-fest-rangoli, .ps-fest-wash .ps-fest-corner .ps-fest-rangoli { opacity: .16; }
+  .ps-fest-flame { transform-origin: 50% 100%; animation: ps-fest-fl calc(1.7s / (var(--motion) + .06)) ease-in-out infinite alternate; }
+  @keyframes ps-fest-fl { from { transform: scaleY(.93) scaleX(1.05); } to { transform: scaleY(1.05) scaleX(.96); } }
+  @media (max-width: 640px) { .ps-fest-corner { width: 110px; right: -12px; bottom: -18px; } }
+  /* Footer edge: the string returns along the footer's top. */
+  .ps-fest-footedge { position: relative; height: 0; }
+  .ps-fest-footedge svg { position: absolute; left: 0; right: 0; top: -6px; width: 100%; height: 34px; pointer-events: none; }
+  /* NIGHT: a school's photographs must not read as black rectangles between lit
+     panels. A warm hairline and a touch less brightness — no scrim element. */
+  .ps-fest-night .ps-panel img, .ps-fest-night .ps-card img { filter: brightness(.94) saturate(.95); outline: 1px solid color-mix(in srgb, var(--ps2) 22%, transparent); outline-offset: -1px; }
+  /* Ribbon on the light treatments takes the festival's light gradient. */
+  .ps-fest-hero .ps-fest-ribbon, .ps-fest-chrome .ps-fest-ribbon { background: linear-gradient(90deg, var(--ps-hero-a), var(--ps-hero-b)); color: var(--ps-hero-accent); }
+  .ps-motion-off .ps-fest-bulb, .ps-motion-off .ps-fest-flame { animation: none; }
+  @media (prefers-reduced-motion: reduce) { .ps-fest-bulb, .ps-fest-flame { animation: none; } }
 
   /* ── Studio additions: motion kill-switches ──
      Same contract as everything above them: reduced-motion and Animation=Off

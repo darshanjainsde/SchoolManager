@@ -50,7 +50,7 @@ const FEATURES = ['GALLERY', 'ENQUIRY', 'EVENTS', 'ALUMNI', 'BLOG', 'SPORTS'];
 const M = 'https://x.supabase.co/storage/v1/object/public/m';
 
 /** Longest realistic values, per the ledger — full Indian names, long labels. */
-function siteData(over: Record<string, unknown> = {}): PublicSiteData {
+export function siteData(over: Record<string, unknown> = {}): PublicSiteData {
   const base = {
     school: { name: 'Raffles International School', slug: 'raffles', tier: 'PRO', features: FEATURES, timezone: 'Asia/Kolkata' },
     profile: {
@@ -138,7 +138,17 @@ const CONFIGS: { name: string; data: PublicSiteData }[] = [
   { name: 'full-bleed hero', data: siteData({ profile: { heroLayout: 'FULL_BLEED' } }) },
   { name: 'side-panel hero, one image', data: siteData({ profile: { heroLayout: 'SIDE_PANEL' }, homepage: { heroImages: ['https://x.supabase.co/storage/v1/object/public/m/only.jpg'] } }) },
   { name: 'illustrated legacy hero', data: siteData({ profile: { heroStyle: 'ILLUSTRATED', heroLayout: 'ILLUSTRATED' } }) },
-  { name: 'festive diwali', data: siteData({ profile: { festiveTheme: { key: 'DIWALI', intensity: 'FULL', ribbon: true, recolour: true } } }) },
+  // The fixture used to send { key, recolour }; the normaliser reads
+  // { festival, recolor }, so this case had never rendered a festival. Now one
+  // case per treatment, so every dressed branch of the hero and footer runs.
+  { name: 'festive diwali · LAYER', data: siteData({ profile: { festiveTheme: { festival: 'DIWALI', variant: 'DIYAS', treatment: 'LAYER', ribbon: true, recolor: true } } }) },
+  { name: 'festive diwali · CHROME', data: siteData({ profile: { festiveTheme: { festival: 'DIWALI', treatment: 'CHROME' } } }) },
+  { name: 'festive diwali · HERO', data: siteData({ profile: { festiveTheme: { festival: 'DIWALI', treatment: 'HERO' } } }) },
+  { name: 'festive diwali · WASH', data: siteData({ profile: { festiveTheme: { festival: 'DIWALI', treatment: 'WASH' } } }) },
+  { name: 'festive diwali · NIGHT', data: siteData({ profile: { festiveTheme: { festival: 'DIWALI', treatment: 'NIGHT' } } }) },
+  { name: 'festive holi · WASH on a full-bleed photo hero', data: siteData({ profile: { festiveTheme: { festival: 'HOLI', treatment: 'WASH' }, heroLayout: 'FULL_BLEED' } }) },
+  { name: 'festive tiranga · HERO on a minimal hero', data: siteData({ profile: { festiveTheme: { festival: 'INDEPENDENCE', treatment: 'HERO' }, heroLayout: 'MINIMAL' } }) },
+  { name: 'festive eid · NIGHT, animation off', data: siteData({ profile: { festiveTheme: { festival: 'EID', treatment: 'NIGHT' }, animationLevel: 'NONE' } }) },
   { name: 'motion off', data: siteData({ profile: { animationLevel: 'NONE', scrollFeel: 'CLASSIC' } }) },
   { name: 'bare school', data: siteData({ school: { name: 'A', slug: 'a', tier: 'BASIC', features: [], timezone: 'Asia/Kolkata' }, courses: [], gallery: [], events: [], staff: [], celebrations: null, records: null, homepage: { aboutText: null, heroImages: [], heroUrl: null, stats: [] } }) },
 ];
@@ -174,5 +184,26 @@ describe('the fixture actually exercises the page', () => {
     }
     // The optimiser must be reached for the hero photos (the H5 fix).
     expect(html).toContain('/_next/image?url=');
+  });
+});
+
+
+describe('the festive fixtures really render a festival', () => {
+  it('a dressed treatment puts the dress inside the hero and the edge on the footer; LAYER does not', () => {
+    const dressed = renderToStaticMarkup(<PublicSite data={siteData({ profile: { festiveTheme: { festival: 'DIWALI', treatment: 'HERO' } } })} view="home" />);
+    expect(dressed).toContain('data-fest-dress="HERO"');
+    expect(dressed).toContain('ps-fest-footedge');
+    expect(dressed).toContain('ps-fest-hero');
+    expect(dressed).not.toContain('class="ps-fx"');
+    const layer = renderToStaticMarkup(<PublicSite data={siteData({ profile: { festiveTheme: { festival: 'DIWALI', treatment: 'LAYER' } } })} view="home" />);
+    expect(layer).not.toContain('data-fest-dress');
+    expect(layer).toContain('ps-fx');
+  });
+  it('no treatment writes a greeting into the hero — the school\u2019s own headline stays', () => {
+    for (const treatment of ['CHROME', 'HERO', 'WASH', 'NIGHT']) {
+      const html = renderToStaticMarkup(<PublicSite data={siteData({ profile: { festiveTheme: { festival: 'DIWALI', treatment, ribbon: false } } })} view="home" />);
+      expect(html).toContain('A school that knows every child by name');
+      expect(html).not.toMatch(/Happy Diwali/);
+    }
   });
 });

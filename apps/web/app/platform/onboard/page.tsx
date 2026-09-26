@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { useApi } from '@/lib/use-api';
 import { OWNER_HOST } from '@/lib/hosts';
 import { useWizardStore, type Tier } from '@/lib/wizard-store';
+import { COUNTRIES, countryName, hasOwnPack } from '@skoolos/types';
 import { cn } from '@/lib/cn';
 
 const STEPS = ['Basics', 'Choose tier', 'Confirm'];
@@ -56,6 +57,7 @@ export default function OnboardPage() {
         tier: w.tier,
         domainHostname: w.domainHostname,
         adminEmail: w.adminEmail,
+        countryCode: w.countryCode,
       }),
     onSuccess: (data) => {
       setSuccessInfo(data);
@@ -274,6 +276,25 @@ function BasicsStep() {
       </div>
 
       <div>
+        <Label htmlFor="countryCode" required hint="Sets the festivals, timezone and locale the school starts with">Country</Label>
+        <select
+          id="countryCode"
+          value={w.countryCode}
+          onChange={(e) => w.set({ countryCode: e.target.value })}
+          className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
+        >
+          {COUNTRIES.map((c) => (
+            <option key={c.code} value={c.code}>{c.name}</option>
+          ))}
+        </select>
+        {!hasOwnPack(w.countryCode) && (
+          <p className="mt-1 text-xs text-slate-500">
+            {countryName(w.countryCode)} is not set up on its own yet — this school starts with India&rsquo;s festivals, timezone and locale until it is.
+          </p>
+        )}
+      </div>
+
+      <div>
         <Label htmlFor="adminEmail" required>Admin email</Label>
         <Input
           id="adminEmail"
@@ -375,6 +396,7 @@ function ConfirmStep() {
         <ConfirmRow label="Slug" value={<code className="font-mono">{w.slug}</code>} />
         <ConfirmRow label="Domain" value={w.domainHostname} />
         <ConfirmRow label="Admin email" value={w.adminEmail} />
+        <ConfirmRow label="Country" value={countryName(w.countryCode)} />
         <ConfirmRow
           label="Tier"
           value={<Badge tone="info">{tierLabel}</Badge>}

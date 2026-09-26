@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { getPlatformPrisma, resolveFeatures, Prisma, DEFAULT_COURSES } from '@skoolos/db';
+import { countryPack } from '@skoolos/types';
 import { randomBytes } from 'node:crypto';
 import { PasswordService } from '../../auth';
 import { FeatureResolverService } from '../../features';
@@ -125,7 +126,17 @@ export class OwnerSchoolsService {
     let school;
     try {
       school = await db.$transaction(async (tx) => {
-        const s = await tx.school.create({ data: { name: dto.name, slug: dto.slug, tier: dto.tier, status: 'SETUP' } });
+        // The country is the switch every per-country behaviour hangs off, so
+        // it is written at birth together with the defaults its pack carries.
+        // Today every pack inherits India's, which is exactly what the schema
+        // defaults were — nothing changes for a school created without one.
+        const pack = countryPack(dto.countryCode);
+        const s = await tx.school.create({
+          data: {
+            name: dto.name, slug: dto.slug, tier: dto.tier, status: 'SETUP',
+            countryCode: pack.code, timezone: pack.timezone, locale: pack.locale, currency: pack.currency,
+          },
+        });
         await tx.domain.create({
           data: { schoolId: s.id, hostname: dto.domainHostname, type: 'CUSTOM', status: 'PENDING', isPrimary: true },
         });

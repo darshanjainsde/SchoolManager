@@ -28,13 +28,16 @@ export class SiteContentService {
 
   async getContent(schoolId: string) {
     return withTenant(schoolId, async (tx) => {
-      const [profile, homepage, stats, socialLinks] = await Promise.all([
+      const [profile, homepage, stats, socialLinks, school] = await Promise.all([
         tx.schoolProfile.findUnique({ where: { schoolId } }),
         tx.homepageContent.findUnique({ where: { schoolId } }),
         tx.statItem.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId }, orderBy: { order: 'asc' } }),
         tx.socialLink.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId }, orderBy: { order: 'asc' } }),
+        // The Studio offers festivals by country (the country switch), so it
+        // needs to know where the school is. One column, same transaction.
+        tx.school.findUnique({ where: { id: schoolId }, select: { countryCode: true } }),
       ]);
-      return { profile, homepage, stats, socialLinks };
+      return { profile, homepage, stats, socialLinks, school: { countryCode: school?.countryCode ?? 'IN' } };
     });
   }
 

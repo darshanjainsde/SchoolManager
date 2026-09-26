@@ -1,4 +1,5 @@
 import { IsBoolean, IsDateString, IsEmail, IsIn, IsOptional, IsString, IsUUID, Length, Matches } from 'class-validator';
+import { COUNTRY_CODES } from '@skoolos/types';
 
 export class OwnerLoginDto {
   @IsEmail() email!: string;
@@ -23,6 +24,13 @@ export class CreateSchoolDto {
   @IsIn(['BASIC', 'STANDARD', 'PRO']) tier!: 'BASIC' | 'STANDARD' | 'PRO';
   @IsString() @Matches(/^[a-z0-9.-]+$/) domainHostname!: string;
   @IsEmail() adminEmail!: string;
+  /**
+   * ISO 3166-1 alpha-2, validated against the shared list. Optional so an
+   * owner console deployed before this field existed still creates schools;
+   * it then gets the schema default (IN). This is THE country switch — see
+   * @skoolos/types country-pack.ts — so it is set at birth and not inferred.
+   */
+  @IsOptional() @IsIn([...COUNTRY_CODES]) countryCode?: string;
 }
 
 export class SetTierDto {

@@ -66,6 +66,13 @@ export interface SiteContent {
   homepage: SiteHomepage;
   stats: StatRow[];
   socialLinks: SocialLink[];
+  /**
+   * The school itself, for the parts of the Studio that depend on WHERE the
+   * school is — which festivals it is offered. Optional: an API deployed a
+   * minute earlier than this bundle sends no `school`, and the Studio must
+   * then behave as it always has (the shared catalogue).
+   */
+  school?: { countryCode: string };
 }
 
 export interface MediaAsset {
