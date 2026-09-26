@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { optimised } from '@/lib/img';
 import type { PublicSiteData } from '@/lib/public-api';
+import { normalizeFestiveTheme } from '../site-variants';
+import { FestiveDress } from './FestiveLayer';
 import { rgba } from '../site-utils';
 // Pure helpers live in hero-model.ts with NO client boundary, so a server
 // component may call them. Deliberately not re-exported from here: a re-export
@@ -252,6 +254,9 @@ export default function HeroSection({
 }) {
   const layout = resolveHeroLayout(data);
   const images = heroImagesOf(data);
+  // The festive dress sits inside the band, over its background, under its copy.
+  const fest = normalizeFestiveTheme(data.profile?.festiveTheme);
+  const dress = <FestiveDress fest={fest} />;
   const heroUrl = images[0] ?? null;
   const brand = data.profile?.brandColorPrimary ?? '#2f6b4f';
   const center = (data.profile?.heroTextAlign ?? 'LEFT') === 'CENTER';
@@ -272,6 +277,7 @@ export default function HeroSection({
   if (layout === 'MINIMAL') {
     return (
       <section id="home" className="relative overflow-hidden">
+        {dress}
         <div className="relative max-w-3xl mx-auto px-6 py-24 text-center grid grid-cols-1 gap-12 items-center w-full">
           <HeroCopy {...copyProps} light={false} center />
         </div>
@@ -283,6 +289,7 @@ export default function HeroSection({
   if (layout === 'ILLUSTRATION') {
     return (
       <section id="home" className="relative overflow-hidden">
+        {dress}
         <div className="relative max-w-6xl mx-auto px-6 pt-14 pb-20 grid lg:grid-cols-2 gap-12 items-center w-full">
           <HeroCopy {...copyProps} light={false} center={false} />
           <IllustratedCluster heroUrl={heroUrl} />
@@ -331,6 +338,7 @@ export default function HeroSection({
             style={{ background: 'linear-gradient(180deg, transparent, var(--paper))' }}
           />
         </div>
+        {dress}
 
         <div
           className={`relative max-w-6xl mx-auto px-6 ${navOverlay ? 'pt-28' : 'pt-14'} pb-20 grid ${
@@ -349,6 +357,7 @@ export default function HeroSection({
     const smalls = images.slice(1, 3);
     return (
       <section id="home" className="relative overflow-hidden">
+        {dress}
         <div className={`max-w-6xl mx-auto px-6 ${navOverlay ? 'pt-24' : 'pt-6'} pb-14 w-full`}>
           <div className={`grid gap-3 ${smalls.length ? 'lg:grid-cols-[1.6fr_1fr]' : ''}`}>
             <div
@@ -386,6 +395,7 @@ export default function HeroSection({
   if (layout === 'SPLIT_EDITORIAL') {
     return (
       <section id="home" className="relative overflow-hidden">
+        {dress}
         <div
           className={`max-w-6xl mx-auto px-6 ${navOverlay ? 'pt-24' : 'pt-6'} pb-14 grid gap-8 lg:grid-cols-2 items-stretch ${
             full ? 'lg:min-h-[78vh]' : 'lg:min-h-[60vh]'
@@ -418,6 +428,7 @@ export default function HeroSection({
   const bandCols = ['', 'grid-cols-1', 'grid-cols-2', 'grid-cols-2 md:grid-cols-3', 'grid-cols-2 md:grid-cols-4'][band.length];
   return (
     <section id="home" className="relative overflow-hidden">
+        {dress}
       <div className="max-w-6xl mx-auto px-6 pt-12 pb-14 w-full">
         <div className="max-w-3xl mx-auto text-center">
           <HeroCopy {...copyProps} light={false} center />

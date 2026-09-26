@@ -1,4 +1,4 @@
-import type { FestiveTheme } from '../site-variants';
+import type { FestivalDef, FestiveTheme } from '../site-variants';
 import { festivalDef, festiveDecorations } from '../site-variants';
 
 /**
@@ -278,6 +278,115 @@ export function FestiveRibbon({ fest }: { fest: FestiveTheme }) {
   return (
     <div className="ps-fest-ribbon">
       {def.emoji} {def.greeting} {def.emoji}
+    </div>
+  );
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   THE DRESS — what CHROME, HERO, WASH and NIGHT draw. (LAYER keeps the
+   decoration sets above.)
+
+   Three marks, drawn once as <symbol>s and reused: a string of small bulbs,
+   a thin line rangoli, a clay diya. Chosen from the references the owner
+   approved — a bulb string along the top, one framed lamp, a rangoli set in
+   the ground — and deliberately NOT a garland, fireworks or falling glyphs.
+   No filters, no images: a phone paints this in one pass. Every animation is
+   opacity/transform only and answers to --motion / reduced-motion in CSS.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/** Which drawn marks a festival's dress uses. Bulbs and bokeh for nearly all;
+ *  the rangoli and the diya only where they belong. */
+export function festiveMarks(def: FestivalDef): { bulbs: boolean; rangoli: boolean; diya: boolean } {
+  const rangoli = new Set(['DIWALI', 'DURGA', 'NAVRATRI', 'ONAM', 'UGADI', 'SANKRANTI', 'GANESH', 'VASANT', 'GURUNANAK']);
+  const diya = new Set(['DIWALI', 'DURGA', 'GURUNANAK', 'LOHRI', 'JANMASHTAMI', 'GANESH']);
+  const noBulbs = new Set(['HOLI', 'GANDHI', 'INDEPENDENCE', 'REPUBLIC']);
+  return { bulbs: !noBulbs.has(def.value), rangoli: rangoli.has(def.value), diya: diya.has(def.value) };
+}
+
+/** Drawn once per page; every <use> below points at these. */
+export function FestiveSymbols() {
+  return (
+    <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true" focusable="false">
+      <defs>
+        <radialGradient id="ps-fest-g-flame"><stop offset="0" stopColor="#ffcf7a" stopOpacity=".78" /><stop offset=".45" stopColor="#f2a13a" stopOpacity=".28" /><stop offset="1" stopColor="#f2a13a" stopOpacity="0" /></radialGradient>
+        <radialGradient id="ps-fest-g-pool"><stop offset="0" stopColor="#f2a13a" stopOpacity=".4" /><stop offset="1" stopColor="#f2a13a" stopOpacity="0" /></radialGradient>
+        {/* clay diya: uneven rim, dark oil, wick, teardrop flame, light on the floor */}
+        <symbol id="ps-fest-diya" viewBox="-30 -40 60 52" overflow="visible">
+          <ellipse cx="0" cy="6" rx="34" ry="7" fill="url(#ps-fest-g-pool)" />
+          <circle cx="0" cy="-14" r="20" fill="url(#ps-fest-g-flame)" />
+          <path d="M-20 0c-1 6 6 11 20 11s21-5 20-11c0-2-2-2-3-2h-34c-1 0-3 0-3 2z" fill="#9a4b2a" />
+          <path d="M-20-1q20-5 40 0q-2-3-20-4t-20 4z" fill="#b86a40" />
+          <ellipse cx="0" cy="-1.5" rx="15" ry="2.6" fill="#3a1a0d" />
+          <path d="M0-2v-4" stroke="#2a1208" strokeWidth="1.4" strokeLinecap="round" />
+          <g className="ps-fest-flame"><path d="M0-5c4-6 5-12 .6-21C-4.6-17-4-11 0-5z" fill="#ffb84a" /><path d="M0-7c2-4 2.5-8 .3-13C-2.2-15-2-11 0-7z" fill="#fff1c2" /></g>
+        </symbol>
+        {/* line rangoli: eight petals, sixteen inner, a ring of dots — thin, for the ground */}
+        <symbol id="ps-fest-rangoli" viewBox="-80 -80 160 160" overflow="visible">
+          <g fill="none" stroke="currentColor" strokeWidth="1.3">
+            <circle r="76" /><circle r="62" /><circle r="12" />
+            {[0, 45, 90, 135, 180, 225, 270, 315].map((a) => <ellipse key={a} cx="0" cy="-44" rx="11" ry="26" transform={`rotate(${a})`} />)}
+            {[22.5, 45, 67.5, 90, 112.5, 135, 157.5, 180, 202.5, 225, 247.5, 270, 292.5, 315, 337.5, 360].map((a) => <ellipse key={a} cx="0" cy="-24" rx="5" ry="12" transform={`rotate(${a})`} />)}
+            <circle r="69" strokeWidth="3" strokeDasharray="0 9" strokeLinecap="round" />
+          </g>
+        </symbol>
+        {/* a string of small bulbs: dots on a drooping thread, five lamps hanging from it */}
+        <symbol id="ps-fest-bulbs" viewBox="0 0 380 34" overflow="visible" preserveAspectRatio="none">
+          <path d="M-4 6q95 22 190 6t194-6" fill="none" stroke="currentColor" strokeWidth="1" opacity=".55" />
+          <path d="M-4 6q95 22 190 6t194-6" fill="none" stroke="#ffd98a" strokeWidth="3.2" strokeDasharray="0 11" strokeLinecap="round" opacity=".95" />
+          <g stroke="currentColor" strokeWidth="1" opacity=".7"><path d="M52 15v7M132 18v8M212 13v7M292 10v8M356 5v7" /></g>
+          <g fill="#ffd27a" opacity=".38"><circle cx="52" cy="26" r="9" /><circle cx="132" cy="30" r="9" /><circle cx="212" cy="24" r="9" /><circle cx="292" cy="22" r="9" /><circle cx="356" cy="16" r="9" /></g>
+          <g fill="#ffe3a3">
+            {[[52, 26, 0], [132, 30, 0.4], [212, 24, 0.8], [292, 22, 0.2], [356, 16, 0.6]].map(([x, y, d]) => (
+              <circle key={x} className="ps-fest-bulb" cx={x} cy={y} r="4.5" style={{ animationDelay: `${d}s` }} />
+            ))}
+          </g>
+        </symbol>
+      </defs>
+    </svg>
+  );
+}
+
+/**
+ * The hero's dress. Rendered INSIDE the hero section, after its background
+ * layers and before its copy, so document order stacks it: over the photo,
+ * under the words. Positions are constants — server and client must agree.
+ */
+export function FestiveDress({ fest }: { fest: FestiveTheme | null }) {
+  if (!fest || fest.treatment === 'LAYER') return null;
+  const def = festivalDef(fest.festival);
+  if (!def) return null;
+  const marks = festiveMarks(def);
+  const showBokeh = fest.treatment !== 'CHROME';
+  return (
+    <div className="ps-fest-dress" aria-hidden="true" data-fest-dress={fest.treatment}>
+      {showBokeh && <div className="ps-fest-bokeh" />}
+      {marks.bulbs && (
+        <svg className="ps-fest-bulbs" viewBox="0 0 380 34" preserveAspectRatio="none" style={{ color: 'var(--ps-hero-accent)' }}>
+          <use href="#ps-fest-bulbs" width="380" height="34" />
+        </svg>
+      )}
+      {(marks.rangoli || marks.diya) && (
+        <svg className="ps-fest-corner" viewBox="0 0 220 200" style={{ color: 'var(--ps-hero-accent)' }}>
+          {marks.rangoli && <use className="ps-fest-rangoli" href="#ps-fest-rangoli" x="40" y="20" width="180" height="180" />}
+          {marks.diya && <use href="#ps-fest-diya" x="118" y="146" width="56" height="48" />}
+          {marks.diya && <use href="#ps-fest-diya" x="60" y="160" width="40" height="34" />}
+        </svg>
+      )}
+    </div>
+  );
+}
+
+/** The bulb string returns along the footer's top edge on the dressed treatments. */
+export function FestiveFooterEdge({ fest }: { fest: FestiveTheme | null }) {
+  if (!fest || fest.treatment === 'LAYER') return null;
+  const def = festivalDef(fest.festival);
+  if (!def || !festiveMarks(def).bulbs) return null;
+  return (
+    <div className="ps-fest-footedge" aria-hidden="true">
+      <svg viewBox="0 0 380 34" preserveAspectRatio="none" style={{ color: 'var(--ps-accent-text)' }}>
+        <use href="#ps-fest-bulbs" width="380" height="34" />
+      </svg>
     </div>
   );
 }

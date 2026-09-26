@@ -107,7 +107,7 @@ function FlipCard({ course, delay }: { course: PublicCourse; delay: number }) {
                 <ul className="mt-3 space-y-1.5 text-[13px] flex-1 overflow-hidden">
                   {course.highlights.slice(0, 4).map((h, i) => (
                     <li key={i} className="pl-5 relative">
-                      <span className="absolute left-0 font-bold" style={{ color: 'var(--ps2)' }}>✓</span>
+                      <span className="absolute left-0 font-bold" style={{ color: 'var(--ps-accent2-text)' }}>✓</span>
                       {h}
                     </li>
                   ))}

@@ -10,6 +10,8 @@ export interface WizardData {
   domainHostname: string;
   adminEmail: string;
   tier: Tier;
+  /** ISO 3166-1 alpha-2 — the country switch. Chosen at creation, India by default. */
+  countryCode: string;
 }
 
 export interface WizardActions {
@@ -24,6 +26,7 @@ const initial: WizardData = {
   domainHostname: '',
   adminEmail: '',
   tier: 'STANDARD',
+  countryCode: 'IN',
 };
 
 export const useWizardStore = create<WizardData & WizardActions>()((setState) => ({

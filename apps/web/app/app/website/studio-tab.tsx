@@ -16,12 +16,32 @@ import { START_THEMES, themeInUse, type StartTheme } from '@/lib/start-themes';
 import { STYLE_PRESETS, MOTION_GESTURES, BACKGROUND_TEXTURES } from '@/components/public/site-style';
 import { SECTION_SHAPES } from '@/components/public/section-shape';
 import {
-  SCROLL_FEELS, NAV_DROPDOWN_ANIMS, HERO_MEDIA_OPTIONS, SECTION_KEYS, SECTION_VARIANT_DEFS,
-  FESTIVALS, FOOTER_LAYOUTS, FOOTER_COLORS,
-  normalizeFooterConfig, normalizeFestiveTheme, normalizeSectionVariants, type SectionKey,
-  ORDERABLE_HOME_SECTIONS, HOME_SECTIONS_KEY, SECTION_ORDER_KEY, HOME_SECTION_MAX,
-  homeSectionsOf, sectionOrderOf, normalizeSectionOrder, normalizeHomeSections, isSafeBlockUrl,
-  type HomeSection, type SectionVariants,
+  SCROLL_FEELS,
+  NAV_DROPDOWN_ANIMS,
+  HERO_MEDIA_OPTIONS,
+  SECTION_KEYS,
+  SECTION_VARIANT_DEFS,
+  FESTIVALS,
+  FOOTER_LAYOUTS,
+  FOOTER_COLORS,
+  normalizeFooterConfig,
+  normalizeFestiveTheme,
+  normalizeSectionVariants,
+  type SectionKey,
+  ORDERABLE_HOME_SECTIONS,
+  HOME_SECTIONS_KEY,
+  SECTION_ORDER_KEY,
+  HOME_SECTION_MAX,
+  homeSectionsOf,
+  sectionOrderOf,
+  normalizeSectionOrder,
+  normalizeHomeSections,
+  isSafeBlockUrl,
+  type HomeSection,
+  type SectionVariants,
+  TREATMENTS,
+  festivalsFor,
+  treatmentsFor,
 } from '@/components/public/site-variants';
 import { defaultNavConfig, validateNavConfig, type NavConfig, type NavConfigItem } from '@/components/public/sections/nav-config';
 import {
@@ -63,7 +83,7 @@ type Look = Record<string, unknown>;
 interface SiteContent {
   profile: Record<string, unknown> | null;
   homepage?: { heroImageAssetIds?: string[] | null } | null;
-  school?: { features?: string[] } | null;
+  school?: { features?: string[]; countryCode?: string } | null;
   courses?: unknown[];
 }
 interface DesignDraft { id: string; name: string; config: Record<string, unknown>; publishAt: string | null; revertAt: string | null; }
@@ -931,17 +951,26 @@ export default function StudioTab() {
       </Group>
 
       {/* ── Festive mode ── */}
-      <Group id="festive" title="Festive mode" summary={festiveDef ? `${festiveDef.emoji} ${festiveDef.label}` : 'Off'}>
-        <Chips options={[{ value: 'NONE', label: 'None' }, ...FESTIVALS.map((f) => ({ value: f.value, label: `${f.emoji} ${f.label}` }))]} value={festive?.festival ?? 'NONE'}
-          onPick={(v) => setLook({ festiveTheme: v === 'NONE' ? null : { festival: v, variant: FESTIVALS.find((f) => f.value === v)?.variants[0].value, intensity: 'LAYER', ribbon: true, recolor: true } })} />
+      <Group id="festive" title="Festive mode" summary={festiveDef ? `${festiveDef.emoji} ${festiveDef.label} · ${TREATMENTS.find((t) => t.value === festive?.treatment)?.label ?? ''}` : 'Off'}>
+        {/* The festivals offered are the school's COUNTRY's — the country switch
+            (see @skoolos/types country-pack.ts). An API that has not shipped
+            `school` yet means the shared catalogue, which is what India gets. */}
+        <Chips options={[{ value: 'NONE', label: 'None' }, ...festivalsFor(data?.school?.countryCode).map((f) => ({ value: f.value, label: `${f.emoji} ${f.label}` }))]} value={festive?.festival ?? 'NONE'}
+          onPick={(v) => setLook({ festiveTheme: v === 'NONE' ? null : { festival: v, variant: FESTIVALS.find((f) => f.value === v)?.variants[0].value, treatment: 'LAYER', ribbon: true, recolor: true } })} />
         {festive && festiveDef && (
           <>
-            <FieldLabel>Decorations</FieldLabel>
-            <Chips options={festiveDef.variants} value={festive.variant} onPick={(v) => setLook({ festiveTheme: { ...festive, variant: v } })} />
-            <FieldLabel>Intensity</FieldLabel>
-            <Chips options={[{ value: 'LAYER', label: 'Decorations layer' }, { value: 'FULL', label: 'Full takeover' }]} value={festive.intensity} onPick={(v) => setLook({ festiveTheme: { ...festive, intensity: v } })} />
-            <div className="mt-2.5"><Toggle checked={festive.ribbon} onChange={(v) => setLook({ festiveTheme: { ...festive, ribbon: v } })} label="Greeting ribbon above the navbar" /></div>
-            {festive.intensity === 'LAYER' && <div className="mt-1.5"><Toggle checked={festive.recolor} onChange={(v) => setLook({ festiveTheme: { ...festive, recolor: v } })} label="Festive accent colour" /></div>}
+            <FieldLabel>How much of the page</FieldLabel>
+            {/* Five treatments, the same five for every festival; the ones this
+                festival does not offer (a night for Independence Day) are not shown. */}
+            <Stack options={TREATMENTS.filter((t) => treatmentsFor(festiveDef).includes(t.value))} value={festive.treatment} onPick={(v) => setLook({ festiveTheme: { ...festive, treatment: v } })} />
+            {festive.treatment === 'LAYER' && (
+              <>
+                <FieldLabel>Decorations</FieldLabel>
+                <Chips options={festiveDef.variants} value={festive.variant} onPick={(v) => setLook({ festiveTheme: { ...festive, variant: v } })} />
+              </>
+            )}
+            <div className="mt-2.5"><Toggle checked={festive.ribbon} onChange={(v) => setLook({ festiveTheme: { ...festive, ribbon: v } })} label="Greeting strip above the menu" /></div>
+            {festive.treatment === 'LAYER' && <div className="mt-1.5"><Toggle checked={festive.recolor} onChange={(v) => setLook({ festiveTheme: { ...festive, recolor: v } })} label="Festive accent colour" /></div>}
           </>
         )}
       </Group>
