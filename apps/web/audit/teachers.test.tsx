@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * Renders the REAL Teachers page — the card grid the buttons ran out of on a
  * wide monitor — with a realistic roll, and writes it for measure.html.

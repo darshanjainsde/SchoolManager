@@ -248,7 +248,8 @@ export class OnboardingService {
     const pre = await this.preview(schoolId, kind, file, opts);
     if (pre.issues.length) throw new BadRequestException(`${pre.issues.length} problem(s) remain — fix the file and upload it again. Nothing was imported.`);
     const failed: RowIssue[] = [];
-    let created = 0; let skipped = pre.skipped ?? 0;
+    let created = 0;
+    const skipped = pre.skipped ?? 0;
     if (kind === 'teachers') {
       for (const r of pre.rows) {
         try { await this.teachers.create(schoolId, plainToInstance(CreateTeacherDto, this.teacherBody(r))); created += 1; }
@@ -353,7 +354,7 @@ export function cellValue(v: unknown, c: Column): string {
   }
   const s = String(v).trim();
   if (c.date) {
-    const m = /^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/.exec(s); // 14/03/1988 — the way an Indian office writes it
+    const m = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(s); // 14/03/1988 — the way an Indian office writes it
     if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
   }
   return s;
