@@ -1,0 +1,417 @@
+<title>Page Scorecard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Public+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+:root{
+  --paper:#FAFAFC; --panel:#FFFFFF; --sunk:#F3F3F8;
+  --ink:#16162A; --ink-2:#3C3D57; --muted:#6A6B84; --faint:#9294AC;
+  --rule:#E4E3EE; --rule-2:#D3D2E2;
+  --brand:#4F46E5; --brand-soft:#EEEDFD;
+  --good:#15803D; --good-w:#DCF2E3; --good-b:#8FD3A8;
+  --warn:#B54708; --warn-w:#FBEBD9; --warn-b:#E8BC8A;
+  --crit:#B42318; --crit-w:#FBE4E1;
+  --shadow:0 1px 2px rgba(22,22,42,.05), 0 8px 24px -16px rgba(22,22,42,.22);
+  --maxw:1200px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#101018; --panel:#191924; --sunk:#14141E;
+    --ink:#ECECF4; --ink-2:#C3C4D6; --muted:#9698B0; --faint:#6E7089;
+    --rule:#2A2A3A; --rule-2:#383850;
+    --brand:#8B87F5; --brand-soft:#232241;
+    --good:#4ADE80; --good-w:#0F2A1A; --good-b:#1F5133;
+    --warn:#E89448; --warn-w:#36210E; --warn-b:#6B4416;
+    --crit:#F0736A; --crit-w:#3A1614;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#101018; --panel:#191924; --sunk:#14141E;
+  --ink:#ECECF4; --ink-2:#C3C4D6; --muted:#9698B0; --faint:#6E7089;
+  --rule:#2A2A3A; --rule-2:#383850;
+  --brand:#8B87F5; --brand-soft:#232241;
+  --good:#4ADE80; --good-w:#0F2A1A; --good-b:#1F5133;
+  --warn:#E89448; --warn-w:#36210E; --warn-b:#6B4416;
+  --crit:#F0736A; --crit-w:#3A1614;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+body{background:var(--paper); color:var(--ink); margin:0; font-size:16px; line-height:1.6;
+  font-family:'Public Sans',ui-sans-serif,system-ui,-apple-system,sans-serif; -webkit-font-smoothing:antialiased}
+.wrap{max-width:var(--maxw); margin:0 auto; padding:0 24px}
+.prose{max-width:68ch}
+h1,h2,h3,h4{font-family:'Archivo',ui-sans-serif,system-ui,sans-serif; margin:0; text-wrap:balance; letter-spacing:-.018em}
+h1{font-size:clamp(2rem,4.8vw,2.9rem); font-weight:700; line-height:1.06}
+h2{font-size:clamp(1.3rem,2.6vw,1.7rem); font-weight:600}
+h3{font-size:1rem; font-weight:600}
+p{margin:0 0 1em}
+code{font-family:'IBM Plex Mono',ui-monospace,Menlo,monospace; font-size:.85em; background:var(--sunk);
+  border:1px solid var(--rule); border-radius:4px; padding:.08em .34em; color:var(--ink-2)}
+:focus-visible{outline:2px solid var(--brand); outline-offset:2px; border-radius:3px}
+.eyebrow{font-family:'Archivo',sans-serif; font-size:.69rem; font-weight:600; letter-spacing:.13em;
+  text-transform:uppercase; color:var(--muted)}
+
+.mast{border-bottom:1px solid var(--rule); background:var(--panel)}
+.mast-in{padding:48px 0 36px}
+.mast .eyebrow{display:flex; align-items:center; gap:10px; margin-bottom:18px; flex-wrap:wrap}
+.tassel{width:18px;height:18px;flex:none}
+.lede{font-size:1.1rem; line-height:1.55; color:var(--ink-2); max-width:62ch; margin-top:18px}
+.lede b{color:var(--ink); font-weight:600}
+
+section{padding:48px 0}
+section+section{border-top:1px solid var(--rule)}
+.sec-head{display:flex; align-items:baseline; gap:12px; margin-bottom:10px; flex-wrap:wrap}
+.sec-head .eyebrow{color:var(--brand)}
+
+.split{margin-top:26px; border:1px solid var(--rule); border-radius:12px; background:var(--panel);
+  padding:22px 24px; box-shadow:var(--shadow)}
+.bar{display:flex; height:46px; border-radius:8px; overflow:hidden; gap:2px}
+.bar div{display:flex; align-items:center; justify-content:center; font-family:'Archivo',sans-serif;
+  font-weight:700; font-size:.95rem; color:#fff; min-width:0; white-space:nowrap}
+.bar .b-perfect{background:var(--good)}
+.bar .b-moderate{background:var(--warn)}
+.bar .b-broken{background:var(--crit)}
+.bar .b-none{background:var(--sunk); color:var(--muted); font-weight:600; font-size:.8rem;
+  border:1px dashed var(--rule-2)}
+.legend{display:flex; gap:22px; flex-wrap:wrap; margin-top:16px; padding-top:16px; border-top:1px solid var(--rule)}
+.legend div{font-size:.84rem; color:var(--ink-2); max-width:30ch}
+.legend b{display:block; font-family:'Archivo',sans-serif; font-size:.76rem; letter-spacing:.06em;
+  text-transform:uppercase; margin-bottom:3px}
+.legend .l-p b{color:var(--good)} .legend .l-m b{color:var(--warn)} .legend .l-b b{color:var(--crit)}
+
+/* what changed since the previous run */
+.moves{display:grid; gap:10px; grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr)); margin-top:22px}
+.move{border:1px solid var(--rule); border-left-width:3px; border-radius:0 9px 9px 0; background:var(--panel); padding:12px 15px}
+.move.better{border-left-color:var(--good)}
+.move.worse{border-left-color:var(--crit)}
+.move.fresh{border-left-color:var(--brand)}
+.move .rt{font-family:'IBM Plex Mono',monospace; font-size:.83rem; color:var(--ink); display:block; word-break:break-all}
+.move .mv{font-size:.76rem; color:var(--muted); font-family:'Archivo',sans-serif; letter-spacing:.04em; text-transform:uppercase; margin-top:4px; display:block}
+.move.better .mv{color:var(--good)} .move.worse .mv{color:var(--crit)} .move.fresh .mv{color:var(--brand)}
+.nomoves{font-size:.9rem; color:var(--muted); margin-top:18px}
+
+.surfaces{display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr)); margin-top:26px}
+.surf{border:1px solid var(--rule); border-radius:10px; background:var(--panel); padding:16px 18px}
+.surf.clean{border-color:var(--good-b); background:var(--good-w)}
+.surf h3{margin-bottom:10px; display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+.surf .score{font-family:'IBM Plex Mono',monospace; font-size:.78rem; color:var(--muted); font-variant-numeric:tabular-nums}
+.minibar{display:flex; height:8px; border-radius:4px; overflow:hidden; gap:1px; margin-bottom:9px}
+.minibar i{display:block}
+.minibar .p{background:var(--good)} .minibar .m{background:var(--warn)} .minibar .b{background:var(--crit)}
+.surf p{margin:0; font-size:.82rem; color:var(--muted); line-height:1.45}
+
+.rules{border:1px solid var(--rule); border-radius:10px; background:var(--panel); overflow:hidden; margin-top:24px}
+.rulerow{display:grid; grid-template-columns:auto 1fr auto; gap:14px; align-items:center;
+  padding:13px 18px; border-bottom:1px solid var(--rule)}
+.rulerow:last-child{border-bottom:0}
+.rulerow .n{font-family:'Archivo',sans-serif; font-weight:700; font-size:1.15rem; color:var(--warn);
+  font-variant-numeric:tabular-nums; min-width:2.2ch; text-align:right}
+.rulerow .k{display:block; font-family:'IBM Plex Mono',monospace; font-size:.83rem; color:var(--ink)}
+.rulerow .d{display:block; font-size:.82rem; color:var(--muted); margin-top:2px}
+.rulerow .why{font-size:.78rem; color:var(--faint); text-align:right; max-width:26ch}
+
+.ctl{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:24px}
+.ctl button{font-family:'Archivo',sans-serif; font-size:.75rem; font-weight:600; padding:7px 13px;
+  min-height:32px; border-radius:20px; cursor:pointer; border:1px solid var(--rule-2);
+  background:var(--panel); color:var(--ink-2); transition:background .12s,border-color .12s,color .12s}
+.ctl button:hover{border-color:var(--brand); color:var(--brand)}
+.ctl button[aria-pressed="true"]{background:var(--brand); border-color:var(--brand); color:#fff}
+.ctl .count{margin-left:auto; font-family:'IBM Plex Mono',monospace; font-size:.76rem; color:var(--muted)}
+.tbl{overflow-x:auto; border:1px solid var(--rule); border-radius:10px; background:var(--panel); margin-top:14px; max-height:560px}
+table{border-collapse:collapse; width:100%; min-width:680px; font-size:.85rem}
+th,td{text-align:left; padding:9px 14px; border-bottom:1px solid var(--rule); vertical-align:top}
+thead th{position:sticky; top:0; background:var(--panel); z-index:1; font-family:'Archivo',sans-serif;
+  font-size:.66rem; font-weight:600; letter-spacing:.09em; text-transform:uppercase; color:var(--muted);
+  border-bottom:1px solid var(--rule-2); white-space:nowrap}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--sunk)}
+td.r{font-family:'IBM Plex Mono',monospace; font-size:.8rem}
+td.n{font-family:'IBM Plex Mono',monospace; font-variant-numeric:tabular-nums; white-space:nowrap; color:var(--muted)}
+.pill{display:inline-block; font-family:'Archivo',sans-serif; font-size:.64rem; font-weight:700;
+  letter-spacing:.07em; text-transform:uppercase; padding:2px 8px; border-radius:20px; white-space:nowrap}
+.pill-perfect{background:var(--good-w); color:var(--good); border:1px solid var(--good-b)}
+.pill-moderate{background:var(--warn-w); color:var(--warn); border:1px solid var(--warn-b)}
+.pill-broken{background:var(--crit-w); color:var(--crit)}
+.find{font-size:.79rem; color:var(--ink-2); display:block; margin-top:3px}
+.find b{font-family:'IBM Plex Mono',monospace; font-weight:500; color:var(--warn)}
+.find span{color:var(--faint); font-family:'IBM Plex Mono',monospace; font-size:.92em}
+
+.note{border-left:3px solid var(--brand); background:var(--brand-soft); padding:16px 20px;
+  border-radius:0 8px 8px 0; margin:24px 0}
+.note p{margin:0; font-size:.89rem; color:var(--ink-2)}
+.note p+p{margin-top:.7em}
+.note strong{color:var(--ink)}
+
+footer{border-top:1px solid var(--rule); background:var(--panel); padding:32px 0 44px}
+footer p{font-size:.83rem; color:var(--muted); margin:0}
+footer p+p{margin-top:.55em}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+@media (max-width:640px){section{padding:36px 0} .rulerow{grid-template-columns:auto 1fr} .rulerow .why{display:none}}
+</style>
+
+<div class="mast">
+  <div class="wrap mast-in">
+    <div class="eyebrow">
+      <svg class="tassel" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M17.5 5.6C16.2 4.2 14.3 3.4 12.2 3.4 8.4 3.4 6 5.6 6 8.3c0 2.5 2 3.8 4.9 4.6 3.2.9 5.2 1.9 5.2 4.3 0 2.5-2.2 4.4-5.6 4.4-2.2 0-4.1-.8-5.4-2.2"
+              stroke="#4F46E5" stroke-width="2.1" stroke-linecap="round"/>
+        <circle cx="18.6" cy="7.4" r="2.3" fill="#F59E0B"/>
+      </svg>
+      <span id="stamp">Sckools &middot; Standing page audit</span>
+    </div>
+
+    <h1>Every page, graded</h1>
+
+    <p class="lede" id="lede"></p>
+
+    <div class="split">
+      <div class="bar" id="bar"></div>
+      <div class="legend">
+        <div class="l-p"><b>Perfect</b>Every check ran and found nothing. Not &ldquo;probably fine&rdquo;.</div>
+        <div class="l-m"><b>Moderate</b>Works today. Carries a cost that grows with the roll.</div>
+        <div class="l-b"><b>Broken</b>A person can reach this and be stuck or misled.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head"><span class="eyebrow">What moved</span></div>
+    <div class="prose">
+      <p id="movesLede"></p>
+    </div>
+    <div class="moves" id="moves"></div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head"><span class="eyebrow">By surface</span></div>
+    <div class="prose">
+      <p>The question behind this page is always &ldquo;is <em>my</em> bit clean&rdquo;, so the
+      grades are grouped the way the product is used rather than the way the routes are
+      spelled. A surface where every page is clean is drawn green.</p>
+    </div>
+    <div class="surfaces" id="surfaces"></div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head"><span class="eyebrow">What was found</span></div>
+    <div class="prose">
+      <h2>Every rule here is an incident, not an opinion</h2>
+      <p>Each one is in the file because a screen shipped with it. The number is how many
+      pages carry it today.</p>
+    </div>
+    <div class="rules" id="rules"></div>
+
+    <div class="note">
+      <p><strong>Two rules were narrowed after their first run.</strong> Matching a word
+      anywhere on a line flagged one student&rsquo;s three invoices as &ldquo;roster-scale
+      work&rdquo;, and a list of thirty classes, because those lines happened to contain
+      <code>invoice</code> and <code>students</code>. The receiver now has to be a bare
+      identifier naming a roll of people. The image rule stopped flagging a missing
+      <code>loading</code> attribute too &mdash; an above-the-fold image <em>should not</em> be
+      lazy, so that is a judgement, not a fault.</p>
+      <p>A rule that cries wolf makes the whole audit ignorable, which is worse than not
+      having the rule. That is why the moderate list is worth reading.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="sec-head"><span class="eyebrow">Every page</span></div>
+    <div class="prose">
+      <p>Filter by grade or surface. The perfect ones are listed too &mdash; a report that only
+      ever shows problems teaches people to stop opening it.</p>
+    </div>
+
+    <div class="ctl" id="filters"></div>
+
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Route</th><th>Grade</th><th>Surface</th><th>Queries</th><th>JS</th><th>Findings</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap prose">
+    <h4 style="margin-bottom:10px">How to run it again</h4>
+    <p><code>cd apps/web &amp;&amp; npx next build &gt; ../../scripts/audit/build.log</code>, then
+    <code>node scripts/audit/page-audit.mjs</code>, then
+    <code>node scripts/audit/scorecard.mjs</code> &mdash; which rebuilds this page from
+    <code>log/latest.json</code>. The page has no figures of its own, so it cannot drift from
+    the run.</p>
+    <p>Each run diffs against the one before, so a page that was perfect last week and is not
+    today shows up as a <strong>regression</strong> rather than as somebody&rsquo;s new
+    opinion. That is the whole reason it is a script and not a conversation.</p>
+    <p>Without <code>build.log</code> the run prints <strong>SKIPPED</strong> for the bundle
+    rule rather than quietly grading on six rules instead of seven.</p>
+    <p style="margin-top:14px; color:var(--faint)">Rules in
+    <code>scripts/audit/checks.mjs</code> &middot; history in <code>scripts/audit/log/</code></p>
+  </div>
+</footer>
+
+<script>
+const DATA = /*__DATA__*/null;
+
+const WHY = {
+  'silent-query': 'a query whose failure is never shown',
+  'raw-image': 'a school photo at upload size',
+  'unmemoised-roster-work': 'the roll walked on every render',
+  'request-fan-out': 'six or more requests on mount',
+  'heavy-bundle': 'over 160 kB of first-load JS',
+  'swallowed-error': 'a failure caught and thrown away',
+  'client-boundary': 'a server page marked client',
+};
+const INCIDENT = {
+  'silent-query': 'the screen says nothing when the request dies',
+  'raw-image': 'a crest at 240px shipped as a 238 KB JPEG',
+  'unmemoised-roster-work': 'the roll walked 4× per keystroke',
+  'request-fan-out': 'the portal opened with seven requests',
+  'heavy-bundle': 'eleven studio tabs, all imported at once',
+  'swallowed-error': 'a failed request sat on "loading" for good',
+  'client-boundary': 'the staging push 500’d every school site',
+};
+
+const fmtDate = (iso) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+
+// stamp + lede
+(function () {
+  document.getElementById('stamp').textContent =
+    'Sckools · Standing page audit · ' + fmtDate(DATA.at);
+  const p = DATA.prev;
+  const moved = p ? DATA.perfect - p.perfect : 0;
+  document.getElementById('lede').innerHTML =
+    'All <b>' + DATA.pages + ' pages</b>, checked against seven rules that each exist because a real '
+    + 'screen shipped with them. '
+    + (DATA.broken ? '<b>' + DATA.broken + ' broken.</b> ' : '<b>Nothing is broken.</b> ')
+    + '<b>' + DATA.perfect + '</b> are clean — not unexamined, <em>checked and clean</em> — and '
+    + DATA.moderate + ' carry a cost that grows with the data'
+    + (p && moved > 0 ? ', ' + moved + ' fewer than last run.' : '.');
+})();
+
+// headline bar
+(function () {
+  const total = DATA.pages;
+  const parts = [
+    ['b-perfect', DATA.perfect, DATA.perfect + ' perfect'],
+    ['b-moderate', DATA.moderate, DATA.moderate + ' moderate'],
+    DATA.broken ? ['b-broken', DATA.broken, DATA.broken + ' broken'] : ['b-none', Math.max(total * 0.12, 8), 'nothing broken'],
+  ];
+  document.getElementById('bar').innerHTML = parts
+    .map(([cls, n, label]) => '<div class="' + cls + '" style="flex:' + n + ' 1 0">' + label + '</div>')
+    .join('');
+})();
+
+// what moved
+(function () {
+  const RANK = { BROKEN: 0, MODERATE: 1, PERFECT: 2 };
+  const moves = DATA.changes.filter((c) => c.to !== 'gone');
+  const better = moves.filter((c) => c.from !== 'new' && RANK[c.to] > RANK[c.from]).length;
+  const worse = moves.filter((c) => c.from !== 'new' && RANK[c.to] < RANK[c.from]).length;
+  const fresh = moves.filter((c) => c.from === 'new').length;
+
+  const lede = document.getElementById('movesLede');
+  if (!moves.length) {
+    lede.textContent = 'Nothing changed grade since the previous run.';
+    document.getElementById('moves').innerHTML = '';
+    return;
+  }
+  lede.innerHTML = 'Since ' + (DATA.prev ? fmtDate(DATA.prev.at) : 'the previous run') + ': '
+    + '<b>' + better + '</b> page' + (better === 1 ? '' : 's') + ' improved, '
+    + '<b>' + worse + '</b> slipped, and <b>' + fresh + '</b> ' + (fresh === 1 ? 'is' : 'are') + ' new. '
+    + 'A slip is the thing worth reading here — it is a page that used to be clean.';
+
+  const cls = (c) => c.from === 'new' ? 'fresh' : RANK[c.to] > RANK[c.from] ? 'better' : 'worse';
+  const order = { worse: 0, fresh: 1, better: 2 };
+  document.getElementById('moves').innerHTML = [...moves]
+    .sort((a, b) => order[cls(a)] - order[cls(b)] || a.route.localeCompare(b.route))
+    .map((c) => '<div class="move ' + cls(c) + '"><span class="rt">' + c.route + '</span>'
+      + '<span class="mv">' + c.from + ' → ' + c.to + '</span></div>')
+    .join('');
+})();
+
+// surfaces
+(function () {
+  const by = {};
+  for (const r of DATA.rows) {
+    by[r.s] ??= { PERFECT: 0, MODERATE: 0, BROKEN: 0, total: 0 };
+    by[r.s][r.g] += 1; by[r.s].total += 1;
+  }
+  document.getElementById('surfaces').innerHTML = Object.entries(by)
+    .sort((a, b) => (b[1].PERFECT / b[1].total) - (a[1].PERFECT / a[1].total))
+    .map(([name, v]) => {
+      const allClean = v.PERFECT === v.total;
+      const pct = Math.round((v.PERFECT / v.total) * 100);
+      return '<div class="surf' + (allClean ? ' clean' : '') + '">'
+        + '<h3>' + name + ' <span class="score">' + v.PERFECT + '/' + v.total + ' clean</span></h3>'
+        + '<div class="minibar">'
+        + (v.PERFECT ? '<i class="p" style="flex:' + v.PERFECT + '"></i>' : '')
+        + (v.MODERATE ? '<i class="m" style="flex:' + v.MODERATE + '"></i>' : '')
+        + (v.BROKEN ? '<i class="b" style="flex:' + v.BROKEN + '"></i>' : '')
+        + '</div>'
+        + '<p>' + pct + '% of these pages have nothing on them'
+        + (v.BROKEN ? ' · <b>' + v.BROKEN + ' broken</b>' : '') + '</p></div>';
+    }).join('');
+})();
+
+// rules
+(function () {
+  const counts = {};
+  for (const r of DATA.rows) for (const f of r.f) counts[f.u] = (counts[f.u] || 0) + 1;
+  const el = document.getElementById('rules');
+  const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  if (!entries.length) { el.innerHTML = '<div class="rulerow"><span class="n">0</span><span><span class="k">nothing fired</span></span></div>'; return; }
+  el.innerHTML = entries.map(([rule, n]) => '<div class="rulerow">'
+      + '<span class="n">' + n + '</span>'
+      + '<span><span class="k">' + rule + '</span><span class="d">' + (WHY[rule] ?? '') + '</span></span>'
+      + '<span class="why">' + (INCIDENT[rule] ?? '') + '</span>'
+    + '</div>').join('');
+})();
+
+// explorer
+(function () {
+  const surfaces = [...new Set(DATA.rows.map((r) => r.s))].sort();
+  document.getElementById('filters').innerHTML =
+    ['all', 'PERFECT', 'MODERATE'].concat(DATA.broken ? ['BROKEN'] : []).concat(surfaces)
+      .map((f, i) => '<button type="button" data-f="' + f + '" aria-pressed="' + (i === 0) + '">'
+        + (f === 'all' ? 'All' : f === f.toUpperCase() && f.length < 9 ? f[0] + f.slice(1).toLowerCase() : f)
+        + '</button>')
+      .join('') + '<span class="count" id="count"></span>';
+
+  const rowsEl = document.getElementById('rows');
+  const countEl = document.getElementById('count');
+  function render(filter) {
+    const list = filter === 'all' ? DATA.rows : DATA.rows.filter((r) => r.g === filter || r.s === filter);
+    const order = { BROKEN: 0, MODERATE: 1, PERFECT: 2 };
+    rowsEl.innerHTML = [...list].sort((a, b) => order[a.g] - order[b.g] || a.r.localeCompare(b.r))
+      .map((r) => '<tr>'
+        + '<td class="r">' + r.r + '</td>'
+        + '<td><span class="pill pill-' + r.g.toLowerCase() + '">' + r.g + '</span></td>'
+        + '<td class="n">' + r.s + '</td>'
+        + '<td class="n">' + (r.q || '—') + '</td>'
+        + '<td class="n">' + (r.k ? r.k + ' kB' : '—') + '</td>'
+        + '<td>' + (r.f.length
+          ? r.f.map((f) => '<span class="find"><b>' + f.u + '</b> — ' + f.d + '<br><span>' + f.w + (f.l ? ':' + f.l : '') + '</span></span>').join('')
+          : '<span class="find" style="color:var(--good)">nothing</span>')
+        + '</td></tr>').join('');
+    countEl.textContent = list.length + ' of ' + DATA.pages + ' pages';
+  }
+  document.getElementById('filters').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-f]');
+    if (!b) return;
+    for (const o of document.querySelectorAll('#filters button')) o.setAttribute('aria-pressed', String(o === b));
+    render(b.dataset.f);
+  });
+  render('all');
+})();
+</script>

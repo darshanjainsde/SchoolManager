@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useApi } from '@/lib/use-api';
+import { QueryError } from '@/components/ui/query-state';
 import { useHost } from '@/components/use-host';
 import { Card, CardBody, CardHead, EmptyRow, Kpi, Note, RunPill, TableWrap, Td, Th, monthName, rupees } from './ui';
 import type { CalcResult, RunDetail } from './types';
@@ -37,6 +38,10 @@ export default function RunPanel({ runId, base }: { runId: string; base: string 
     await qc.invalidateQueries({ queryKey: ['pay-overview'] });
   };
 
+  // A failed read used to return null, so the whole month panel simply
+  // disappeared and the office had nothing to act on or retry. Loading and
+  // failure are different states and the screen says which one it is in.
+  if (detail.isError) return <QueryError error={detail.error} onRetry={detail.refetch} className="py-8" />;
   if (!open) return null;
 
   return (

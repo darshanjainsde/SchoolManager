@@ -8,6 +8,7 @@ import { useApi } from '@/lib/use-api';
 import { BackToFees } from '@/components/fees/back-to-fees';
 import { useHost } from '@/components/use-host';
 import { METHOD_LABEL, fmtDate, rupees, type FeePaymentStatus, type PaymentRow } from '@/lib/fees';
+import { optimised } from '@/lib/img';
 
 /**
  * The verify desk: where a screenshot becomes money.
@@ -257,7 +258,7 @@ function PaymentDetail({
           <a href={p.proofUrl} target="_blank" rel="noopener noreferrer"
              className="block overflow-hidden rounded-[11px] border"
              style={{ borderColor: 'var(--sk-line-2)' }}>
-            <img src={p.proofUrl} alt={`Payment proof from ${p.student.name}`}
+            <img src={optimised(p.proofUrl, 828)} alt={`Payment proof from ${p.student.name}`}
                  className="max-h-[240px] w-full object-contain" style={{ background: 'var(--sk-bg-2)' }} />
             <span className="flex items-center justify-center gap-1 p-1.5 text-[10.5px]"
                   style={{ color: 'var(--sk-brand-2)' }}>

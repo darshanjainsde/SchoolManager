@@ -37,7 +37,10 @@ export default function PortalConcernsPage() {
     audience: 'OFFICE', category: 'OTHER', title: '', body: '',
   });
 
-  const me = useQuery({ queryKey: ['me-profile-concerns', host], enabled: !!host, queryFn: () => api.get<Me>('/me/profile') });
+  // Deliberately the portal's ONE profile key: My profile reads `/me/profile`
+  // under the same key, so a family that opens both screens fetches it once
+  // instead of twice. A private key here was a second identical round trip.
+  const me = useQuery({ queryKey: ['portal-profile'], enabled: !!host, queryFn: () => api.get<Me>('/me/profile') });
   const list = useQuery({ queryKey: ['my-concerns', host], enabled: !!host, queryFn: () => api.get<ConcernRow[]>('/me/concerns') });
   const detail = useQuery({ queryKey: ['my-concern', host, openId], enabled: !!host && !!openId, queryFn: () => api.get<ConcernDetail>(`/me/concerns/${openId}`) });
 

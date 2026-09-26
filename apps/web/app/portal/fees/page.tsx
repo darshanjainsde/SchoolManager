@@ -12,6 +12,7 @@ import {
   type BankInstructions, type FeePaymentMethod, type HowToPay, type ScheduleStatus, type ScheduleTerm, type StudentFees,
 } from '@/lib/fees';
 import { QueryError } from '@/components/ui/query-state';
+import { optimised } from '@/lib/img';
 
 const STATUS_WORD: Record<ScheduleStatus, string> = {
   PAID: 'Paid', PART_PAID: 'Part paid', DUE: 'Due', OVERDUE: 'Overdue', UPCOMING: 'Later',
@@ -368,7 +369,7 @@ function PayByTransfer({
           </div>
           {b.upiQrUrl && (
             <div className="flex items-center gap-3">
-              <img src={b.upiQrUrl} alt="School UPI QR code" width={78} height={78} className="rounded-[9px] border" style={{ borderColor: 'var(--sk-line-2)' }} />
+              <img src={optimised(b.upiQrUrl, 256)} alt="School UPI QR code" width={78} height={78} className="rounded-[9px] border" style={{ borderColor: 'var(--sk-line-2)' }} />
               <p className="text-[11px] leading-snug" style={{ color: 'var(--sk-ink-2)' }}>Scan with any UPI app.<br /><strong>Enter {rupees(dueMinor)} yourself</strong> — the QR does not carry an amount.</p>
             </div>
           )}

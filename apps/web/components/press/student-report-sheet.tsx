@@ -1,5 +1,6 @@
 'use client';
 import type { StudentReport } from '@skoolos/types';
+import { optimised } from '@/lib/img';
 
 /**
  * The Student Report on paper — the sheet a parent is handed when they ask
@@ -49,7 +50,7 @@ export function StudentReportSheet({ report, asOn }: { report: StudentReport; as
       <div style={{ display: 'flex', gap: '5mm', alignItems: 'center', borderBottom: `0.8mm solid ${BRAND}`, paddingBottom: '3mm' }}>
         {r.school.logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- print crest, fixed box
-          <img src={r.school.logoUrl} alt="" style={{ width: '15mm', height: '15mm', objectFit: 'contain' }} />
+          <img src={optimised(r.school.logoUrl, 384)} alt="" style={{ width: '15mm', height: '15mm', objectFit: 'contain' }} />
         ) : null}
         <div style={{ minWidth: 0 }}>
           <div style={{ fontWeight: 800, fontSize: '15pt', color: BRAND }}>{r.school.name}</div>

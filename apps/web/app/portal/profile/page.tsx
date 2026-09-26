@@ -5,6 +5,7 @@ import { GraduationCap, Hash, ListOrdered } from 'lucide-react';
 import type { AvatarUploadResponse, Profile } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
+import { optimised } from '@/lib/img';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -100,7 +101,7 @@ export default function PortalProfilePage() {
               >
                 {profile.photoUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={profile.photoUrl} alt={`${profile.firstName} ${profile.lastName}`} />
+                  <img src={optimised(profile.photoUrl, 256)} alt={`${profile.firstName} ${profile.lastName}`} />
                 ) : (
                   <span aria-hidden="true">{initials(profile.firstName, profile.lastName)}</span>
                 )}

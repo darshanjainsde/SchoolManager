@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import { optimised } from '@/lib/img';
 
 /**
  * The alumni wing, on the school's OWN public site.
@@ -606,7 +607,7 @@ function Giving({ session, onGo }: { session: string | null; onGo: (t: TabId) =>
                   {r.attachments.map((a) => (
                     <figure key={a.id} style={{ margin: 0 }}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={a.url} alt={a.caption ?? 'From the school'} loading="lazy"
+                      <img src={optimised(a.url, 828)} alt={a.caption ?? 'From the school'} loading="lazy"
                         style={{ width: '100%', borderRadius: 10, display: 'block' }} />
                       {a.caption && (
                         <figcaption className="text-xs text-slate-500 mt-1">{a.caption}</figcaption>

@@ -68,15 +68,16 @@ export class ConcernsService {
       // The tallies come from a tenant-scoped groupBy, never Prisma's relation
       // `_count`: that one aggregates every comment on the platform to draw
       // one school's box (see common/lists/relation-counts.ts).
-      const [rows, comments] = await Promise.all([
-        tx.concern.findMany({
-          where,
-          take: LIST_CEILING.ACTIVITY,
-          orderBy: [{ lastActivityAt: 'desc' }],
-          include: this.rowInclude(),
-        }),
-        commentCountsByConcern(tx, schoolId),
-      ]);
+      const rows = await tx.concern.findMany({
+        where,
+        take: LIST_CEILING.ACTIVITY,
+        orderBy: [{ lastActivityAt: 'desc' }],
+        include: this.rowInclude(),
+      });
+      // Tallied for THESE rows only. Both queries share this one transaction,
+      // so the second is a seek on the page we already hold, not a second
+      // round trip to the pool.
+      const comments = await commentCountsByConcern(tx, schoolId, rows.map((r) => r.id));
       return rows.map((r) => this.toRow(r, viewer, comments.get(r.id) ?? 0));
     });
   }

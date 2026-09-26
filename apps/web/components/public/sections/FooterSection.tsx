@@ -22,6 +22,7 @@ const SOCIAL_GLYPH: Record<string, string> = {
  */
 import { normalizeFestiveTheme } from '../site-variants';
 import { FestiveFooterEdge } from './FestiveLayer';
+import { optimised } from '@/lib/img';
 
 export default function FooterSection({
   data,
@@ -58,7 +59,7 @@ export default function FooterSection({
       <div className={`flex items-center gap-2.5 ${cfg.layout === 'CENTER' ? 'justify-center' : ''}`}>
         {logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={logoUrl} alt={schoolName} className="h-9 w-auto" loading="lazy" decoding="async" />
+          <img src={optimised(logoUrl, 384)} alt={schoolName} className="h-9 w-auto" loading="lazy" decoding="async" />
         ) : (
           <>
             <span className="h-9 w-9 rounded-xl ps-logo-bg grid place-items-center font-bold text-white text-sm ps-head">

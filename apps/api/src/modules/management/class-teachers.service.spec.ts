@@ -11,7 +11,7 @@ const txMock = {
   teacher: { findMany: jest.fn(), findFirst: jest.fn() },
   classTeacherAssignment: { updateMany: jest.fn(), create: jest.fn() },
   // Roll sizes come from a tenant-scoped groupBy now, not a relation _count.
-  student: { groupBy: jest.fn() },
+  student: { groupBy: jest.fn(), count: jest.fn() },
 };
 jest.mock('@skoolos/db', () => ({
   ...jest.requireActual('@skoolos/db'),
@@ -35,6 +35,18 @@ const IRFAN = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 
 const section = (id: string, grade: string, name: string, order: number, classTeacherId: string | null) => ({
   id, name, classTeacherId, grade: { name: grade, order },
+});
+
+/**
+ * `classSection.findFirst` is called twice on the write path with two
+ * different selects — the guard reads the academic year, the read-back reads
+ * the grade — and ONE mock serves both. So the fixture carries the widest
+ * shape, not the narrower of the two: a fixture shaped to the first caller
+ * makes the second crash on a field the real row has.
+ */
+const oneSection = (classTeacherId: string | null) => ({
+  ...section('s1', 'LKG', 'A', 1, classTeacherId),
+  academicYearId: YEAR.id,
 });
 
 let svc: ClassTeachersService;
@@ -90,8 +102,19 @@ describe('the desk', () => {
 
 describe('assigning', () => {
   beforeEach(() => {
-    txMock.classSection.findFirst.mockResolvedValue({ id: 's1', classTeacherId: null, academicYearId: YEAR.id });
-    txMock.teacher.findFirst.mockResolvedValue({ id: PRIYA, status: 'ACTIVE' });
+    // The section is read TWICE inside one transaction: once to guard the
+    // write, once to read the result back. A fixed fixture would answer the
+    // second read with the state from before the write, so the mock holds the
+    // value and `update` moves it — which is what the transaction does.
+    let held: string | null = null;
+    txMock.classSection.findFirst.mockImplementation(() => Promise.resolve(oneSection(held)));
+    txMock.classSection.update.mockImplementation(({ data }: { data: { classTeacherId: string | null } }) => {
+      held = data.classTeacherId;
+      return Promise.resolve({});
+    });
+    // Also serves the read-back, which asks for the teacher's NAME.
+    txMock.teacher.findFirst.mockResolvedValue({ id: PRIYA, status: 'ACTIVE', firstName: 'Priya', lastName: 'Nair' });
+    txMock.student.count.mockResolvedValue(28);
     txMock.classSection.findMany.mockResolvedValue([section('s1', 'LKG', 'A', 1, PRIYA)]);
   });
 
@@ -105,7 +128,9 @@ describe('assigning', () => {
   });
 
   it('clearing one closes the record and opens none', async () => {
-    txMock.classSection.findFirst.mockResolvedValue({ id: 's1', classTeacherId: PRIYA, academicYearId: YEAR.id });
+    let cleared = false;
+    txMock.classSection.findFirst.mockImplementation(() => Promise.resolve(oneSection(cleared ? null : PRIYA)));
+    txMock.classSection.update.mockImplementation(() => { cleared = true; return Promise.resolve({}); });
     txMock.classSection.findMany.mockResolvedValue([section('s1', 'LKG', 'A', 1, null)]);
     await svc.assign(SCHOOL, 's1', null, ADMIN);
     expect(txMock.classTeacherAssignment.updateMany).toHaveBeenCalled();
@@ -123,8 +148,31 @@ describe('assigning', () => {
     await expect(svc.assign(SCHOOL, 's1', PRIYA, ADMIN)).rejects.toBeInstanceOf(ApiError);
   });
 
+  it('reads back only the row it changed — never the whole desk again', async () => {
+    await svc.assign(SCHOOL, 's1', PRIYA, ADMIN);
+    // The desk read every section, every teacher, the previous session and the
+    // whole roll, in a SECOND transaction, to return one row the screen throws
+    // away. These three are the desk's fingerprint and nothing else uses them:
+    // the roll of active teachers, the roll counts, and the session lookup. If
+    // any of them runs here, the write is doing the desk's work twice on every
+    // dropdown change. (`classSection.findMany` is NOT on this list — the
+    // read-back uses it, scoped to the one teacher, to say what else they hold.)
+    expect(txMock.teacher.findMany).not.toHaveBeenCalled();
+    expect(txMock.student.groupBy).not.toHaveBeenCalled();
+    expect(txMock.academicYear.findFirst).not.toHaveBeenCalled();
+    const sectionScans = txMock.classSection.findMany.mock.calls;
+    expect(sectionScans).toHaveLength(1);
+    expect(sectionScans[0][0].where).toMatchObject({ classTeacherId: PRIYA });
+  });
+
+  it('returns the changed row, named and counted', async () => {
+    const row = await svc.assign(SCHOOL, 's1', PRIYA, ADMIN);
+    expect(row).toMatchObject({ classSectionId: 's1', label: 'LKG A', students: 28 });
+    expect(row.teacher).toEqual({ id: PRIYA, name: 'Priya Nair' });
+  });
+
   it('writes nothing when the teacher is already the one on the section', async () => {
-    txMock.classSection.findFirst.mockResolvedValue({ id: 's1', classTeacherId: PRIYA, academicYearId: YEAR.id });
+    txMock.classSection.findFirst.mockResolvedValue(oneSection(PRIYA));
     await svc.assign(SCHOOL, 's1', PRIYA, ADMIN);
     expect(txMock.classSection.update).not.toHaveBeenCalled();
     expect(txMock.classTeacherAssignment.create).not.toHaveBeenCalled();
