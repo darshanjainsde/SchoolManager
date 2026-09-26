@@ -1,7 +1,7 @@
 /**
- * Renders the REAL school site under each FULL festive takeover, so the pitch
- * shows what a school gets TODAY — the numbers in festive-contrast.test.tsx
- * made visible. Home + admissions, four festivals + none.
+ * Renders the REAL school site under every festival's every scene, so the
+ * scenes can be LOOKED AT (audit/festive-look.html) before they ship. HERO for
+ * every scene, then the night and full-bleed cases that stress the dress.
  */
 import type { ReactElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -19,20 +19,20 @@ import { siteData } from './public-site-render.test';
 const fest = (festival: string, treatment: string, extra: Record<string, unknown> = {}) =>
   ({ festival, treatment, ribbon: true, recolor: true, ...extra });
 
+import { FESTIVALS } from '@/components/public/site-variants';
+
 const CASES: [string, unknown, Record<string, unknown>][] = [
   ['none', null, {}],
-  ['DIWALI · LAYER (diyas)', fest('DIWALI', 'LAYER', { variant: 'DIYAS' }), {}],
-  ['DIWALI · CHROME', fest('DIWALI', 'CHROME'), {}],
-  ['DIWALI · HERO', fest('DIWALI', 'HERO'), {}],
-  ['DIWALI · HERO · full-bleed photo', fest('DIWALI', 'HERO'), { heroLayout: 'FULL_BLEED' }],
-  ['DIWALI · WASH', fest('DIWALI', 'WASH'), {}],
-  ['DIWALI · NIGHT', fest('DIWALI', 'NIGHT'), {}],
-  ['NAVRATRI · HERO', fest('NAVRATRI', 'HERO'), {}],
-  ['HOLI · WASH', fest('HOLI', 'WASH'), {}],
-  ['EID · NIGHT', fest('EID', 'NIGHT'), {}],
-  ['INDEPENDENCE · CHROME', fest('INDEPENDENCE', 'CHROME'), {}],
-  ['DURGA · NIGHT', fest('DURGA', 'NIGHT'), {}],
-  ['VASANT · WASH', fest('VASANT', 'WASH'), {}],
+  ...FESTIVALS.flatMap((f) => f.variants.map((v): [string, unknown, Record<string, unknown>] => [`${f.value} · ${v.value} · HERO`, fest(f.value, 'HERO', { variant: v.value }), {}])),
+  ['DIWALI · DEEPAVALI · NIGHT', fest('DIWALI', 'NIGHT'), {}],
+  ['DIWALI · LAKSHMI · NIGHT', fest('DIWALI', 'NIGHT', { variant: 'LAKSHMI' }), {}],
+  ['EID · SKYLINE · NIGHT', fest('EID', 'NIGHT', { variant: 'SKYLINE' }), {}],
+  ['CHRISTMAS · TREE · NIGHT', fest('CHRISTMAS', 'NIGHT'), {}],
+  ['JANMASHTAMI · KRISHNA · NIGHT', fest('JANMASHTAMI', 'NIGHT', { variant: 'KRISHNA' }), {}],
+  ['DIWALI · DEEPAVALI · HERO · full-bleed photo', fest('DIWALI', 'HERO'), { heroLayout: 'FULL_BLEED' }],
+  ['GANESH · MURTI · WASH · split', fest('GANESH', 'WASH'), { heroLayout: 'SPLIT' }],
+  ['HOLI · SPLASH · LAYER · pill nav', fest('HOLI', 'LAYER'), { navStyle: 'PILL' }],
+  ['NAVRATRI · DUSSEHRA · CHROME', fest('NAVRATRI', 'CHROME', { variant: 'DUSSEHRA' }), {}],
 ];
 
 describe('look at the festive takeovers', () => {
@@ -52,7 +52,7 @@ describe('look at the festive takeovers', () => {
 <style>body{margin:0}.look{position:relative;margin:0 0 80px;border-bottom:16px solid #000}
 .look-h{position:sticky;top:0;z-index:99;margin:0;padding:6px 16px;background:#111;color:#fff;font:700 12px ui-monospace,monospace;letter-spacing:.14em;text-transform:uppercase}
 .reveal{opacity:1!important;transform:none!important;clip-path:none!important}
-.ps-fx{position:absolute!important}</style>
+</style>
 </head><body>${pages.join('\n')}</body></html>`,
     );
     expect(pages.join('').length).toBeGreaterThan(20000);

@@ -1222,85 +1222,118 @@
   @media (max-width: 640px) { .ps-pgblock-imgtext { grid-template-columns: 1fr; } }
 
   /* ── Festive overlay ──
-     A decoration layer OVER the page (fixed, pointer-events none, under the
-     nav's z-50). Positions are constants, not randomness — the server and the
-     hydration render must agree. Every animation answers to --motion and is
-     silenced by motion-off / reduced-motion at the end of this sheet. */
+     The ribbon above the nav, then the drawing kit's motion and the scene
+     placement rules. Positions are constants, not randomness — the server and
+     the hydration render must agree. Every animation answers to --motion and
+     is silenced by motion-off / reduced-motion at the end of this sheet. */
   .ps-fest-ribbon { position: relative; z-index: 51; text-align: center; font-size: .8rem;
     font-weight: 700; letter-spacing: .02em; padding: .45rem .9rem;
     background: color-mix(in srgb, var(--ps2) 24%, var(--paper)); color: var(--ink); }
-  .ps-fx { position: fixed; inset: 0; pointer-events: none; z-index: 49; overflow: hidden; }
-  .ps-fx-lightrow { position: absolute; top: 0; left: 0; right: 0; display: flex;
-    justify-content: space-around; }
-  .ps-fx-bulb { width: 9px; height: 9px; border-radius: 999px; margin-top: 12px;
-    animation: ps-fx-twinkle calc(1.9s / (var(--motion) + .06)) ease-in-out infinite alternate; }
-  @keyframes ps-fx-twinkle { from { opacity: .45; transform: scale(.85); } to { opacity: 1; transform: scale(1.2); } }
-  .ps-fx-diya { position: absolute; bottom: 12px; font-size: 30px;
-    animation: ps-fx-glow calc(2.3s / (var(--motion) + .06)) ease-in-out infinite alternate; }
-  @keyframes ps-fx-glow { from { filter: drop-shadow(0 0 4px rgba(255,170,60,.5)); }
-    to { filter: drop-shadow(0 0 16px rgba(255,170,60,.95)); } }
-  .ps-fx-burst { position: absolute; width: 130px; height: 130px; border-radius: 999px; opacity: 0;
-    background: repeating-conic-gradient(rgba(255,205,120,.95) 0 3deg, transparent 3deg 22deg);
-    -webkit-mask: radial-gradient(circle, transparent 40%, #000 41%, #000 54%, transparent 55%);
-    mask: radial-gradient(circle, transparent 40%, #000 41%, #000 54%, transparent 55%);
-    animation: ps-fx-boom 3.1s ease-out infinite; }
-  @keyframes ps-fx-boom { 0% { transform: scale(.05); opacity: 0; } 12% { opacity: calc(.9 * var(--motion) + .1); }
-    48% { transform: scale(1); opacity: 0; } 100% { opacity: 0; } }
-  .ps-fx-rangoli { position: absolute; width: 180px; height: 180px; border-radius: 999px; opacity: .4;
-    background: repeating-conic-gradient(var(--ps2) 0 12deg, var(--ps1) 12deg 24deg);
-    -webkit-mask: radial-gradient(circle, #000 0 28%, transparent 29% 44%, #000 45% 58%, transparent 59%);
-    mask: radial-gradient(circle, #000 0 28%, transparent 29% 44%, #000 45% 58%, transparent 59%); }
-  .ps-fx-blob { position: absolute; width: 200px; height: 200px; border-radius: 999px;
-    filter: blur(34px); opacity: .34;
-    animation: ps-fx-blob calc(6.5s / (var(--motion) + .06)) ease-in-out infinite alternate; }
-  @keyframes ps-fx-blob { from { transform: scale(.9); } to { transform: scale(1.15); } }
-  .ps-fx-fall { position: absolute; top: -4%;
-    animation: ps-fx-fall linear infinite; }
-  @keyframes ps-fx-fall { to { top: 104%; transform: rotate(320deg); } }
-  .ps-fx-lantern { position: absolute; top: -2px; font-size: 28px; transform-origin: top center;
-    animation: ps-fx-swing calc(3.2s / (var(--motion) + .06)) ease-in-out infinite alternate; }
-  @keyframes ps-fx-swing { from { transform: rotate(calc(-9deg * var(--motion))); }
-    to { transform: rotate(calc(9deg * var(--motion))); } }
-  .ps-fx-moon { position: absolute; top: 70px; right: 28px; font-size: 34px;
-    filter: drop-shadow(0 0 10px rgba(255,255,200,.65)); }
-  .ps-fx-star { position: absolute; font-size: 12px;
-    animation: ps-fx-twinkle calc(2.1s / (var(--motion) + .06)) ease-in-out infinite alternate; }
-  .ps-fx-bunting { position: absolute; top: 0; left: 0; right: 0; display: flex; }
-  .ps-fx-flag { flex: 1; height: 20px; clip-path: polygon(0 0, 100% 0, 50% 100%); }
-  .ps-fx-kite { position: absolute; font-size: 28px; animation: ps-fx-kite 16s linear infinite; }
-  @keyframes ps-fx-kite { 0% { left: -6%; top: 58%; transform: rotate(12deg); }
-    50% { top: 22%; transform: rotate(-8deg); } 100% { left: 104%; top: 6%; transform: rotate(14deg); } }
-  /* Garland: a toran of glyphs strung along the top edge, each swaying on its
-     own phase (marigold rows for Navratri/Onam/Ganesh Chaturthi). */
-  .ps-fx-garland { position: absolute; top: 0; left: 0; right: 0; display: flex;
-    justify-content: space-around; }
-  .ps-fx-gitem { font-size: 19px; font-style: normal; margin-top: 2px; transform-origin: top center;
-    animation: ps-fx-swing calc(3s / (var(--motion) + .06)) ease-in-out infinite alternate; }
-  /* Rise: the fall field mirrored upward (balloons on Children's Day). */
-  .ps-fx-rise { position: absolute; top: 104%;
-    animation: ps-fx-rise linear infinite; }
-  @keyframes ps-fx-rise { to { top: -8%; transform: rotate(-14deg); } }
-  /* Sun: a warm morning sun in the top corner (Sankranti/Pongal). */
-  .ps-fx-sun { position: absolute; top: 66px; left: 26px; font-size: 36px;
-    animation: ps-fx-glow calc(2.6s / (var(--motion) + .06)) ease-in-out infinite alternate; }
-  /* Perch: a large glyph resting in a bottom corner with a gentle bob
-     (peacock feathers, wheat sheaves). */
-  .ps-fx-perch { position: absolute; bottom: 12px; font-size: 34px;
-    animation: ps-fx-bob calc(3.4s / (var(--motion) + .06)) ease-in-out infinite alternate; }
-  @keyframes ps-fx-bob { from { transform: translateY(0) rotate(-2deg); }
-    to { transform: translateY(calc(-7px * var(--motion))) rotate(2deg); } }
-  /* Rakhi: a thread medallion — gold centre, pink-gold tassels radiating from
-     a ring — turning very slowly in a page corner (Raksha Bandhan). Colours
-     are the festival's own thread tones, not palette vars, so the medallion
-     reads as a rakhi even before the takeover retints the page. */
-  .ps-fx-rakhi { position: absolute; width: 110px; height: 110px; border-radius: 999px; opacity: .45;
-    background:
-      radial-gradient(circle, #d4a017 0 20%, transparent 21%),
-      repeating-conic-gradient(#f25287 0 8deg, #d4a017 8deg 16deg, transparent 16deg 28deg);
-    -webkit-mask: radial-gradient(circle, #000 0 26%, transparent 27% 36%, #000 37% 82%, transparent 83%);
-    mask: radial-gradient(circle, #000 0 26%, transparent 27% 36%, #000 37% 82%, transparent 83%);
-    animation: ps-fx-spin calc(16s / (var(--motion) + .06)) linear infinite; }
+  /* ── The festive drawing kit's motion (components/public/festive/) ──
+     Opacity/transform only, every duration scaled by --motion, all silenced by
+     Animation = Off and reduced-motion at the end of this sheet. Positions of
+     the objects themselves are set by the scene; these rules only move them. */
+  .ps-fx-glow { animation: ps-fx-glow calc(2.4s / (var(--motion) + .06)) ease-in-out infinite alternate; }
+  @keyframes ps-fx-glow { from { opacity: .55; } to { opacity: 1; } }
+  .ps-fx-twinkle { animation: ps-fx-twinkle calc(2.1s / (var(--motion) + .06)) ease-in-out infinite alternate; }
+  @keyframes ps-fx-twinkle { from { opacity: .45; } to { opacity: 1; } }
+  .ps-fx-blink { animation: ps-fx-blink calc(1.6s / (var(--motion) + .06)) steps(2, jump-none) infinite alternate; }
+  @keyframes ps-fx-blink { from { opacity: .35; } to { opacity: 1; } }
+  .ps-fx-flame { transform-origin: 50% 100%; animation: ps-fx-flame calc(1.7s / (var(--motion) + .06)) ease-in-out infinite alternate; }
+  @keyframes ps-fx-flame { from { transform: scaleY(.93) scaleX(1.05); } to { transform: scaleY(1.05) scaleX(.96); } }
+  .ps-fx-burn { animation: ps-fx-burn calc(.9s / (var(--motion) + .06)) ease-in-out infinite alternate; }
+  @keyframes ps-fx-burn { from { transform: scaleY(.96) scaleX(1.03); } to { transform: scaleY(1.06) scaleX(.97); } }
+  .ps-fx-swing { transform-origin: 50% 0; animation: ps-fx-swing calc(3.2s / (var(--motion) + .06)) ease-in-out infinite alternate; }
+  @keyframes ps-fx-swing { from { transform: rotate(calc(-5deg * var(--motion))); } to { transform: rotate(calc(5deg * var(--motion))); } }
+  .ps-fx-pendulum { animation: ps-fx-pendulum calc(3.6s / (var(--motion) + .06)) ease-in-out infinite alternate; }
+  @keyframes ps-fx-pendulum { from { transform: rotate(calc(-9deg * var(--motion))); } to { transform: rotate(calc(9deg * var(--motion))); } }
+  .ps-fx-sway { animation: ps-fx-sway calc(4s / (var(--motion) + .06)) ease-in-out infinite alternate; }
+  @keyframes ps-fx-sway { from { transform: rotate(calc(-4deg * var(--motion))); } to { transform: rotate(calc(4deg * var(--motion))); } }
+  .ps-fx-wave { animation: ps-fx-wave calc(2.8s / (var(--motion) + .06)) ease-in-out infinite alternate; }
+  @keyframes ps-fx-wave { from { transform: skewY(calc(-2deg * var(--motion))); } to { transform: skewY(calc(2deg * var(--motion))); } }
+  .ps-fx-beat { animation: ps-fx-beat calc(.5s / (var(--motion) + .06)) ease-in-out infinite alternate; }
+  @keyframes ps-fx-beat { from { transform: rotate(0deg); } to { transform: rotate(calc(-18deg * var(--motion))); } }
+  .ps-fx-row { animation: ps-fx-row calc(1.2s / (var(--motion) + .06)) ease-in-out infinite alternate; }
+  @keyframes ps-fx-row { from { transform: rotate(calc(-14deg * var(--motion))); } to { transform: rotate(calc(14deg * var(--motion))); } }
+  .ps-fx-clash-l { animation: ps-fx-clash-l calc(1.1s / (var(--motion) + .06)) ease-in-out infinite alternate; }
+  .ps-fx-clash-r { animation: ps-fx-clash-r calc(1.1s / (var(--motion) + .06)) ease-in-out infinite alternate; }
+  @keyframes ps-fx-clash-l { from { transform: rotate(calc(-12deg * var(--motion))); } to { transform: rotate(0deg); } }
+  @keyframes ps-fx-clash-r { from { transform: rotate(calc(12deg * var(--motion))); } to { transform: rotate(0deg); } }
+  .ps-fx-spin-slow { animation: ps-fx-spin calc(18s / (var(--motion) + .06)) linear infinite; }
+  .ps-fx-spin { animation: ps-fx-spin calc(6s / (var(--motion) + .06)) linear infinite; }
   @keyframes ps-fx-spin { to { transform: rotate(360deg); } }
+  .ps-fx-drift { animation: ps-fx-drift calc(7s / (var(--motion) + .06)) ease-in-out infinite alternate; }
+  @keyframes ps-fx-drift { from { transform: scale(.94) rotate(-3deg); } to { transform: scale(1.06) rotate(3deg); } }
+  .ps-fx-spray { animation: ps-fx-spray calc(1.4s / (var(--motion) + .06)) ease-out infinite; }
+  @keyframes ps-fx-spray { 0% { transform: translate(0, 0); opacity: 1; } 100% { transform: translate(var(--dx, 60px), var(--dy, -20px)); opacity: 0; } }
+  .ps-fx-bloom { animation: ps-fx-bloom calc(5s / (var(--motion) + .06)) ease-in-out infinite alternate; transform-origin: 0 0; }
+  @keyframes ps-fx-bloom { from { transform: scale(.97); opacity: .85; } to { transform: scale(1.02); opacity: 1; } }
+  .ps-fx-rise-soft { animation: ps-fx-rise-soft calc(2.6s / (var(--motion) + .06)) ease-out infinite; }
+  @keyframes ps-fx-rise-soft { from { transform: translateY(0); opacity: .9; } to { transform: translateY(-16px); opacity: 0; } }
+  .ps-fx-chalk { stroke-dasharray: 1; stroke-dashoffset: 1; animation: ps-fx-chalk 6s ease-in-out infinite; }
+  @keyframes ps-fx-chalk { 0% { stroke-dashoffset: 1; } 30% { stroke-dashoffset: 0; } 85% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
+  .ps-fx-glide { animation: ps-fx-glide calc(26s / (var(--motion) + .06)) linear infinite; }
+  @keyframes ps-fx-glide { from { transform: translateX(-110%); } to { transform: translateX(110vw); } }
+  .ps-fx-fall { position: absolute; top: -6%; animation: ps-fx-fall linear infinite; }
+  @keyframes ps-fx-fall { to { top: 104%; transform: rotate(320deg); } }
+  .ps-fx-rise { position: absolute; top: 104%; animation: ps-fx-rise linear infinite; }
+  @keyframes ps-fx-rise { to { top: -12%; transform: rotate(-8deg); } }
+  .ps-fx-burst { position: absolute; width: 130px; height: 130px; border-radius: 999px; opacity: 0;
+    -webkit-mask-image: radial-gradient(circle, transparent 30%, #000 32%, #000 60%, transparent 62%); mask-image: radial-gradient(circle, transparent 30%, #000 32%, #000 60%, transparent 62%);
+    animation: ps-fx-boom 3.1s ease-out infinite; }
+  @keyframes ps-fx-boom { 0% { transform: scale(.05); opacity: 0; } 12% { opacity: calc(.9 * var(--motion) + .1); } 100% { transform: scale(1.1); opacity: 0; } }
+  /* kites: drift across the band; at rest (Animation = Off) they hang at 70%. */
+  .ps-fx-kite { position: absolute; left: 70%; animation: ps-fx-kite calc(22s / (var(--motion) + .06)) linear infinite; }
+  @keyframes ps-fx-kite { 0% { left: -8%; transform: rotate(8deg) translateY(0); } 50% { transform: rotate(-6deg) translateY(-14px); } 100% { left: 104%; transform: rotate(8deg) translateY(0); } }
+  .ps-fx-sun { position: absolute; top: 8%; left: 6%; width: 110px; height: 110px; border-radius: 999px;
+    background: radial-gradient(circle, #ffe08a 0 36%, rgba(255,214,102,.45) 40%, transparent 70%); animation: ps-fx-glow calc(3s / (var(--motion) + .06)) ease-in-out infinite alternate; }
+
+  /* ── Scene placement: where a scene's groups sit in the band ── */
+  .ps-fest-top { position: absolute; left: 0; right: 0; top: 0; width: 100%; height: 34px; }
+  #ps-nav.ps-nav-float-over ~ [data-sec="hero"] .ps-fest-top,
+  #ps-nav.ps-nav-float-over ~ [data-sec="hero"] .ps-fest-hang { top: 4.25rem; }
+  .ps-fest-hang { position: absolute; top: 0; right: clamp(16px, 8vw, 120px); width: 160px; height: 180px; }
+  .ps-fest-corner { position: absolute; right: 0; bottom: 0; width: 260px; height: 240px; transform-origin: 100% 100%; opacity: .92; }
+  .ps-fest-floor { position: absolute; left: clamp(12px, 3vw, 40px); bottom: 10px; width: 220px; height: 50px; }
+  .ps-fest-art { right: clamp(16px, 7vw, 120px); bottom: 34px; }
+  .ps-fest-stars { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .9; }
+  .ps-fest-skyline { position: absolute; left: 0; right: 0; bottom: -2px; width: 100%; height: clamp(40px, 8vw, 90px); opacity: .9; }
+  .ps-fest-kasavu { position: absolute; left: 0; right: 0; bottom: 0; height: 14px;
+    background: linear-gradient(90deg, #c9931a 0 25%, #f4e9c8 25% 50%, #c9931a 50% 75%, #f4e9c8 75%); background-size: 48px 100%; opacity: .55; }
+  .ps-fest-chakra { position: absolute; right: -60px; top: 50%; width: 260px; height: 260px; margin-top: -130px; border-radius: 999px; opacity: .08;
+    background: repeating-conic-gradient(#1e3a6e 0 2deg, transparent 2deg 15deg); -webkit-mask-image: radial-gradient(circle, transparent 46%, #000 48%, #000 60%, transparent 62%); mask-image: radial-gradient(circle, transparent 46%, #000 48%, #000 60%, transparent 62%); }
+  /* falling things */
+  .ps-fest-flake { display: block; width: 7px; height: 7px; border-radius: 999px; background: #fff; opacity: .85; box-shadow: 0 0 4px rgba(255,255,255,.7); }
+  .ps-fest-spark { display: block; width: 4px; height: 4px; border-radius: 999px; background: #ffd27a; box-shadow: 0 0 6px 2px rgba(255,200,90,.6); }
+  .ps-fest-petal { display: block; width: 9px; height: 13px; border-radius: 60% 60% 60% 60% / 80% 80% 40% 40%; opacity: .9; }
+  .ps-fest-leaf { display: block; width: 8px; height: 16px; border-radius: 0 100% 0 100%; background: #4a7a55; }
+  /* The picture frame: an arched print with a warm mount, as a print hangs at home. */
+  .ps-fest-frame { position: absolute; }
+  .ps-fest-frame-arch { overflow: hidden; border-radius: 999px 999px 10px 10px; border: 6px solid #b8862b; box-shadow: 0 0 0 2px #7a5418, 0 10px 30px rgba(0,0,0,.28); background: #fff6e0; }
+  .ps-fest-frame-arch img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 12%; }
+  .ps-fest-credit { position: absolute; left: 0; right: 0; bottom: -18px; text-align: center; font-size: 9px; letter-spacing: .04em; color: var(--ps-hero-text, var(--ps-muted)); opacity: .8; white-space: nowrap; }
+  /* Wide bands: the objects grow with the band. transform-origins keep each
+     group pinned to its own edge. */
+  @media (min-width: 768px) {
+    .ps-fest-corner { scale: 1.3; right: 12px; bottom: 8px; }
+    .ps-fest-hang { scale: 1.35; transform-origin: 100% 0; }
+    .ps-fest-floor { scale: 1.25; transform-origin: 0 100%; }
+    .ps-fest-art { scale: 1.3; transform-origin: 100% 100%; bottom: 44px; }
+  }
+  @media (min-width: 1200px) {
+    .ps-fest-corner { scale: 1.7; right: 24px; bottom: 16px; }
+    .ps-fest-hang { scale: 1.7; }
+    .ps-fest-floor { scale: 1.5; }
+    .ps-fest-art { scale: 1.55; bottom: 56px; }
+  }
+  /* Phones: the scene steps back so the copy stays first. */
+  @media (max-width: 640px) {
+    .ps-fest-corner { scale: .72; opacity: .8; }
+    .ps-fest-hang { scale: .7; transform-origin: 100% 0; right: 8px; }
+    .ps-fest-art { scale: .62; transform-origin: 100% 100%; right: 8px; bottom: 12px; }
+    .ps-fest-floor { scale: .8; transform-origin: 0 100%; }
+    .ps-fest-chakra { width: 180px; height: 180px; margin-top: -90px; right: -50px; }
+  }
 
   /* FULL takeover on a night festival: panels and body text follow the dark
      paper via the same tokens the shape control owns. */
@@ -1351,21 +1384,6 @@
       radial-gradient(circle at 20% 92%, color-mix(in srgb, var(--ps-fest-glow) 22%, #fff) 0 8px, transparent 26px);
     -webkit-mask-image: linear-gradient(90deg, rgba(0,0,0,.35), #000 55%); mask-image: linear-gradient(90deg, rgba(0,0,0,.35), #000 55%); }
   .ps-fest-night .ps-fest-bokeh { opacity: calc(.7 + .3 * var(--motion)); }
-  /* The bulb string: an <svg> sized to the band's top edge. */
-  .ps-fest-bulbs { position: absolute; left: 0; right: 0; top: 0; height: 34px; width: 100%; }
-  /* A floating pill/ghost nav sits fixed over the hero's top edge and hid the
-     string behind it (only the glow peeked out). When the nav floats over,
-     the string hangs from just below the bar instead. */
-  #ps-nav.ps-nav-float-over ~ [data-sec="hero"] .ps-fest-bulbs { top: 4.25rem; }
-  .ps-fest-bulb { animation: ps-fest-tw calc(2.1s / (var(--motion) + .06)) ease-in-out infinite alternate; }
-  @keyframes ps-fest-tw { from { opacity: .55; } to { opacity: 1; } }
-  /* The corner mark (rangoli + diya): bottom-right of the band, phone-sized on phones. */
-  .ps-fest-corner { position: absolute; right: -8px; bottom: -14px; width: clamp(120px, 24vw, 220px); height: auto; opacity: .9; }
-  .ps-fest-corner .ps-fest-rangoli { opacity: .22; }
-  .ps-fest-night .ps-fest-corner .ps-fest-rangoli, .ps-fest-wash .ps-fest-corner .ps-fest-rangoli { opacity: .16; }
-  .ps-fest-flame { transform-origin: 50% 100%; animation: ps-fest-fl calc(1.7s / (var(--motion) + .06)) ease-in-out infinite alternate; }
-  @keyframes ps-fest-fl { from { transform: scaleY(.93) scaleX(1.05); } to { transform: scaleY(1.05) scaleX(.96); } }
-  @media (max-width: 640px) { .ps-fest-corner { width: 110px; right: -12px; bottom: -18px; } }
   /* Footer edge: the string returns along the footer's top. */
   .ps-fest-footedge { position: relative; height: 0; }
   .ps-fest-footedge svg { position: absolute; left: 0; right: 0; top: -6px; width: 100%; height: 34px; pointer-events: none; }
@@ -1374,8 +1392,6 @@
   .ps-fest-night .ps-panel img, .ps-fest-night .ps-card img { filter: brightness(.94) saturate(.95); outline: 1px solid color-mix(in srgb, var(--ps2) 22%, transparent); outline-offset: -1px; }
   /* Ribbon on the light treatments takes the festival's light gradient. */
   .ps-fest-hero .ps-fest-ribbon, .ps-fest-chrome .ps-fest-ribbon { background: linear-gradient(90deg, var(--ps-hero-a), var(--ps-hero-b)); color: var(--ps-hero-accent); }
-  .ps-motion-off .ps-fest-bulb, .ps-motion-off .ps-fest-flame { animation: none; }
-  @media (prefers-reduced-motion: reduce) { .ps-fest-bulb, .ps-fest-flame { animation: none; } }
 
   /* ── Studio additions: motion kill-switches ──
      Same contract as everything above them: reduced-motion and Animation=Off
@@ -1388,12 +1404,10 @@
     /* Two-class specificity so these beat the .ps-menuanim-* longhands that
        come later in the sheet — the shipped single-class rule did not. */
     .ps-menuanim-slide .ps-menu-card, .ps-menuanim-scale .ps-menu-card { animation: none; }
-    .ps-fx-bulb, .ps-fx-diya, .ps-fx-burst, .ps-fx-blob, .ps-fx-fall, .ps-fx-lantern,
-    .ps-fx-star, .ps-fx-kite, .ps-fx-gitem, .ps-fx-rise, .ps-fx-sun, .ps-fx-perch,
-    .ps-fx-rakhi { animation: none; }
+    .ps-root [class*="ps-fx-"] { animation: none; }
     .ps-fx-burst { opacity: 0; }
-    .ps-fx-fall { top: 104%; }
-    .ps-fx-rise { top: -8%; }
+    .ps-fx-chalk { stroke-dashoffset: 0; }
+    .ps-fx-glide { transform: translateX(20vw); }
     .ps-hero-video { display: none; }
     /* Bar fill collapses to its final width, not an empty track. */
     .ps-bar-fill { transition: none; width: var(--ps-bar-w, 75%); }
@@ -1408,11 +1422,10 @@
   .ps-motion-off.ps-menuanim-slide .ps-menu-card, .ps-motion-off.ps-menuanim-scale .ps-menu-card,
   .ps-motion-off .ps-menuanim-slide .ps-menu-card, .ps-motion-off .ps-menuanim-scale .ps-menu-card {
     animation: none; }
-  .ps-motion-off .ps-fx-bulb, .ps-motion-off .ps-fx-diya, .ps-motion-off .ps-fx-burst,
-  .ps-motion-off .ps-fx-blob, .ps-motion-off .ps-fx-fall, .ps-motion-off .ps-fx-lantern,
-  .ps-motion-off .ps-fx-star, .ps-motion-off .ps-fx-kite { animation: none; }
+  .ps-motion-off [class*="ps-fx-"] { animation: none; }
   .ps-motion-off .ps-fx-burst { opacity: 0; }
-  .ps-motion-off .ps-fx-fall { top: 104%; }
+  .ps-motion-off .ps-fx-chalk { stroke-dashoffset: 0; }
+  .ps-motion-off .ps-fx-glide { transform: translateX(20vw); }
   .ps-motion-off .ps-hero-video { display: none; }
   /* ═══════════════ END WEBSITE STUDIO ADDITIONS ═══════════════ */
 

@@ -256,7 +256,7 @@ export default function HeroSection({
   const images = heroImagesOf(data);
   // The festive dress sits inside the band, over its background, under its copy.
   const fest = normalizeFestiveTheme(data.profile?.festiveTheme);
-  const dress = <FestiveDress fest={fest} />;
+  const dress = <FestiveDress fest={fest} imageUrl={data.profile?.festiveImageUrl ?? null} />;
   const heroUrl = images[0] ?? null;
   const brand = data.profile?.brandColorPrimary ?? '#2f6b4f';
   const center = (data.profile?.heroTextAlign ?? 'LEFT') === 'CENTER';

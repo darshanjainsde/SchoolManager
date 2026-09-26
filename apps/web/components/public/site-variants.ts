@@ -1,5 +1,6 @@
 import { countryPack } from '@skoolos/types';
 import type { StyleOption } from './site-style';
+import { sceneVariants, type SceneVariant } from './festive/scene-variants';
 
 /**
  * The Website Studio increment: every NEW design axis in one pure module,
@@ -486,6 +487,8 @@ export interface FestiveTheme {
   intensity: FestiveIntensity;
   ribbon: boolean;
   recolor: boolean;
+  /** MediaAsset(kind FESTIVE) the school chose for the scene's picture, if any. */
+  imageAssetId: string | null;
 }
 export interface FestivalDef {
   value: FestivalKey;
@@ -513,11 +516,11 @@ export interface FestivalDef {
   /** Treatments this festival offers. Absent = all five if it has a night surface, else all but NIGHT. */
   treatments?: readonly FestiveTreatment[];
   greeting: string;
-  variants: StyleOption<string>[];
-  /** Decoration sets layered IN ADDITION to the chosen one at FULL (LAYER never used these; kept for data compatibility). */
-  fullExtras: string[];
+  /** The scenes this festival offers — from festive/scene-variants.ts; the first is the default. */
+  variants: SceneVariant[];
 }
-export const FESTIVALS: FestivalDef[] = [
+type FestivalSeed = Omit<FestivalDef, 'variants'>;
+const FESTIVAL_SEEDS: FestivalSeed[] = [
   {
     value: 'DIWALI',
     label: 'Diwali',
@@ -531,12 +534,6 @@ export const FESTIVALS: FestivalDef[] = [
     // The gradient from the reference the owner approved: gold to rose.
     heroWash: ['#fbd47f', '#f0a37a'],
     greeting: 'Happy Diwali from all of us — may the season glow bright',
-    variants: [
-      { value: 'DIYAS', label: 'Diyas & string lights', hint: 'Glowing lamps in the corners, lights along the top.' },
-      { value: 'FIREWORKS', label: 'Night fireworks', hint: 'Slow celebratory bursts over the page.' },
-      { value: 'RANGOLI', label: 'Rangoli corners', hint: 'Patterned rings tucked into the page corners.' },
-    ],
-    fullExtras: ['DIYAS', 'FIREWORKS'],
   },
   {
     value: 'HOLI',
@@ -546,11 +543,6 @@ export const FESTIVALS: FestivalDef[] = [
     accent: '#c2367f',
     full: { ps1: '#c2367f', ps2: '#26c281' },
     greeting: 'Happy Holi — may the year ahead be full of colour',
-    variants: [
-      { value: 'SPLASH', label: 'Colour splashes', hint: 'Soft gulal clouds washing the corners.' },
-      { value: 'CONFETTI', label: 'Gulal drift', hint: 'Colour flecks drifting gently down the page.' },
-    ],
-    fullExtras: ['SPLASH', 'CONFETTI'],
   },
   {
     value: 'EID',
@@ -561,12 +553,6 @@ export const FESTIVALS: FestivalDef[] = [
     full: { ps1: '#3ecf8e', ps2: '#e8c76a' },
     fullSurface: { paper: '#0e2b26', ink: '#eaf5ef' },
     greeting: 'Eid Mubarak from our whole school family',
-    variants: [
-      { value: 'LANTERNS', label: 'Hanging lanterns', hint: 'Lanterns swinging gently from the top edge.' },
-      { value: 'CRESCENT', label: 'Crescent & stars', hint: 'A glowing crescent with drifting stars.' },
-      { value: 'GLOW', label: 'Golden glow lights', hint: 'A warm gold light string along the top.' },
-    ],
-    fullExtras: ['LANTERNS', 'CRESCENT'],
   },
   {
     value: 'NAVRATRI',
@@ -576,12 +562,6 @@ export const FESTIVALS: FestivalDef[] = [
     accent: '#c41e3a',
     full: { ps1: '#c41e3a', ps2: '#e8b923' },
     greeting: 'Shubh Navratri — nine nights of colour, music and devotion',
-    variants: [
-      { value: 'MARIGOLD', label: 'Marigold garland', hint: 'A genda-phool garland swaying along the top.' },
-      { value: 'GARBA', label: 'Garba colours', hint: 'Red, gold and pink flecks drifting like twirling dancers.' },
-      { value: 'RANGOLI', label: 'Rangoli corners', hint: 'Patterned rings tucked into the page corners.' },
-    ],
-    fullExtras: ['MARIGOLD', 'GARBA'],
   },
   {
     value: 'GANESH',
@@ -592,12 +572,6 @@ export const FESTIVALS: FestivalDef[] = [
     // ps2 was #d3492f: a mid-tone no label can read on (white 4.41, ink 4.40). A touch deeper carries white at 5.2.
     full: { ps1: '#f4772e', ps2: '#c43d22' },
     greeting: 'Ganpati Bappa Morya — a blessed Ganesh Chaturthi to every family',
-    variants: [
-      { value: 'PETALS', label: 'Falling petals', hint: 'Hibiscus and marigold petals drifting down.' },
-      { value: 'MARIGOLD', label: 'Marigold garland', hint: 'A flower garland swaying along the top.' },
-      { value: 'DIYAS', label: 'Diyas & string lights', hint: 'Glowing lamps in the corners, lights along the top.' },
-    ],
-    fullExtras: ['PETALS', 'MARIGOLD'],
   },
   {
     value: 'JANMASHTAMI',
@@ -608,11 +582,6 @@ export const FESTIVALS: FestivalDef[] = [
     full: { ps1: '#2e5eaa', ps2: '#ffc93c' },
     fullSurface: { paper: '#101a33', ink: '#e9eefb' },
     greeting: 'Happy Janmashtami — celebrating the joy of little Krishna',
-    variants: [
-      { value: 'PEACOCK', label: 'Peacock feathers', hint: 'Feathers in the corners with a gentle drift of plumes.' },
-      { value: 'CRESCENT', label: 'Midnight sky', hint: 'The midnight moon and stars of Krishna’s birth.' },
-    ],
-    fullExtras: ['PEACOCK', 'CRESCENT'],
   },
   {
     value: 'ONAM',
@@ -622,12 +591,6 @@ export const FESTIVALS: FestivalDef[] = [
     accent: '#c9a227',
     full: { ps1: '#1e7a46', ps2: '#c9a227' },
     greeting: 'Happy Onam — wishing every family a joyous Thiruvonam',
-    variants: [
-      { value: 'RANGOLI', label: 'Pookalam rings', hint: 'Flower-carpet rings blooming in the page corners.' },
-      { value: 'PETALS', label: 'Falling petals', hint: 'Pookalam flowers drifting gently down.' },
-      { value: 'MARIGOLD', label: 'Flower garland', hint: 'A floral garland swaying along the top.' },
-    ],
-    fullExtras: ['RANGOLI', 'PETALS'],
   },
   {
     value: 'SANKRANTI',
@@ -637,12 +600,6 @@ export const FESTIVALS: FestivalDef[] = [
     accent: '#e8862a',
     full: { ps1: '#1978a5', ps2: '#e8862a' },
     greeting: 'Happy Sankranti & Pongal — may the harvest bring abundance',
-    variants: [
-      { value: 'KITES', label: 'Kite sky', hint: 'Kites drifting across the page.' },
-      { value: 'SUN', label: 'Morning sun', hint: 'A warm rising sun with gentle sparkle.' },
-      { value: 'HARVEST', label: 'Harvest corners', hint: 'Wheat sheaves in the corners with a soft shimmer.' },
-    ],
-    fullExtras: ['KITES', 'SUN'],
   },
   {
     value: 'RAKSHA',
@@ -653,12 +610,6 @@ export const FESTIVALS: FestivalDef[] = [
     // ps1 was #e63946 — a mid-tone whose best label measured 4.497. A touch lighter carries the dark label at 5.9.
     full: { ps1: '#ee4a56', ps2: '#d4a017' },
     greeting: 'Happy Raksha Bandhan — celebrating the bond between siblings',
-    variants: [
-      { value: 'RAKHI', label: 'Rakhi medallions', hint: 'Thread medallions turning slowly in the corners.' },
-      { value: 'MITHAI', label: 'Gifts & sweets', hint: 'Gifts and mithai drifting gently down.' },
-      { value: 'GLOW', label: 'Golden thread lights', hint: 'A warm gold light string along the top.' },
-    ],
-    fullExtras: ['RAKHI', 'MITHAI'],
   },
   {
     value: 'INDEPENDENCE',
@@ -668,12 +619,6 @@ export const FESTIVALS: FestivalDef[] = [
     accent: '#e8862a',
     full: { ps1: '#c26a1a', ps2: '#2e9d6b' },
     greeting: 'Happy Independence Day — Jai Hind',
-    variants: [
-      { value: 'BUNTING', label: 'Tricolour bunting', hint: 'A flag garland along the top of the page.' },
-      { value: 'KITES', label: 'Kite sky', hint: 'Kites drifting across the page.' },
-      { value: 'TRICOLOR', label: 'Tricolour drift', hint: 'Saffron, white and green flecks drifting down.' },
-    ],
-    fullExtras: ['BUNTING', 'KITES'],
   },
   {
     value: 'REPUBLIC',
@@ -683,12 +628,6 @@ export const FESTIVALS: FestivalDef[] = [
     accent: '#2e5eaa',
     full: { ps1: '#c26a1a', ps2: '#2e9d6b' },
     greeting: 'Happy Republic Day — celebrating our constitution, Jai Hind',
-    variants: [
-      { value: 'BUNTING', label: 'Tricolour bunting', hint: 'A flag garland along the top of the page.' },
-      { value: 'TRICOLOR', label: 'Tricolour drift', hint: 'Saffron, white and green flecks drifting down.' },
-      { value: 'KITES', label: 'Kite sky', hint: 'Kites drifting across the page.' },
-    ],
-    fullExtras: ['BUNTING', 'TRICOLOR'],
   },
   {
     value: 'CHILDRENS',
@@ -699,12 +638,6 @@ export const FESTIVALS: FestivalDef[] = [
     accent: '#f0409c',
     full: { ps1: '#2196f3', ps2: '#ffc107' },
     greeting: 'Happy Children’s Day — today the school belongs to you',
-    variants: [
-      { value: 'BALLOONS', label: 'Rising balloons', hint: 'Balloons floating up the page.' },
-      { value: 'DOODLES', label: 'Doodle rain', hint: 'Stars, rockets and crayons drifting down.' },
-      { value: 'CRAYONS', label: 'Crayon lights', hint: 'A bright crayon-colour light string along the top.' },
-    ],
-    fullExtras: ['BALLOONS', 'DOODLES'],
   },
   {
     value: 'TEACHERS',
@@ -714,11 +647,6 @@ export const FESTIVALS: FestivalDef[] = [
     accent: '#c0392b',
     full: { ps1: '#1f3a5f', ps2: '#c0392b' },
     greeting: 'Happy Teacher’s Day — thank you for lighting the way',
-    variants: [
-      { value: 'BOOKS', label: 'Books & apples', hint: 'Books, pencils and apples drifting gently down.' },
-      { value: 'GOLDDUST', label: 'Gold sparkle', hint: 'A quiet drift of golden sparkles.' },
-    ],
-    fullExtras: ['BOOKS', 'GOLDDUST'],
   },
   {
     value: 'CHRISTMAS',
@@ -729,12 +657,6 @@ export const FESTIVALS: FestivalDef[] = [
     full: { ps1: '#4cc38a', ps2: '#e46a5d' },
     fullSurface: { paper: '#12291d', ink: '#f2f7f0' },
     greeting: 'Merry Christmas and a joyful winter break',
-    variants: [
-      { value: 'SNOW', label: 'Snowfall', hint: 'Flakes drifting gently down the page.' },
-      { value: 'LIGHTS', label: 'Fairy lights', hint: 'A multicolour light string along the top.' },
-      { value: 'GIFTS', label: 'Gifts & stars', hint: 'Presents and stars drifting down the page.' },
-    ],
-    fullExtras: ['SNOW', 'LIGHTS'],
   },
   {
     value: 'NEWYEAR',
@@ -745,15 +667,9 @@ export const FESTIVALS: FestivalDef[] = [
     full: { ps1: '#5b2fb8', ps2: '#e5c77b' },
     fullSurface: { paper: '#12101f', ink: '#f1ead6' },
     greeting: 'Happy New Year — to a bright year of learning ahead',
-    variants: [
-      { value: 'FIREWORKS', label: 'Midnight fireworks', hint: 'Slow celebratory bursts over the page.' },
-      { value: 'GOLDDUST', label: 'Champagne sparkle', hint: 'Gold and silver sparkles drifting down.' },
-      { value: 'GLOW', label: 'Golden glow lights', hint: 'A warm gold light string along the top.' },
-    ],
-    fullExtras: ['FIREWORKS', 'GOLDDUST'],
   },
 ];
-FESTIVALS.push(
+FESTIVAL_SEEDS.push(
   {
     value: 'DURGA',
     label: 'Durga Puja',
@@ -763,12 +679,6 @@ FESTIVALS.push(
     full: { ps1: '#a3162d', ps2: '#f2c14e' },
     fullSurface: { paper: '#24080f', ink: '#f8e9dd' },
     greeting: 'Shubho Sharadiya — a joyous Durga Puja to every family',
-    variants: [
-      { value: 'MARIGOLD', label: 'Marigold garland', hint: 'A genda-phool garland swaying along the top.' },
-      { value: 'PETALS', label: 'Shiuli petals', hint: 'Petals drifting gently down the page.' },
-      { value: 'DIYAS', label: 'Diyas & lights', hint: 'Glowing lamps in the corners, lights along the top.' },
-    ],
-    fullExtras: ['MARIGOLD', 'PETALS'],
   },
   {
     value: 'VASANT',
@@ -780,12 +690,6 @@ FESTIVALS.push(
     heroWash: ['#fff1b8', '#ffe27a'],
     treatments: ['LAYER', 'CHROME', 'HERO', 'WASH'],
     greeting: 'Happy Vasant Panchami — Saraswati Puja, the day of books and learning',
-    variants: [
-      { value: 'PETALS', label: 'Mustard petals', hint: 'Yellow petals drifting gently down.' },
-      { value: 'BOOKS', label: 'Books & pens', hint: 'The tools of learning drifting gently down.' },
-      { value: 'KITES', label: 'Kite sky', hint: 'Kites drifting across the page.' },
-    ],
-    fullExtras: ['PETALS', 'BOOKS'],
   },
   {
     value: 'UGADI',
@@ -796,12 +700,6 @@ FESTIVALS.push(
     full: { ps1: '#1e7a46', ps2: '#f2c14e' },
     treatments: ['LAYER', 'CHROME', 'HERO', 'WASH'],
     greeting: 'Happy Ugadi and Gudi Padwa — a new year of learning begins',
-    variants: [
-      { value: 'MARIGOLD', label: 'Mango-leaf toran', hint: 'A garland swaying along the top.' },
-      { value: 'RANGOLI', label: 'Rangoli corners', hint: 'Patterned rings tucked into the page corners.' },
-      { value: 'PETALS', label: 'Falling petals', hint: 'Neem and mango blossom drifting down.' },
-    ],
-    fullExtras: ['MARIGOLD', 'RANGOLI'],
   },
   {
     value: 'BAISAKHI',
@@ -812,12 +710,6 @@ FESTIVALS.push(
     full: { ps1: '#c26a1a', ps2: '#f6d36b' },
     treatments: ['LAYER', 'CHROME', 'HERO', 'WASH'],
     greeting: 'Happy Baisakhi — a harvest of good things for every family',
-    variants: [
-      { value: 'HARVEST', label: 'Harvest corners', hint: 'Wheat sheaves in the corners with a soft shimmer.' },
-      { value: 'KITES', label: 'Kite sky', hint: 'Kites drifting across the page.' },
-      { value: 'SUN', label: 'Morning sun', hint: 'A warm rising sun with gentle sparkle.' },
-    ],
-    fullExtras: ['HARVEST', 'SUN'],
   },
   {
     value: 'GURUNANAK',
@@ -828,12 +720,6 @@ FESTIVALS.push(
     full: { ps1: '#1f3a8a', ps2: '#f2a93b' },
     fullSurface: { paper: '#0f1a3a', ink: '#f3ecdc' },
     greeting: 'Happy Gurpurab — light, service and learning for all',
-    variants: [
-      { value: 'GLOW', label: 'Golden glow lights', hint: 'A warm gold light string along the top.' },
-      { value: 'DIYAS', label: 'Diyas & lights', hint: 'Glowing lamps in the corners, lights along the top.' },
-      { value: 'PETALS', label: 'Falling petals', hint: 'Petals drifting gently down.' },
-    ],
-    fullExtras: ['GLOW', 'DIYAS'],
   },
   {
     value: 'LOHRI',
@@ -844,12 +730,6 @@ FESTIVALS.push(
     full: { ps1: '#b8451a', ps2: '#f2a93b' },
     fullSurface: { paper: '#1e120c', ink: '#f6e9cf' },
     greeting: 'Happy Lohri and Bihu — warmth, harvest and song',
-    variants: [
-      { value: 'GLOW', label: 'Bonfire glow', hint: 'A warm light string along the top.' },
-      { value: 'HARVEST', label: 'Harvest corners', hint: 'Sheaves in the corners with a soft shimmer.' },
-      { value: 'KITES', label: 'Kite sky', hint: 'Kites drifting across the page.' },
-    ],
-    fullExtras: ['GLOW', 'HARVEST'],
   },
   {
     value: 'GANDHI',
@@ -860,13 +740,14 @@ FESTIVALS.push(
     full: { ps1: '#1f6b4a', ps2: '#c8b48a' },
     treatments: ['LAYER', 'CHROME'],
     greeting: 'Gandhi Jayanti — be the change you wish to see in the world',
-    variants: [
-      { value: 'PETALS', label: 'Falling petals', hint: 'White petals drifting gently down.' },
-      { value: 'GOLDDUST', label: 'Quiet sparkle', hint: 'A quiet drift of golden sparkles.' },
-    ],
-    fullExtras: ['PETALS'],
   },
 );
+/** Every festival, with its scene options attached. A festival with no scene is a build error, not a blank hero. */
+export const FESTIVALS: FestivalDef[] = FESTIVAL_SEEDS.map((f) => {
+  const variants = sceneVariants(f.value);
+  if (!variants.length) throw new Error(`festival ${f.value} has no scene`);
+  return { ...f, variants };
+});
 
 export function festivalDef(key: string | null | undefined): FestivalDef | null {
   return FESTIVALS.find((f) => f.value === key) ?? null;
@@ -922,18 +803,8 @@ export function normalizeFestiveTheme(raw: unknown): FestiveTheme | null {
     intensity: treatment === 'WASH' || treatment === 'NIGHT' ? 'FULL' : 'LAYER',
     ribbon: r.ribbon !== false,
     recolor: r.recolor !== false,
+    imageAssetId: typeof r.imageAssetId === 'string' && r.imageAssetId ? r.imageAssetId : null,
   };
-}
-/**
- * Which decoration sets to render. Only LAYER draws the decoration sets —
- * the other four treatments dress the page with the drawn marks in
- * FestiveDress instead, because a page-wide field of falling glyphs was the
- * single most-rejected thing about the old takeover.
- */
-export function festiveDecorations(f: FestiveTheme): string[] {
-  const def = festivalDef(f.festival);
-  if (!def || f.treatment !== 'LAYER') return [];
-  return [f.variant];
 }
 /**
  * Root classes. `ps-fest-<treatment>` is what the stylesheet keys off;

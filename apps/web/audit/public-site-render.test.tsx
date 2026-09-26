@@ -141,7 +141,10 @@ const CONFIGS: { name: string; data: PublicSiteData }[] = [
   // The fixture used to send { key, recolour }; the normaliser reads
   // { festival, recolor }, so this case had never rendered a festival. Now one
   // case per treatment, so every dressed branch of the hero and footer runs.
-  { name: 'festive diwali · LAYER', data: siteData({ profile: { festiveTheme: { festival: 'DIWALI', variant: 'DIYAS', treatment: 'LAYER', ribbon: true, recolor: true } } }) },
+  { name: 'festive diwali · LAYER', data: siteData({ profile: { festiveTheme: { festival: 'DIWALI', variant: 'DEEPAVALI', treatment: 'LAYER', ribbon: true, recolor: true } } }) },
+  { name: 'festive ganesh · HERO, the school\u2019s own murti photo', data: siteData({ profile: { festiveTheme: { festival: 'GANESH', variant: 'MURTI', treatment: 'HERO', imageAssetId: 'a-1' }, festiveImageUrl: 'https://cdn.example.com/murti.jpg' } }) },
+  { name: 'festive navratri · DUSSEHRA on a split hero', data: siteData({ profile: { festiveTheme: { festival: 'NAVRATRI', variant: 'DUSSEHRA', treatment: 'WASH' }, heroLayout: 'SPLIT' } }) },
+  { name: 'festive christmas · NIGHT tree, floating nav', data: siteData({ profile: { festiveTheme: { festival: 'CHRISTMAS', variant: 'TREE', treatment: 'NIGHT' }, navStyle: 'PILL' } }) },
   { name: 'festive diwali · CHROME', data: siteData({ profile: { festiveTheme: { festival: 'DIWALI', treatment: 'CHROME' } } }) },
   { name: 'festive diwali · HERO', data: siteData({ profile: { festiveTheme: { festival: 'DIWALI', treatment: 'HERO' } } }) },
   { name: 'festive diwali · WASH', data: siteData({ profile: { festiveTheme: { festival: 'DIWALI', treatment: 'WASH' } } }) },
@@ -189,21 +192,37 @@ describe('the fixture actually exercises the page', () => {
 
 
 describe('the festive fixtures really render a festival', () => {
-  it('a dressed treatment puts the dress inside the hero and the edge on the footer; LAYER does not', () => {
-    const dressed = renderToStaticMarkup(<PublicSite data={siteData({ profile: { festiveTheme: { festival: 'DIWALI', treatment: 'HERO' } } })} view="home" />);
-    expect(dressed).toContain('data-fest-dress="HERO"');
-    expect(dressed).toContain('ps-fest-footedge');
-    expect(dressed).toContain('ps-fest-hero');
-    expect(dressed).not.toContain('class="ps-fx"');
-    const layer = renderToStaticMarkup(<PublicSite data={siteData({ profile: { festiveTheme: { festival: 'DIWALI', treatment: 'LAYER' } } })} view="home" />);
-    expect(layer).not.toContain('data-fest-dress');
-    expect(layer).toContain('ps-fx');
+  it('every treatment draws the festival\u2019s scene inside the hero; the page-wide emoji field is gone for good', () => {
+    for (const treatment of ['LAYER', 'CHROME', 'HERO', 'WASH', 'NIGHT']) {
+      const html = renderToStaticMarkup(<PublicSite data={siteData({ profile: { festiveTheme: { festival: 'DIWALI', treatment } } })} view="home" />);
+      expect(html, treatment).toContain(`data-fest-dress="${treatment}"`);
+      expect(html, treatment).toContain('data-fest-scene="DEEPAVALI"');
+      expect(html, treatment).not.toContain('class="ps-fx"');
+    }
   });
-  it('no treatment writes a greeting into the hero — the school\u2019s own headline stays', () => {
-    for (const treatment of ['CHROME', 'HERO', 'WASH', 'NIGHT']) {
+  it('the footer edge follows the dressed treatments only', () => {
+    const hero = renderToStaticMarkup(<PublicSite data={siteData({ profile: { festiveTheme: { festival: 'DIWALI', treatment: 'HERO' } } })} view="home" />);
+    expect(hero).toContain('ps-fest-footedge');
+    expect(hero).toContain('ps-fest-hero');
+    const layer = renderToStaticMarkup(<PublicSite data={siteData({ profile: { festiveTheme: { festival: 'DIWALI', treatment: 'LAYER' } } })} view="home" />);
+    expect(layer).not.toContain('ps-fest-footedge');
+  });
+  it('a scene with a picture shows the school\u2019s own upload when the theme names it, else the shipped painting', () => {
+    const own = renderToStaticMarkup(<PublicSite data={siteData({ profile: { festiveTheme: { festival: 'GANESH', variant: 'MURTI', treatment: 'HERO', imageAssetId: 'a-1' }, festiveImageUrl: 'https://cdn.example.com/murti.jpg' } })} view="home" />);
+    expect(own).toContain('src="https://cdn.example.com/murti.jpg"');
+    expect(own).not.toContain('/festive/art/ganesha.webp');
+    // The asset was removed from the theme but the API still resolved a URL: the painting wins.
+    const stale = renderToStaticMarkup(<PublicSite data={siteData({ profile: { festiveTheme: { festival: 'GANESH', variant: 'MURTI', treatment: 'HERO' }, festiveImageUrl: 'https://cdn.example.com/murti.jpg' } })} view="home" />);
+    expect(stale).toContain('/festive/art/ganesha.webp');
+  });
+  it('no treatment writes a greeting or an emoji into the page — the school\u2019s own headline stays', () => {
+    for (const treatment of ['LAYER', 'CHROME', 'HERO', 'WASH', 'NIGHT']) {
       const html = renderToStaticMarkup(<PublicSite data={siteData({ profile: { festiveTheme: { festival: 'DIWALI', treatment, ribbon: false } } })} view="home" />);
       expect(html).toContain('A school that knows every child by name');
       expect(html).not.toMatch(/Happy Diwali/);
+      // The dress itself carries no emoji glyph (scenes.test.tsx checks every scene); the
+      // page keeps its own ✓ / 📞 / medal glyphs, which are not the festival's.
+      expect(html, treatment).not.toContain('ps-fx-diya');
     }
   });
 });

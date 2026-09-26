@@ -14,7 +14,6 @@ import {
   footerClasses,
   FESTIVALS,
   normalizeFestiveTheme,
-  festiveDecorations,
   festiveClasses,
   sanitizeSectionCss,
   scopeSectionCss,
@@ -109,21 +108,27 @@ describe('defaults emit no class', () => {
     expect(new Set(anims).size).toBe(anims.length);
   });
 
-  it('every festival has at least two decoration variants and a full palette', () => {
+  it('every festival offers at least two scenes, distinct by value, and a full palette', () => {
     for (const f of FESTIVALS) {
       expect(f.variants.length).toBeGreaterThanOrEqual(2);
+      expect(new Set(f.variants.map((v) => v.value)).size).toBe(f.variants.length);
       expect(f.full.ps1).toMatch(/^#[0-9a-f]{6}$/i);
       expect(f.full.ps2).toMatch(/^#[0-9a-f]{6}$/i);
-      expect(f.fullExtras.length).toBeGreaterThan(0);
     }
   });
 
-  it('only LAYER draws the decoration sets — the dressed treatments draw marks instead', () => {
-    const layer = normalizeFestiveTheme({ festival: 'DIWALI', variant: 'FIREWORKS' })!;
-    expect(festiveDecorations(layer)).toEqual(['FIREWORKS']);
-    for (const treatment of ['CHROME', 'HERO', 'WASH', 'NIGHT']) {
-      expect(festiveDecorations(normalizeFestiveTheme({ festival: 'DIWALI', treatment })!)).toEqual([]);
+  it('a row saved with an old emoji-set variant falls to the festival\u2019s default scene, whatever the treatment', () => {
+    for (const treatment of ['LAYER', 'CHROME', 'HERO', 'WASH', 'NIGHT']) {
+      const fest = normalizeFestiveTheme({ festival: 'DIWALI', variant: 'FIREWORKS', treatment })!;
+      expect(fest.variant).toBe('DEEPAVALI');
     }
+    expect(normalizeFestiveTheme({ festival: 'GANESH', variant: 'MODAK' })!.variant).toBe('MODAK');
+  });
+
+  it('the picture slot survives normalisation only as a non-empty string', () => {
+    expect(normalizeFestiveTheme({ festival: 'GANESH', imageAssetId: 'asset-1' })!.imageAssetId).toBe('asset-1');
+    expect(normalizeFestiveTheme({ festival: 'GANESH', imageAssetId: '' })!.imageAssetId).toBeNull();
+    expect(normalizeFestiveTheme({ festival: 'GANESH', imageAssetId: 7 })!.imageAssetId).toBeNull();
   });
 
   it('keeps only known sections, layouts and gestures', () => {
@@ -350,18 +355,16 @@ describe('admin-built homepage sections', () => {
 });
 
 /**
- * A festival variant is only real if the FestiveLayer switch can draw it — an
- * unknown set name renders nothing, silently. Every variant and every
- * fullExtra must therefore name a set the renderer implements.
+ * A festival is only real if a scene draws it. The renderer map and the option
+ * list are two files (one pure, one React); this keeps them in step.
  */
-describe('every festival decoration set has a renderer', () => {
-  it('variants and fullExtras all map to DECORATION_SETS', async () => {
-    const { DECORATION_SETS } = await import('./sections/FestiveLayer');
-    const known = new Set<string>(DECORATION_SETS);
-    for (const f of FESTIVALS) {
-      for (const v of f.variants) expect(known, `${f.value}.${v.value}`).toContain(v.value);
-      for (const x of f.fullExtras) expect(known, `${f.value} extra ${x}`).toContain(x);
-    }
+describe('every festival has a scene', () => {
+  it('SCENES and SCENE_VARIANTS cover exactly the festival catalogue', async () => {
+    const { SCENES } = await import('./festive/scenes');
+    const { SCENE_VARIANTS } = await import('./festive/scene-variants');
+    const keys = FESTIVALS.map((f) => f.value).sort();
+    expect(Object.keys(SCENES).sort()).toEqual(keys);
+    expect(Object.keys(SCENE_VARIANTS).sort()).toEqual(keys);
   });
 });
 
