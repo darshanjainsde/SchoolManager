@@ -29,7 +29,13 @@ export class PulseService {
     const fourteenAgo = new Date(dateOnly.getTime() - 13 * DAY_MS);
 
     const base = await withTenant(schoolId, async (tx) => {
-      const [attRows, enquiries, students, teachers, classes, uncontacted] = await Promise.all([
+      // The three setup probes the roll counts below cannot answer. Each is
+      // `findFirst` on an id, which stops at the first matching row — an index
+      // seek, not a count and certainly not a list. The console home used to
+      // ask these by downloading the whole collection.
+      const exists = (rows: { id: string } | null) => rows !== null;
+
+      const [attRows, enquiries, students, teachers, classes, uncontacted, anyYear, anyPeriod, anySubject] = await Promise.all([
         tx.attendance.groupBy({
           by: ['date', 'status'],
           where: { date: { gte: lookback, lte: dateOnly } },
@@ -44,6 +50,9 @@ export class PulseService {
         tx.teacher.count({ where: { isActive: true } }),
         tx.classSection.count({ where: {} }),
         tx.enquiry.count({ where: { status: 'NEW' } }),
+        tx.academicYear.findFirst({ where: {}, select: { id: true } }),
+        tx.period.findFirst({ where: {}, select: { id: true } }),
+        tx.subject.findFirst({ where: {}, select: { id: true } }),
       ]);
 
       // ── attendance: one % per marked day, last 14 of them ────────────────
@@ -93,6 +102,16 @@ export class PulseService {
         },
         enquiries: { last7, prev7, uncontacted, series: enqSeries },
         roll: { students, teachers, classes },
+        // The roll counts already answer three of the six, so only three
+        // extra reads were needed for the whole checklist.
+        setup: {
+          year: exists(anyYear),
+          periods: exists(anyPeriod),
+          subjects: exists(anySubject),
+          classes: classes > 0,
+          teachers: teachers > 0,
+          students: students > 0,
+        },
       };
     });
 

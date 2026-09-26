@@ -29,7 +29,15 @@
      this the BROWSER paints every unstyled form control (inputs, selects,
      number spinners, date pickers, scrollbars) in the visitor's OS dark theme
      — near-black boxes in the middle of a cream page. */
-  .ps-root { font-family: 'Inter', sans-serif; background: var(--paper); color: #43514a; overflow-x: hidden; min-height: 100vh; color-scheme: light; }
+  /* `var(--f-inter)`, NOT the bare family name. The variable resolves to
+     "inter","inter Fallback", and that second face is the one Next generates
+     with ascent/descent/line-gap overrides and size-adjust, so the text holds
+     its exact position while the real woff2 is still downloading. Naming
+     'Inter' directly skipped it: the body copy of every school website page
+     was laid out in plain sans-serif at unadjusted metrics and then jumped
+     when the font swapped in. The headings never had this — they go through
+     FONT_STACK, which already uses the variables. */
+  .ps-root { font-family: var(--f-inter), sans-serif; background: var(--paper); color: #43514a; overflow-x: hidden; min-height: 100vh; color-scheme: light; }
   .ps-head { font-family: var(--font-head); color: var(--ink); letter-spacing: -.01em; }
   /* This stylesheet loads after Tailwind, so .ps-head's ink color silently beat
      Tailwind's .text-white on dark sections (invisible headings/names on the
