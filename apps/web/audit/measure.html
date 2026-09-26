@@ -87,6 +87,31 @@ function audit(doc,win,w){
       R.push(`${panel} | SUBTITLE BESIDE THE TITLE | .sk-pagehead > h1 + p | cap the line with padding-right, never max-width — max-width stops the flex line from breaking`);
     }
   }
+  // ── A form label owns its line ──
+  // `.sk-lab` sets font and colour and no display, so it inherits the
+  // element's: block on a <p>, INLINE on a <label>. Beside a bare
+  // <select>/<input>/<textarea>, which is inline-block, the pair shared a line
+  // and the label centred itself against the field. It looked right wherever
+  // the control happened to be a block <Select>, so the defect appeared at
+  // random across otherwise identical forms.
+  for(const lab of doc.querySelectorAll('label.sk-lab')){
+    const ctl=lab.nextElementSibling;
+    if(!ctl||!ctl.getBoundingClientRect) continue;
+    const a=lab.getBoundingClientRect(),b=ctl.getBoundingClientRect();
+    if(!a.height||!b.height) continue;
+    if(Math.abs(a.top-b.top)<12){
+      const panel=lab.closest('.audit-panel')?.dataset.panel||'?';
+      R.push(`${panel} | LABEL BESIDE ITS FIELD: "${lab.textContent.trim().slice(0,28)}" | label.sk-lab must be display:block`);
+    }
+  }
+  // ── Every control in one form is one width ──
+  for(const form of doc.querySelectorAll('.sk-conraise')){
+    const ws=[...new Set([...form.querySelectorAll('.sk-input')].map(e=>Math.round(e.getBoundingClientRect().width)).filter(Boolean))];
+    if(ws.length>1){
+      const panel=form.closest('.audit-panel')?.dataset.panel||'?';
+      R.push(`${panel} | FORM CONTROLS AT ${ws.length} DIFFERENT WIDTHS (${ws.join(', ')}px) | a form is a column; the controls fill it`);
+    }
+  }
   // ── A row of figures fills its row, whatever the count ──
   // Measured on the LAST TILE, never the grid container: the container is full
   // width either way, and the empty track sits INSIDE it. Checking the

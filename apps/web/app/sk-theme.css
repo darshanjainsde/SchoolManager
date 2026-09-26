@@ -349,6 +349,17 @@ a.sk-kpi:hover { transform: translateY(-2px); border-color: var(--sk-brand); }
 .sk-card-h h3 { font-family: var(--sk-serif); font-size: 15.5px; font-weight: 650; letter-spacing: -0.005em; }
 .sk-card-b { padding: 12px 16px 16px; display: flex; flex-direction: column; gap: 10px; }
 .sk-lab { font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--sk-ink-3); }
+/* A FORM LABEL OWNS ITS LINE.
+   `.sk-lab` sets font and colour and no display, so it inherits the element's
+   own: block on the <p> and <div> that use it, INLINE on the 62 <label>s that
+   do. A bare <select>/<input>/<textarea> is inline-block, so label and control
+   shared a line and the label centred itself against the field — which is what
+   the family's "Raise a concern" form shipped as. It looked fine wherever the
+   control happened to be a block-level <Select>, which pushed the inline label
+   onto its own line by accident, so the defect appeared at random.
+   Scoped to `label` on purpose: the 150 <span class="sk-lab"> uses are chips
+   and captions inside flex rows, and they are right as they are. */
+label.sk-lab { display: block; margin-bottom: 5px; }
 .sk-muted { color: var(--sk-ink-3); font-size: 13px; }
 
 /* ---- list rows ---- */
@@ -4644,7 +4655,13 @@ button.sk-hubdoor:hover { transform: translateY(-2px); border-color: var(--sk-br
 .sk-ctwarn { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; font-size: 11px; color: var(--sk-amber-ink); }
 
 /* The family's own box (portal + app shell). */
-.sk-conraise { display: flex; flex-direction: column; gap: 10px; }
+/* A form is a COLUMN, and every control in it is the same width.
+   These three were 138px, 166px and 178px — each sized to its own content
+   inside a 1,047px card, which reads as three unrelated boxes rather than one
+   form. 34rem is the readable form column; the controls fill it. */
+.sk-conraise { display: flex; flex-direction: column; gap: 10px; max-width: 34rem; }
+.sk-conraise .sk-input { display: block; width: 100%; }
+.sk-conraise textarea.sk-input { min-height: 104px; resize: vertical; }
 .sk-conpick { display: flex; gap: 8px; flex-wrap: wrap; }
 .sk-conpick button { font: inherit; font-size: 12.5px; font-weight: 600; padding: 7px 12px; min-height: 36px; border-radius: 999px; border: 1px solid var(--sk-line); background: var(--sk-card); color: var(--sk-ink-2); cursor: pointer; }
 .sk-conpick button[aria-pressed="true"] { background: var(--sk-brand-tint); border-color: var(--sk-brand); color: var(--sk-brand-2); }
