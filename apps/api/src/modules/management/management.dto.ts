@@ -1271,3 +1271,12 @@ export class ReleaseStaffDto {
   @IsOptional() @IsString() @Length(0, 2000)
   note?: string;
 }
+
+/** One section's class teacher. `null` clears it — an empty string would be a uuid error. */
+export class AssignClassTeacherDto {
+  @IsOptional() @ValidateIf((_o, v) => v !== null) @IsUUID() teacherId?: string | null;
+}
+
+export class CopyClassTeachersDto {
+  @IsUUID() fromYearId!: string;
+}

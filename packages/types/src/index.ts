@@ -243,6 +243,8 @@ export interface Profile {
   rollNo: string | null;
   className: string | null;
   photoUrl: string | null;
+  /** Who owns this child's class — the person the Complaint Box can reach. Null when the section has nobody. */
+  classTeacherName?: string | null;
 }
 
 export interface AttendanceDay {
@@ -581,7 +583,7 @@ export interface TeacherReplyInput {
 // HolidayTypeValue above, both also String columns).
 
 /** The events that write a `NotificationOutbox` row today. */
-export const NOTIFICATION_OUTBOX_KINDS = ['RESULT_PUBLISHED', 'EXAM_SCHEDULED', 'ASSIGNMENT_POSTED', 'MESSAGE_RECEIVED', 'LIBRARY_NOTICE', 'SESSION_STARTED', 'SPORTS_NOTICE', 'FEE_VERIFIED', 'FEE_REJECTED', 'FEE_DUE', 'LEAVE_APPLIED', 'LEAVE_DECIDED', 'COVER_ASSIGNED'] as const;
+export const NOTIFICATION_OUTBOX_KINDS = ['RESULT_PUBLISHED', 'EXAM_SCHEDULED', 'ASSIGNMENT_POSTED', 'MESSAGE_RECEIVED', 'LIBRARY_NOTICE', 'SESSION_STARTED', 'SPORTS_NOTICE', 'FEE_VERIFIED', 'FEE_REJECTED', 'FEE_DUE', 'LEAVE_APPLIED', 'LEAVE_DECIDED', 'COVER_ASSIGNED', 'CONCERN_RAISED', 'CONCERN_REPLIED', 'CONCERN_RESOLVED'] as const;
 export type NotificationOutboxKind = (typeof NOTIFICATION_OUTBOX_KINDS)[number];
 
 /**
@@ -1643,3 +1645,106 @@ export type EventCoverFocus = (typeof EVENT_COVER_FOCUS)[number];
 export * from './countries';
 export * from './country-pack';
 export * from './teacher-record';
+
+/* ── The Complaint Box ──────────────────────────────────────────────────────
+   One place a family raises something and watches it get read, answered and
+   resolved. The family chooses WHO sees it; the class-teacher route is
+   snapshotted when it is written, so a later reassignment never loses it. */
+
+export const CONCERN_CATEGORIES = [
+  'BUS', 'FEES', 'TEACHING', 'SAFETY', 'CANTEEN', 'FACILITIES', 'OTHER',
+] as const;
+export type ConcernCategory = (typeof CONCERN_CATEGORIES)[number];
+export const CONCERN_CATEGORY_LABEL: Record<ConcernCategory, string> = {
+  BUS: 'School bus', FEES: 'Fees', TEACHING: 'Teaching', SAFETY: 'Safety',
+  CANTEEN: 'Canteen', FACILITIES: 'Facilities', OTHER: 'Something else',
+};
+
+/** Who the family chose to send it to. Nobody else in the school can read it. */
+export const CONCERN_AUDIENCES = ['OFFICE', 'CLASS_TEACHER'] as const;
+export type ConcernAudience = (typeof CONCERN_AUDIENCES)[number];
+
+export const CONCERN_STATUSES = ['OPEN', 'IN_PROGRESS', 'RESOLVED'] as const;
+export type ConcernStatus = (typeof CONCERN_STATUSES)[number];
+export const CONCERN_STATUS_LABEL: Record<ConcernStatus, string> = {
+  OPEN: 'Open', IN_PROGRESS: 'Looking into it', RESOLVED: 'Resolved',
+};
+export const CONCERN_STATUS_TONE: Record<ConcernStatus, 'info' | 'warn' | 'good'> = {
+  OPEN: 'info', IN_PROGRESS: 'warn', RESOLVED: 'good',
+};
+
+/** How long after Resolved a family may reopen the same concern, once. */
+export const CONCERN_REOPEN_DAYS = 7;
+
+export type ConcernAuthorRole = 'STUDENT' | 'PARENT' | 'TEACHER' | 'ADMIN';
+
+export interface ConcernRow {
+  id: string;
+  status: ConcernStatus;
+  category: ConcernCategory;
+  audience: ConcernAudience;
+  title: string;
+  createdAt: string;
+  lastActivityAt: string;
+  resolvedAt: string | null;
+  escalatedAt: string | null;
+  /** Unread for the reader asking — the office's flag or the teacher's, never both. */
+  unread: boolean;
+  student: { id: string; name: string; className: string | null };
+  /** The class teacher it was routed to, as at the moment it was raised. */
+  assignedTeacher: { id: string; name: string } | null;
+  raisedBy: { name: string; role: ConcernAuthorRole };
+  /** Replies and notes the asking reader may see. */
+  commentCount: number;
+}
+
+export interface ConcernCommentRow {
+  id: string;
+  body: string;
+  createdAt: string;
+  visibleToFamily: boolean;
+  statusFrom: ConcernStatus | null;
+  statusTo: ConcernStatus | null;
+  author: { name: string; role: ConcernAuthorRole };
+}
+
+export interface ConcernDetail extends ConcernRow {
+  body: string;
+  attachments: { id: string; url: string }[];
+  comments: ConcernCommentRow[];
+  /** True when the asking family may still reopen it (RESOLVED, inside the window, not reopened before). */
+  canReopen: boolean;
+}
+
+export interface ConcernCounts {
+  unread: number;
+  open: number;
+  withClassTeachers: number;
+  resolvedThisMonth: number;
+  /** Median days from raised to resolved this month; null until something is resolved. */
+  medianDaysToResolve: number | null;
+  topCategory: ConcernCategory | null;
+}
+
+/* ── Class teachers ────────────────────────────────────────────────────── */
+
+export interface ClassTeacherRow {
+  classSectionId: string;
+  label: string;
+  gradeName: string;
+  sectionName: string;
+  gradeOrder: number;
+  students: number;
+  teacher: { id: string; name: string } | null;
+  /** This teacher also holds another section this session — allowed, and said out loud. */
+  alsoHolds: string[];
+}
+
+export interface ClassTeacherDesk {
+  academicYear: { id: string; name: string } | null;
+  rows: ClassTeacherRow[];
+  teachers: { id: string; name: string; sections: string[] }[];
+  counts: { sections: number; assigned: number; unassigned: number; holdingMoreThanOne: number };
+  /** The session to copy from, when this one is not set up yet. */
+  previousYear: { id: string; name: string; assigned: number } | null;
+}

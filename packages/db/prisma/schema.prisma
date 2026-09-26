@@ -451,6 +451,9 @@ model School {
   whatsAppSettings       WhatsAppSettings?
   whatsAppDeliveries     WhatsAppDelivery[]
   onboardingImports OnboardingImport[]
+  concerns          Concern[]
+  concernComments   ConcernComment[]
+  classTeacherLog   ClassTeacherAssignment[]
   emailDeliveries        EmailDelivery[]
   emailSuppressions      EmailSuppression[]
   whatsAppInbounds       WhatsAppInbound[]
@@ -581,6 +584,9 @@ model User {
   @@unique([schoolId, username])
   @@index([schoolId])
   @@index([schoolId, phone])
+  concernsRaised      Concern[]            @relation("ConcernRaisedBy")
+  concernComments     ConcernComment[]
+  classTeacherChanges ClassTeacherAssignment[] @relation("ClassTeacherChangedBy")
 }
 
 model RefreshToken {
@@ -1085,6 +1091,7 @@ model ClassSection {
   assignments            Assignment[]
   messageThreads         MessageThread[]
   diaryEntries           DiaryEntry[]
+  classTeacherLog        ClassTeacherAssignment[]
 
   @@unique([schoolId, gradeId, name, academicYearId])
   @@index([schoolId])
@@ -1196,6 +1203,8 @@ model Teacher {
   @@index([schoolId, status])
   @@index([phoneE164])
   @@index([whatsappPhoneE164])
+  concernsAssigned    Concern[]
+  classTeacherLog     ClassTeacherAssignment[]
 }
 
 model TeacherSubject {
@@ -1302,6 +1311,7 @@ model Student {
   // 20260921_010000_fk_indexes for the measurements.
   @@index([classSectionId])
   @@index([houseId])
+  concerns            Concern[]
 }
 
 model Period {
@@ -5133,4 +5143,96 @@ model OnboardingImport {
   school         School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
   @@index([schoolId, createdAt])
+}
+
+/// Who was a section's class teacher, and when. The live answer is
+/// ClassSection.classTeacherId; this is the dated record behind it, because a
+/// report card signed in March must still name March's class teacher and a
+/// concern raised on Monday must show who it actually reached.
+model ClassTeacherAssignment {
+  id             String       @id @default(uuid()) @db.Uuid
+  schoolId       String       @db.Uuid
+  classSectionId String       @db.Uuid
+  teacherId      String       @db.Uuid
+  /// Null while this is the assignment in force.
+  untilAt        DateTime?
+  fromAt         DateTime     @default(now())
+  changedById    String?      @db.Uuid
+  school         School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  classSection   ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+  teacher        Teacher      @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  changedBy      User?        @relation("ClassTeacherChangedBy", fields: [changedById], references: [id], onDelete: SetNull)
+
+  @@index([schoolId, classSectionId, fromAt])
+  @@index([teacherId])
+  @@index([changedById])
+}
+
+/// One thing a family raised — the Complaint Box. `audience` is the family's
+/// own choice of who should see it; `assignedTeacherId` is the class teacher
+/// SNAPSHOTTED when it was written, so a later reassignment never loses a
+/// live concern or hands an old one to somebody new.
+model Concern {
+  id                String           @id @default(uuid()) @db.Uuid
+  schoolId          String           @db.Uuid
+  studentId         String           @db.Uuid
+  raisedById        String           @db.Uuid
+  /// STUDENT | PARENT — which door the person came in by.
+  raisedByRole      String
+  /// OFFICE | CLASS_TEACHER
+  audience          String
+  assignedTeacherId String?          @db.Uuid
+  category          String
+  title             String
+  body              String
+  /// MediaAsset ids the family attached (photos of the bus, the bill, the fan).
+  attachmentIds     String[]         @default([])
+  /// OPEN | IN_PROGRESS | RESOLVED
+  status            String           @default("OPEN")
+  readByOfficeAt    DateTime?
+  readByTeacherAt   DateTime?
+  escalatedAt       DateTime?
+  resolvedAt        DateTime?
+  resolvedById      String?          @db.Uuid
+  reopenedAt        DateTime?
+  lastActivityAt    DateTime         @default(now())
+  createdAt         DateTime         @default(now())
+  school            School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student           Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  raisedBy          User             @relation("ConcernRaisedBy", fields: [raisedById], references: [id], onDelete: Cascade)
+  assignedTeacher   Teacher?         @relation(fields: [assignedTeacherId], references: [id], onDelete: SetNull)
+  comments          ConcernComment[]
+
+  @@index([schoolId, status, lastActivityAt])
+  @@index([schoolId, assignedTeacherId, status])
+  @@index([schoolId, studentId, createdAt])
+  @@index([raisedById])
+  @@index([studentId])
+  @@index([assignedTeacherId])
+}
+
+/// One entry on a concern's timeline: a comment the family can see, a private
+/// note the school keeps to itself, or a status change. One table, so the
+/// thread is one ordered story rather than two lists a screen has to merge.
+model ConcernComment {
+  id              String   @id @default(uuid()) @db.Uuid
+  schoolId        String   @db.Uuid
+  concernId       String   @db.Uuid
+  authorId        String   @db.Uuid
+  /// STUDENT | PARENT | TEACHER | ADMIN
+  authorRole      String
+  body            String
+  /// False = a note only the school sees.
+  visibleToFamily Boolean  @default(true)
+  /// Set when this entry IS a status change, so the timeline shows the move.
+  statusFrom      String?
+  statusTo        String?
+  createdAt       DateTime @default(now())
+  school          School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  concern         Concern  @relation(fields: [concernId], references: [id], onDelete: Cascade)
+  author          User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, concernId, createdAt])
+  @@index([concernId])
+  @@index([authorId])
 }

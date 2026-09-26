@@ -70,7 +70,7 @@ describe('family route honesty', () => {
     }
   });
 
-  it('lists every off-bar tool — the six from before, and the four the web portal had first', () => {
+  it('lists every off-bar tool — the six from before, the four the web portal had first, and the Complaint Box', () => {
     const labels = MORE_ITEMS.map((i) => i.label);
     expect(labels).toEqual([
       'Diary',
@@ -83,10 +83,14 @@ describe('family route honesty', () => {
       'Library',
       'Report cards',
       'Birthdays',
+      'Complaint Box',
     ]);
     // The paid modules carry their feature key so Home can leave them off
     // for a school that does not have them.
     expect(MORE_ITEMS.find((i) => i.label === 'Sports')?.feature).toBe('SPORTS');
+    // Raising a concern is not a paid module: a family that cannot find it
+    // will use WhatsApp instead, where nothing is tracked.
+    expect(MORE_ITEMS.find((i) => i.label === 'Complaint Box')?.feature).toBeUndefined();
     expect(MORE_ITEMS.find((i) => i.label === 'Library')?.feature).toBe('LIBRARY');
     expect(MORE_ITEMS.find((i) => i.label === 'Report cards')?.feature).toBe('PRESS');
     expect(MORE_ITEMS.find((i) => i.label === 'Birthdays')?.feature).toBeUndefined();

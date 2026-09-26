@@ -101,6 +101,9 @@ export type ErrorCode =
   | 'NO_ACADEMIC_YEAR'
   /** A TEACHER targeted a class section they do not teach — pair with 403. */
   | 'CLASS_NOT_OWNED'
+  /** The Complaint Box: a move that belongs to someone else — a family changing
+   *  a status, or a non-teacher sending a concern up to the office. Pair with 403. */
+  | 'CONCERN_NOT_YOUR_MOVE'
   /** Caller has no linked Student record — e.g. a non-student login hitting /me/messages. Pair with 404. */
   | 'NOT_A_STUDENT'
   /** A STUDENT tried to message a teacher who does not teach them that subject (per the timetable) — pair with 403. */

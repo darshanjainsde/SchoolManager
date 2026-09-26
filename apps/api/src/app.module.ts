@@ -22,6 +22,7 @@ import { FeaturesModule } from './modules/features';
 import { OwnerModule } from './modules/owner';
 import { CmsModule } from './modules/cms';
 import { ManagementModule } from './modules/management';
+import { ConcernsModule } from './modules/concerns';
 import { CommunityModule } from './modules/community';
 import { HiringModule } from './modules/hiring';
 import { PublicModule } from './modules/public';
@@ -91,6 +92,7 @@ import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storag
     AdminCredentialsModule,
     CmsModule,
     ManagementModule,
+    ConcernsModule,
     CommunityModule,
     HiringModule,
     PublicModule,

@@ -4581,3 +4581,49 @@ button.sk-hubdoor:hover { transform: translateY(-2px); border-color: var(--sk-br
 
 /* ── Library home: the counter's three doors as buttons ── */
 .sk-libactions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+/* ═══════════════════════════════════════════════════════════════
+   THE COMPLAINT BOX — the thread (components/concerns/concern-thread.tsx),
+   shared by the office, the class teacher and the family. A private note
+   is drawn as one, so the school can see at a glance which lines the
+   family can read. Prefix sk-con.
+   ═══════════════════════════════════════════════════════════════ */
+.sk-conthread { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.sk-conthead { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.sk-conthead h3 { font-family: var(--sk-serif); font-size: 16.5px; font-weight: 650; letter-spacing: -0.005em; margin: 0; }
+.sk-conmeta { margin: 3px 0 0; font-size: 12px; color: var(--sk-ink-3); overflow-wrap: anywhere; }
+.sk-conbody { background: var(--sk-bg-2); border-radius: var(--sk-r-sm); padding: 12px 14px; font-size: 13.5px; color: var(--sk-ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+.sk-contimeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.sk-conentry { border-left: 2px solid var(--sk-line); padding-left: 11px; min-width: 0; }
+.sk-conentry[data-private] { border-left-color: var(--sk-amber); background: var(--sk-amber-tint); border-radius: 0 var(--sk-r-sm) var(--sk-r-sm) 0; padding: 8px 11px; }
+.sk-conentry[data-status] { border-left-color: var(--sk-brand); }
+.sk-conwho { display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; font-size: 11.5px; color: var(--sk-ink-3); }
+.sk-conwho b { font-size: 13px; font-weight: 650; color: var(--sk-ink); }
+.sk-conprivate { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; color: var(--sk-amber-ink); }
+.sk-constatus { margin: 3px 0 0; font-size: 12.5px; font-weight: 650; color: var(--sk-brand-2); }
+.sk-context { margin: 3px 0 0; font-size: 13.5px; color: var(--sk-ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+.sk-conreply { display: flex; flex-direction: column; gap: 8px; }
+.sk-conreply .sk-input { width: 100%; box-sizing: border-box; resize: vertical; }
+.sk-conactions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sk-conprivtoggle { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--sk-ink-2); cursor: pointer; }
+.sk-conprivtoggle input { width: 16px; height: 16px; accent-color: var(--sk-amber); flex: none; }
+@media (pointer: coarse), (max-width: 560px) { .sk-conprivtoggle input { width: 24px; height: 24px; margin: -4px; } }
+.sk-conmoves { display: flex; gap: 8px; flex-wrap: wrap; }
+/* The unread dot on a row: a mark, not a colour-only signal — the row also
+   carries the word "Open" and the date. */
+.sk-condot { display: inline-block; width: 7px; height: 7px; border-radius: 999px; background: var(--sk-brand); margin-right: 6px; vertical-align: middle; }
+
+/* The class-teacher desk: the picker reads as empty when nobody holds the class. */
+.sk-ctpick { width: 100%; box-sizing: border-box; min-width: 0; }
+.sk-ctpick[data-empty] { border-color: var(--sk-bad); color: var(--sk-bad); }
+.sk-ctwarn { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; font-size: 11px; color: var(--sk-amber-ink); }
+
+/* The family's own box (portal + app shell). */
+.sk-conraise { display: flex; flex-direction: column; gap: 10px; }
+.sk-conpick { display: flex; gap: 8px; flex-wrap: wrap; }
+.sk-conpick button { font: inherit; font-size: 12.5px; font-weight: 600; padding: 7px 12px; min-height: 36px; border-radius: 999px; border: 1px solid var(--sk-line); background: var(--sk-card); color: var(--sk-ink-2); cursor: pointer; }
+.sk-conpick button[aria-pressed="true"] { background: var(--sk-brand-tint); border-color: var(--sk-brand); color: var(--sk-brand-2); }
+/* A label a screen reader hears and nobody sees — the console's own, because
+   the Tailwind `sr-only` utility is not guaranteed to be in the built bundle
+   for a class the app only uses once. */
+.sk-sronly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }

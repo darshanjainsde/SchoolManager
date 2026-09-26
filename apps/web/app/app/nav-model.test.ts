@@ -11,8 +11,8 @@ import { NAV_MODEL, groupOf, leafActive, navLeaves, visibleModel } from './nav-m
 const EVERY_ROUTE = [
   '/app',
   '/app/website', '/app/blog', '/app/events',
-  '/app/enquiries',
-  '/app/students', '/app/teachers', '/app/staff', '/app/classes',
+  '/app/enquiries', '/app/concerns',
+  '/app/students', '/app/teachers', '/app/staff', '/app/classes', '/app/class-teachers',
       '/app/sessions', '/app/onboarding', '/app/jobs',
   '/app/staff-attendance', '/app/leave', '/app/requests',
   '/app/timetable', '/app/availability',

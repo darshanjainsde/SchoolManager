@@ -230,7 +230,7 @@ export class PortalService {
     return this.run(schoolId, tx, (t) =>
       t.student.findFirst({
         where: { schoolId, userId },
-        include: { classSection: { select: { id: true, name: true, grade: { select: { name: true } } } } },
+        include: { classSection: { select: { id: true, name: true, grade: { select: { name: true } }, classTeacher: { select: { firstName: true, lastName: true, status: true } } } } },
       }),
     );
   }
@@ -313,6 +313,12 @@ export class PortalService {
       // fees and timetable projections use. The family app and the web portal
       // both print this verbatim under the greeting.
       className: s.classSection ? `${s.classSection.grade.name}-${s.classSection.name}` : null,
+      // The family's own Complaint Box offers "my class teacher" only when
+      // there IS one, and names them — a choice that silently goes elsewhere
+      // is worse than no choice at all.
+      classTeacherName: s.classSection?.classTeacher
+        ? `${s.classSection.classTeacher.firstName} ${s.classSection.classTeacher.lastName}`.trim()
+        : null,
       photoUrl,
     };
   }
