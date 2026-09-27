@@ -8,8 +8,9 @@ import type {
   RosterStudent,
 } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
+import { useReload } from '@/lib/query';
 import { shiftISO, todayISO } from '@/lib/attendance';
-import { Card, Empty, Page, RowWash, Screen, SectionTitle, Toast } from '@/components/ui';
+import { Card, Empty, ErrorState, Page, RowWash, Screen, SectionTitle, Toast } from '@/components/ui';
 import { StudentPicker, type PickableStudent } from '@/components/StudentPicker';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
@@ -279,6 +280,7 @@ export default function StaffDiary() {
   const [page, setPage] = useState<DiaryPageResult | null>(null);
   const [roster, setRoster] = useState<RosterStudent[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, reload] = useReload();
 
   const [kind, setKind] = useState<Kind>('ITEM');
   const [body, setBody] = useState('');
@@ -314,7 +316,7 @@ export default function StaffDiary() {
       return () => {
         cancelled = true;
       };
-    }, []),
+    }, [reloadKey]),
   );
 
   // The page itself, plus the roster the picker types against.
@@ -341,7 +343,7 @@ export default function StaffDiary() {
       return () => {
         cancelled = true;
       };
-    }, [classId, date]),
+    }, [classId, date, reloadKey]),
   );
 
   const pickable: PickableStudent[] = useMemo(
@@ -487,7 +489,7 @@ export default function StaffDiary() {
         </View>
       )}
 
-      {error && <Toast kind="error" message={error} />}
+      {error && page !== null && <Toast kind="error" message={error} />}
       {sent && <Toast kind="success" message={sent} testID="diary-sent" />}
 
       {isToday && (
@@ -635,6 +637,7 @@ export default function StaffDiary() {
 
       <SectionTitle title={page ? `${page.className} · ${page.entries.length} entries` : 'Entries'} />
 
+      {page === null && error && <ErrorState error={error} onRetry={reload} />}
       {page === null && !error && (
         <Page>
           <Empty>Opening the diary…</Empty>

@@ -346,7 +346,7 @@ function PaymentRow({ p, first, onSendAgain, onReceipt }: { p: FeePaymentRow; fi
         {p.rejectionReason ? (
           <>
             <Text style={{ fontSize: 11.5, color: tokens.color.red, marginTop: 3, lineHeight: 16 }}>{p.rejectionReason}</Text>
-            <Touchable testID={`payment-${p.id}-again`} onPress={onSendAgain} haptic="none" style={{ alignSelf: 'flex-start', paddingVertical: 4 }}>
+            <Touchable testID={`payment-${p.id}-again`} onPress={onSendAgain} haptic="none" hitSlop={10} style={{ alignSelf: 'flex-start', minHeight: 32, justifyContent: 'center', paddingVertical: 4, paddingHorizontal: 2 }}>
               <Text style={{ fontSize: 12, fontWeight: '700', color: tokens.color.indigo }}>Send again</Text>
             </Touchable>
           </>

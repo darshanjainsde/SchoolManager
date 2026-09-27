@@ -89,9 +89,15 @@ it('shows an empty state for a thread with no messages', async () => {
   expect(await findByText('No messages in this conversation yet.')).toBeTruthy();
 });
 
-it('shows the API error message verbatim when the thread fails to load', async () => {
+// A thread that never loaded is a PAGE failure: the shared ErrorState, with
+// the server's own words and a way back. It used to be a bare red line with
+// nothing to press (UI audit 2026-09-27).
+it('shows the API error message verbatim, with a retry, when the thread fails to load', async () => {
   (api.request as jest.Mock).mockRejectedValue(new ApiError(404, 'Conversation not found'));
-  const { findByTestId } = render(<StudentThread />);
-  const err = await findByTestId('thread-error');
-  expect(err.props.children).toBe('Conversation not found');
+  const { findByTestId, getByText, getByTestId } = render(<StudentThread />);
+  expect(await findByTestId('thread-error')).toBeTruthy();
+  expect(getByText('Conversation not found')).toBeTruthy();
+  (api.request as jest.Mock).mockClear();
+  fireEvent.press(getByTestId('thread-error-retry'));
+  expect(api.request).toHaveBeenCalledWith(expect.stringMatching(/\/messages\/th1/));
 });

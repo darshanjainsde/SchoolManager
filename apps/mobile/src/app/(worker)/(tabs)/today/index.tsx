@@ -76,6 +76,7 @@ const STAFF_ROLE_LABEL: Record<string, string> = {
   LIBRARIAN: 'Librarian',
   // Was missing, so a sports teacher read as the generic "Staff".
   SPORTS: 'Sports teacher',
+  ACCOUNTS: 'Accounts officer',
   OTHER: 'Staff',
 };
 

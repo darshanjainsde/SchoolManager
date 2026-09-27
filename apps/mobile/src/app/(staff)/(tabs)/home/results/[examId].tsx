@@ -171,7 +171,10 @@ export default function ExamResults() {
   const tokens = useTokens();
   // `.mkrow input` — a small mono box, because a column of marks is a column
   // of figures and figures only line up in a mono face.
-  const inputStyle = {
+  // useMemo, both of them: MarkRow is React.memo'd so that a keystroke in one
+  // box does not re-render fifty rows, and a fresh style object per render
+  // defeated that memo entirely (the typing lag of perf audit #4, back).
+  const inputStyle = useMemo(() => ({
     borderWidth: 1.5,
     borderColor: tokens.color.line,
     borderRadius: 9,
@@ -187,15 +190,19 @@ export default function ExamResults() {
     // column where a mis-tap lands on the wrong student (UI audit #2).
     minHeight: 44,
     textAlign: 'center' as const,
-  };
+  }), [tokens]);
   // `.mkrow input.doneIn` — a filled, in-range box turns green-tinted. Not a
   // reward: it is how a teacher's eye finds the ONE row still blank without
   // re-reading forty names.
-  const doneInputStyle = {
+  const doneInputStyle = useMemo(() => ({
     borderColor: tokens.color.green,
     backgroundColor: tokens.color.green50,
     color: tokens.color.green,
-  };
+  }), [tokens]);
+  // One ref callback per student, made once — an inline arrow was a new prop
+  // for every row on every render.
+  const refFns = useRef<Record<string, (el: TextInput | null) => void>>({});
+  const refFor = (id: string) => (refFns.current[id] ??= (el) => { inputs.current[id] = el; });
   const { examId, classSectionId } = useLocalSearchParams<{
     examId: string;
     classSectionId: string;
@@ -429,9 +436,7 @@ export default function ExamResults() {
               maxMarks={exam.maxMarks}
               inputStyle={inputStyle}
               doneInputStyle={doneInputStyle}
-              inputRef={(el) => {
-                inputs.current[s.id] = el;
-              }}
+              inputRef={refFor(s.id)}
               onChange={setMark}
               onSubmit={focusNext}
               last={i === students.length - 1}

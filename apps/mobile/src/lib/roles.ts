@@ -1,5 +1,5 @@
 import type { Role, Session } from './session';
-import { homeTabFor, jobFor } from './worker-nav';
+import { homeTabFor } from './worker-nav';
 
 export function portalForRole(role: Role): '/(family)/(tabs)/home' | '/(staff)/(tabs)/home' | '/(worker)/(tabs)/today' {
   switch (role) {
@@ -24,8 +24,19 @@ export function portalForRole(role: Role): '/(family)/(tabs)/home' | '/(staff)/(
     // router as a route. Widening the union is what turns that silent
     // undefined into a compile error, since the return type names three
     // literals and TypeScript rejects a non-exhaustive switch.
-    case 'LIBRARIAN': throw new Error('The library counter is on the web console.');
+    // Legacy value only: the library wing folded every LIBRARIAN user into
+    // STAFF + StaffRole.LIBRARIAN, who lands on the counter in (worker). A
+    // login still carrying the old enum is an unmigrated database, not a
+    // person we can route — say so rather than "the counter is on the web",
+    // which stopped being true when the app grew one.
+    case 'LIBRARIAN': throw new Error('This login needs updating by the school. Please ask the office.');
     case 'OWNER': throw new Error('Owner accounts use the web console.');
+    // Alumni sign in with an email and a password like anyone else, and
+    // nothing on the API stops them opening the school app. Their home is the
+    // alumni site. Without this case the switch fell off its end, returned
+    // undefined, the boot guard's try/catch never fired because nothing threw,
+    // and the app sat on the Sckools logo forever — on every relaunch.
+    case 'ALUMNUS': throw new Error('Alumni accounts use the school website.');
   }
 }
 
@@ -37,7 +48,7 @@ export function portalForRole(role: Role): '/(family)/(tabs)/home' | '/(staff)/(
  */
 export function portalForSession(s: Pick<Session, 'role' | 'staffRole' | 'features'>): string {
   const base = portalForRole(s.role);
-  return s.role === 'STAFF' ? `/(worker)/(tabs)/${homeTabFor(jobFor(s))}` : base;
+  return s.role === 'STAFF' ? `/(worker)/(tabs)/${homeTabFor(s)}` : base;
 }
 
 // Pure bootstrap decision for app/index.tsx. A persisted session whose role

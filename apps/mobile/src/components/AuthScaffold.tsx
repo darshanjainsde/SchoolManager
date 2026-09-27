@@ -269,8 +269,9 @@ export function AuthLink({
       testID={testID}
       onPress={onPress}
       accessibilityRole="link"
-      hitSlop={8}
-      style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.965 : 1 }] })}
+      hitSlop={10}
+      // 12.5px of text plus 8 of slop was a 33dp target; padding and slop together clear 44.
+      style={({ pressed }) => ({ paddingVertical: 6, transform: [{ scale: pressed ? 0.965 : 1 }] })}
     >
       <Text
         style={{

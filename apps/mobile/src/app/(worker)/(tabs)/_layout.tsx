@@ -13,12 +13,14 @@ import { useSession } from '@/lib/use-session';
 export default function WorkerTabsLayout() {
   const session = useSession();
   const job = jobFor(session);
-  const tabs = tabsFor(job);
+  // Session, not job: an accounts officer's Pay tab depends on the SALARY
+  // override as well as the job, and only the session knows both.
+  const tabs = tabsFor(session);
   const visible = new Set(tabs.map((t) => t.name));
   return (
     <Tabs
-      key={job}
-      initialRouteName={homeTabFor(job)}
+      key={`${job}:${tabs.length}`}
+      initialRouteName={homeTabFor(session)}
       backBehavior="history"
       screenOptions={{ headerShown: false }}
       tabBar={(props) => (

@@ -87,10 +87,10 @@ export default function MyPhone() {
             <Page>
               <PageHeader title="Change or remove" />
               <View style={{ flexDirection: 'row', gap: 10, padding: 12 }}>
-                <Pressable testID="phone-change" onPress={() => setEditing(true)} style={{ paddingVertical: 9, paddingHorizontal: 14, borderRadius: 999, backgroundColor: tokens.color.indigo }}
+                <Pressable testID="phone-change" onPress={() => setEditing(true)} style={{ minHeight: 44, justifyContent: 'center', paddingVertical: 9, paddingHorizontal: 14, borderRadius: 999, backgroundColor: tokens.color.indigo }}
                   accessibilityRole="button"
                   ><Text style={{ color: tokens.color.onBrand, fontWeight: '700' }}>Change</Text></Pressable>
-                <Pressable testID="phone-remove" onPress={clear} disabled={busy !== null} style={{ paddingVertical: 9, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: tokens.color.line }}
+                <Pressable testID="phone-remove" onPress={clear} disabled={busy !== null} style={{ minHeight: 44, justifyContent: 'center', paddingVertical: 9, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: tokens.color.line }}
                   accessibilityRole="button"
                   ><Text style={{ color: tokens.color.ink, fontWeight: '600' }}>{busy === 'clear' ? 'Removing…' : 'Remove'}</Text></Pressable>
               </View>
@@ -100,13 +100,16 @@ export default function MyPhone() {
               <PageHeader title="Your number" />
               <View style={{ padding: 12, gap: 10 }}>
                 <TextField label="WhatsApp number" value={phone} onChangeText={setPhone} placeholder="98765 43210" keyboardType="phone-pad" autoComplete="tel" textContentType="telephoneNumber" testID="phone-input" />
-                <Pressable testID="phone-send" onPress={send} disabled={!d.platformReady || busy !== null || !phone.trim()} style={{ alignSelf: 'flex-start', paddingVertical: 9, paddingHorizontal: 14, borderRadius: 999, backgroundColor: tokens.color.indigo, opacity: !d.platformReady || !phone.trim() ? 0.5 : 1 }}
+                <Pressable testID="phone-send" onPress={send} disabled={!d.platformReady || busy !== null || !phone.trim()} style={{ alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', paddingVertical: 9, paddingHorizontal: 14, borderRadius: 999, backgroundColor: tokens.color.indigo, opacity: !d.platformReady || !phone.trim() ? 0.5 : 1 }}
                   accessibilityRole="button"
                   >
                   <Text style={{ color: tokens.color.onBrand, fontWeight: '700' }}>{busy === 'send' ? 'Sending…' : d.pending ? 'Send again' : 'Send code'}</Text>
                 </Pressable>
                 {editing ? <Pressable onPress={() => { setEditing(false); setPhone(''); }}
                              accessibilityRole="button"
+                             hitSlop={8}
+                             // Sized for a thumb, not for the word: 12.5px of ink was a 15dp target.
+                             style={{ minHeight: 44, paddingHorizontal: 12, justifyContent: 'center' }}
                              ><Text style={{ color: tokens.color.sub, fontSize: 12.5 }}>Cancel</Text></Pressable> : null}
               </View>
             </Page>
@@ -117,7 +120,7 @@ export default function MyPhone() {
               <PageHeader title="The 6-digit code from WhatsApp" />
               <View style={{ padding: 12, gap: 10 }}>
                 <TextField label="Code" value={code} onChangeText={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))} placeholder="482911" keyboardType="number-pad" autoComplete="one-time-code" textContentType="oneTimeCode" maxLength={6} testID="phone-code" />
-                <Pressable testID="phone-verify-go" onPress={verify} disabled={busy !== null || code.length !== 6} style={{ alignSelf: 'flex-start', paddingVertical: 9, paddingHorizontal: 14, borderRadius: 999, backgroundColor: tokens.color.indigo, opacity: code.length !== 6 ? 0.5 : 1 }}
+                <Pressable testID="phone-verify-go" onPress={verify} disabled={busy !== null || code.length !== 6} style={{ alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', paddingVertical: 9, paddingHorizontal: 14, borderRadius: 999, backgroundColor: tokens.color.indigo, opacity: code.length !== 6 ? 0.5 : 1 }}
                   accessibilityRole="button"
                   >
                   <Text style={{ color: tokens.color.onBrand, fontWeight: '700' }}>{busy === 'verify' ? 'Checking…' : 'Verify'}</Text>

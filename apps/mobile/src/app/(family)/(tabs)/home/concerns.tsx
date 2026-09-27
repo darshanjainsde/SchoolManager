@@ -6,7 +6,7 @@ import {
   type ConcernAudience, type ConcernCategory, type ConcernRow, type Profile,
 } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
-import { Card, Empty, Page, Pill, Screen, SectionTitle } from '@/components/ui';
+import { Card, Empty, ErrorState, Page, Pill, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
@@ -43,7 +43,9 @@ export default function FamilyConcerns() {
       setProfile(me);
       setError(null);
     } catch (e) {
-      setRows([]);
+      // Keep whatever was on screen. Blanking the rows here turned a lost
+      // connection into "Nothing raised yet" — a false answer, and the one a
+      // parent acts on by raising the same concern twice.
       setError(e instanceof ApiError ? e.message : 'That did not load.');
     }
   }, []);
@@ -77,7 +79,7 @@ export default function FamilyConcerns() {
         {classTeacher ? ` Your class teacher is ${classTeacher}.` : ''}
       </Text>
 
-      {error ? <Text style={{ marginTop: 10, fontSize: 13, color: tokens.color.red }}>{error}</Text> : null}
+      {error && rows !== null ? <Text style={{ marginTop: 10, fontSize: 13, color: tokens.color.red }}>{error}</Text> : null}
 
       {!writing && (
         <Pressable
@@ -158,7 +160,7 @@ export default function FamilyConcerns() {
       )}
 
       <SectionTitle title="Your concerns" />
-      {rows === null ? <LoadingRows label="Loading your concerns" rows={3} /> : rows.length === 0 ? (
+      {rows === null && error ? <ErrorState error={error} onRetry={() => void load()} /> : rows === null ? <LoadingRows label="Loading your concerns" rows={3} /> : rows.length === 0 ? (
         <Empty icon="concern">Nothing raised yet. If something needs the school&rsquo;s attention, raise it here and you will see what happens.</Empty>
       ) : (
         <Page>

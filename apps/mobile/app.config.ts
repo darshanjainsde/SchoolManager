@@ -96,6 +96,10 @@ const config: ExpoConfig = {
       },
     ],
     '@sentry/react-native',
+    // Android 16 stops calling onBackPressed() for API-36 targets and RN 0.79
+    // has no other back path: without this every back press closed the app.
+    // Details and the removal condition in the plugin itself.
+    './plugins/with-legacy-back',
     // Google Play requires targeting Android 16 (API 36) from 2026-08-31.
     // Expo SDK 53 defaults to API 35, so bump compile+target here. AGP 8.8.2
     // (RN 0.79) can build against 36 (emits a "tested up to 35" warning).

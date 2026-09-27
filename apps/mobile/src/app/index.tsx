@@ -27,7 +27,14 @@ export default function Index() {
         }
       }
       setTarget(resolveStartRoute(s));
-    })();
+    })().catch(async () => {
+      // A torn SecureStore write or an unparseable saved session used to
+      // reject here with nothing to catch it, so setTarget never ran and the
+      // app sat on the logo for good — the same symptom the ALUMNUS bug had.
+      // Start clean instead: the gate is always a real screen.
+      try { await session.clear(); } catch { /* nothing left to clear */ }
+      setTarget(resolveStartRoute(null));
+    });
   }, []);
   // A blank frame used to sit here for the whole boot chain (perf audit #5).
   // The chain is much shorter now that the session is read once, but the

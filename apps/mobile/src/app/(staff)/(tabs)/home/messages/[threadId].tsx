@@ -8,7 +8,7 @@ import {
   type MessageThreadDetail,
 } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
-import { Card, Empty } from '@/components/ui';
+import { Card, Empty, ErrorState } from '@/components/ui';
 import { BackChipHeader } from '@/components/BackChipHeader';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
@@ -127,6 +127,9 @@ export default function StaffThread() {
       <ScrollView
         ref={scrollRef}
         testID="thread-scroll"
+        // The reply box sits under this list: a tap on a message while the
+        // keyboard is up must land, not merely close the keyboard.
+        keyboardShouldPersistTaps="handled"
         style={{ flex: 1 }}
         contentContainerStyle={{ padding: 14, gap: tokens.gap, paddingBottom: 20 }}
       >
@@ -141,7 +144,8 @@ export default function StaffThread() {
           </Card>
         )}
 
-        {error && (
+        {error && detail === null && <ErrorState testID="thread-error" error={error} onRetry={() => void load()} />}
+        {error && detail !== null && (
           <Card>
             <Text testID="thread-error" style={{ color: tokens.color.red }}>
               {error}

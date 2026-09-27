@@ -4,7 +4,7 @@ import { api, ApiError } from '@/lib/api';
 import { useQuery } from '@/lib/query';
 import { Button } from '@/components/desk';
 import { TextField } from '@/components/Field';
-import { Card, SectionTitle } from '@/components/ui';
+import {  Card, ErrorState, SectionTitle } from '@/components/ui';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 
@@ -54,6 +54,10 @@ export function PayDetails() {
   // person can do anything about, so the card simply is not there.
   if (q.error instanceof ApiError && (q.error.status === 403 || q.error.status === 404)) return null;
   const d = q.data;
+  // Any OTHER failure with nothing to show is said, with a way back. This
+  // used to return null too, so a server hiccup made the bank card vanish
+  // without a word and a person could not tell it existed.
+  if (!d && q.error) return <ErrorState error={q.error} onRetry={q.reload} />;
   if (!d) return null;
 
   const set = (k: keyof typeof form) => (v: string) => {

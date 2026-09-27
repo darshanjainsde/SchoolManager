@@ -20,9 +20,14 @@ export function jobFor(s: Pick<Session, 'staffRole' | 'features'> | null | undef
   if (!s) return 'GENERAL';
   if (s.staffRole === 'SPORTS' && hasFeature(s, 'SPORTS')) return 'SPORTS';
   if (s.staffRole === 'LIBRARIAN' && hasFeature(s, 'LIBRARY')) return 'LIBRARIAN';
-  // An accounts officer at a school that does not keep pay here is general
-  // staff — the same rule as a librarian without the Library module.
-  if (s.staffRole === 'ACCOUNTS' && hasFeature(s, 'SALARY')) return 'ACCOUNTS';
+  // An accounts officer is one on the strength of the JOB, not the module.
+  // Half of the desk — deciding leave — needs only MANAGEMENT, which every
+  // school on a real plan has; only the pay half needs the SALARY override,
+  // which is switched on per school by hand. Gating the whole job on SALARY
+  // sent an appointed accounts officer to the two-tab general portal with no
+  // leave desk at all, while the API would have let them decide leave. The
+  // pay tab is dropped on its own below when SALARY is off.
+  if (s.staffRole === 'ACCOUNTS') return 'ACCOUNTS';
   return 'GENERAL';
 }
 
@@ -60,17 +65,31 @@ const TAB_NAMES_BY_JOB: Record<WorkerJob, readonly string[]> = {
   ACCOUNTS: ['paydesk', 'leavedesk', 'profile'],
 };
 
-export function tabsFor(job: WorkerJob): readonly TabSpec[] {
+type NavSession = Pick<Session, 'staffRole' | 'features'> | null | undefined;
+
+/**
+ * The tab NAMES a session actually gets: its job's list, minus any tab whose
+ * module the school has not switched on. Today that is only `paydesk` — an
+ * accounts officer keeps the leave desk at a school that does not run pay
+ * here. Takes the session, not the job, because the job alone cannot know.
+ */
+export function tabNamesFor(s: NavSession): readonly string[] {
+  const job = jobFor(s);
   const names = TAB_NAMES_BY_JOB[job];
-  return names.map((n) => ALL_TABS.find((t) => t.name === n)!);
+  if (job === 'ACCOUNTS' && !hasFeature(s, 'SALARY')) return names.filter((n) => n !== 'paydesk');
+  return names;
+}
+
+export function tabsFor(s: NavSession): readonly TabSpec[] {
+  return tabNamesFor(s).map((n) => ALL_TABS.find((t) => t.name === n)!);
 }
 
 /** The general tabs — what an unknown or not-yet-loaded session draws. */
-export const VISIBLE_TABS: readonly TabSpec[] = tabsFor('GENERAL');
+export const VISIBLE_TABS: readonly TabSpec[] = tabsFor(null);
 
-/** The tab a job lands on when the portal opens. */
-export function homeTabFor(job: WorkerJob): string {
-  return TAB_NAMES_BY_JOB[job][0];
+/** The tab a session lands on when the portal opens: the first it is allowed. */
+export function homeTabFor(s: NavSession): string {
+  return tabNamesFor(s)[0];
 }
 
 /**

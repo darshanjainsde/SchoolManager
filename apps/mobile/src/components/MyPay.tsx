@@ -32,15 +32,10 @@ export interface MyPayPayload {
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 export const monthName = (m: number) => MONTHS[m - 1] ?? String(m);
 
-/** Paise → "₹37,600". Indian grouping, paise only when there are any. */
-export function rupees(minor: number): string {
-  const neg = minor < 0;
-  const abs = Math.abs(minor);
-  const whole = Math.floor(abs / 100);
-  const paise = abs % 100;
-  const grouped = whole.toLocaleString('en-IN');
-  return `${neg ? '−' : ''}₹${paise === 0 ? grouped : `${grouped}.${String(paise).padStart(2, '0')}`}`;
-}
+/** Paise → "₹37,600". The one formatter (lib/money.ts): Hermes's reduced ICU
+ *  made `toLocaleString('en-IN')` group a lakh wrongly, in silence. */
+import { rupees } from '@/lib/money';
+export { rupees };
 
 /**
  * MY PAY — the same screen for a teacher and for a driver, because the
