@@ -214,6 +214,7 @@ export const AUTHZ_REVIEWED: string[] = [
   "GET /manage/fees/grid",
   "GET /manage/fees/payment-setup",
   "GET /manage/fees/payments",
+  "GET /manage/fees/payments/recent",
   "GET /manage/fees/settings",
   "GET /manage/fees/students",
   "GET /manage/fees/students/:id",
@@ -303,6 +304,42 @@ export const AUTHZ_REVIEWED: string[] = [
   //                    token could publish to the live website. Fixed here, and
   //                    site-authoring-authz.e2e-spec.ts holds it shut.
   "GET /owner/schools/:id/domains",
+  // Reviewed 27 Sep 2026 — these 27 shipped with the Complaint Box, the Class
+  // teachers desk, Onboarding, the fees hub and the owner Snapshot, into
+  // neither bucket, so this guard was red on main and staging for a day.
+  //
+  // concerns-authz.e2e-spec.ts: three doors to a concern, one per role, each
+  // refusing the other two (family → /me, class teacher → /teacher, office →
+  // /manage); class-teachers and onboarding are @Roles('SCHOOL_ADMIN') +
+  // MANAGEMENT, and non-admin STAFF is refused as well.
+  "GET /manage/concerns/counts",
+  "GET /manage/concerns",
+  "GET /manage/concerns/:id",
+  "POST /manage/concerns/:id/comment",
+  "POST /manage/concerns/:id/status",
+  "GET /teacher/concerns/counts",
+  "GET /teacher/concerns",
+  "GET /teacher/concerns/:id",
+  "POST /teacher/concerns/:id/comment",
+  "POST /teacher/concerns/:id/status",
+  "POST /teacher/concerns/:id/escalate",
+  "GET /me/concerns",
+  "POST /me/concerns",
+  "GET /me/concerns/:id",
+  "POST /me/concerns/:id/comment",
+  "POST /me/concerns/:id/reopen",
+  "GET /manage/class-teachers",
+  "POST /manage/class-teachers/copy",
+  "PUT /manage/class-teachers/:classSectionId",
+  "GET /manage/onboarding/template/:kind",
+  "GET /manage/onboarding/status",
+  "GET /manage/onboarding/export/all",
+  "GET /manage/onboarding/export/:kind",
+  "POST /manage/onboarding/preview/:kind",
+  "POST /manage/onboarding/import/:kind",
+  // owner/schools/:id/snapshot.json — OwnerController, same class-level
+  // OwnerHostGuard + PlatformJwtGuard as the domains routes above; read-only.
+  "GET /owner/schools/:id/snapshot.json",
   "POST /owner/schools/:id/domains",
   "POST /owner/schools/:id/domains/:domainId/verify",
   "POST /owner/schools/:id/domains/:domainId/primary",
