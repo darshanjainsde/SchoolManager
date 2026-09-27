@@ -17,6 +17,7 @@ interface MarketingConfigRow {
   priceProInr: number;
   contactEmail: string;
   contactPhone: string;
+  loginOtpEnabled: boolean;
 }
 
 /** INR first: it is the figure most schools are actually billed. */
@@ -63,6 +64,7 @@ export default function PlatformSettingsPage() {
         priceProInr: Number(body.priceProInr),
         contactEmail: body.contactEmail,
         contactPhone: body.contactPhone,
+        loginOtpEnabled: body.loginOtpEnabled,
       }),
     onSuccess: () => {
       toast.success('Saved — live on sckools.com within a minute');
@@ -225,6 +227,36 @@ export default function PlatformSettingsPage() {
                 Discard
               </button>
             )}
+          </div>
+
+          {/* Owner access */}
+          <div className="sk-card">
+            <div className="sk-card-h">
+              <h3>Sign-in</h3>
+            </div>
+            <div className="sk-card-b">
+              <p className="sk-muted">
+                Whether the login page offers <b>&ldquo;sign in with a code&rdquo;</b> beside the
+                password door. It is off because the code cannot be delivered yet: Meta refuses
+                every authentication-category template on our WhatsApp account, so the code is
+                never sent and the door cannot open. Leave it off until that is resolved — a door
+                that does nothing is the one people try first.
+              </p>
+              <label className="sk-own-fld" style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }} htmlFor="loginOtpEnabled">
+                <input
+                  id="loginOtpEnabled"
+                  type="checkbox"
+                  checked={!!form.loginOtpEnabled}
+                  onChange={(e) => set('loginOtpEnabled', e.target.checked)}
+                  style={{ width: 18, height: 18 }}
+                />
+                <span>Offer sign-in by code on the login page</span>
+              </label>
+              <p className="sk-muted" style={{ marginTop: 8, fontSize: 12 }}>
+                Takes up to a minute to appear on the login page. Turning it off also refuses the
+                request at the server, so nothing can ask for a code by going round the page.
+              </p>
+            </div>
           </div>
 
           {/* Owner access */}

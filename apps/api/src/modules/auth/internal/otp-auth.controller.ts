@@ -79,8 +79,8 @@ export class OtpAuthController {
   /** Whether the phone door should be shown at all. */
   @Public()
   @Get('otp/ready')
-  ready() {
-    return { ready: this.otpAuth.ready };
+  async ready() {
+    return { ready: await this.otpAuth.isReady() };
   }
 
   @ApiBearerAuth()
