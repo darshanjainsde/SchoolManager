@@ -133,3 +133,25 @@ describe('switching a band off the homepage', () => {
     expect(back).toContain('data-sec="hof"');
   });
 });
+
+/**
+ * The contact facts are shown the same way wherever they appear.
+ *
+ * The footer was the report, but the Contact band one section above it had
+ * the identical defect — 📞 ✉️ 📍 as literal emoji, and not one of them
+ * pressable. Both read from the same profile, so both use the same drawn
+ * icons and the same tel:/mailto: links now (sections/ContactIcon.tsx).
+ */
+describe('contact details on the homepage', () => {
+  it('use drawn icons, never emoji, and can be pressed', () => {
+    const html = home(null);
+    for (const emoji of ['\u{1F4DE}', '\u{2709}\u{FE0F}', '\u{1F4CD}']) {
+      // The enquiry wizard's own question labels are conversational prompts,
+      // not icons standing in for data, and keep their emoji deliberately.
+      const outsideWizard = html.split('ps-wiz-phone')[0];
+      expect(outsideWizard).not.toContain(emoji);
+    }
+    expect(html).toContain('href="tel:+911412345678"');
+    expect(html).toContain('href="mailto:office@raffles.edu.in"');
+  });
+});
