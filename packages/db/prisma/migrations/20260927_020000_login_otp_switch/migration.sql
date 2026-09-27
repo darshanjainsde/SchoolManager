@@ -1,0 +1,11 @@
+-- The owner's switch for "sign in with a code".
+--
+-- Additive and defaulted FALSE, which is also the behaviour today: Meta
+-- refuses every AUTHENTICATION-category template on this account, so the code
+-- can never be delivered and the door on the login page cannot open. It was
+-- still being offered, because readiness was computed from "is any sender
+-- configured" rather than from a decision anybody made.
+--
+-- Existing rows take the default, so applying this HIDES the door — which is
+-- the correct state until the Meta appeal clears.
+ALTER TABLE "MarketingConfig" ADD COLUMN "loginOtpEnabled" BOOLEAN NOT NULL DEFAULT false;

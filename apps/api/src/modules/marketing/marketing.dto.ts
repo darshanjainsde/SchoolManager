@@ -1,4 +1,5 @@
-import { IsIn, IsInt, IsEmail, IsISO8601, IsOptional, IsString, Length, Matches, Min } from 'class-validator';
+import {
+  IsBoolean, IsIn, IsInt, IsEmail, IsISO8601, IsOptional, IsString, Length, Matches, Min } from 'class-validator';
 
 /** Digits with optional +, spaces, dashes, parens — 7..16 significant chars. */
 const PHONE_RE = /^\+?[\d\s\-()]{7,20}$/;
@@ -123,6 +124,14 @@ export class UpdateMarketingConfigDto {
   @IsString()
   @Length(0, 40)
   contactPhone?: string;
+
+  /**
+   * Optional so an older owner console — which does not send it — cannot
+   * silently switch the door off by omitting the field.
+   */
+  @IsOptional()
+  @IsBoolean()
+  loginOtpEnabled?: boolean;
 }
 
 export interface PublicMarketingConfig {

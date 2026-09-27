@@ -1,4 +1,6 @@
-const db = { user: { findFirst: jest.fn() }, teacher: { findFirst: jest.fn() }, staff: { findFirst: jest.fn() } };
+const db = { user: { findFirst: jest.fn() }, teacher: { findFirst: jest.fn() }, staff: { findFirst: jest.fn() },
+  // The owner's switch for the phone door.
+  marketingConfig: { findUnique: jest.fn().mockResolvedValue({ loginOtpEnabled: true }) } };
 jest.mock('@skoolos/db', () => ({ ...jest.requireActual('@skoolos/db'), getPlatformPrisma: () => db }));
 jest.mock('@skoolos/config', () => ({ loadEnv: () => ({ JWT_SCHOOL_ACCESS_SECRET: 'test-secret-long-enough-xx' }) }));
 
@@ -97,5 +99,78 @@ describe('OtpAuthService', () => {
       db.user.findFirst.mockResolvedValue({ id: 'u-other' });
       await expect(svc().resetWithOtp(SCHOOL, 'other@raffles.test', 'c9', '482911', 'x'.repeat(8))).rejects.toMatchObject({ response: { code: 'OTP_CHALLENGE_UNKNOWN' } });
     });
+  });
+});
+
+// ── the owner's switch ───────────────────────────────────────────────────────
+
+describe("the owner's switch for sign-in by code", () => {
+  const otpReady = { ready: true, start: jest.fn(), check: jest.fn() };
+  const make = () =>
+    new OtpAuthService(
+      otpReady as never,
+      { resolve: jest.fn().mockResolvedValue([]) } as never,
+      {} as never,
+      {} as never,
+      { sign: jest.fn() } as never,
+    );
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    otpReady.ready = true;
+  });
+
+  it('shows the door only when the owner has switched it on', async () => {
+    db.marketingConfig.findUnique.mockResolvedValue({ loginOtpEnabled: true });
+    const svc = make();
+    expect(await svc.isReady()).toBe(true);
+
+    db.marketingConfig.findUnique.mockResolvedValue({ loginOtpEnabled: false });
+    svc.forgetSwitch();
+    expect(await svc.isReady()).toBe(false);
+  });
+
+  it('stays hidden when no sender can carry a code, whatever the switch says', async () => {
+    // The switch is a DECISION; this is a FACT. Both have to hold.
+    db.marketingConfig.findUnique.mockResolvedValue({ loginOtpEnabled: true });
+    otpReady.ready = false;
+    const svc = make();
+    expect(await svc.isReady()).toBe(false);
+  });
+
+  it('is OFF when the row does not exist yet, rather than on', async () => {
+    // Nobody has opened the owner console. The door has never worked, so the
+    // honest default is closed.
+    db.marketingConfig.findUnique.mockResolvedValue(null);
+    const svc = make();
+    expect(await svc.isReady()).toBe(false);
+  });
+
+  it('is OFF when the switch cannot be read at all', async () => {
+    // A migration not yet run must not put an unopenable door back on the
+    // login page.
+    db.marketingConfig.findUnique.mockRejectedValue(new Error('column does not exist'));
+    const svc = make();
+    expect(await svc.isReady()).toBe(false);
+  });
+
+  it('refuses the request itself, so hiding the button is not the only guard', async () => {
+    db.marketingConfig.findUnique.mockResolvedValue({ loginOtpEnabled: false });
+    const svc = make();
+    await expect(svc.request('+919876543210', null, null)).rejects.toMatchObject({
+      // Anything can POST to /auth/otp/request. If only the page hid the
+      // door, turning the switch off would be decoration.
+      status: 400,
+    });
+  });
+
+  it('reads the switch once a minute, not once a visit', async () => {
+    // /auth/otp/ready is hit by everyone who opens /login, signed in or not.
+    db.marketingConfig.findUnique.mockResolvedValue({ loginOtpEnabled: true });
+    const svc = make();
+    await svc.isReady();
+    await svc.isReady();
+    await svc.isReady();
+    expect(db.marketingConfig.findUnique).toHaveBeenCalledTimes(1);
   });
 });
