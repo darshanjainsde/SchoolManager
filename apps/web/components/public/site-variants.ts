@@ -107,6 +107,15 @@ export const SECTION_KEYS: SectionKey[] = ['stats', 'about', 'courses', 'admissi
 export interface SectionVariantChoice {
   layout?: string;
   gesture?: string;
+  /**
+   * Hidden from the homepage. The band's full content still lives on its own
+   * page (/admissions, /gallery, /records…) — this only decides whether the
+   * homepage carries it.
+   *
+   * Absent means shown, so a school that never opens the switch is untouched
+   * and the JSON stays small.
+   */
+  hidden?: boolean;
 }
 export type SectionVariants = Partial<Record<SectionKey, SectionVariantChoice>>;
 
@@ -227,6 +236,17 @@ const SECTION_DEFAULT_LAYOUT: Record<SectionKey, string> = {
   contact: 'SPLIT',
 };
 
+/**
+ * Is this band switched off for the homepage?
+ *
+ * Takes a plain string because the band order carries custom sections
+ * (`x:<id>`) and `events` as well, and only the nine real section keys can be
+ * hidden this way — anything else is never hidden by this switch.
+ */
+export function sectionHidden(variants: SectionVariants | null | undefined, key: string): boolean {
+  return (SECTION_KEYS as string[]).includes(key) && variants?.[key as SectionKey]?.hidden === true;
+}
+
 export function sectionLayoutOf(variants: SectionVariants | null | undefined, key: SectionKey): string {
   const v = variants?.[key]?.layout;
   const allowed = SECTION_VARIANT_DEFS[key].layouts.some((l) => l.value === v);
@@ -280,6 +300,9 @@ export function normalizeSectionVariants(raw: unknown): SectionVariants {
     if (typeof gesture === 'string' && (SECTION_GESTURES as readonly string[]).includes(gesture)) {
       entry.gesture = gesture;
     }
+    // Only `true` is stored: `hidden: false` and shown are the same state, and
+    // one way to say a thing is what keeps the default page byte-identical.
+    if ((v as Record<string, unknown>).hidden === true) entry.hidden = true;
     if (Object.keys(entry).length) out[key] = entry;
   }
   return out;
@@ -378,8 +401,8 @@ export function sectionOrderOf(variantsRaw: unknown, customIds: string[] = []): 
 /* ── Footer ───────────────────────────────────────────────────────────────
    footerConfig (SchoolProfile Json). Null = the shipped three-column footer.
    COLUMNS/PAPER with social off is therefore the no-class default. */
-export type FooterLayout = 'COLUMNS' | 'SIMPLE' | 'CENTER';
-export type FooterColor = 'PAPER' | 'DARK' | 'BRAND';
+export type FooterLayout = 'COLUMNS' | 'NOTICE' | 'TOWER' | 'LEDGER' | 'POSTCARD' | 'SIMPLE' | 'CENTER';
+export type FooterColor = 'PAPER' | 'DARK' | 'BRAND' | 'FESTIVE';
 export interface FooterConfig {
   layout: FooterLayout;
   color: FooterColor;
@@ -391,34 +414,75 @@ export interface FooterConfig {
   tagline: string | null;
   /** Split the Explore link list into two columns when it grows long. */
   twoCols: boolean;
+  /** Office hours, the school's own words: "Mon–Sat · 8:30 am – 3:30 pm". */
+  hours: string | null;
+  /** A line under the admissions heading: dates, classes, whatever is true. */
+  admissionsNote: string | null;
+  /** The admissions band above the footer (pitch F5). Works with any layout. */
+  admissionsBand: boolean;
+  /** "Back to top" in the sign-off row. */
+  backToTop: boolean;
+  /** Also offer the phone number as a WhatsApp chat. */
+  whatsapp: boolean;
 }
 export const FOOTER_LAYOUTS: StyleOption<FooterLayout>[] = [
-  { value: 'COLUMNS', label: 'Link columns', hint: 'Brand, Explore and Contact columns — today’s footer.' },
+  { value: 'COLUMNS', label: 'Link columns', hint: 'Brand, Explore and Visit columns — today’s footer.' },
+  { value: 'NOTICE', label: 'Notice board', hint: 'Four short columns: brand, links, visiting details, admissions.' },
+  { value: 'TOWER', label: 'Bell tower', hint: 'The school’s name set large, links and contact beneath it.' },
+  { value: 'LEDGER', label: 'Ledger', hint: 'Two compact rows — the smallest footer that still has everything.' },
+  { value: 'POSTCARD', label: 'Postcard', hint: 'Address panel beside the lists, for “where are you and when”.' },
   { value: 'SIMPLE', label: 'Simple line', hint: 'One quiet line: name, tagline, copyright.' },
-  { value: 'CENTER', label: 'Statement', hint: 'Centered crest and school name, links beneath.' },
+  { value: 'CENTER', label: 'Statement', hint: 'Centred crest and school name, links beneath.' },
 ];
 export const FOOTER_COLORS: StyleOption<FooterColor>[] = [
   { value: 'PAPER', label: 'Paper', hint: 'On the page paper — today’s footer.' },
   { value: 'DARK', label: 'Dark', hint: 'A deep ink band that closes the page.' },
   { value: 'BRAND', label: 'School colour', hint: 'Your primary colour, white text.' },
+  { value: 'FESTIVE', label: 'Follows the festival', hint: 'Paper normally; during a full festive look it takes the festival’s own ink, so the texture never runs under the links.' },
 ];
+
+/**
+ * The colour a footer actually paints in.
+ *
+ * FESTIVE is the only one that depends on the page: a full-surface treatment
+ * (WASH or NIGHT) already tints the whole page, and a transparent footer over
+ * that texture is what put a grid pattern under 13px grey links. Taking the
+ * festival's own ink gives the links a solid ground; with no festival on, it
+ * is plain paper and nothing changes.
+ */
+export function footerColorFor(cfg: FooterConfig, fest: FestiveTheme | null): Exclude<FooterColor, 'FESTIVE'> {
+  if (cfg.color !== 'FESTIVE') return cfg.color;
+  return fest && (fest.treatment === 'NIGHT' || fest.treatment === 'WASH') ? 'DARK' : 'PAPER';
+}
 export function normalizeFooterConfig(raw: unknown): FooterConfig {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const layout = FOOTER_LAYOUTS.some((o) => o.value === r.layout) ? (r.layout as FooterLayout) : 'COLUMNS';
   const color = FOOTER_COLORS.some((o) => o.value === r.color) ? (r.color as FooterColor) : 'PAPER';
+  const text = (v: unknown, max: number): string | null =>
+    typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null;
   return {
     layout,
     color,
     social: r.social === true,
     contact: r.contact !== false,
-    tagline: typeof r.tagline === 'string' && r.tagline.trim() ? r.tagline.slice(0, 160) : null,
+    tagline: text(r.tagline, 160),
     twoCols: r.twoCols === true,
+    hours: text(r.hours, 80),
+    admissionsNote: text(r.admissionsNote, 160),
+    admissionsBand: r.admissionsBand === true,
+    // On by default: a footer that cannot get you back to the top of a long
+    // school homepage is the small rudeness nobody reports.
+    backToTop: r.backToTop !== false,
+    whatsapp: r.whatsapp === true,
   };
 }
-export function footerClasses(cfg: FooterConfig): string {
+/** COLUMNS on paper is the shipped footer and carries NO class, so a school
+ *  that never opened the setting renders exactly what it rendered before. */
+export function footerClasses(cfg: FooterConfig, fest: FestiveTheme | null = null): string {
+  const color = footerColorFor(cfg, fest);
   return [
-    cfg.layout === 'SIMPLE' ? 'ps-foot-simple' : cfg.layout === 'CENTER' ? 'ps-foot-center' : '',
-    cfg.color === 'DARK' ? 'ps-footc-dark' : cfg.color === 'BRAND' ? 'ps-footc-brand' : '',
+    cfg.layout === 'COLUMNS' ? '' : `ps-foot-${cfg.layout.toLowerCase()}`,
+    color === 'DARK' ? 'ps-footc-dark' : color === 'BRAND' ? 'ps-footc-brand' : '',
   ]
     .filter(Boolean)
     .join(' ');

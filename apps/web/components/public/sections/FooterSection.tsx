@@ -1,28 +1,144 @@
 import Link from 'next/link';
 import type { PublicSiteData } from '@/lib/public-api';
-import { footerClasses, normalizeFooterConfig } from '../site-variants';
+import { optimised } from '@/lib/img';
+import { footerClasses, normalizeFestiveTheme, normalizeFooterConfig } from '../site-variants';
+import { FestiveFooterEdge } from './FestiveLayer';
 import type { NavFlags } from './SiteNav';
 
-const SOCIAL_GLYPH: Record<string, string> = {
-  FACEBOOK: 'f',
-  INSTAGRAM: 'ig',
-  YOUTUBE: '▶',
-  X: 'x',
-  LINKEDIN: 'in',
-};
-
 /**
- * The site footer, extracted from PublicSite so it can answer to footerConfig.
+ * The site footer.
  *
- * With a NULL config this must render byte-for-byte what PublicSite carried
- * inline (COLUMNS on paper, slate text, working hover, no social row) — the
- * extraction repaints nobody. `.ps-foot-muted` carries the slate default and
- * lets the dark/brand colour classes recolour it (higher specificity), so the
- * one class does both jobs without an inline literal that only works on paper.
+ * Seven layouts over one set of blocks. The blocks — brand, Explore, Visit us,
+ * Admissions, sign-off — are built once and arranged differently; a layout
+ * never gets its own copy of a link list, because that is how two of them
+ * drift apart and one school ends up with a footer missing its Blog link.
+ *
+ * COLUMNS on paper is the default and carries no layout class, so a school
+ * that has never opened the setting keeps the arrangement it had. What DID
+ * change for everybody, deliberately, are the defects the arrangement was
+ * hiding (reported 2026-09-27 against Raffles):
+ *
+ *  - Contact lines were emoji (📞 ✉️ 📍), which render in whatever emoji font
+ *    the device ships — a different footer on every phone, and the only
+ *    cartoon on an otherwise serious page. They are drawn SVG now.
+ *  - Nothing was tappable. A phone number a parent cannot press is a phone
+ *    number they have to type. tel:, mailto:, wa.me and a Maps search now.
+ *  - Nine links stacked 340px tall beside an empty column. The Explore list
+ *    splits itself past six links; no setting to remember.
+ *  - The sign-off was one flat centred line. It is three parts now, with the
+ *    way back to the top of a long homepage.
  */
-import { normalizeFestiveTheme } from '../site-variants';
-import { FestiveFooterEdge } from './FestiveLayer';
-import { optimised } from '@/lib/img';
+
+/** 14px line icons. Never emoji — see the note above. */
+function Ico({ name }: { name: 'phone' | 'mail' | 'pin' | 'clock' | 'wa' }) {
+  const common = {
+    width: 14,
+    height: 14,
+    viewBox: '0 0 24 24',
+    fill: 'none' as const,
+    stroke: 'currentColor',
+    strokeWidth: 1.9,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    'aria-hidden': true,
+    className: 'ps-foot-ico',
+  };
+  if (name === 'phone') {
+    return (
+      <svg {...common}>
+        <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.4-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2Z" />
+      </svg>
+    );
+  }
+  if (name === 'mail') {
+    return (
+      <svg {...common}>
+        <rect x="2" y="4" width="20" height="16" rx="2" />
+        <path d="m2 7 10 6 10-6" />
+      </svg>
+    );
+  }
+  if (name === 'pin') {
+    return (
+      <svg {...common}>
+        <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+        <circle cx="12" cy="10" r="3" />
+      </svg>
+    );
+  }
+  if (name === 'clock') {
+    return (
+      <svg {...common}>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v5l3 2" />
+      </svg>
+    );
+  }
+  return (
+    <svg {...common}>
+      <path d="M21 11.5a8.4 8.4 0 0 1-12.6 7.3L3 20.5l1.8-5.2A8.4 8.4 0 1 1 21 11.5Z" />
+      <path d="M8.6 9.2c.3 1.6 2.6 4 4.2 4.2l1-1 1.9.9v1.4c-2.4.4-6.6-3-7.2-5.6l1.3-.6Z" />
+    </svg>
+  );
+}
+
+/** The real marks, not letters. `f`, `ig` and `▶` read as typing mistakes. */
+function SocialIcon({ platform }: { platform: string }) {
+  const p = platform.toUpperCase();
+  const box = { width: 15, height: 15, viewBox: '0 0 24 24', 'aria-hidden': true } as const;
+  if (p === 'FACEBOOK') {
+    return (
+      <svg {...box} fill="currentColor">
+        <path d="M13.5 21.9V14h2.6l.5-3h-3.1V9c0-.9.3-1.5 1.6-1.5h1.6V4.8c-.3 0-1.3-.1-2.4-.1-2.4 0-4 1.4-4 4.1v2.2H7.6v3h2.7v7.9Z" />
+      </svg>
+    );
+  }
+  if (p === 'INSTAGRAM') {
+    return (
+      <svg {...box} fill="none" stroke="currentColor" strokeWidth="1.9">
+        <rect x="3" y="3" width="18" height="18" rx="5" />
+        <circle cx="12" cy="12" r="4" />
+        <circle cx="17.2" cy="6.8" r="1.1" fill="currentColor" stroke="none" />
+      </svg>
+    );
+  }
+  if (p === 'YOUTUBE') {
+    return (
+      <svg {...box} fill="currentColor">
+        <path d="M23 12s0-3.3-.4-4.9a2.6 2.6 0 0 0-1.8-1.8C19.1 5 12 5 12 5s-7.1 0-8.8.4A2.6 2.6 0 0 0 1.4 7.2C1 8.7 1 12 1 12s0 3.3.4 4.8a2.6 2.6 0 0 0 1.8 1.8C4.9 19 12 19 12 19s7.1 0 8.8-.4a2.6 2.6 0 0 0 1.8-1.8C23 15.3 23 12 23 12ZM9.8 15.2V8.8l6 3.2Z" />
+      </svg>
+    );
+  }
+  if (p === 'LINKEDIN') {
+    return (
+      <svg {...box} fill="currentColor">
+        <path d="M4.9 3.5a2.4 2.4 0 1 0 0 4.9 2.4 2.4 0 0 0 0-4.9ZM2.8 21h4.2V9.4H2.8Zm7 0H14v-6.3c0-1.7.9-2.5 2-2.5s1.9.9 1.9 2.5V21h4.2v-7.1c0-3.6-1.9-5.2-4.4-5.2A3.9 3.9 0 0 0 14 10.7V9.4H9.8c.1 1.2 0 11.6 0 11.6Z" />
+      </svg>
+    );
+  }
+  if (p === 'X' || p === 'TWITTER') {
+    return (
+      <svg {...box} fill="currentColor">
+        <path d="M17.7 3h3.2l-7 8 8.2 10h-6.4l-5-6.1L4.9 21H1.7l7.5-8.5L1.3 3h6.6l4.5 5.6Zm-1.1 16.1h1.8L7.5 4.8H5.6Z" />
+      </svg>
+    );
+  }
+  return (
+    <svg {...box} fill="currentColor">
+      <circle cx="12" cy="12" r="4" />
+    </svg>
+  );
+}
+
+/** Digits only — wa.me refuses anything else, silently. */
+function waHref(phone: string): string {
+  return `https://wa.me/${phone.replace(/\D/g, '')}`;
+}
+
+/** A Maps SEARCH, never an embed: no key, no cookie, no iframe weight. */
+function mapsHref(parts: (string | null | undefined)[]): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(parts.filter(Boolean).join(', '))}`;
+}
 
 export default function FooterSection({
   data,
@@ -37,124 +153,297 @@ export default function FooterSection({
   year: number;
 }) {
   const cfg = normalizeFooterConfig(data.profile?.footerConfig);
-  const cls = footerClasses(cfg);
+  const fest = normalizeFestiveTheme(data.profile?.festiveTheme);
+  const cls = footerClasses(cfg, fest);
   const schoolName = data.school.name;
-  const logoUrl = data.profile?.logoUrl;
+  const p = data.profile;
+  const logoUrl = p?.logoUrl;
   const tagline = cfg.tagline ?? 'Nurturing confident, compassionate lifelong learners.';
   const muted = 'ps-foot-muted text-slate-500';
   const linkCls = 'ps-foot-link hover:text-slate-900 transition';
 
-  const social = cfg.social && data.socialLinks.length > 0 ? (
-    <div className="ps-foot-social" aria-label="Social links">
-      {data.socialLinks.map((s, i) => (
-        <a key={i} href={s.url} target="_blank" rel="noopener noreferrer" aria-label={s.platform.toLowerCase()}>
-          {SOCIAL_GLYPH[s.platform] ?? '•'}
-        </a>
-      ))}
-    </div>
-  ) : null;
+  const social =
+    cfg.social && data.socialLinks.length > 0 ? (
+      <div className="ps-foot-social" aria-label="Social links">
+        {data.socialLinks.map((s, i) => (
+          <a key={i} href={s.url} target="_blank" rel="noopener noreferrer" aria-label={s.platform.toLowerCase()}>
+            <SocialIcon platform={s.platform} />
+          </a>
+        ))}
+      </div>
+    ) : null;
+
+  const crest = logoUrl ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={optimised(logoUrl, 384)} alt={schoolName} className="h-9 w-auto" loading="lazy" decoding="async" />
+  ) : (
+    <>
+      <span className="h-9 w-9 rounded-xl ps-logo-bg grid place-items-center font-bold text-white text-sm ps-head">
+        {schoolName.charAt(0)}
+      </span>
+      <span className="ps-head font-bold">{schoolName}</span>
+    </>
+  );
 
   const brand = (withSocial: boolean) => (
     <div>
-      <div className={`flex items-center gap-2.5 ${cfg.layout === 'CENTER' ? 'justify-center' : ''}`}>
-        {logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={optimised(logoUrl, 384)} alt={schoolName} className="h-9 w-auto" loading="lazy" decoding="async" />
-        ) : (
-          <>
-            <span className="h-9 w-9 rounded-xl ps-logo-bg grid place-items-center font-bold text-white text-sm ps-head">
-              {schoolName.charAt(0)}
-            </span>
-            <span className="ps-head font-bold">{schoolName}</span>
-          </>
-        )}
-      </div>
+      <div className={`flex items-center gap-2.5 ${cfg.layout === 'CENTER' ? 'justify-center' : ''}`}>{crest}</div>
       <p className={`text-sm mt-3 ${muted}`}>{tagline}</p>
+      {p?.affiliationNo && <p className={`text-xs mt-2 ${muted}`}>Affiliation no. {p.affiliationNo}</p>}
       {withSocial ? social : null}
     </div>
   );
 
+  // Built as DATA so the count can decide the column split and every layout
+  // gets the same list.
+  const exploreLinks: { href: string; label: string; internal?: boolean }[] = [
+    ...(flags.hasAbout ? [{ href: `${base}#about`, label: 'About' }] : []),
+    ...(flags.hasAcademics ? [{ href: '/academics', label: 'Academics' }] : []),
+    ...(flags.hasAdmissions ? [{ href: '/admissions', label: 'Admissions' }] : []),
+    ...(flags.hasHof ? [{ href: `${base}#hall-of-fame`, label: 'Hall of Fame' }] : []),
+    ...(flags.hasGallery ? [{ href: '/gallery', label: 'Gallery' }] : []),
+    ...(flags.hasEvents ? [{ href: '/connect', label: 'Connect' }] : []),
+    ...(flags.hasBlog ? [{ href: '/blog', label: 'Blog', internal: true }] : []),
+    ...(data.pages ?? []).map((pg) => ({ href: `/p/${pg.slug}`, label: pg.title })),
+    { href: '/contact', label: 'Enquire' },
+  ];
+  // Six is where one column starts to look like a wall beside an empty
+  // neighbour. `twoCols` stays honoured for schools that set it by hand.
+  const splitLinks = cfg.twoCols || exploreLinks.length > 6;
+
+  const linkEl = (l: { href: string; label: string; internal?: boolean }) =>
+    l.internal ? (
+      <Link href={l.href} className={linkCls}>
+        {l.label}
+      </Link>
+    ) : (
+      <a href={l.href} className={linkCls}>
+        {l.label}
+      </a>
+    );
+
   const explore = (
     <div>
       <div className="ps-head font-bold mb-3">Explore</div>
-      <ul className={`space-y-2 text-sm ${muted} ${cfg.twoCols ? 'sm:columns-2 sm:gap-x-8 [&>li]:break-inside-avoid' : ''}`}>
-        {flags.hasAbout && <li><a href={`${base}#about`} className={linkCls}>About</a></li>}
-        {flags.hasAcademics && <li><a href="/academics" className={linkCls}>Academics</a></li>}
-        {flags.hasAdmissions && <li><a href="/admissions" className={linkCls}>Admissions</a></li>}
-        {flags.hasHof && <li><a href={`${base}#hall-of-fame`} className={linkCls}>Hall of Fame</a></li>}
-        {flags.hasGallery && <li><a href="/gallery" className={linkCls}>Gallery</a></li>}
-        {flags.hasEvents && <li><a href="/connect" className={linkCls}>Connect</a></li>}
-        {flags.hasBlog && <li><Link href="/blog" className={linkCls}>Blog</Link></li>}
-        {(data.pages ?? []).map((p) => (
-          <li key={p.slug}><a href={`/p/${p.slug}`} className={linkCls}>{p.title}</a></li>
+      <ul className={`space-y-2 text-sm ${muted} ${splitLinks ? 'sm:columns-2 sm:gap-x-8 [&>li]:break-inside-avoid' : ''}`}>
+        {exploreLinks.map((l) => (
+          <li key={l.href}>{linkEl(l)}</li>
         ))}
-        <li><a href="/contact" className={linkCls}>Enquire</a></li>
       </ul>
     </div>
   );
 
+  const addressLine = [p?.addressLine1, p?.addressLine2].filter(Boolean).join(', ');
+  const cityLine = [p?.city, p?.region].filter(Boolean).join(', ');
+  const placeLine = [addressLine, cityLine, p?.postalCode].filter(Boolean).join(' · ');
+  const hasPlace = !!placeLine;
+
+  /** Every line does something on a phone. */
   const contact = cfg.contact ? (
     <div>
-      <div className="ps-head font-bold mb-3">Contact</div>
+      <div className="ps-head font-bold mb-3">Visit us</div>
       <ul className={`space-y-2 text-sm ${muted}`}>
-        {data.profile?.phone && <li>📞 {data.profile.phone}</li>}
-        {data.profile?.email && <li>✉️ {data.profile.email}</li>}
-        {data.profile?.city && (
-          <li>📍 {data.profile.city}{data.profile.region ? `, ${data.profile.region}` : ''}</li>
+        {p?.phone && (
+          <li className="ps-foot-line">
+            <Ico name="phone" />
+            <a href={`tel:${p.phone.replace(/\s+/g, '')}`} className={linkCls}>
+              {p.phone}
+            </a>
+          </li>
         )}
-        {!data.profile?.phone && !data.profile?.email && !data.profile?.city && (
-          <li className="text-slate-400">—</li>
+        {cfg.whatsapp && p?.phone && (
+          <li className="ps-foot-line">
+            <Ico name="wa" />
+            <a href={waHref(p.phone)} target="_blank" rel="noopener noreferrer" className={linkCls}>
+              WhatsApp the office
+            </a>
+          </li>
         )}
+        {p?.email && (
+          <li className="ps-foot-line">
+            <Ico name="mail" />
+            <a href={`mailto:${p.email}`} className={linkCls}>
+              {p.email}
+            </a>
+          </li>
+        )}
+        {hasPlace && (
+          <li className="ps-foot-line">
+            <Ico name="pin" />
+            <a href={mapsHref([schoolName, addressLine, cityLine, p?.postalCode])} target="_blank" rel="noopener noreferrer" className={linkCls}>
+              {placeLine}
+            </a>
+          </li>
+        )}
+        {cfg.hours && (
+          <li className="ps-foot-line">
+            <Ico name="clock" />
+            <span>{cfg.hours}</span>
+          </li>
+        )}
+        {!p?.phone && !p?.email && !hasPlace && !cfg.hours && <li className="text-slate-400">—</li>}
       </ul>
     </div>
   ) : null;
 
-  const copyright = (
-    <div className="border-t border-black/10 text-center text-xs ps-foot-muted text-slate-400 py-4">
-      © {year} {schoolName} · Powered by Sckools ·{' '}
-      {/* Launch-gate #8 (DPDP): the platform's policy must be one click away
-          from every page a parent sees, school sites included. */}
-      <a href="https://sckools.com/privacy" className="underline-offset-2 hover:underline">Privacy</a>
-      {' · '}
-      <a href="https://sckools.com/terms" className="underline-offset-2 hover:underline">Terms</a>
+  /** The one thing a school footer should sell. */
+  const admissions = flags.hasAdmissions ? (
+    <div>
+      <div className="ps-head font-bold mb-3">Admissions</div>
+      {cfg.admissionsNote && <p className={`text-sm ${muted}`}>{cfg.admissionsNote}</p>}
+      <a href="/contact" className="ps-foot-cta mt-3">
+        Enquire now
+      </a>
     </div>
+  ) : null;
+
+  const band =
+    cfg.admissionsBand && flags.hasAdmissions ? (
+      <div className="ps-foot-band">
+        <div>
+          <div className="ps-head ps-foot-band-t">Admissions are open</div>
+          {cfg.admissionsNote && <div className="ps-foot-band-s">{cfg.admissionsNote}</div>}
+        </div>
+        <a href="/contact" className="ps-foot-cta">
+          Book a visit
+        </a>
+      </div>
+    ) : null;
+
+  const copyright = (
+    <div className="ps-foot-sign border-t border-black/10 text-xs ps-foot-muted text-slate-400 py-4">
+      <span>© {year} {schoolName}</span>
+      <span>
+        {/* Launch-gate #8 (DPDP): the platform's policy must be one click away
+            from every page a parent sees, school sites included. */}
+        <a href="https://sckools.com/privacy" className="underline-offset-2 hover:underline">Privacy</a>
+        {' · '}
+        <a href="https://sckools.com/terms" className="underline-offset-2 hover:underline">Terms</a>
+        {cfg.backToTop && (
+          <>
+            {' · '}
+            <a href="#top" className="underline-offset-2 hover:underline">Back to top ↑</a>
+          </>
+        )}
+      </span>
+      <span>Powered by Sckools</span>
+    </div>
+  );
+
+  const shell = (children: React.ReactNode) => (
+    <footer data-sec="footer" data-foot={cfg.layout} className={`border-t border-black/10 mt-8 ${cls}`}>
+      <FestiveFooterEdge fest={fest} />
+      {band}
+      {children}
+      {copyright}
+    </footer>
   );
 
   if (cfg.layout === 'SIMPLE') {
     // Brand keeps its own social row; a second one here would duplicate it.
-    return (
-      <footer data-sec="footer" className={`border-t border-black/10 mt-8 ${cls}`}>
-      <FestiveFooterEdge fest={normalizeFestiveTheme(data.profile?.festiveTheme)} />
-        <div className="max-w-6xl mx-auto px-6 py-8">{brand(true)}</div>
-        {copyright}
-      </footer>
-    );
+    return shell(<div className="max-w-6xl mx-auto px-6 py-8">{brand(true)}</div>);
   }
 
   if (cfg.layout === 'CENTER') {
-    return (
-      <footer data-sec="footer" className={`border-t border-black/10 mt-8 ${cls}`}>
-      <FestiveFooterEdge fest={normalizeFestiveTheme(data.profile?.festiveTheme)} />
-        <div className="max-w-6xl mx-auto px-6 py-14 ps-foot-cols">
-          {brand(true)}
-          {explore}
-          {contact}
-        </div>
-        {copyright}
-      </footer>
-    );
-  }
-
-  // COLUMNS — the shipped footer, reproduced exactly when the config is null.
-  return (
-    <footer data-sec="footer" className={`border-t border-black/10 mt-8 ${cls}`}>
-      <FestiveFooterEdge fest={normalizeFestiveTheme(data.profile?.festiveTheme)} />
-      <div className="max-w-6xl mx-auto px-6 py-14 grid md:grid-cols-3 gap-8">
+    return shell(
+      <div className="max-w-6xl mx-auto px-6 py-14 ps-foot-cols">
         {brand(true)}
         {explore}
         {contact}
-      </div>
-      {copyright}
-    </footer>
+      </div>,
+    );
+  }
+
+  if (cfg.layout === 'TOWER') {
+    return shell(
+      <div className="max-w-6xl mx-auto px-6 py-14 ps-foot-tower-in">
+        <div className="ps-head ps-foot-bigname">{schoolName}</div>
+        <div className="ps-foot-inline">
+          {exploreLinks.map((l) => (
+            <span key={l.href}>{linkEl(l)}</span>
+          ))}
+        </div>
+        <div className="ps-foot-chips">
+          {p?.phone && <a href={`tel:${p.phone.replace(/\s+/g, '')}`} className="ps-foot-chip"><Ico name="phone" />{p.phone}</a>}
+          {p?.email && <a href={`mailto:${p.email}`} className="ps-foot-chip"><Ico name="mail" />{p.email}</a>}
+          {hasPlace && (
+            <a href={mapsHref([schoolName, addressLine, cityLine])} target="_blank" rel="noopener noreferrer" className="ps-foot-chip">
+              <Ico name="pin" />
+              {cityLine || addressLine}
+            </a>
+          )}
+          {cfg.hours && <span className="ps-foot-chip"><Ico name="clock" />{cfg.hours}</span>}
+        </div>
+        {social}
+      </div>,
+    );
+  }
+
+  if (cfg.layout === 'LEDGER') {
+    return shell(
+      <div className="max-w-6xl mx-auto px-6 py-8 ps-foot-ledger-in">
+        <div className="ps-foot-ledger-row">
+          <div className="flex items-center gap-2.5">{crest}</div>
+          <div className="ps-foot-inline">
+            {exploreLinks.map((l) => (
+              <span key={l.href}>{linkEl(l)}</span>
+            ))}
+          </div>
+        </div>
+        <div className="ps-foot-ledger-row ps-foot-ledger-meta">
+          {p?.phone && <a href={`tel:${p.phone.replace(/\s+/g, '')}`} className={`ps-foot-line ${linkCls}`}><Ico name="phone" />{p.phone}</a>}
+          {p?.email && <a href={`mailto:${p.email}`} className={`ps-foot-line ${linkCls}`}><Ico name="mail" />{p.email}</a>}
+          {hasPlace && (
+            <a href={mapsHref([schoolName, addressLine, cityLine])} target="_blank" rel="noopener noreferrer" className={`ps-foot-line ${linkCls}`}>
+              <Ico name="pin" />
+              {cityLine || addressLine}
+            </a>
+          )}
+          {cfg.hours && <span className="ps-foot-line"><Ico name="clock" />{cfg.hours}</span>}
+          {social}
+        </div>
+      </div>,
+    );
+  }
+
+  if (cfg.layout === 'POSTCARD') {
+    return shell(
+      <div className="max-w-6xl mx-auto px-6 py-14 ps-foot-postcard">
+        <a
+          href={mapsHref([schoolName, addressLine, cityLine, p?.postalCode])}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="ps-foot-place"
+        >
+          <span className="ps-head ps-foot-place-n">{schoolName}</span>
+          {hasPlace && <span className="ps-foot-place-a">{placeLine}</span>}
+          <span className="ps-foot-place-go">Open in Maps →</span>
+        </a>
+        <div className="ps-foot-postcard-cols">
+          {explore}
+          {contact}
+        </div>
+      </div>,
+    );
+  }
+
+  if (cfg.layout === 'NOTICE') {
+    return shell(
+      <div className="max-w-6xl mx-auto px-6 py-14 ps-foot-notice-in">
+        {brand(true)}
+        {explore}
+        {contact}
+        {admissions}
+      </div>,
+    );
+  }
+
+  // COLUMNS — the shipped arrangement, with the blocks above.
+  return shell(
+    <div className="max-w-6xl mx-auto px-6 py-14 grid md:grid-cols-3 gap-8">
+      {brand(true)}
+      {explore}
+      {contact}
+    </div>,
   );
 }

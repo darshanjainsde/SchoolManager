@@ -83,7 +83,16 @@ type Look = Record<string, unknown>;
 
 interface SiteContent {
   profile: Record<string, unknown> | null;
-  homepage?: { heroImageAssetIds?: string[] | null } | null;
+  // The four `show*` switches are the Homepage tab's, not the Studio's — read
+  // here only so the Studio's own switch cannot claim a band is shown when
+  // that tab has already hidden it.
+  homepage?: {
+    heroImageAssetIds?: string[] | null;
+    showAdmissions?: boolean;
+    showGallery?: boolean;
+    showEvents?: boolean;
+    showContact?: boolean;
+  } | null;
   school?: { features?: string[]; countryCode?: string } | null;
   courses?: unknown[];
 }
@@ -144,22 +153,25 @@ function Stack({ options, value, onPick }: { options: readonly Opt[]; value: str
     </div>
   );
 }
-function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
+function Toggle({ checked, onChange, label, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean }) {
   return (
-    <label className="flex cursor-pointer items-center justify-between gap-3 text-sm text-slate-600">
+    <label className={`flex items-center justify-between gap-3 text-sm ${disabled ? 'cursor-not-allowed text-slate-400' : 'cursor-pointer text-slate-600'}`}>
       <span>{label}</span>
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="h-4 w-4 accent-teal-600" />
+      <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} className="h-4 w-4 accent-teal-600 disabled:opacity-50" />
     </label>
   );
 }
+/** Bands the Homepage tab can also hide (its switches are content, not design). */
+const HOMEPAGE_FLAG: Partial<Record<SectionKey, 'showAdmissions' | 'showGallery' | 'showContact'>> = {
+  admissions: 'showAdmissions',
+  gallery: 'showGallery',
+  contact: 'showContact',
+};
+
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return <div className="mb-1.5 mt-3 text-[11px] font-bold uppercase tracking-wide text-slate-400 first:mt-0">{children}</div>;
 }
 
-function fmtDate(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
-}
 
 /**
  * The collapsible group. Defined at MODULE level (reading open state through a
@@ -475,10 +487,14 @@ export default function StudioTab() {
     if (o.join('|') !== normalizeSectionOrder(undefined, ids).join('|')) blob[SECTION_ORDER_KEY] = o;
     setLook({ sectionVariants: blob });
   };
-  const setVariant = (key: SectionKey, patch: { layout?: string; gesture?: string }) => {
+  const setVariant = (key: SectionKey, patch: { layout?: string; gesture?: string; hidden?: boolean }) => {
     // The preview follows the band being edited, not the group's first band.
     setFocus(key);
-    writeSectionConfig({ v: { ...variants, [key]: { ...(variants[key] ?? {}), ...patch } } });
+    const next = { ...(variants[key] ?? {}), ...patch };
+    // Shown is the absence of the flag, not `hidden: false` — one way to say
+    // it, and a school that never touches the switch keeps an empty entry.
+    if (next.hidden !== true) delete next.hidden;
+    writeSectionConfig({ v: { ...variants, [key]: next } });
   };
   const moveBand = (i: number, by: number) => {
     const next = [...order]; const j = i + by;
@@ -724,8 +740,15 @@ export default function StudioTab() {
 
       {/* ── Per-section variants ── */}
       <Group id="variants" title="Per-section layout" summary="A layout & entrance for each band">
+        <p className="mb-1 text-[11px] text-slate-400">The switch decides whether a band is on the <b>homepage</b>. Its own page (/admissions, /gallery, /records…) is never affected.</p>
         {SECTION_KEYS.map((key) => {
           const def = SECTION_VARIANT_DEFS[key];
+          // The Homepage tab owns three of these bands as CONTENT. When it has
+          // hidden one, the Studio switch must show off and say who holds it —
+          // a switch that reads "shown" over a band nobody can see is the
+          // defect this whole control exists to remove.
+          const contentOff = HOMEPAGE_FLAG[key] ? data?.homepage?.[HOMEPAGE_FLAG[key]!] === false : false;
+          const off = contentOff || variants[key]?.hidden === true;
           return (
             <div
               key={key}
@@ -734,9 +757,22 @@ export default function StudioTab() {
               onPointerDown={() => setFocus(key)}
               onFocusCapture={() => setFocus(key)}
             >
-              <div className="text-sm font-semibold text-slate-700">{def.label}</div>
-              <div className="mt-1.5"><Chips options={def.layouts} value={variants[key]?.layout ?? def.layouts[0].value} onPick={(v) => setVariant(key, { layout: v })} /></div>
-              <div className="mt-1.5"><Chips options={[{ value: 'DEFAULT', label: 'Page default' }, { value: 'RISE', label: 'Rise' }, { value: 'SLIDE', label: 'Slide' }, { value: 'ZOOM', label: 'Zoom' }, { value: 'DRAW', label: 'Wipe' }, { value: 'CURTAIN', label: 'Curtain' }, { value: 'FLIP', label: 'Flip' }, { value: 'FADE', label: 'Fade' }]} value={variants[key]?.gesture ?? 'DEFAULT'} onPick={(v) => setVariant(key, { gesture: v })} /></div>
+              <div className="flex items-center justify-between gap-3">
+                <div className={`text-sm font-semibold ${off ? 'text-slate-400' : 'text-slate-700'}`}>{def.label}</div>
+                <Toggle
+                  checked={!off}
+                  disabled={contentOff}
+                  label=""
+                  onChange={(v) => setVariant(key, { hidden: !v })}
+                />
+              </div>
+              {contentOff ? (
+                <p className="mt-1 text-[11px] text-slate-400">Hidden from the <b>Homepage</b> tab — turn it back on there.</p>
+              ) : off ? (
+                <p className="mt-1 text-[11px] text-slate-400">Not on the homepage. Its own page still works.</p>
+              ) : null}
+              <div className={`mt-1.5${off ? ' pointer-events-none opacity-40' : ''}`}><Chips options={def.layouts} value={variants[key]?.layout ?? def.layouts[0].value} onPick={(v) => setVariant(key, { layout: v })} /></div>
+              <div className={`mt-1.5${off ? ' pointer-events-none opacity-40' : ''}`}><Chips options={[{ value: 'DEFAULT', label: 'Page default' }, { value: 'RISE', label: 'Rise' }, { value: 'SLIDE', label: 'Slide' }, { value: 'ZOOM', label: 'Zoom' }, { value: 'DRAW', label: 'Wipe' }, { value: 'CURTAIN', label: 'Curtain' }, { value: 'FLIP', label: 'Flip' }, { value: 'FADE', label: 'Fade' }]} value={variants[key]?.gesture ?? 'DEFAULT'} onPick={(v) => setVariant(key, { gesture: v })} /></div>
             </div>
           );
         })}
@@ -952,10 +988,20 @@ export default function StudioTab() {
         <div className="mt-2.5 flex flex-col gap-1.5">
           <Toggle checked={footer.social} onChange={(v) => setLook({ footerConfig: { ...footer, social: v } })} label="Show social icons" />
           <Toggle checked={footer.contact} onChange={(v) => setLook({ footerConfig: { ...footer, contact: v } })} label="Show contact details" />
-          <Toggle checked={footer.twoCols} onChange={(v) => setLook({ footerConfig: { ...footer, twoCols: v } })} label="Split links into two columns" />
+          <Toggle checked={footer.twoCols} onChange={(v) => setLook({ footerConfig: { ...footer, twoCols: v } })} label="Always split links into two columns" />
+          <Toggle checked={footer.whatsapp} onChange={(v) => setLook({ footerConfig: { ...footer, whatsapp: v } })} label="Offer the phone number on WhatsApp" />
+          <Toggle checked={footer.backToTop} onChange={(v) => setLook({ footerConfig: { ...footer, backToTop: v } })} label="“Back to top” in the sign-off" />
         </div>
+        <p className="mt-1 text-[11px] text-slate-400">Links split themselves past six, so the switch above is only for splitting a shorter list too.</p>
         <FieldLabel>Tagline</FieldLabel>
         <Input value={footer.tagline ?? ''} maxLength={160} placeholder="Nurturing confident, compassionate lifelong learners." onChange={(e) => setLook({ footerConfig: { ...footer, tagline: e.target.value || null } })} className="h-9 text-sm" />
+        <FieldLabel>Office hours</FieldLabel>
+        <Input value={footer.hours ?? ''} maxLength={80} placeholder="Mon–Sat · 8:30 am – 3:30 pm" onChange={(e) => setLook({ footerConfig: { ...footer, hours: e.target.value || null } })} className="h-9 text-sm" />
+        <p className="mt-1 text-[11px] text-slate-400">Shown with the address. The affiliation number comes from Contact &amp; address.</p>
+        <FieldLabel>Admissions</FieldLabel>
+        <Toggle checked={footer.admissionsBand} onChange={(v) => setLook({ footerConfig: { ...footer, admissionsBand: v } })} label="Band above the footer" />
+        <Input value={footer.admissionsNote ?? ''} maxLength={160} placeholder="Nursery to Class 8 · applications close 31 January" onChange={(e) => setLook({ footerConfig: { ...footer, admissionsNote: e.target.value || null } })} className="mt-1.5 h-9 text-sm" />
+        <p className="mt-1 text-[11px] text-slate-400">The line under the Admissions heading, and in the band. Switch the band off out of season.</p>
       </Group>
 
       </>)}
