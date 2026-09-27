@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { schoolPageMetadata } from '@/lib/school-metadata';
 import { notFound } from 'next/navigation';
 import PublicSite from '@/components/public/PublicSite';
 import { loadSchoolSite } from '@/lib/school-view';
@@ -18,8 +19,17 @@ export const revalidate = 60;
 export function generateStaticParams(): { host: string }[] {
   return [];
 }
+
 // Children's names are not search results (spec D8).
-export const metadata: Metadata = { robots: { index: false, follow: false } };
+/**
+ * The school's own name and mark in the tab — and STILL out of the index.
+ * `metadata` and `generateMetadata` cannot both be exported, so the noindex
+ * that kept children's birthdays off search engines lives in here now.
+ */
+export async function generateMetadata({ params }: { params: Promise<{ host: string }> }): Promise<Metadata> {
+  const { host } = await params;
+  return { ...(await schoolPageMetadata(decodeURIComponent(host), 'Birthdays')), robots: { index: false, follow: false } };
+}
 
 export default async function SchoolBirthdays({ params }: { params: Promise<{ host: string }> }) {
   const { host } = await params;

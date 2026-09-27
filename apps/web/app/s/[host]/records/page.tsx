@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { schoolIcon, schoolIconMetadata } from '@/lib/school-metadata';
 import { notFound } from 'next/navigation';
 import PublicSite from '@/components/public/PublicSite';
 import { loadSchoolSite } from '@/lib/school-view';
@@ -19,7 +20,12 @@ export function generateStaticParams(): { host: string }[] {
 export async function generateMetadata({ params }: { params: Promise<{ host: string }> }): Promise<Metadata> {
   const { host } = await params;
   const data = await loadSchoolSite(host);
-  return { title: `Book of Records · ${data.school.name}`, description: `School sports records at ${data.school.name}: every verified record and the all-time bests.` };
+  return {
+    title: `Book of Records · ${data.school.name}`,
+    description: `School sports records at ${data.school.name}: every verified record and the all-time bests.`,
+    // The school's own mark, like every other page of its site.
+    ...schoolIconMetadata(schoolIcon(data.profile)),
+  };
 }
 
 export default async function SchoolRecords({ params }: { params: Promise<{ host: string }> }) {

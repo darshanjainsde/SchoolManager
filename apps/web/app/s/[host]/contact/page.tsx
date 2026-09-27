@@ -1,3 +1,5 @@
+import type { Metadata } from 'next';
+import { schoolPageMetadata } from '@/lib/school-metadata';
 import PublicSite from '@/components/public/PublicSite';
 import { loadSchoolSite } from '@/lib/school-view';
 
@@ -13,6 +15,12 @@ import { loadSchoolSite } from '@/lib/school-view';
 export const revalidate = 60;
 export function generateStaticParams(): { host: string }[] {
   return [];
+}
+
+/** The school's own name and mark in the tab — not the platform's. */
+export async function generateMetadata({ params }: { params: Promise<{ host: string }> }): Promise<Metadata> {
+  const { host } = await params;
+  return schoolPageMetadata(decodeURIComponent(host), 'Contact');
 }
 
 export default async function SchoolView({ params }: { params: Promise<{ host: string }> }) {

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { schoolIcon, schoolIconMetadata } from '@/lib/school-metadata';
 import { cache } from 'react';
 import { getRequestHost } from '@/lib/request';
 import { fetchPublicSite } from '@/lib/public-api';
@@ -27,8 +28,12 @@ async function loginTheme() {
 }
 
 export async function generateMetadata(): Promise<Metadata> {
-  const theme = await loginTheme();
-  return { title: `Sign in · ${theme.schoolName}` };
+  const host = await getRequestHost();
+  const data = isSchoolHost(host) ? await getSite(host) : null;
+  const theme = resolveLoginTheme(data, host);
+  // The gate is school-branded down to the colours; the tab was the one place
+  // it still said Sckools.
+  return { title: `Sign in · ${theme.schoolName}`, ...schoolIconMetadata(schoolIcon(data?.profile)) };
 }
 
 export default async function TenantLoginPage() {
