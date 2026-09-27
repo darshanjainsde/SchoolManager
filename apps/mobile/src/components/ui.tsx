@@ -89,7 +89,10 @@ export function ListScreen<T>({
       contentContainerStyle={{
         paddingTop: pushed ? 4 : insets.top + 10,
         paddingHorizontal: 14,
-        paddingBottom: 28,
+        // Never less than the system bar: Android 16 forces edge-to-edge, and
+        // a pushed screen (no tab bar) with 3-button navigation has a 48 dp bar
+        // the last row used to sit under.
+        paddingBottom: Math.max(insets.bottom, 28),
         flexGrow: 1,
       }}
     />
@@ -159,7 +162,10 @@ export function Screen({
         paddingTop: pushed ? 4 : insets.top + 10,
         paddingHorizontal: 14,
         gap: tokens.gap,
-        paddingBottom: 28,
+        // Never less than the system bar: Android 16 forces edge-to-edge, and
+        // a pushed screen (no tab bar) with 3-button navigation has a 48 dp bar
+        // the last row used to sit under.
+        paddingBottom: Math.max(insets.bottom, 28),
       }}
     >
       {children}

@@ -1,7 +1,16 @@
 import * as SecureStore from 'expo-secure-store';
 import { clearCache } from './cache-store';
 
-export type Role = 'STUDENT' | 'TEACHER' | 'SCHOOL_ADMIN' | 'STAFF' | 'LIBRARIAN' | 'OWNER';
+/**
+ * Every role the API can put in a school JWT. This union MUST match
+ * `UserRole` in packages/db/prisma/schema.prisma, because `/auth/me` is read
+ * through an unchecked cast and `portalForRole`'s exhaustiveness check can only
+ * see the names listed here. A role missing from this line is not a compile
+ * error — it is a switch that falls off its end at runtime, returns undefined,
+ * and leaves the app on the boot logo on every launch until app data is
+ * cleared. That is exactly what ALUMNUS did before it was added.
+ */
+export type Role = 'STUDENT' | 'TEACHER' | 'SCHOOL_ADMIN' | 'STAFF' | 'LIBRARIAN' | 'OWNER' | 'ALUMNUS';
 
 export interface Session {
   accessToken: string;

@@ -1,3 +1,4 @@
+import { rupees as rupeesFromMinor } from '@/lib/money';
 /**
  * THE LIBRARY COUNTER — response shapes of `/library/*` as the counter reads
  * them (mirrors apps/api/src/modules/library/internal/library-circulation,
@@ -42,8 +43,9 @@ export interface HallToday {
   sections: { id: string; className: string }[];
 }
 
-/** Whole rupees everywhere on the counter. */
-export const rupees = (r: number) => `₹${r.toLocaleString('en-IN')}`;
+/** Whole rupees everywhere on the counter — through the one formatter, so a
+ *  ₹1,25,000 fine groups the Indian way on Hermes too. */
+export const rupees = (r: number) => rupeesFromMinor(Math.round(r * 100));
 
 /** Calendar days from `today` to `dueOn`; negative once late. */
 export function daysLeft(dueOn: string, today: string): number {

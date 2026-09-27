@@ -3,7 +3,7 @@ import { Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { CONCERN_CATEGORY_LABEL, CONCERN_STATUS_LABEL, type ConcernCounts, type ConcernRow } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
-import { Empty, Page, Pill, Screen, SectionTitle } from '@/components/ui';
+import { Empty, ErrorState, Page, Pill, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
@@ -32,7 +32,8 @@ export default function StaffConcerns() {
       setCounts(c);
       setError(null);
     } catch (e) {
-      setRows([]);
+      // Keep whatever was on screen — blanking the rows turned a lost
+      // connection into "Nothing open", which is a false answer.
       setError(e instanceof ApiError ? e.message : 'That did not load.');
     }
   }, []);
@@ -53,7 +54,7 @@ export default function StaffConcerns() {
         </View>
       ) : null}
 
-      {error ? <Text style={{ marginTop: 10, fontSize: 13, color: tokens.color.red }}>{error}</Text> : null}
+      {error && rows !== null ? <Text style={{ marginTop: 10, fontSize: 13, color: tokens.color.red }}>{error}</Text> : null}
 
       <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
         <Toggle label="Open" on={!showAll} onPress={() => setShowAll(false)} />
@@ -61,7 +62,7 @@ export default function StaffConcerns() {
       </View>
 
       <SectionTitle title={showAll ? 'Everything' : 'Open'} />
-      {rows === null ? <LoadingRows label="Loading concerns" rows={3} /> : rows.length === 0 ? (
+      {rows === null && error ? <ErrorState error={error} onRetry={() => void load(showAll)} /> : rows === null ? <LoadingRows label="Loading concerns" rows={3} /> : rows.length === 0 ? (
         <Empty icon="concern">
           {showAll ? 'Nothing has been raised with you yet.' : 'Nothing open. A family of your class can write to you from their app.'}
         </Empty>

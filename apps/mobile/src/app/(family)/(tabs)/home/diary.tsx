@@ -4,7 +4,8 @@ import Svg, { Path } from 'react-native-svg';
 import { useFocusEffect } from 'expo-router';
 import type { DiarySignResult, StudentDiaryEntry, StudentDiaryResult } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
-import { Empty, Page, Pill, RowWash, Screen, SectionTitle, Toast } from '@/components/ui';
+import { useReload } from '@/lib/query';
+import { Empty, ErrorState, Page, Pill, RowWash, Screen, SectionTitle, Toast } from '@/components/ui';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 import { DASH, DUR, pinStyle, strokeDashoffset, useGesture } from '@/theme/motion';
@@ -188,6 +189,7 @@ export default function FamilyDiary() {
   const [error, setError] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [signing, setSigning] = useState<string | null>(null);
+  const [reloadKey, reload] = useReload();
   const today = todayISO();
 
   useFocusEffect(
@@ -205,7 +207,7 @@ export default function FamilyDiary() {
       return () => {
         cancelled = true;
       };
-    }, []),
+    }, [reloadKey]),
   );
 
   const sign = async (entry: StudentDiaryEntry) => {
@@ -256,7 +258,10 @@ export default function FamilyDiary() {
         }
       />
 
-      {error && <Toast kind="error" message={error} />}
+      {/* Nothing loaded and a failure: the page failed, with a way back. A
+          toast alone slid away and left the "Opening…" line up for good. */}
+      {error && data === null && <ErrorState error={error} onRetry={reload} />}
+      {error && data !== null && <Toast kind="error" message={error} />}
 
       {data === null && !error && (
         <Page>

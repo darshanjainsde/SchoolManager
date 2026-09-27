@@ -1,4 +1,5 @@
 import { Text, View } from 'react-native';
+import { rupees } from '@/lib/money';
 import { useQuery } from '@/lib/query';
 import { ApiError } from '@/lib/api';
 import { formatDate } from '@/lib/portal';
@@ -34,7 +35,7 @@ export interface LibraryMe {
 }
 
 /** Fines are whole rupees on this endpoint (not paise) — see LibraryMeService. */
-const fine = (r: number) => `₹${r.toLocaleString('en-IN')}`;
+const fine = (r: number) => rupees(Math.round(r * 100));
 
 function dueWord(h: LibraryMe['holdings'][number]): { text: string; tone: 'red' | 'amber' | 'neutral' } {
   if (h.daysLeft < 0) return { text: `${-h.daysLeft} day${h.daysLeft === -1 ? '' : 's'} late`, tone: 'red' };
