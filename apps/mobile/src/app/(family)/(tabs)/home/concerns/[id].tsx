@@ -3,7 +3,7 @@ import { Text } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import type { ConcernDetail } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
-import { Screen } from '@/components/ui';
+import { ErrorState, Screen } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { ConcernThread } from '@/components/ConcernThread';
 import { useTokens } from '@/theme/theme-context';
@@ -36,8 +36,11 @@ export default function FamilyConcernThread() {
 
   return (
     <Screen onRefresh={() => void load()}>
-      {error ? <Text style={{ fontSize: 13, color: tokens.color.red, marginBottom: 10 }}>{error}</Text> : null}
-      {!concern ? <LoadingRows label="Loading this concern" rows={4} /> : (
+      {/* No thread and a failure: the page failed, offer the way back. A
+          failure once the thread is up is an action that did not go through,
+          said beside the thread rather than in place of it. */}
+      {error && concern ? <Text style={{ fontSize: 13, color: tokens.color.red, marginBottom: 10 }}>{error}</Text> : null}
+      {!concern && error ? <ErrorState error={error} onRetry={() => void load()} /> : !concern ? <LoadingRows label="Loading this concern" rows={4} /> : (
         <ConcernThread
           concern={concern}
           viewer="FAMILY"

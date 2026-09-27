@@ -85,13 +85,29 @@ interface MeResponse {
   staffRole?: string | null;
 }
 
+/** How long a JSON call may hang before it is treated as no signal. */
+export const REQUEST_TIMEOUT_MS = 20_000;
+/** A photo upload on a slow link is allowed longer. */
+export const UPLOAD_TIMEOUT_MS = 90_000;
+
 // MINOR 1: fetch rejects (offline, DNS failure, ...) with a raw TypeError.
 // Normalize every network call through here so callers only ever see ApiError.
-async function safeFetch(url: string, init: RequestInit): Promise<Response> {
+//
+// And it must END. Android's networking has no timeout of its own (OkHttp is
+// configured with 0/0/0 by React Native), so on a captive-portal Wi-Fi where
+// the socket opens and nothing ever answers, a fetch hung forever — the
+// skeleton stayed up, and pull-to-refresh handed back the same in-flight
+// promise (lib/query.ts shares one). Aborting maps to the same status-0
+// ApiError every screen already renders as "No signal", with a retry.
+async function safeFetch(url: string, init: RequestInit, timeoutMs = REQUEST_TIMEOUT_MS): Promise<Response> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), timeoutMs);
   try {
-    return await fetch(url, init);
+    return await fetch(url, { ...init, signal: ctl.signal });
   } catch {
     throw new ApiError(0, 'Could not reach the school server.');
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -109,7 +125,7 @@ async function rawUpload(path: string, s: Session | null, form: FormData) {
     headers['X-Skoolos-Host'] = s.schoolHost;
     headers['Authorization'] = `Bearer ${s.accessToken}`;
   }
-  return safeFetch(`${BASE}${path}`, { method: 'POST', headers, body: form });
+  return safeFetch(`${BASE}${path}`, { method: 'POST', headers, body: form }, UPLOAD_TIMEOUT_MS);
 }
 
 async function rawFetch(path: string, s: Session | null, opts: Opts) {

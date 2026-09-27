@@ -242,7 +242,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   // `role` gates the console itself — see the redirect effect below.
   const { data: me } = useQuery({
     queryKey: ['me', host],
-    queryFn: () => api.get<{ features?: string[]; role?: string; name?: string | null }>('/auth/me'),
+    queryFn: () => api.get<{ features?: string[]; role?: string; staffRole?: string | null; name?: string | null }>('/auth/me'),
     enabled: hydrated && isSchoolHost(host) && hasSession && audience === 'school',
     staleTime: 5 * 60_000,
   });
@@ -290,9 +290,15 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   // being shown a console that will refuse everything they touch.
   useEffect(() => {
     if (me?.role && me.role !== 'SCHOOL_ADMIN') {
-      router.replace(homeForRole(me.role));
+      // BOTH arguments. `homeForRole` needs the staff kind to send an ACCOUNTS
+      // officer to /app/pay; called with the role alone it answered /staff,
+      // whose own layout knows the kind and sent them straight back here —
+      // an accounts officer bounced between the two shells forever and could
+      // reach nothing but their profile. The API had been ready for them all
+      // along; the chrome was the lock.
+      router.replace(homeForRole(me.role, me.staffRole));
     }
-  }, [me?.role, pathname, router]);
+  }, [me?.role, me?.staffRole, pathname, router]);
 
   // Close the mobile drawer whenever navigation happens (Link clicks already
   // do this eagerly; this covers back/forward and any other route change).

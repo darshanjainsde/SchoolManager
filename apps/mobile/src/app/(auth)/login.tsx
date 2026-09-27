@@ -147,7 +147,7 @@ export default function Login() {
       accessibilityRole="tab"
       accessibilityState={{ selected: mode === m }}
       onPress={() => { setMode(m); setError(null); }}
-      style={{ flex: 1, paddingVertical: 8, borderRadius: 9, alignItems: 'center', backgroundColor: mode === m ? tokens.color.surface : 'transparent' }}
+      style={{ flex: 1, minHeight: 44, justifyContent: 'center', paddingVertical: 8, borderRadius: 9, alignItems: 'center', backgroundColor: mode === m ? tokens.color.surface : 'transparent' }}
     >
       <Text style={{ fontSize: 13, fontWeight: '700', color: mode === m ? tokens.color.ink : sub }}>{label}</Text>
     </Pressable>

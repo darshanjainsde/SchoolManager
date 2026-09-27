@@ -1,4 +1,4 @@
-import { portalForRole, resolveStartRoute } from '../roles';
+import { portalForRole, portalForSession, resolveStartRoute } from '../roles';
 import type { Session } from '../session';
 
 it.each([
@@ -26,8 +26,32 @@ it('rejects SCHOOL_ADMIN (web-only)', () => {
 // LIBRARIAN is a real tenant role with a real login, and the app has no
 // counter to send her to. Before this case existed the switch fell through and
 // returned undefined, which the bootstrap passed to the router as a route.
-it('rejects LIBRARIAN (the counter is a web screen)', () => {
-  expect(() => portalForRole('LIBRARIAN')).toThrow(/web console/i);
+it('rejects a legacy LIBRARIAN login as unmigrated, not as "the counter is on the web"', () => {
+  expect(() => portalForRole('LIBRARIAN')).toThrow(/ask the office/i);
+});
+
+// An alumnus can sign in — the API applies no role filter to the password
+// door — and the app had no case for them. The switch returned undefined,
+// nothing threw, so the boot guard never cleared the session, and the app sat
+// on the logo forever on every launch. This must THROW, because throwing is
+// what makes the bootstrap clear the persisted session.
+it('rejects ALUMNUS by throwing, so the bad session is cleared rather than kept', () => {
+  expect(() => portalForRole('ALUMNUS')).toThrow(/website/i);
+});
+
+describe('portalForSession', () => {
+  const staff = (staffRole: string, features: string[]): Session => ({
+    accessToken: 'at', refreshToken: 'rt', role: 'STAFF', staffRole, features,
+    schoolHost: 'raffles.sckools.com', displayName: 'id',
+  });
+  // An accounts officer opens on Pay when the school runs pay here, and on
+  // Leave — not on a hidden tab — when it does not. Before, the job needed
+  // SALARY to exist at all and they landed on the general Today.
+  it('lands an accounts officer on the desk they are actually allowed', () => {
+    expect(portalForSession(staff('ACCOUNTS', ['SALARY']))).toBe('/(worker)/(tabs)/paydesk');
+    expect(portalForSession(staff('ACCOUNTS', []))).toBe('/(worker)/(tabs)/leavedesk');
+    expect(portalForSession(staff('DRIVER', []))).toBe('/(worker)/(tabs)/today');
+  });
 });
 
 describe('resolveStartRoute', () => {

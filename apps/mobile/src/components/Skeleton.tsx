@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { AccessibilityInfo, Animated, View } from 'react-native';
+import { useReduceMotion } from '@/theme/motion';
+import { Animated, View } from 'react-native';
 import { useTokens } from '@/theme/theme-context';
 
 /**
@@ -30,22 +31,23 @@ export function Skeleton({
   const tokens = useTokens();
   const pulse = useRef(new Animated.Value(0.5)).current;
 
+  // The shared probe (theme/motion.ts): a list of twelve skeleton rows used
+  // to issue twelve bridge round trips on every focus.
+  const reduced = useReduceMotion();
   useEffect(() => {
-    let cancelled = false;
-    void AccessibilityInfo.isReduceMotionEnabled().then((reduce) => {
-      if (cancelled || reduce) return;
-      const loop = Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulse, { toValue: 1, duration: 800, delay: index * 120, useNativeDriver: true }),
-          Animated.timing(pulse, { toValue: 0.5, duration: 800, useNativeDriver: true }),
-        ]),
-      );
-      loop.start();
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [pulse, index]);
+    if (reduced.current) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 800, delay: index * 120, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.5, duration: 800, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    // Stop it. The loop used to start inside a `.then`, out of the cleanup's
+    // reach, so every skeleton that ever showed left a loop re-arming from JS
+    // every 1.6 s for the rest of the session — dozens after a few screens.
+    return () => loop.stop();
+  }, [pulse, index, reduced]);
 
   return (
     <Animated.View

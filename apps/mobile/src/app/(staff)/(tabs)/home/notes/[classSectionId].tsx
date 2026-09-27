@@ -5,7 +5,7 @@ import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import type { ClassLog, ClassLogNote, ClassLogTodo } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { shiftISO, todayISO } from '@/lib/attendance';
-import { Card, Screen, SectionTitle } from '@/components/ui';
+import { Card, ErrorState, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { Icon } from '@/components/icons';
 import { useTokens } from '@/theme/theme-context';
@@ -191,7 +191,8 @@ export default function ClassNotesHistory() {
     <Screen>
       <SectionTitle title={heading} />
 
-      {error && (
+      {error && log === null && <ErrorState testID="class-log-error" error={error} onRetry={() => void load()} />}
+      {error && log !== null && (
         <Card>
           <Text testID="class-log-error" style={{ color: tokens.color.red }}>
             {error}

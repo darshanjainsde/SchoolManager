@@ -1,4 +1,4 @@
-import { jobFor, tabsFor, homeTabFor, ALL_TABS } from '../worker-nav';
+import { jobFor, tabsFor, homeTabFor, tabNamesFor, ALL_TABS } from '../worker-nav';
 
 /**
  * One portal, three desks: which tabs a session gets is decided by the staff
@@ -8,20 +8,33 @@ import { jobFor, tabsFor, homeTabFor, ALL_TABS } from '../worker-nav';
 describe('worker desks', () => {
   it('general staff get Today and Profile', () => {
     expect(jobFor({ staffRole: 'DRIVER', features: ['LIBRARY', 'SPORTS'] })).toBe('GENERAL');
-    expect(tabsFor('GENERAL').map((t) => t.name)).toEqual(['today', 'profile']);
+    expect(tabsFor({ staffRole: 'DRIVER', features: ['LIBRARY', 'SPORTS'] }).map((t) => t.name)).toEqual(['today', 'profile']);
   });
   it('a sports teacher opens on the desk with meets, records and houses', () => {
     expect(jobFor({ staffRole: 'SPORTS', features: ['SPORTS'] })).toBe('SPORTS');
-    expect(tabsFor('SPORTS').map((t) => t.name)).toEqual(['desk', 'meets', 'records', 'houses', 'profile']);
-    expect(homeTabFor('SPORTS')).toBe('desk');
+    const s = { staffRole: 'SPORTS', features: ['SPORTS'] };
+    expect(tabsFor(s).map((t) => t.name)).toEqual(['desk', 'meets', 'records', 'houses', 'profile']);
+    expect(homeTabFor(s)).toBe('desk');
   });
   it('a librarian opens on the counter', () => {
     expect(jobFor({ staffRole: 'LIBRARIAN', features: ['LIBRARY'] })).toBe('LIBRARIAN');
-    expect(tabsFor('LIBRARIAN').map((t) => t.name)).toEqual(['counter', 'hall', 'books', 'fines', 'profile']);
+    expect(tabsFor({ staffRole: 'LIBRARIAN', features: ['LIBRARY'] }).map((t) => t.name)).toEqual(['counter', 'hall', 'books', 'fines', 'profile']);
   });
   it('a desk job at a school without that module is general staff', () => {
     expect(jobFor({ staffRole: 'LIBRARIAN', features: [] })).toBe('GENERAL');
     expect(jobFor({ staffRole: 'SPORTS', features: ['LIBRARY'] })).toBe('GENERAL');
+  });
+  it('an accounts officer gets the desk on the JOB; the Pay tab needs the SALARY override', () => {
+    const withPay = { staffRole: 'ACCOUNTS', features: ['MANAGEMENT', 'SALARY'] };
+    expect(jobFor(withPay)).toBe('ACCOUNTS');
+    expect(tabNamesFor(withPay)).toEqual(['paydesk', 'leavedesk', 'profile']);
+    expect(homeTabFor(withPay)).toBe('paydesk');
+    // No SALARY: still the accounts desk, still the leave decisions — no Pay
+    // tab, and the portal opens on Leave rather than on a tab that is hidden.
+    const noPay = { staffRole: 'ACCOUNTS', features: ['MANAGEMENT'] };
+    expect(jobFor(noPay)).toBe('ACCOUNTS');
+    expect(tabNamesFor(noPay)).toEqual(['leavedesk', 'profile']);
+    expect(homeTabFor(noPay)).toBe('leavedesk');
   });
   it('an older session (no staffRole) and no session are general', () => {
     expect(jobFor({ features: ['SPORTS'] })).toBe('GENERAL');
@@ -29,12 +42,19 @@ describe('worker desks', () => {
   });
   it('every tab a job draws is a declared tab, and every label fits a five-slot bar', () => {
     const names = new Set(ALL_TABS.map((t) => t.name));
-    for (const job of ['GENERAL', 'SPORTS', 'LIBRARIAN'] as const) {
-      for (const t of tabsFor(job)) {
+    const sessions = [
+      { staffRole: 'DRIVER', features: [] },
+      { staffRole: 'SPORTS', features: ['SPORTS'] },
+      { staffRole: 'LIBRARIAN', features: ['LIBRARY'] },
+      { staffRole: 'ACCOUNTS', features: ['SALARY'] },
+      { staffRole: 'ACCOUNTS', features: [] },
+    ];
+    for (const s of sessions) {
+      for (const t of tabsFor(s)) {
         expect(names.has(t.name)).toBe(true);
         expect(t.title.length).toBeLessThanOrEqual(8);
       }
-      expect(tabsFor(job).length).toBeLessThanOrEqual(5);
+      expect(tabsFor(s).length).toBeLessThanOrEqual(5);
     }
   });
 });
