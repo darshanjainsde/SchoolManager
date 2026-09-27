@@ -59,14 +59,21 @@ describe('the roster list ships a chosen set of fields', () => {
   });
 });
 
-describe('the public site is the one response a shared cache can serve', () => {
+describe('the public site is tenant-keyed by a header, so it is never shared-cached', () => {
   const controller = src('modules/public/public-site.controller.ts');
 
-  it('opts out of the API-wide no-store, like its two siblings', () => {
-    // Every other response in this API is authenticated and per-person, so
-    // no-store is the right blanket default (see configure-app.ts). This one
-    // is byte-identical for every visitor to a school and had never opted out.
+  it('sends a PRIVATE Cache-Control, not the public/s-maxage this test once demanded', () => {
+    // This test used to REQUIRE `public, s-maxage=60` here, on the premise
+    // that the response is "byte-identical for every visitor to a school".
+    // It is — but the school is chosen by `X-Skoolos-Host`, and the URL is
+    // the same for every school, so the CDN stored one school's site and
+    // served it to every other school on that edge (2026-09-27, staging: a
+    // non-existent host got Raffles' whole website as a HIT). The rule now
+    // lives in modules/public/public-cache-headers.spec.ts; this keeps the
+    // opposite from ever being pinned again.
     const site = controller.slice(controller.indexOf("@Get('site')"), controller.indexOf("@Get('records')"));
-    expect(site).toMatch(/Cache-Control.*public, max-age=60, s-maxage=60, stale-while-revalidate/);
+    expect(site).toMatch(/Cache-Control/);
+    expect(controller).toMatch(/TENANT_PUBLIC_CACHE = 'private, no-cache'/);
+    expect(site).not.toMatch(/s-maxage/);
   });
 });
