@@ -214,12 +214,30 @@ export class WhatsAppChannel implements NotificationChannel {
         where: { schoolId, userId: user.id },
         select: { guardianPhone: true, firstName: true, lastName: true, classSection: { select: { name: true, grade: { select: { name: true } } } } },
       }),
-      this.prisma.teacher.findFirst({ where: { schoolId, userId: user.id }, select: { phone: true } }),
+      this.prisma.teacher.findFirst({ where: { schoolId, userId: user.id }, select: { phone: true, whatsappOptIn: true } }),
       this.prisma.staff.findFirst({ where: { schoolId, userId: user.id }, select: { phone: true } }),
     ]);
     const child = student
       ? { name: `${student.firstName} ${student.lastName}`.trim(), className: student.classSection ? `${student.classSection.grade.name}-${student.classSection.name}` : null }
       : null;
+    // A TEACHER WHO SAID NO IS NOT MESSAGED.
+    //
+    // The record carries `whatsappOptIn` and the onboarding sheet asks for it
+    // in as many words — "WhatsApp messages OK (YES/NO)" — and nothing read it
+    // on the way out, so a teacher who declined was messaged anyway. That is
+    // the wrong side of WhatsApp's own Business Messaging Policy, which allows
+    // contact only where "you have received opt-in permission from the
+    // recipient confirming that they wish to receive subsequent messages".
+    //
+    // It is also the fastest way to lose the templates: quality is driven by
+    // people blocking and reporting, and a template that reaches the lowest
+    // rating is paused for three hours, then six, then DISABLED for good.
+    //
+    // The gate is on the PERSON, not on the phone column. A teacher who
+    // declined but happens to have a verified login number would otherwise
+    // still be reachable through the first branch below.
+    if (teacher && !teacher.whatsappOptIn) return null;
+
     // A number the person proved is theirs wins over anything the office typed.
     const phone = (user.phone && user.phoneVerifiedAt ? toE164(user.phone) : null) ?? toE164(student?.guardianPhone) ?? toE164(teacher?.phone) ?? toE164(staff?.phone);
     return phone ? { phone, child } : null;
