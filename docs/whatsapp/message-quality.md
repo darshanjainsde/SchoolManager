@@ -176,6 +176,45 @@ sits in the list looking like ours.
 
 ---
 
+## 3b. What the rewrite is actually worth
+
+Meta charges **per message**, by category. India, as at July 2026:
+
+| category | per message | +18% GST |
+|---|---|---|
+| Marketing | **₹0.8631** | ₹1.0185 |
+| Utility | **₹0.1150** | ₹0.1357 |
+
+**Utility is 7.5× cheaper than Marketing for the identical message.**
+
+The two catch-alls are the ones a school sends to *everybody* — a holiday, a
+PTM, a timing change. That is where the whole bill lives. For one 800-family
+school sending two general notices a week:
+
+| | as Marketing (today) | as narrow Utility |
+|---|---|---|
+| one notice to 800 families | ₹815 | ₹109 |
+| eight a month | ₹6,518 | ₹868 |
+| a year | **₹78,200** | **₹10,400** |
+
+Against a subscription of ₹18,800–30,000 a year, WhatsApp at marketing rates
+costs **more than twice what the school pays us**. At utility rates it is a
+line item. This is the difference between WhatsApp being a feature we can
+include and one we have to charge extra for.
+
+Two caveats, both honest:
+
+- It assumes every general notice goes through a catch-all today. It does —
+  that is what the two catch-alls are for.
+- **TIER_250 caps this anyway right now**: 250 unique recipients per 24 hours,
+  so an 800-family school cannot be reached in a day regardless. The tier lifts
+  with quality and volume, which is the other half of why quality matters.
+
+Utility templates delivered inside an open customer service window are free
+today, but **from 1 October 2026 Meta starts charging for those too**, with
+1,000 free service messages per number per month. So the gap above is the
+number to plan against, not the optimistic one.
+
 ## 4. Two rules for sending, not writing
 
 Quality is mostly a question of who gets messaged and how often.
