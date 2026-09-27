@@ -1220,6 +1220,77 @@
     font-weight: 700; transition: opacity .2s; }
   .ps-foot-social a:hover { opacity: 1; }
 
+  /* ── Footer, shared by every layout ─────────────────────────────────────
+     A contact line is an icon and a tappable value, not an emoji and a string
+     of text nobody can press (the 2026-09-27 report). The icon is flex:none so
+     a wrapping address never squeezes it into an oval. */
+  .ps-foot-line { display: flex; align-items: flex-start; gap: .5rem; }
+  .ps-foot-ico { flex: none; margin-top: .15rem; opacity: .65; }
+  .ps-foot-line a, .ps-foot-line span { min-width: 0; }
+
+  /* The sign-off: three parts, so the page ends on something composed rather
+     than one grey sentence. Centres and stacks on a phone. */
+  .ps-foot-sign { display: flex; flex-wrap: wrap; align-items: center;
+    justify-content: space-between; gap: .35rem 1.25rem;
+    max-width: 72rem; margin-inline: auto; padding-inline: 1.5rem; }
+  @media (max-width: 640px) { .ps-foot-sign { justify-content: center; text-align: center; } }
+
+  .ps-foot-cta { display: inline-flex; align-items: center; justify-content: center;
+    min-height: 2.5rem; padding: 0 1rem; border-radius: .7rem; font-size: .82rem;
+    font-weight: 700; background: var(--ps1); color: #fff; white-space: nowrap;
+    transition: filter .2s, transform .2s; }
+  .ps-foot-cta:hover { filter: brightness(1.08); transform: translateY(calc(-1px * var(--motion))); }
+  .ps-footc-brand .ps-foot-cta { background: #fff; color: var(--ps1); }
+  .ps-footc-dark .ps-foot-cta { background: var(--ps2); color: var(--ink); }
+
+  /* The admissions band (pitch F5) — sits above any layout. */
+  .ps-foot-band { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1.25rem;
+    max-width: 72rem; margin: 1.5rem auto 0; padding: 1rem 1.15rem;
+    border-radius: .9rem; border: 1px solid color-mix(in srgb, var(--ps1) 30%, transparent);
+    background: color-mix(in srgb, var(--ps1) 9%, transparent); }
+  .ps-foot-band > div { flex: 1 1 16rem; min-width: 0; }
+  .ps-foot-band .ps-foot-cta { margin-left: auto; }
+  .ps-foot-band-t { font-weight: 700; font-size: 1rem; }
+  .ps-foot-band-s { font-size: .8rem; opacity: .8; margin-top: .15rem; }
+  .ps-footc-dark .ps-foot-band, .ps-footc-brand .ps-foot-band {
+    border-color: rgba(255,255,255,.28); background: rgba(255,255,255,.08); }
+
+  /* ── NOTICE: four short columns instead of one long one ── */
+  .ps-foot-notice-in { display: grid; gap: 2rem; grid-template-columns: 1fr; }
+  @media (min-width: 720px) { .ps-foot-notice-in { grid-template-columns: 1fr 1fr; } }
+  @media (min-width: 1000px) { .ps-foot-notice-in { grid-template-columns: 1.25fr 1fr 1fr 1fr; } }
+
+  /* ── TOWER: the name is the mark ── */
+  .ps-foot-tower-in { display: grid; gap: 1.15rem; }
+  .ps-foot-bigname { font-size: clamp(1.7rem, 5vw, 2.9rem); font-weight: 600; line-height: 1.05;
+    letter-spacing: -.02em; text-wrap: balance; }
+  .ps-foot-inline { display: flex; flex-wrap: wrap; gap: .4rem 1.15rem; font-size: .85rem; }
+  .ps-foot-chips { display: flex; flex-wrap: wrap; gap: .5rem; }
+  .ps-foot-chip { display: inline-flex; align-items: center; gap: .4rem; min-height: 2.25rem;
+    padding: 0 .75rem; border-radius: .6rem; font-size: .78rem;
+    border: 1px solid color-mix(in srgb, var(--ink) 18%, transparent); }
+  .ps-footc-dark .ps-foot-chip, .ps-footc-brand .ps-foot-chip { border-color: rgba(255,255,255,.3); }
+
+  /* ── LEDGER: the smallest footer that still has everything ── */
+  .ps-foot-ledger-in { display: grid; gap: .85rem; }
+  .ps-foot-ledger-row { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1.25rem; }
+  .ps-foot-ledger-meta { font-size: .8rem; }
+  .ps-foot-ledger-meta .ps-foot-social { margin-top: 0; }
+
+  /* ── POSTCARD: where are you, and when can I come ── */
+  .ps-foot-postcard { display: grid; gap: 1.75rem; grid-template-columns: 1fr; }
+  @media (min-width: 860px) { .ps-foot-postcard { grid-template-columns: 1fr 1.4fr; align-items: start; } }
+  .ps-foot-postcard-cols { display: grid; gap: 1.75rem; grid-template-columns: 1fr; }
+  @media (min-width: 560px) { .ps-foot-postcard-cols { grid-template-columns: 1fr 1fr; } }
+  .ps-foot-place { display: flex; flex-direction: column; justify-content: flex-end; gap: .3rem;
+    min-height: 9.5rem; padding: 1rem; border-radius: .9rem; color: #fff;
+    background: linear-gradient(160deg, var(--ps1), color-mix(in srgb, var(--ps1) 45%, var(--ps2)));
+    transition: filter .2s; }
+  .ps-foot-place:hover { filter: brightness(1.06); }
+  .ps-foot-place-n { color: #fff; font-size: 1rem; font-weight: 600; }
+  .ps-foot-place-a { font-size: .78rem; opacity: .9; }
+  .ps-foot-place-go { font-size: .75rem; font-weight: 700; opacity: .95; margin-top: .25rem; }
+
   /* ── Hero background video ── */
   .ps-hero-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 

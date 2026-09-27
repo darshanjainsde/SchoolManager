@@ -11,6 +11,9 @@ import {
   sectionGestureClass,
   normalizeSectionVariants,
   normalizeFooterConfig,
+  sectionHidden,
+  footerColorFor,
+  FOOTER_LAYOUTS,
   footerClasses,
   FESTIVALS,
   normalizeFestiveTheme,
@@ -80,11 +83,69 @@ describe('defaults emit no class', () => {
 
   it('footer: null config is COLUMNS on paper with no classes', () => {
     const cfg = normalizeFooterConfig(null);
-    expect(cfg).toEqual({ layout: 'COLUMNS', color: 'PAPER', social: false, contact: true, tagline: null, twoCols: false });
+    expect(cfg).toEqual({
+      layout: 'COLUMNS',
+      color: 'PAPER',
+      social: false,
+      contact: true,
+      tagline: null,
+      twoCols: false,
+      hours: null,
+      admissionsNote: null,
+      admissionsBand: false,
+      // The one default that is ON: a long school homepage with no way back
+      // to the top is the small rudeness nobody reports.
+      backToTop: true,
+      whatsapp: false,
+    });
     expect(footerClasses(cfg)).toBe('');
     expect(footerClasses(normalizeFooterConfig({ layout: 'CENTER', color: 'DARK' }))).toBe(
       'ps-foot-center ps-footc-dark',
     );
+  });
+
+  it('footer: every new layout names itself, and only COLUMNS stays classless', () => {
+    for (const l of FOOTER_LAYOUTS) {
+      const cls = footerClasses(normalizeFooterConfig({ layout: l.value }));
+      expect(cls).toBe(l.value === 'COLUMNS' ? '' : `ps-foot-${l.value.toLowerCase()}`);
+    }
+    // A layout nobody has heard of falls back to the shipped one rather than
+    // rendering an unstyled footer.
+    expect(normalizeFooterConfig({ layout: 'MOONBASE' }).layout).toBe('COLUMNS');
+  });
+
+  it('footer: FESTIVE takes the festival’s ink only while a full look is on', () => {
+    const cfg = normalizeFooterConfig({ color: 'FESTIVE' });
+    expect(footerColorFor(cfg, null)).toBe('PAPER');
+    expect(footerColorFor(cfg, normalizeFestiveTheme({ festival: 'DIWALI', treatment: 'LAYER' }))).toBe('PAPER');
+    expect(footerColorFor(cfg, normalizeFestiveTheme({ festival: 'DIWALI', treatment: 'NIGHT' }))).toBe('DARK');
+    // …and it paints with the dark band's classes, so the grid texture cannot
+    // run under 13px links (the 2026-09-27 report).
+    expect(footerClasses(cfg, normalizeFestiveTheme({ festival: 'DIWALI', treatment: 'NIGHT' }))).toBe('ps-footc-dark');
+    expect(footerClasses(cfg, null)).toBe('');
+    // Every other colour ignores the festival entirely.
+    expect(footerColorFor(normalizeFooterConfig({ color: 'BRAND' }), normalizeFestiveTheme({ festival: 'DIWALI', treatment: 'NIGHT' }))).toBe('BRAND');
+  });
+
+  it('footer: the typed lines are trimmed, capped and never empty strings', () => {
+    const cfg = normalizeFooterConfig({ hours: '  Mon–Sat · 8:30 am – 3:30 pm  ', admissionsNote: '   ', tagline: 'x'.repeat(400) });
+    expect(cfg.hours).toBe('Mon–Sat · 8:30 am – 3:30 pm');
+    expect(cfg.admissionsNote).toBeNull();
+    expect(cfg.tagline).toHaveLength(160);
+  });
+
+  it('a band can be switched off the homepage, and only the nine real bands can be', () => {
+    const v = normalizeSectionVariants({ hof: { hidden: true }, records: { layout: 'BOARD', hidden: false }, gallery: {} });
+    // Shown is the ABSENCE of the flag — `hidden: false` is never stored.
+    expect(v).toEqual({ hof: { hidden: true }, records: { layout: 'BOARD' } });
+    expect(sectionHidden(v, 'hof')).toBe(true);
+    expect(sectionHidden(v, 'records')).toBe(false);
+    expect(sectionHidden(v, 'gallery')).toBe(false);
+    // The band order also carries custom sections and `events`; neither is
+    // hideable this way, and asking must not throw.
+    expect(sectionHidden(v, 'x:abc')).toBe(false);
+    expect(sectionHidden(v, 'events')).toBe(false);
+    expect(sectionHidden(null, 'hof')).toBe(false);
   });
 
   it('festive: null stays null; LAYER names itself and never claims a takeover', () => {

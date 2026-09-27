@@ -33,6 +33,7 @@ import {
   normalizeFestiveTheme,
   normalizeSectionVariants,
   sectionGestureClass,
+  sectionHidden,
   sectionLayoutClass,
   sectionLayoutOf,
   sectionOrderOf,
@@ -121,7 +122,8 @@ export default function PublicSite({ data, view = 'home', page, birthdays = null
   // The Book of Records: the school's switch, with consent, on a plan with the Sports wing.
   const hasRecords = !!data.records?.enabled;
   const recordsLayout = sectionLayoutOf(variants, 'records') as RecordsHomeLayout;
-  const showRecordsBand = view === 'home' && hasRecords && !!records && records.home.length > 0;
+  const showRecordsBand =
+    view === 'home' && hasRecords && !!records && records.home.length > 0 && !sectionHidden(variants, 'records');
   const hasBlog = data.school.features.includes('BLOG');
   const hasAcademics = data.courses.length > 0;
   const hasAdmissions = admissionsHasContent(data.admissions, data.courses);
@@ -528,9 +530,15 @@ export default function PublicSite({ data, view = 'home', page, birthdays = null
           order — plus their custom sections — decides the sequence). Always
           direct children of the root: Deck, Panels/edges and the scroll-driven
           feels (side-scroll included) all rely on that. ── */}
-      {bandOrder.map((k) => (
-        <Fragment key={k}>{homeBands[k]}</Fragment>
-      ))}
+      {bandOrder
+        // A band the school switched off in Studio → Per-section layout. One
+        // gate for all nine: every band is still DEFINED above with its own
+        // visibility condition, so hiding is a filter over the order rather
+        // than a second condition buried in each band.
+        .filter((k) => !sectionHidden(variants, k))
+        .map((k) => (
+          <Fragment key={k}>{homeBands[k]}</Fragment>
+        ))}
         </>
       )}
 
