@@ -5182,6 +5182,9 @@ model ClassTeacherAssignment {
   changedBy      User?        @relation("ClassTeacherChangedBy", fields: [changedById], references: [id], onDelete: SetNull)
 
   @@index([schoolId, classSectionId, fromAt])
+  /// On its own as well: the composite above starts with schoolId, so a
+  /// ClassSection delete still had to scan this table (fk-indexes gate).
+  @@index([classSectionId])
   @@index([teacherId])
   @@index([changedById])
 }
