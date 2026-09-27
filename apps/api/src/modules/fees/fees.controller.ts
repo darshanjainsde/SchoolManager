@@ -169,6 +169,12 @@ export class FeesController {
 
   // ── The verify desk ───────────────────────────────────────────────────────
 
+  /** The Fees home's "Latest payments" — any status, newest first. */
+  @Get('payments/recent') recentPayments(@Query('limit') limit?: string) {
+    const n = Number(limit);
+    return this.query.recentPayments(this.sid(), Number.isFinite(n) && n > 0 ? n : 8);
+  }
+
   @Get('payments') payments_(
     @Query('status') status?: 'SUBMITTED' | 'VERIFIED' | 'REJECTED' | 'REVERSED',
   ) {

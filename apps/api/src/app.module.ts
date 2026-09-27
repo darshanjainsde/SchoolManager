@@ -14,6 +14,7 @@ import { RedisModule } from './common/redis/redis.module';
 import { StorageModule } from './common/storage/storage.module';
 import { MailModule } from './common/mail/mail.module';
 import { NotificationModule } from './common/notifications/notification.module';
+import { OtpModule } from './common/otp/otp.module';
 import { AuditInterceptor } from './common/audit/audit.interceptor';
 import { AuthModule } from './modules/auth';
 import { TenancyModule } from './modules/tenancy';
@@ -21,18 +22,22 @@ import { FeaturesModule } from './modules/features';
 import { OwnerModule } from './modules/owner';
 import { CmsModule } from './modules/cms';
 import { ManagementModule } from './modules/management';
+import { ConcernsModule } from './modules/concerns';
 import { CommunityModule } from './modules/community';
 import { HiringModule } from './modules/hiring';
 import { PublicModule } from './modules/public';
 import { PortalModule } from './modules/portal';
 import { LibraryModule } from './modules/library';
 import { SportsModule } from './modules/sports';
+import { PayrollModule } from './modules/payroll';
 import { DirectoryModule } from './modules/directory/directory.module';
 import { AlumniModule } from './modules/alumni';
 import { MarketingModule } from './modules/marketing';
 import { AdminCredentialsModule } from './modules/admin-credentials';
 import { BlogModule } from './modules/blog';
 import { FeesModule } from './modules/fees';
+import { WhatsAppModule } from './modules/whatsapp';
+import { MailWebhooksModule } from './modules/mail-webhooks/mail-webhooks.module';
 import { PressModule } from './modules/press';
 import { RedisThrottlerModule } from './common/throttler/redis-throttler.module';
 import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storage';
@@ -76,6 +81,7 @@ import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storag
     StorageModule,
     MailModule,
     NotificationModule,
+    OtpModule,
     EventBusModule,
     HealthModule,
 
@@ -86,12 +92,16 @@ import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storag
     AdminCredentialsModule,
     CmsModule,
     ManagementModule,
+    ConcernsModule,
     CommunityModule,
     HiringModule,
     PublicModule,
     PortalModule,
     LibraryModule,
     SportsModule,
+    PayrollModule,
+    WhatsAppModule,
+    MailWebhooksModule,
     DirectoryModule,
     AlumniModule,
     MarketingModule,

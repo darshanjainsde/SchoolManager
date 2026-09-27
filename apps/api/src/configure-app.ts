@@ -64,6 +64,25 @@ export function configureApp(app: INestApplication, env: AppEnv): void {
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Forwarded-Host', 'X-Skoolos-Host', 'X-Skoolos-Client'],
+    // EVERY AUTHENTICATED CALL WAS COSTING TWO ROUND TRIPS.
+    //
+    // The console is on the school's host and the API is on another, and every
+    // request carries Authorization and X-Skoolos-Host, which makes it a
+    // non-simple request: the browser must ask permission with an OPTIONS
+    // preflight before it may send the real one. Without a max-age the browser
+    // keeps that permission for about five seconds, so anything a person does
+    // after a short pause — which is every click a person makes — pays for the
+    // question again.
+    //
+    // Measured against the staging API: the preflight costs 135 ms and the
+    // request it precedes costs 138 ms. So the answer to "may I?" was as
+    // expensive as the call itself, on every screen, all day.
+    //
+    // Two hours is the ceiling Chromium honours; Firefox caps at 24. The cost
+    // of the cache is that a change to the methods or headers above takes up
+    // to that long to reach a browser that has already asked — acceptable,
+    // because those two lines change roughly never.
+    maxAge: 7200,
   });
 
   // Swagger UI is opt-in via env so a misconfigured controller can't take down

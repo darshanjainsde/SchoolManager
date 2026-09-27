@@ -152,7 +152,8 @@ export function ClassNotesPanel({ classSectionId, date, subjectId, subjectName }
               onPress={submitNote}
               disabled={addingNote}
               style={{ backgroundColor: tokens.color.indigo, borderRadius: 11, paddingHorizontal: 14, justifyContent: 'center', opacity: addingNote ? 0.6 : 1 }}
-            >
+              accessibilityRole="button"
+              >
               <Text style={{ color: tokens.color.onBrand, fontWeight: '700', fontSize: 13 }}>Add</Text>
             </Pressable>
           </View>
@@ -179,7 +180,8 @@ export function ClassNotesPanel({ classSectionId, date, subjectId, subjectName }
               testID={`todo-toggle-${t.id}`}
               onPress={() => toggleTodo(t.id, !t.done)}
               style={{ flexDirection: 'row', alignItems: 'center', gap: 9, paddingVertical: 7 }}
-            >
+              accessibilityRole="button"
+              >
               <View
                 testID={`todo-box-${t.id}`}
                 style={{
@@ -221,7 +223,8 @@ export function ClassNotesPanel({ classSectionId, date, subjectId, subjectName }
               onPress={submitTodo}
               disabled={addingTodo}
               style={{ backgroundColor: tokens.color.indigo, borderRadius: 11, paddingHorizontal: 14, justifyContent: 'center', opacity: addingTodo ? 0.6 : 1 }}
-            >
+              accessibilityRole="button"
+              >
               <Text style={{ color: tokens.color.onBrand, fontWeight: '700', fontSize: 13 }}>Add</Text>
             </Pressable>
           </View>

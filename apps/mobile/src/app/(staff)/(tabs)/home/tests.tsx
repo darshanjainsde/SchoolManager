@@ -189,7 +189,8 @@ export default function Tests() {
         borderBottomWidth: 1,
         borderBottomColor: tokens.color.line,
       }}
-    >
+      accessibilityRole="button"
+      >
       <Text style={{ fontFamily: font.serif, fontWeight: '700', fontSize: 14, color: tokens.color.ink }}>{exam.title}</Text>
       <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>
         {subjectLabel(exam.subjectId)} · {new Date(exam.scheduledAt).toLocaleString()} · out of{' '}
@@ -237,7 +238,8 @@ export default function Tests() {
                   testID={`class-${c.classSectionId}`}
                   onPress={() => selectClass(c.classSectionId)}
                   style={chipStyle(tokens, on)}
-                >
+                  accessibilityRole="button"
+                  >
                   <Text style={{ fontSize: 12.5, fontWeight: '700', color: on ? tokens.color.indigo : tokens.color.sub }}>
                     {on ? `✓ ${c.name}` : c.name}
                   </Text>
@@ -264,7 +266,9 @@ export default function Tests() {
               {(subjects ?? []).map((s) => {
                 const on = subjectId === s.id;
                 return (
-                  <Pressable key={s.id} testID={`subject-${s.id}`} onPress={() => setSubjectId(s.id)} style={chipStyle(tokens, on)}>
+                  <Pressable key={s.id} testID={`subject-${s.id}`} onPress={() => setSubjectId(s.id)} style={chipStyle(tokens, on)}
+                    accessibilityRole="button"
+                    >
                     <Text style={{ fontSize: 12.5, fontWeight: '700', color: on ? tokens.color.indigo : tokens.color.sub }}>
                       {on ? `✓ ${s.code}` : s.code}
                     </Text>
@@ -289,14 +293,14 @@ export default function Tests() {
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <Text style={labelStyle}>Date</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <Pressable testID="test-date-prev" onPress={() => setDate((d) => shiftISO(d, -1))}>
-                <Text style={{ color: tokens.color.indigo, fontWeight: '700' }}>‹</Text>
+              <Pressable testID="test-date-prev" accessibilityRole="button" accessibilityLabel="Previous day" hitSlop={12} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }} onPress={() => setDate((d) => shiftISO(d, -1))}>
+                <Text style={{ color: tokens.color.indigo, fontWeight: '700', fontSize: 18 }}>‹</Text>
               </Pressable>
               <Text testID="test-date-value" style={{ fontSize: 12.5, color: tokens.color.ink, minWidth: 84, textAlign: 'center' }}>
                 {date}
               </Text>
-              <Pressable testID="test-date-next" onPress={() => setDate((d) => shiftISO(d, 1))}>
-                <Text style={{ color: tokens.color.indigo, fontWeight: '700' }}>›</Text>
+              <Pressable testID="test-date-next" accessibilityRole="button" accessibilityLabel="Next day" hitSlop={12} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }} onPress={() => setDate((d) => shiftISO(d, 1))}>
+                <Text style={{ color: tokens.color.indigo, fontWeight: '700', fontSize: 18 }}>›</Text>
               </Pressable>
             </View>
           </View>
@@ -304,13 +308,17 @@ export default function Tests() {
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <Text style={labelStyle}>Time</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <Pressable testID="test-time-prev" onPress={() => setTime((t) => shiftTime(t, -15))}>
+              <Pressable testID="test-time-prev" onPress={() => setTime((t) => shiftTime(t, -15))}
+                accessibilityRole="button"
+                accessibilityLabel="Previous">
                 <Text style={{ color: tokens.color.indigo, fontWeight: '700' }}>‹</Text>
               </Pressable>
               <Text testID="test-time-value" style={{ fontSize: 12.5, color: tokens.color.ink, minWidth: 60, textAlign: 'center' }}>
                 {time}
               </Text>
-              <Pressable testID="test-time-next" onPress={() => setTime((t) => shiftTime(t, 15))}>
+              <Pressable testID="test-time-next" onPress={() => setTime((t) => shiftTime(t, 15))}
+                accessibilityRole="button"
+                accessibilityLabel="Next">
                 <Text style={{ color: tokens.color.indigo, fontWeight: '700' }}>›</Text>
               </Pressable>
             </View>
@@ -363,7 +371,8 @@ export default function Tests() {
               paddingHorizontal: 18,
               opacity: canSchedule ? 1 : 0.6,
             }}
-          >
+            accessibilityRole="button"
+            >
             <Text style={{ color: tokens.color.onBrand, fontWeight: '700', fontSize: 13 }}>
               {scheduling ? 'Scheduling…' : 'Schedule test'}
             </Text>

@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useApi } from '@/lib/use-api';
+import { saveBlob } from '@/lib/save-blob';
 import { OWNER_HOST, schoolHref } from '@/lib/hosts';
 import { useAuthStore } from '@/lib/auth-store';
 
@@ -89,6 +90,20 @@ export default function PlatformDashboardPage() {
       toast.error((e as Error).message);
     } finally {
       setImpersonating(null);
+    }
+  }
+
+  /**
+   * One school's data, whole, to reproduce a reported problem locally. Owner
+   * only; secrets are redacted server-side. Can be large — a full roll with a
+   * year of attendance is tens of megabytes — so it streams as a file.
+   */
+  async function downloadSnapshot(school: SchoolMetrics) {
+    try {
+      const { blob, filename } = await api.download(`/owner/schools/${school.id}/snapshot.json`);
+      saveBlob(blob, filename ?? `${school.slug}-snapshot.json`);
+    } catch (e) {
+      toast.error((e as Error).message);
     }
   }
 
@@ -202,6 +217,9 @@ export default function PlatformDashboardPage() {
                   </button>
                   <button type="button" className="sk-own-btn" onClick={() => downloadCsv(s)}>
                     <Download size={13} aria-hidden="true" /> Enquiries CSV
+                  </button>
+                  <button type="button" className="sk-own-btn" onClick={() => downloadSnapshot(s)} title="Every table for this school as one JSON file, secrets redacted — to reproduce a reported problem locally">
+                    <Download size={13} aria-hidden="true" /> Snapshot (JSON)
                   </button>
                   <Link href={`/platform/schools/${s.id}`} className="sk-own-btn">Manage</Link>
                 </div>

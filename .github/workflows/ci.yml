@@ -47,3 +47,70 @@ jobs:
       # package here — only the DB-backed tests are scoped out.
       - name: Unit tests
         run: pnpm test --filter '!@library/*'
+
+  # The tenancy gates, running on every push instead of when someone remembers.
+  #
+  # `apps/api`'s strongest controls all live in `test:e2e`: rls-coverage (every
+  # tenant table is ENABLEd, FORCEd and policied), tenant-isolation (40
+  # assertions that one school cannot see another's rows), route-coverage
+  # (every mounted route has had its authorization decided) and the authz
+  # suites. None of them ran here, because the `build` job above has no
+  # database — so the route manifest had drifted by 82 routes and nobody knew.
+  #
+  # `library-ci.yml` already stands up a Postgres for exactly this reason. This
+  # is the school API's equivalent, and it is deliberately the WHOLE e2e suite
+  # rather than a hand-picked subset: a gate that covers some of the tests is
+  # how the last one rotted.
+  api-e2e:
+    name: api e2e (tenancy + authz gates)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        # `skoolos` is the superuser the suite's globalSetup connects as to
+        # drop and recreate skoolos_test, and the role the migrations run as.
+        # skoolos_app / skoolos_platform are created by migration 20260703.
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: skoolos
+          POSTGRES_PASSWORD: skoolos
+          POSTGRES_DB: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U skoolos -d postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      # No `env:` block on purpose. test/integration/setup-env.ts and
+      # global-setup.ts both load test/env.setup.js, so the suite carries its
+      # own fake secrets and its own database URLs. It used to read them from
+      # the developer's shell, which is the other half of why it could not run
+      # here — and why it passed on one machine and failed on the next.
+      #
+      # The six live-API suites and the one object-storage test skip
+      # themselves; they need a separately booted API and a MinIO, and both say
+      # so rather than failing. Removing those skips means standing up the
+      # dependencies, not deleting the guard.
+      - name: e2e
+        run: pnpm --filter @skoolos/api test:e2e

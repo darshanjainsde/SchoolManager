@@ -5,6 +5,7 @@ const txMock = {
     findMany: jest.fn(),
     findFirst: jest.fn(),
     update: jest.fn(),
+    create: jest.fn(),
   },
   user: {
     create: jest.fn(),
@@ -538,5 +539,21 @@ describe('TeachersService one-school guard + release (Phase 5·1)', () => {
 
     expect(txMock.user.updateMany).not.toHaveBeenCalled();
     expect(txMock.refreshToken.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('TeachersService — the E.164 twin of the office phone', () => {
+  it('is written on create and refreshed on update, and left alone when the phone is not in the body', async () => {
+    withTenantMock.mockImplementation((_s: string, fn: (tx: unknown) => unknown) => fn(txMock));
+    txMock.teacher.create.mockClear(); txMock.teacher.update.mockClear();
+    const svc = new TeachersService({} as never, {} as never, {} as never);
+    txMock.teacher.create.mockResolvedValue({});
+    await svc.create(SCHOOL, { firstName: 'Priya', lastName: 'Nair', phone: '+91 98765 43210' } as never);
+    expect(txMock.teacher.create.mock.calls[0][0].data).toMatchObject({ phone: '+91 98765 43210', phoneE164: '+919876543210', schoolId: SCHOOL });
+    txMock.teacher.update.mockResolvedValue({});
+    await svc.update(SCHOOL, 't1', { phone: '' } as never);
+    expect(txMock.teacher.update.mock.calls[0][0].data).toEqual({ phone: '', phoneE164: null });
+    await svc.update(SCHOOL, 't1', { lastName: 'N' } as never);
+    expect(txMock.teacher.update.mock.calls[1][0].data).toEqual({ lastName: 'N' });
   });
 });

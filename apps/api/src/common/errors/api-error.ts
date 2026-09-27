@@ -101,6 +101,9 @@ export type ErrorCode =
   | 'NO_ACADEMIC_YEAR'
   /** A TEACHER targeted a class section they do not teach — pair with 403. */
   | 'CLASS_NOT_OWNED'
+  /** The Complaint Box: a move that belongs to someone else — a family changing
+   *  a status, or a non-teacher sending a concern up to the office. Pair with 403. */
+  | 'CONCERN_NOT_YOUR_MOVE'
   /** Caller has no linked Student record — e.g. a non-student login hitting /me/messages. Pair with 404. */
   | 'NOT_A_STUDENT'
   /** A STUDENT tried to message a teacher who does not teach them that subject (per the timetable) — pair with 403. */
@@ -177,6 +180,31 @@ export type ErrorCode =
   | 'STORAGE_UNAVAILABLE'
   /** The room still has saved seating plans; deleting it would take them too — pair with 409. */
   | 'ROOM_IN_USE'
+  /** The platform has no WhatsApp credentials yet — pair with 409. */
+  | 'WHATSAPP_NOT_CONFIGURED'
+  /** A phone that does not normalise to a mobile — pair with 400. */
+  | 'BAD_PHONE'
+  /** A verification code was asked for again within a minute — pair with 429. */
+  | 'PHONE_CODE_COOLDOWN'
+  /** Another login of the school already verified that number — 409. */
+  | 'PHONE_TAKEN'
+  /** One-time codes (login, reset, verify): too many asked for this phone, or asked again within a minute. */
+  | 'OTP_RATE_LIMITED'
+  /** No sender could deliver the code (not on WhatsApp, SMS not enabled, platform not set up). */
+  | 'OTP_UNDELIVERABLE'
+  | 'OTP_EXPIRED'
+  | 'OTP_WRONG'
+  /** Five wrong tries on one code. */
+  | 'OTP_LOCKED'
+  | 'OTP_CHALLENGE_UNKNOWN'
+  /** The target login does not share this session's phone identity. */
+  | 'PROFILE_NOT_SWITCHABLE'
+  /** No live code, or too many wrong tries — 400 / 429. */
+  | 'PHONE_CODE_EXPIRED'
+  /** The code typed is not the one sent — 400. */
+  | 'PHONE_CODE_WRONG'
+  /** WhatsApp could not deliver the code (not on WhatsApp, or platform not set up) — 502. */
+  | 'WHATSAPP_UNREACHABLE'
   | 'VALIDATION'
   /** Caller is not authenticated (missing/invalid credential) — pair with 401. */
   | 'UNAUTHORIZED'
@@ -237,7 +265,22 @@ export type ErrorCode =
   | 'UNDECIDED_STUDENTS'
   // ── Sports wing ──
   /** Not the sports teacher (Staff.role SPORTS) nor a school admin. 403. */
+  /** The signed-in admin does not hold the salary right — 403. */
+  | 'NOT_SALARY_ADMIN'
+  /** The school's country has no pay rule book yet — 400. */
+  | 'SALARY_NO_PACK'
+  /** The structure breaks the Code on Wages 50% rule — 400. */
+  | 'SALARY_WAGE_SHARE'
+  /** The split's parts add to MORE than the agreed gross, so it cannot be paid — 400. */
+  | 'SALARY_OVERSHOOT'
+  /** A pay run that is locked cannot be changed — 409. */
+  | 'PAY_RUN_LOCKED'
+  /** The run is not in a state where that step is legal — 409. */
+  | 'PAY_RUN_STATE'
+  /** Nobody has a pay structure, so there is nothing to run — 400. */
+  | 'PAY_RUN_EMPTY'
   | 'NOT_SPORTS_DESK'
+  | 'NOT_LEAVE_DESK'
   /** The sports teacher's permission list does not include this action. 403. */
   | 'SPORTS_PERM'
   /** Bands overlap, are empty or malformed. 400. */

@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, Pressable, type ViewStyle } from 'react-native';
+import { useTokens } from '@/theme/theme-context';
+import { useReduceMotion } from '@/theme/motion';
+import { useRef } from 'react';
+import { Animated, Pressable, type ViewStyle } from 'react-native';
 import * as Haptics from 'expo-haptics';
 
 /**
@@ -59,22 +61,15 @@ export function Touchable({
    */
   pressTranslateY?: number;
 }): React.JSX.Element {
+  const tokens = useTokens();
   const scale = useRef(new Animated.Value(1)).current;
   const translateY = useRef(new Animated.Value(0)).current;
-  const [reduceMotion, setReduceMotion] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    void AccessibilityInfo.isReduceMotionEnabled().then((on) => {
-      if (!cancelled) setReduceMotion(on);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // Shared probe: one bridge call for the whole app, read at press time
+  // (a register renders one Touchable per student — 45 probes before).
+  const reduceMotion = useReduceMotion();
 
   function to(value: number) {
-    if (reduceMotion) return;
+    if (reduceMotion.current) return;
     Animated.spring(scale, {
       toValue: value,
       useNativeDriver: true,
@@ -113,6 +108,10 @@ export function Touchable({
       }}
       onPressOut={() => to(1)}
       onPress={onPress}
+      // Android's own press language. Without it every tap in the app was a
+      // web page's opacity change (UI audit 2026-09-22, #21); the scale spring
+      // above stays, so iOS is unchanged.
+      android_ripple={{ color: tokens.color.line2, borderless: false }}
     >
       <Animated.View style={[style, { transform: [{ scale }, { translateY }] }]}>{children}</Animated.View>
     </Pressable>

@@ -76,6 +76,27 @@ export function labelOn(fill: string): string {
   return contrastRatio(fill, '#ffffff') >= contrastRatio(fill, DARK) ? '#ffffff' : DARK;
 }
 
+/**
+ * The nearest shade of `hex` that reads as TEXT on `bg`.
+ *
+ * A festival's colours are chosen as fills — a marigold, a gulal green, a
+ * flag saffron — and most of them fail as words on the school's paper (the
+ * audit measured 1.5–2.5:1 across the light takeovers). Rather than hand-pick
+ * a second "text" hex for every festival × surface, derive it: walk the colour
+ * toward black (on a light ground) or white (on a dark one) until it clears
+ * `min`. The hue survives, the ratio is guaranteed, and a new festival cannot
+ * ship an unreadable accent because it never chooses one.
+ */
+export function textSafe(hex: string, bg: string, min = 4.5): string {
+  if (contrastRatio(hex, bg) >= min) return hex;
+  const towards = luminance(bg) > 0.4 ? '#000000' : '#ffffff';
+  for (let step = 1; step <= 20; step++) {
+    const c = mix(hex, towards, step / 20);
+    if (contrastRatio(c, bg) >= min) return c;
+  }
+  return towards;
+}
+
 /** `rgba()` string from hex + alpha, for overlay gradients. */
 export function rgba(hex: string, alpha: number): string {
   const rgb = hexToRgb(hex) ?? [0, 0, 0];

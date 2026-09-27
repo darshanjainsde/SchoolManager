@@ -1,3 +1,4 @@
+import { useReload } from '@/lib/query';
 import { useCallback, useMemo, useState } from 'react';
 import { Text } from 'react-native';
 import { useFocusEffect } from 'expo-router';
@@ -8,7 +9,7 @@ import { useNowMinutes } from '@/lib/use-now-minutes';
 import { buildGrid, cellKey, toGridSlot, type GridPeriodRow } from '@/lib/timetable-grid';
 import { DaySelector } from '@/components/DaySelector';
 import { TimetableList, type TimetableRow } from '@/components/TimetableList';
-import { Card, Screen, SectionTitle } from '@/components/ui';
+import { Card, ErrorState, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 
@@ -45,6 +46,8 @@ function findCurrentPeriodId(periods: GridPeriodRow[], now: number): string | nu
 
 export default function Timetable() {
   const tokens = useTokens();
+  // Try again / pull-to-refresh for this screen's own focus effect.
+  const [reloadKey, reload] = useReload();
   const [slots, setSlots] = useState<TimetableSlot[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pickedDay, setPickedDay] = useState<number | null>(null);
@@ -65,7 +68,7 @@ export default function Timetable() {
       return () => {
         cancelled = true;
       };
-    }, []),
+    }, [reloadKey]),
   );
 
   const shape = useMemo(() => buildGrid((slots ?? []).map(toGridSlot)), [slots]);
@@ -86,7 +89,7 @@ export default function Timetable() {
   }));
 
   return (
-    <Screen>
+    <Screen onRefresh={reload}>
       <SectionTitle title="Timetable" />
       <Text style={{ fontSize: 11, color: tokens.color.sub, marginHorizontal: 4, marginTop: -6 }}>
         Your whole week — pick a day to see its periods.
@@ -96,11 +99,7 @@ export default function Timetable() {
         <LoadingRows label="Loading your timetable…" rows={6} />
       )}
 
-      {error && (
-        <Card>
-          <Text style={{ color: tokens.color.red }}>{error}</Text>
-        </Card>
-      )}
+      {error && <ErrorState error={error} onRetry={reload} />}
 
       {slots !== null && !error && slots.length === 0 && (
         <Card>

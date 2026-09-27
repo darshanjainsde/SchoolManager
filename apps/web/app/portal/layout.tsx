@@ -15,6 +15,7 @@ import { NAV_ITEMS } from './nav-items';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { NotificationBell } from '@/components/notifications/notification-bell';
+import { SwitchProfile } from '@/components/switch-profile';
 import { MobileNavButton, MobileNavDrawer } from '@/components/MobileNavDrawer';
 import '../sk-theme.css';
 import { ConsoleSkeleton } from '@/components/console-skeleton';
@@ -124,6 +125,7 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
           <div style={{ flex: 1 }} />
           <NotificationBell portal="student" />
           <ThemeToggle />
+          <SwitchProfile variant="bar" />
           <button
             className="sk-signout"
             onClick={() => {
@@ -170,6 +172,7 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
             <div style={{ padding: '8px 11px' }}>
               <ThemeToggle />
             </div>
+            <SwitchProfile onDone={() => setDrawerOpen(false)} />
             <button
               className="sk-nav"
               style={{ width: '100%', textAlign: 'left', background: 'none', border: 0, cursor: 'pointer' }}

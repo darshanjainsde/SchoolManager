@@ -100,6 +100,8 @@ export interface PublicSiteData {
     heroVideoUrl: string | null;
     sectionVariants: unknown;
     festiveTheme: unknown;
+    /** The school's own festival image (MediaKind FESTIVE), or null. */
+    festiveImageUrl: string | null;
     footerConfig: unknown;
     customSectionCss: unknown;
     customHtmlBlock: string | null;

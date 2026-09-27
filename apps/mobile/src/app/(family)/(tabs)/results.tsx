@@ -1,9 +1,10 @@
+import { useReload } from '@/lib/query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import { formatDate, type PublishedResult, type UpcomingExam } from '@/lib/portal';
-import { Card, Page, Pill, Screen, SectionTitle } from '@/components/ui';
+import { Card, ErrorState, Page, Pill, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { DUR, inkWidth, play, useReduceMotion } from '@/theme/motion';
 import { useTokens } from '@/theme/theme-context';
@@ -190,6 +191,8 @@ function ResultRow({ r, first }: { r: PublishedResult; first: boolean }) {
  */
 export default function Results() {
   const tokens = useTokens();
+  // Try again / pull-to-refresh for this screen's own focus effect.
+  const [reloadKey, reload] = useReload();
   const [results, setResults] = useState<PublishedResult[] | null>(null);
   const [exams, setExams] = useState<UpcomingExam[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -213,20 +216,16 @@ export default function Results() {
       return () => {
         cancelled = true;
       };
-    }, []),
+    }, [reloadKey]),
   );
 
   const nextExam = exams?.[0] ?? null;
 
   return (
-    <Screen>
+    <Screen onRefresh={reload}>
       <SectionTitle title="Results" />
 
-      {error && (
-        <Card>
-          <Text style={{ color: tokens.color.red }}>{error}</Text>
-        </Card>
-      )}
+      {error && <ErrorState error={error} onRetry={reload} />}
       {results === null && !error && (
         <LoadingRows label="Loading results…" rows={4} />
       )}

@@ -189,6 +189,9 @@ it('login() falls back to the identifier only when nobody has a name on file', a
     // Second edition: the school's switched-on modules ride on the session,
     // so the app can decide which doors to draw without another round trip.
     features: [],
+    // Third: WHICH staff job, so the worker portal knows which desk to open
+    // (lib/worker-nav.ts). Null for every non-STAFF role, as here.
+    staffRole: null,
   });
 
   const [loginUrl, loginInit] = mockFetch.mock.calls[0];

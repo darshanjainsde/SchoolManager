@@ -20,6 +20,10 @@ const SOCIAL_GLYPH: Record<string, string> = {
  * lets the dark/brand colour classes recolour it (higher specificity), so the
  * one class does both jobs without an inline literal that only works on paper.
  */
+import { normalizeFestiveTheme } from '../site-variants';
+import { FestiveFooterEdge } from './FestiveLayer';
+import { optimised } from '@/lib/img';
+
 export default function FooterSection({
   data,
   flags,
@@ -55,7 +59,7 @@ export default function FooterSection({
       <div className={`flex items-center gap-2.5 ${cfg.layout === 'CENTER' ? 'justify-center' : ''}`}>
         {logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={logoUrl} alt={schoolName} className="h-9 w-auto" loading="lazy" decoding="async" />
+          <img src={optimised(logoUrl, 384)} alt={schoolName} className="h-9 w-auto" loading="lazy" decoding="async" />
         ) : (
           <>
             <span className="h-9 w-9 rounded-xl ps-logo-bg grid place-items-center font-bold text-white text-sm ps-head">
@@ -120,6 +124,7 @@ export default function FooterSection({
     // Brand keeps its own social row; a second one here would duplicate it.
     return (
       <footer data-sec="footer" className={`border-t border-black/10 mt-8 ${cls}`}>
+      <FestiveFooterEdge fest={normalizeFestiveTheme(data.profile?.festiveTheme)} />
         <div className="max-w-6xl mx-auto px-6 py-8">{brand(true)}</div>
         {copyright}
       </footer>
@@ -129,6 +134,7 @@ export default function FooterSection({
   if (cfg.layout === 'CENTER') {
     return (
       <footer data-sec="footer" className={`border-t border-black/10 mt-8 ${cls}`}>
+      <FestiveFooterEdge fest={normalizeFestiveTheme(data.profile?.festiveTheme)} />
         <div className="max-w-6xl mx-auto px-6 py-14 ps-foot-cols">
           {brand(true)}
           {explore}
@@ -142,6 +148,7 @@ export default function FooterSection({
   // COLUMNS — the shipped footer, reproduced exactly when the config is null.
   return (
     <footer data-sec="footer" className={`border-t border-black/10 mt-8 ${cls}`}>
+      <FestiveFooterEdge fest={normalizeFestiveTheme(data.profile?.festiveTheme)} />
       <div className="max-w-6xl mx-auto px-6 py-14 grid md:grid-cols-3 gap-8">
         {brand(true)}
         {explore}

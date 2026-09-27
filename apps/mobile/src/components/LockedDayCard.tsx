@@ -140,7 +140,8 @@ export function LockedDayCard({
               alignSelf: 'flex-start',
               opacity: canSubmit ? 1 : 0.6,
             }}
-          >
+            accessibilityRole="button"
+            >
             <Text style={{ color: tokens.color.onBrand, fontWeight: '700', fontSize: 13 }}>
               {isSubmitting ? 'Requesting…' : 'Request a change'}
             </Text>

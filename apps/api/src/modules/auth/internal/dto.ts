@@ -1,4 +1,4 @@
-import { IsEmail, IsOptional, IsString, Length, Matches, MinLength } from 'class-validator';
+import { IsEmail, IsOptional, IsString, Length, Matches, MinLength, IsUUID, MaxLength } from 'class-validator';
 import { ApiPropertyOptional, ApiProperty } from '@nestjs/swagger';
 
 export class LoginDto {
@@ -101,4 +101,51 @@ export class ResolveSchoolDto {
   @IsString()
   @Length(3, 160)
   identifier!: string;
+}
+
+/** Phone login (design §4). The phone is normalised server-side; any spacing the person typed is fine. */
+export class OtpRequestDto {
+  @IsString()
+  @Length(8, 20)
+  phone!: string;
+}
+
+export class OtpVerifyDto {
+  @IsUUID()
+  challengeId!: string;
+
+  @IsString()
+  @Matches(/^\s*\d{6}\s*$/, { message: 'The code is six digits' })
+  code!: string;
+}
+
+export class OtpChooseDto {
+  @IsString()
+  @Length(20, 2048)
+  ticket!: string;
+
+  @IsUUID()
+  userId!: string;
+}
+
+export class SwitchProfileDto {
+  @IsUUID()
+  userId!: string;
+}
+
+export class ResetWithOtpDto {
+  @IsEmail()
+  email!: string;
+
+  @IsUUID()
+  challengeId!: string;
+
+  @IsString()
+  @Matches(/^\s*\d{6}\s*$/, { message: 'The code is six digits' })
+  code!: string;
+
+  @IsString()
+  @MinLength(8)
+  @MaxLength(128)
+  newPassword!: string;
 }

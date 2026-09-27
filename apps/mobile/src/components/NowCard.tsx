@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Animated, Easing, Pressable, Text, View, type TextStyle } from 'react-native';
+import { Animated, Easing, Pressable, Text, View, type TextStyle, AppState } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import type { TeacherDayEntry } from '@skoolos/types';
 import { Card } from './ui';
@@ -326,7 +326,17 @@ function LiveDot({ on }: { on: string }) {
       }),
     );
     loop.start();
-    return () => loop.stop();
+    // The Home tab stays mounted when you switch tabs, so this used to tick
+    // for as long as the app was open — including in the background
+    // (perf audit 2026-09-22, #15).
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next === 'active') loop.start();
+      else loop.stop();
+    });
+    return () => {
+      sub.remove();
+      loop.stop();
+    };
   }, [pulse, reduced]);
 
   return (
@@ -550,7 +560,8 @@ export function NowCard({
                 paddingHorizontal: 16,
                 alignSelf: 'flex-start',
               }}
-            >
+              accessibilityRole="button"
+              >
               <Text style={{ color: tokens.color.indigoDeep, fontWeight: '800', fontSize: 13 }}>
                 Take attendance →
               </Text>

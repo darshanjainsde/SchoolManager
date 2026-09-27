@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import type { PublicSiteData } from '@/lib/public-api';
-import { isNearWhite, labelOn, lighten, mix } from './site-utils';
+import { isNearWhite, labelOn, lighten, mix, textSafe } from './site-utils';
 import { fontVars, FONT_STACK } from '@/lib/fonts';
 import { sectionShapeClass } from './section-shape';
 import { accentClass, backgroundTextureClass, motionGestureClass } from './site-style';
@@ -57,23 +57,79 @@ export function themeRootProps(data: PublicSiteData): { className: string; style
   // an inline style.
   const fest = normalizeFestiveTheme(data.profile?.festiveTheme);
   const festDef = fest ? festivalDef(fest.festival) : null;
+  const treatment = fest && festDef ? fest.treatment : null;
   let ps1 = brandColor;
   let ps2 = brandColor2;
   let paper = '#f7f5ef';
+  // ── The two surfaces, as tokens ──
+  // Text below the fold is written in Tailwind's slate utilities, and the
+  // stylesheet remaps those utilities to these tokens inside .ps-root (see
+  // "two surfaces" in ps-css.css). With no festival on, every token below IS
+  // the slate value the utility always had, so nothing repaints — and a
+  // treatment changes the page by changing six numbers here, not by finding
+  // a hundred class names.
+  let panel = '#ffffff';
+  let textStrong = '#1e293b'; // slate-800
+  let textBody = '#475569';   // slate-600
+  // slate-500 on the site's cream measures 4.37:1 — under AA on every page,
+  // festival or not, since the site shipped. Walked to the first shade that
+  // clears 4.5 (a hair darker, same hue) rather than jumped to slate-600.
+  let textMuted = textSafe('#64748b', '#f7f5ef');
+  let textFaint = '#94a3b8';  // slate-400
+  let ink = mix(brandColor, '#14261d', 0.55);
   if (fest && festDef) {
-    if (fest.intensity === 'FULL') {
+    if (treatment === 'NIGHT') {
       ps1 = festDef.full.ps1;
       ps2 = festDef.full.ps2;
-      if (festDef.fullSurface) paper = festDef.fullSurface.paper;
-    } else if (fest.recolor) {
+      const night = festDef.fullSurface ?? { paper: mix(festDef.full.ps1, '#0d0b10', 0.86), ink: '#f3ecdc' };
+      paper = night.paper;
+      ink = night.ink;
+      panel = mix(paper, '#ffffff', 0.08);
+      textStrong = ink;
+      // Tints of the ink, then walked back toward it until they read: the
+      // ratio is the contract, the tint is only the starting point.
+      textBody = textSafe(mix(ink, paper, 0.18), panel, 5);
+      textMuted = textSafe(mix(ink, paper, 0.28), panel, 4.5);
+      textFaint = mix(ink, paper, 0.45);
+    } else if (treatment === 'WASH') {
+      ps1 = festDef.full.ps1;
+      ps2 = festDef.full.ps2;
+      paper = mix('#f7f5ef', festDef.full.ps2, 0.16);
+      ink = mix(festDef.full.ps1, '#14261d', 0.7);
+      panel = mix(paper, '#ffffff', 0.7);
+      textStrong = mix(ink, '#000000', 0.1);
+      textBody = textSafe(mix(ink, paper, 0.25), paper, 5);
+      textMuted = textSafe(mix(ink, paper, 0.4), paper, 4.5);
+      textFaint = mix(ink, paper, 0.58);
+    } else if (treatment === 'LAYER' && fest.recolor) {
+      ps2 = festDef.accent;
+    } else if (treatment === 'HERO') {
+      // The first screen carries the festival; the page below is the
+      // school's, so only the accent moves — and only where it is a fill.
       ps2 = festDef.accent;
     }
   }
-  const ink =
-    fest?.intensity === 'FULL' && festDef?.fullSurface
-      ? festDef.fullSurface.ink
-      : mix(brandColor, '#14261d', 0.55);
-  const festDark = fest?.intensity === 'FULL' && !!festDef?.fullSurface;
+  const festDark = treatment === 'NIGHT';
+  // Accents that have to be READ (eyebrows, links, figures) are derived, not
+  // chosen: the festival's colour walked toward black or white until it
+  // clears 4.5:1 on the surface it sits on. The audit measured the chosen
+  // ones at 1.5–2.5:1; the derived ones cannot fail.
+  const accentText = textSafe(ps1, paper);
+  const accent2Text = textSafe(ps2, paper);
+  // The HERO band: the festival's light gradient, and an accent that reads on
+  // its darker stop. Set even when unused so the stylesheet never sees an
+  // undefined var.
+  const heroWash: [string, string] = festDef?.heroWash ?? [
+    mix('#ffffff', festDef?.full.ps2 ?? ps2, 0.35),
+    mix('#ffffff', festDef?.full.ps1 ?? ps1, 0.4),
+  ];
+  const heroAccent = textSafe(festDef?.full.ps1 ?? ps1, heroWash[1]);
+  // The school's own ink and body text, walked until they read on the band's
+  // darker stop. A light-brand school (a mint) has a light ink; on a rose
+  // band it measured 2.5:1. Scoped to #home by the stylesheet, so the page
+  // below keeps the school's ink untouched.
+  const heroInk = textSafe(ink, heroWash[1], 4.5);
+  const heroText = textSafe(textBody, heroWash[1], 4.5);
 
   // Each axis contributes nothing when it is at its default, which is why
   // shipping these columns repainted no existing school.
@@ -108,6 +164,22 @@ export function themeRootProps(data: PublicSiteData): { className: string; style
       '--font-head': fontHead,
       '--motion': minimal ? 0.25 : motion,
       '--paper': paper,
+      // Two-surface tokens (see above). The card token is the one .ps-panel
+      // already reads, so the shape control and the treatments share it.
+      '--ps-card-bg': panel,
+      '--ps-text-strong': textStrong,
+      '--ps-text': textBody,
+      '--ps-muted': textMuted,
+      '--ps-faint': textFaint,
+      '--ps-accent-text': accentText,
+      '--ps-accent2-text': accent2Text,
+      '--ps-hero-a': heroWash[0],
+      '--ps-hero-b': heroWash[1],
+      '--ps-hero-accent': heroAccent,
+      '--ps-hero-accent-on': labelOn(heroAccent),
+      '--ps-hero-ink': heroInk,
+      '--ps-hero-text': heroText,
+      '--ps-fest-glow': festDef?.full.ps2 ?? ps2,
     } as CSSProperties,
   };
 }

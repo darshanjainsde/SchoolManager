@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useMemo } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import type { MessageThreadRow } from '@skoolos/types';
@@ -55,9 +55,11 @@ export default function StaffMessages() {
     }, []),
   );
 
-  const sorted = (threads ?? [])
+  // O(n log n) Date constructions on every render before (perf audit 2026-09-22, #18).
+
+  const sorted = useMemo(() => (threads ?? [])
     .slice()
-    .sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
+    .sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()), [threads]);
 
   return (
     <Screen>
@@ -83,7 +85,8 @@ export default function StaffMessages() {
           key={t.id}
           testID={`thread-${t.id}`}
           onPress={() => router.push(`/(staff)/(tabs)/home/messages/${t.id}`)}
-        >
+          accessibilityRole="button"
+          >
           {/* `.mrow` — an initials disc, the thread, and the unread count. A
               conversation is with a PERSON, and a disc bearing their initials
               is the cheapest way to say so on a list of otherwise identical

@@ -28,13 +28,16 @@ export class SiteContentService {
 
   async getContent(schoolId: string) {
     return withTenant(schoolId, async (tx) => {
-      const [profile, homepage, stats, socialLinks] = await Promise.all([
+      const [profile, homepage, stats, socialLinks, school] = await Promise.all([
         tx.schoolProfile.findUnique({ where: { schoolId } }),
         tx.homepageContent.findUnique({ where: { schoolId } }),
         tx.statItem.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId }, orderBy: { order: 'asc' } }),
         tx.socialLink.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId }, orderBy: { order: 'asc' } }),
+        // The Studio offers festivals by country (the country switch), so it
+        // needs to know where the school is. One column, same transaction.
+        tx.school.findUnique({ where: { id: schoolId }, select: { countryCode: true } }),
       ]);
-      return { profile, homepage, stats, socialLinks };
+      return { profile, homepage, stats, socialLinks, school: { countryCode: school?.countryCode ?? 'IN' } };
     });
   }
 
@@ -65,6 +68,16 @@ export class SiteContentService {
     }
     if (typeof data.customHtmlBlock === 'string') {
       data.customHtmlBlock = data.customHtmlBlock.trim() ? sanitizeHtmlBlock(data.customHtmlBlock) : '';
+    }
+    // festiveTheme.imageAssetId is a client-supplied id into MediaAsset. Never
+    // trusted to the database: referential integrity bypasses RLS, and this is
+    // a Json column anyway, so the only check that exists is this one.
+    const festiveImage = (data.festiveTheme as { imageAssetId?: unknown } | null | undefined)?.imageAssetId;
+    if (typeof festiveImage === 'string' && festiveImage) {
+      const owned = await withTenant(schoolId, (tx) =>
+        tx.mediaAsset.findFirst({ where: { id: festiveImage, schoolId, kind: { in: ['FESTIVE', 'HERO', 'GALLERY', 'ABOUT'] } }, select: { id: true } }),
+      );
+      if (!owned) throw new ApiError('VALIDATION', 'That festival image is not one of this school\u2019s uploads.', 400, 'festiveTheme');
     }
     // Json columns cannot ride along in the spread the way every scalar field
     // does — Prisma types their input as InputJsonValue, not a plain object.

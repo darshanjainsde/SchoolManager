@@ -6,6 +6,7 @@ import { batchLabel } from '@/lib/batch-label';
 // Pure — lives in hof-model.ts with no client boundary so a server component
 // may call it. Not re-exported: that would still be a client reference.
 import { hofHasEntries } from './hof-model';
+import { optimised } from '@/lib/img';
 
 /** The layouts a school can pick in the studio (site-variants.ts lists the same values). */
 export const HOF_LAYOUTS = ['PODIUM', 'MEDALS', 'SPOTLIGHT', 'SHELF', 'TIMELINE', 'YEARBOOK', 'SCOREBOARD'] as const;
@@ -47,7 +48,7 @@ function Avatar({ entry, className }: { entry: PublicHallOfFameEntry; className:
     <div className={`ps-hof-ava ${className}`}>
       {entry.photoUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={entry.photoUrl} alt={entry.name} className="h-full w-full object-cover" loading="lazy" decoding="async" />
+        <img src={optimised(entry.photoUrl, 256)} alt={entry.name} className="h-full w-full object-cover" loading="lazy" decoding="async" />
       ) : (
         <span aria-hidden="true">{initials(entry.name) || '🎓'}</span>
       )}
@@ -216,7 +217,7 @@ function Podium({ podium, year }: PodiumProps) {
             >
               {entry.photoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={entry.photoUrl} alt={entry.name} className="h-full w-full object-cover" loading="lazy" decoding="async" />
+                <img src={optimised(entry.photoUrl, 256)} alt={entry.name} className="h-full w-full object-cover" loading="lazy" decoding="async" />
               ) : (
                 <span className="text-3xl">🎓</span>
               )}

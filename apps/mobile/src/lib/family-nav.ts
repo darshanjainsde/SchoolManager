@@ -56,6 +56,9 @@ export const HIDDEN_ROUTES = [
   '(tabs)/home/birthdays',
   '(tabs)/home/report-cards',
   '(tabs)/home/report-cards/[id]',
+  // The Complaint Box (2026-09): the family's own, and the one thread screen.
+  '(tabs)/home/concerns',
+  '(tabs)/home/concerns/[id]',
   '(tabs)/home/receipt/[paymentId]',
 ];
 
@@ -81,7 +84,8 @@ export interface MoreItem {
     | '/(family)/(tabs)/home/sports'
     | '/(family)/(tabs)/home/library'
     | '/(family)/(tabs)/home/birthdays'
-    | '/(family)/(tabs)/home/report-cards';
+    | '/(family)/(tabs)/home/report-cards'
+    | '/(family)/(tabs)/home/concerns';
   /** Icon-tile tint. Defaults to indigo when omitted. */
   tone?: MoreTone;
   /**
@@ -102,4 +106,7 @@ export const MORE_ITEMS: readonly MoreItem[] = [
   { label: 'Library', icon: 'library', route: '/(family)/(tabs)/home/library', tone: 'indigo', feature: 'LIBRARY' },
   { label: 'Report cards', icon: 'report', route: '/(family)/(tabs)/home/report-cards', tone: 'indigo', feature: 'PRESS' },
   { label: 'Birthdays', icon: 'cake', route: '/(family)/(tabs)/home/birthdays', tone: 'amber' },
+  // Always drawn: raising a concern is not a paid module, and a family that
+  // cannot find it will use WhatsApp instead, where nothing is tracked.
+  { label: 'Complaint Box', icon: 'concern', route: '/(family)/(tabs)/home/concerns', tone: 'amber' },
 ];

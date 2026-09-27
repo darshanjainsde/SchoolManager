@@ -1,4 +1,5 @@
 import {
+  Receipt,
   LayoutDashboard,
   ClipboardCheck,
   BookOpen,
@@ -6,6 +7,7 @@ import {
   GraduationCap,
   Megaphone,
   MessageSquare,
+  MessageSquareWarning,
   CalendarDays,
   CalendarOff,
   CalendarRange,
@@ -48,7 +50,9 @@ export const NAV_ITEMS: {
   { href: '/teacher/announcements', label: 'Announcements', icon: Megaphone },
   { href: '/teacher/notes', label: 'Notes', icon: StickyNote },
   { href: '/teacher/inbox', label: 'Inbox', icon: MessageSquare },
+  { href: '/teacher/concerns', label: 'Complaint Box', icon: MessageSquareWarning },
   { href: '/teacher/library', label: 'Library', icon: Library, requiredFeature: 'LIBRARY' },
   { href: '/teacher/requests', label: 'Requests', icon: CalendarOff },
   { href: '/teacher/holidays', label: 'Holidays', icon: CalendarRange },
+  { href: '/teacher/pay', label: 'My pay', icon: Receipt, requiredFeature: 'SALARY' },
 ];

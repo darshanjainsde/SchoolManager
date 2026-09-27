@@ -123,7 +123,7 @@ export default function AdmissionsSection({
                   className="ps-jbadge text-[11px]"
                   style={{
                     background: 'var(--ink)',
-                    color: 'var(--ps2)',
+                    color: 'var(--ps-accent2-text)',
                     transitionDelay: `${0.45 + i * 0.28}s`,
                   }}
                 >
@@ -155,7 +155,7 @@ export default function AdmissionsSection({
               <span className="ps-rdot" aria-hidden="true" />
               <span
                 className="inline-block text-[11px] font-extrabold tracking-widest rounded-full px-2.5 py-1"
-                style={{ background: 'var(--ink)', color: 'var(--ps2)' }}
+                style={{ background: 'var(--ink)', color: 'var(--ps-accent2-text)' }}
               >
                 {String(i + 1).padStart(2, '0')}
               </span>

@@ -9,7 +9,7 @@ import { withTenant } from '@skoolos/db';
 import { StorageService } from '../../../common/storage/storage.service';
 import { LIST_CEILING } from '../../../common/lists/list-ceiling';
 
-const KINDS = ['LOGO', 'FAVICON', 'HERO', 'GALLERY', 'STAFF', 'PRINCIPAL'] as const;
+const KINDS = ['LOGO', 'FAVICON', 'HERO', 'GALLERY', 'STAFF', 'PRINCIPAL', 'COURSE', 'HOF', 'ABOUT', 'EVENT', 'FESTIVE'] as const;
 type Kind = (typeof KINDS)[number];
 
 @Injectable()

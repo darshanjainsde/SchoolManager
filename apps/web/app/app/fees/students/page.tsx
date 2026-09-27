@@ -76,7 +76,7 @@ function StudentFees() {
   const t = list.data?.totals;
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-4">
+    <div className="flex flex-col gap-4">
       <BackToFees />
       <header className="sk-pagehead">
         <h1>Fees by student</h1>

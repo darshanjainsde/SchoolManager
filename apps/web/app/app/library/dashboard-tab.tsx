@@ -1,6 +1,8 @@
 'use client';
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { BookDown, BookUp, Plus } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
@@ -51,6 +53,14 @@ export default function DashboardTab({ base }: { base: string }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* The three things a librarian comes here to DO, before the numbers:
+          the counter's two doors and a new book. Each lands on the tab with
+          that mode already open. */}
+      <div className="sk-libactions" role="group" aria-label="Counter">
+        <Link href={`${sectionHref(base, 'counter')}?mode=out`} className="sk-btn sk-press" data-variant="primary"><BookUp size={15} aria-hidden="true" /> Give out a book</Link>
+        <Link href={`${sectionHref(base, 'counter')}?mode=back`} className="sk-btn sk-press"><BookDown size={15} aria-hidden="true" /> Take a book back</Link>
+        <Link href={`${sectionHref(base, 'books')}?add=1`} className="sk-btn sk-press"><Plus size={15} aria-hidden="true" /> Add a book</Link>
+      </div>
       <DeskSearch />
 
       <div className="sk-kpis" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 150px), 1fr))' }}>

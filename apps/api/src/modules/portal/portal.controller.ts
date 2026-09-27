@@ -56,8 +56,18 @@ export class PortalController {
    * the last month, newest day first. Reading it marks the page seen — that
    * receipt is what the teacher's "23 of 28 families opened this" counts.
    */
-  @Get('diary') diary(@CurrentUser() u: SchoolJwtPayload, @Query('date') date?: string) {
-    return this.portal.diary(u.sub, date);
+  /**
+   * `?month=YYYY-MM` returns the whole month — every day's marks and every
+   * entry in it — so the grid can open a date without asking again. `?date=`
+   * and the undated rolling window are unchanged, which is what the app and
+   * `/me/home` still use.
+   */
+  @Get('diary') diary(
+    @CurrentUser() u: SchoolJwtPayload,
+    @Query('date') date?: string,
+    @Query('month') month?: string,
+  ) {
+    return this.portal.diary(u.sub, date, month);
   }
 
   /**

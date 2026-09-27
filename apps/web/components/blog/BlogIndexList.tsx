@@ -1,4 +1,5 @@
 import type { BlogCard } from '@/lib/blog-api';
+import { optimised } from '@/lib/img';
 
 type Card = BlogCard & { isHero?: boolean };
 
@@ -19,7 +20,7 @@ export default function BlogIndexList({ posts, layout }: { posts: Card[]; layout
           <a className="blog-list-row" href={`/blog/${p.slug}`} key={p.slug}>
             {p.heroImageUrl && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={p.heroImageUrl} alt={p.title} width={320} height={200} loading="lazy" />
+              <img src={optimised(p.heroImageUrl, 640)} alt={p.title} width={320} height={200} loading="lazy" />
             )}
             <div className="blog-list-body">
               <b>{p.title}</b>
@@ -52,7 +53,7 @@ export default function BlogIndexList({ posts, layout }: { posts: Card[]; layout
           <a className="blog-hero-tile" href={`/blog/${p.slug}`} key={p.slug}>
             {p.heroImageUrl && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={p.heroImageUrl} alt={p.title} width={1600} height={800} loading="lazy" />
+              <img src={optimised(p.heroImageUrl, 1600)} alt={p.title} width={1600} height={800} loading="lazy" />
             )}
             <div className="blog-hero-body">
               <h2>{p.title}</h2>
@@ -78,7 +79,7 @@ function BlogTile({ post }: { post: Card }) {
     <a className="blog-card" href={`/blog/${post.slug}`}>
       {post.heroImageUrl && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={post.heroImageUrl} alt={post.title} width={640} height={360} loading="lazy" />
+        <img src={optimised(post.heroImageUrl, 1080)} alt={post.title} width={640} height={360} loading="lazy" />
       )}
       <div className="blog-card-body">
         <b>{post.title}</b>

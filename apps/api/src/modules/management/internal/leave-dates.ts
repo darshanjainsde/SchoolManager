@@ -67,3 +67,18 @@ export function dateRangeInclusive(start: string, end: string): string[] {
   }
   return out;
 }
+
+/** `YYYY-MM`, the shape the diary's month grid is asked for. */
+export const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+/**
+ * The first and last date of a `YYYY-MM`, as date strings.
+ *
+ * Day 0 of the NEXT month is the last day of this one, which is how the
+ * length of February is worked out without a table.
+ */
+export function monthSpan(month: string): { first: string; last: string } {
+  const [y, m] = month.split('-').map(Number);
+  const last = new Date(Date.UTC(y, m, 0));
+  return { first: `${month}-01`, last: toDateStr(last) };
+}

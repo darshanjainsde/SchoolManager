@@ -273,7 +273,8 @@ export default function Post() {
             padding: 15,
             opacity: canSubmit ? 1 : 0.6,
           }}
-        >
+          accessibilityRole="button"
+          >
           <Text style={{ color: tokens.color.onBrand, fontWeight: '700', textAlign: 'center' }}>
             {busy ? 'Posting…' : `Post to ${n} class${n === 1 ? '' : 'es'}`}
           </Text>
@@ -338,10 +339,14 @@ export default function Post() {
               style={[inputStyle, { minHeight: 74, textAlignVertical: 'top' }]}
             />
             <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 14 }}>
-              <Pressable testID="edit-cancel" onPress={cancelEdit} disabled={editBusy}>
+              <Pressable testID="edit-cancel" onPress={cancelEdit} disabled={editBusy}
+                accessibilityRole="button"
+                >
                 <Text style={{ color: tokens.color.sub, fontWeight: '700', fontSize: 13 }}>Cancel</Text>
               </Pressable>
-              <Pressable testID="edit-save" onPress={() => void saveEdit()} disabled={!canSaveEdit}>
+              <Pressable testID="edit-save" onPress={() => void saveEdit()} disabled={!canSaveEdit}
+                accessibilityRole="button"
+                >
                 <Text
                   style={{
                     color: tokens.color.indigo,
@@ -393,14 +398,16 @@ export default function Post() {
                   testID={`edit-${a.id}`}
                   onPress={() => startEdit(a)}
                   disabled={deletingId === a.id}
-                >
+                  accessibilityRole="button"
+                  >
                   <Text style={{ color: tokens.color.indigo, fontWeight: '700', fontSize: 12 }}>Edit</Text>
                 </Pressable>
                 <Pressable
                   testID={`delete-${a.id}`}
                   onPress={() => confirmDelete(a)}
                   disabled={deletingId === a.id}
-                >
+                  accessibilityRole="button"
+                  >
                   <Text style={{ color: tokens.color.red, fontWeight: '700', fontSize: 12 }}>
                     {deletingId === a.id ? 'Deleting…' : 'Delete'}
                   </Text>

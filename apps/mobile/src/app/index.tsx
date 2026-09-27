@@ -1,8 +1,11 @@
+import { View } from 'react-native';
 import { useEffect, useState } from 'react';
 import { Redirect } from 'expo-router';
+import { SckoolsLogo } from '@/components/SckoolsLogo';
+import { brand } from '@/theme/tokens';
 import { session } from '@/lib/session';
 import { family } from '@/lib/family-store';
-import { portalForRole, resolveStartRoute } from '@/lib/roles';
+import { portalForSession, resolveStartRoute } from '@/lib/roles';
 
 export default function Index() {
   const [target, setTarget] = useState<string | null>(null);
@@ -18,7 +21,7 @@ export default function Index() {
       // side effect so future launches don't keep tripping over it.
       if (s) {
         try {
-          portalForRole(s.role);
+          portalForSession(s);
         } catch {
           await session.clear();
         }
@@ -26,6 +29,18 @@ export default function Index() {
       setTarget(resolveStartRoute(s));
     })();
   }, []);
-  if (!target) return null;
+  // A blank frame used to sit here for the whole boot chain (perf audit #5).
+  // The chain is much shorter now that the session is read once, but the
+  // first frame should still belong to the school, not to nothing.
+  if (!target) return <BootFrame />;
   return <Redirect href={target as never} />;
+}
+
+/** The one frame between the native splash and the first screen. */
+function BootFrame() {
+  return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: brand.gate.light.bgBottom }}>
+      <SckoolsLogo size={34} />
+    </View>
+  );
 }

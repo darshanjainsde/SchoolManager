@@ -31,6 +31,7 @@ function leaveRow(overrides: Partial<LeaveApplication> = {}): LeaveApplication {
     endDate: '2026-07-21T00:00:00.000Z',
     reason: 'Flu',
     status: 'PENDING',
+    halfDay: false,
     createdAt: '2026-07-18T10:00:00.000Z',
     ...overrides,
   };

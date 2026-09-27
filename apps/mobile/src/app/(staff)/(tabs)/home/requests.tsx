@@ -324,7 +324,9 @@ export default function Requests() {
             {LEAVE_TYPES.map((t) => {
               const on = type === t;
               return (
-                <Pressable key={t} testID={`apply-type-${t}`} onPress={() => setType(t)} style={chipStyle(tokens, on)}>
+                <Pressable key={t} testID={`apply-type-${t}`} onPress={() => setType(t)} style={chipStyle(tokens, on)}
+                  accessibilityRole="button"
+                  >
                   <Text style={{ fontSize: 12.5, fontWeight: '700', color: on ? tokens.color.indigo : tokens.color.sub }}>
                     {on ? `✓ ${LEAVE_TYPE_LABEL[t]}` : LEAVE_TYPE_LABEL[t]}
                   </Text>
@@ -440,7 +442,8 @@ export default function Requests() {
             alignSelf: 'flex-start',
             opacity: canApply ? 1 : 0.6,
           }}
-        >
+          accessibilityRole="button"
+          >
           <Text style={{ color: tokens.color.onBrand, fontWeight: '700', fontSize: 13 }}>
             {applySubmitting ? 'Submitting…' : 'Submit request'}
           </Text>
@@ -535,7 +538,8 @@ export default function Requests() {
                           disabled={cancelling}
                           onPress={() => confirmCancel(item.id)}
                           style={{ opacity: cancelling ? 0.6 : 1 }}
-                        >
+                          accessibilityRole="button"
+                          >
                           <Text style={{ color: tokens.color.red, fontWeight: '700', fontSize: 12 }}>
                             {cancelling ? 'Cancelling…' : 'Cancel'}
                           </Text>

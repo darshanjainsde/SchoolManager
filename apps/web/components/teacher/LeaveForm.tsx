@@ -14,7 +14,7 @@ const LEAVE_TYPES: { value: LeaveType; label: string }[] = [
   { value: 'OTHER', label: 'Other' },
 ];
 
-const EMPTY_FORM = { type: 'SICK' as LeaveType, startDate: '', endDate: '', reason: '' };
+const EMPTY_FORM = { type: 'SICK' as LeaveType, startDate: '', endDate: '', reason: '', halfDay: false };
 
 const fieldCls =
   'rounded-[10px] border border-[var(--sk-line-2)] bg-[var(--sk-card)] px-[11px] py-[9px] text-[13.5px] text-[var(--sk-ink)] placeholder:text-[var(--sk-ink-3)] focus-visible:outline-none focus-visible:border-[var(--sk-brand)] focus-visible:shadow-[0_0_0_3px_var(--sk-brand-tint)] disabled:opacity-60 disabled:cursor-not-allowed';
@@ -24,7 +24,7 @@ export interface LeaveFormProps {
   /** Remaining days by built-in type — shown under the Type picker so the
       teacher knows the balance BEFORE submitting. Absent = no policy set up. */
   remainingByType?: Partial<Record<LeaveType, number | null>>;
-  onSubmit: (v: { type: string; startDate: string; endDate: string; reason?: string }) => void;
+  onSubmit: (v: { type: string; startDate: string; endDate: string; reason?: string; halfDay?: boolean }) => void;
 }
 
 /**
@@ -38,6 +38,10 @@ export function LeaveForm({ isSubmitting, remainingByType, onSubmit }: LeaveForm
   const remaining = remainingByType?.[form.type];
 
   const dateOrderInvalid = !!form.startDate && !!form.endDate && form.endDate < form.startDate;
+  // A half day is one day — the DB CHECKs it, so the control only exists
+  // when the dates agree, rather than being offered and then refused.
+  const oneDay = !!form.startDate && form.startDate === form.endDate;
+  const halfDay = oneDay && form.halfDay;
   const canSubmit = !!form.startDate && !!form.endDate && !dateOrderInvalid && !isSubmitting;
 
   function submit() {
@@ -47,6 +51,7 @@ export function LeaveForm({ isSubmitting, remainingByType, onSubmit }: LeaveForm
       startDate: form.startDate,
       endDate: form.endDate,
       reason: form.reason.trim() || undefined,
+      halfDay,
     });
   }
 
@@ -112,6 +117,19 @@ export function LeaveForm({ isSubmitting, remainingByType, onSubmit }: LeaveForm
           placeholder="A short note for your admin"
         />
       </div>
+      {oneDay ? (
+        <div className="sm:col-span-2">
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+            <input
+              type="checkbox"
+              style={{ width: 16, height: 16, flex: 'none' }}
+              checked={form.halfDay}
+              onChange={(e) => setForm((f) => ({ ...f, halfDay: e.target.checked }))}
+            />
+            <span>Half day — I will be in for the other half</span>
+          </label>
+        </div>
+      ) : null}
       <div className="sm:col-span-2" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <button type="button" className="sk-btn sk-press" data-variant="primary" disabled={!canSubmit} onClick={submit}>
           {isSubmitting ? 'Submitting…' : 'Submit request'}

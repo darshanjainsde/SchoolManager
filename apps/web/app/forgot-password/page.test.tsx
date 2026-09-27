@@ -71,3 +71,21 @@ describe('ForgotPasswordPage', () => {
     expect(screen.queryByTestId('code-result')).not.toBeInTheDocument();
   });
 });
+
+describe('ForgotPasswordPage — a login with a phone gets a code too (design §4)', () => {
+  it('shows the code form when the server sent one, and sets the password with it', async () => {
+    const post = vi.fn(async (path: string) => (path === '/auth/forgot-password' ? { ok: true, challengeId: '11111111-1111-1111-1111-111111111111', phoneMasked: '+91 98••• •3210', sentVia: ['whatsapp'] } : { ok: true }));
+    vi.mocked(useApi).mockReturnValue(stub({ post }) as never);
+    renderWithProviders(<ForgotPasswordPage />);
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText(/email/i), 'priya@school.test');
+    await user.click(screen.getByRole('button', { name: /send reset link/i }));
+    const form = await screen.findByTestId('otp-reset');
+    expect(form).toHaveTextContent('+91 98••• •3210');
+    await user.type(screen.getByLabelText(/the code/i), '482911');
+    await user.type(screen.getByLabelText(/new password/i), 'long-enough-1');
+    await user.click(screen.getByRole('button', { name: 'Set new password' }));
+    expect(post).toHaveBeenCalledWith('/auth/reset-with-otp', { email: 'priya@school.test', challengeId: '11111111-1111-1111-1111-111111111111', code: '482911', newPassword: 'long-enough-1' });
+    expect(await screen.findByTestId('otp-done')).toBeInTheDocument();
+  });
+});

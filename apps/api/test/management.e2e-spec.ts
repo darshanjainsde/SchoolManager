@@ -20,7 +20,14 @@
  *   5. Cleanup       — afterAll deletes all rows created by this suite (slots→classes→teacher→subject→period→grade).
  */
 
-const BASE = 'http://localhost:3001';
+import { describeLiveApi, LIVE_API_BASE } from './requires-live-api';
+
+// A smoke test against a separately booted API, like student/public/owner/
+// community — and, unlike those four, it was never wired to the opt-in when
+// they were. So it failed twenty-odd assertions on every machine with no API
+// on :3001 and read as a broken product rather than a missing prerequisite,
+// which is the exact noise requires-live-api.ts was written to stop.
+const BASE = LIVE_API_BASE;
 
 /** Obtain a school-scoped JWT without TOTP (school admins have no TOTP). */
 async function schoolToken(slug: string): Promise<string> {
@@ -39,7 +46,7 @@ async function schoolToken(slug: string): Promise<string> {
   return body.accessToken;
 }
 
-describe('Management e2e', () => {
+describeLiveApi('Management e2e', () => {
   let beaconToken: string;
   let acmeToken: string;
 

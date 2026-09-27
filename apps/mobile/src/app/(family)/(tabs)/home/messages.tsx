@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useMemo } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import {
@@ -131,9 +131,11 @@ export default function Messages() {
     }
   }
 
-  const sorted = (threads ?? [])
+  // O(n log n) Date constructions on every render before (perf audit 2026-09-22, #18).
+
+  const sorted = useMemo(() => (threads ?? [])
     .slice()
-    .sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
+    .sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()), [threads]);
 
   return (
     <Screen>
@@ -161,7 +163,9 @@ export default function Messages() {
             <Text style={{ fontFamily: font.serif, fontSize: 13, color: tokens.color.ink }}>
               {picked ? 'New message' : 'Pick a teacher and subject'}
             </Text>
-            <Pressable testID="ask-cancel" onPress={resetAsk} hitSlop={6}>
+            <Pressable testID="ask-cancel" onPress={resetAsk} hitSlop={6}
+              accessibilityRole="button"
+              >
               <Text style={{ color: tokens.color.sub, fontWeight: '700', fontSize: 12 }}>Cancel</Text>
             </Pressable>
           </View>
@@ -221,7 +225,9 @@ export default function Messages() {
                     {picked.subjectName}
                   </Text>
                 </View>
-                <Pressable testID="change-teacher" onPress={() => setPicked(null)} hitSlop={8}>
+                <Pressable testID="change-teacher" onPress={() => setPicked(null)} hitSlop={8}
+                  accessibilityRole="button"
+                  >
                   <Text style={{ color: tokens.color.indigo, fontWeight: '700', fontSize: 12 }}>Change</Text>
                 </Pressable>
               </View>

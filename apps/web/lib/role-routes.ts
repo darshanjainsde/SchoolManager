@@ -25,6 +25,8 @@ export function homeForRole(role: string | undefined, staffRole?: string | null)
       // from a client-chosen tab).
       if (staffRole === 'LIBRARIAN') return '/library';
       if (staffRole === 'SPORTS') return '/sports';
+      // The accounts officer lands on Pay, which is their whole job here.
+      if (staffRole === 'ACCOUNTS') return '/app/pay';
       return '/staff';
     case 'SCHOOL_ADMIN':
       return '/app';

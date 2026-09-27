@@ -50,6 +50,8 @@ export interface PublicSiteData {
     heroVideoUrl?: string | null;
     sectionVariants?: unknown;
     festiveTheme?: unknown;
+    /** The school's own festival image (Studio upload), already resolved to a URL. */
+    festiveImageUrl?: string | null;
     footerConfig?: unknown;
     customSectionCss?: unknown;
     /** Sanitized server-side on write; rendered as-is before the footer. */

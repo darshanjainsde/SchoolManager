@@ -3,6 +3,8 @@ import { runInBackground } from '../../common/notifications/run-in-background';
 import { getPlatformPrisma } from '@skoolos/db';
 import { assertNotificationOutboxKind, type NotificationOutboxKind } from '@skoolos/types';
 import { PushChannel } from '../../common/notifications/push.channel';
+import { WhatsAppChannel } from '../../common/notifications/whatsapp.channel';
+import { ackPayload, leavePayload } from '../../common/notifications/whatsapp/actions';
 import { resolveSectionRecipients, resolveUserRecipients } from '../../common/notifications/recipients';
 import type {
   MessageReceivedOutboxPayload,
@@ -121,6 +123,22 @@ function toNotificationMessage(kind: NotificationOutboxKind, payload: unknown): 
       },
     };
   }
+  if (kind === 'LEAVE_APPLIED') {
+    // The button payloads are signed HERE, at send time, with the app secret
+    // — never stored on the row.
+    const p = payload as { schoolName: string; leaveId: string; teacherName: string; dates: string; days: number; reason: string | null; periodsAffected: number };
+    const secret = process.env.META_APP_SECRET?.trim() || 'unset';
+    return { kind: 'LEAVE_APPLIED', payload: { ...p, approvePayload: leavePayload('approve', p.leaveId, secret), rejectPayload: leavePayload('reject', p.leaveId, secret) } };
+  }
+  if (kind === 'LEAVE_DECIDED') {
+    const p = payload as { schoolName: string; leaveId: string; decision: 'APPROVED' | 'REJECTED'; dates: string; byName: string | null };
+    return { kind: 'LEAVE_DECIDED', payload: { schoolName: p.schoolName, leaveId: p.leaveId, decision: p.decision, dates: p.dates, byName: p.byName ?? null } };
+  }
+  if (kind === 'COVER_ASSIGNED') {
+    const p = payload as { schoolName: string; substitutionId: string; when: string; className: string; subjectName: string | null; originalTeacherName: string };
+    const secret = process.env.META_APP_SECRET?.trim() || 'unset';
+    return { kind: 'COVER_ASSIGNED', payload: { ...p, ackPayload: ackPayload(p.substitutionId, secret) } };
+  }
   if (kind === 'FEE_VERIFIED' || kind === 'FEE_REJECTED' || kind === 'FEE_DUE') {
     // The fee desk's decision to one family, composed at write time by
     // FeePaymentService. Renders through the ANNOUNCEMENT shape like the
@@ -137,6 +155,17 @@ function toNotificationMessage(kind: NotificationOutboxKind, payload: unknown): 
     return {
       kind: 'ANNOUNCEMENT',
       payload: { schoolName: p.schoolName, title: p.title, body: p.body, className: null },
+    };
+  }
+  if (kind === 'CONCERN_RAISED' || kind === 'CONCERN_REPLIED' || kind === 'CONCERN_RESOLVED') {
+    // The Complaint Box, to one reader (targetUserId): the class teacher or
+    // an admin when a family raises one, the family when the school answers.
+    // Renders through the generic single-reader ANNOUNCEMENT shape; the class
+    // slot names the desk, as the fee kinds do.
+    const p = payload as { schoolName: string; title: string; body: string };
+    return {
+      kind: 'ANNOUNCEMENT',
+      payload: { schoolName: p.schoolName, title: p.title, body: p.body, className: 'Complaint Box' },
     };
   }
   if (kind === 'MESSAGE_RECEIVED') {
@@ -211,7 +240,13 @@ interface OutboxRow {
 export class NotificationOutboxService {
   private readonly logger = new Logger(NotificationOutboxService.name);
 
-  constructor(private readonly push: PushChannel) {}
+  // WhatsApp rides the outbox for the same reason push does: these kinds are
+  // the guaranteed, at-least-once ones. The channel itself decides per
+  // school whether anything goes out (see WhatsAppChannel).
+  constructor(
+    private readonly push: PushChannel,
+    private readonly whatsapp: WhatsAppChannel,
+  ) {}
 
   /**
    * Drain shortly, without blocking the caller.
@@ -301,6 +336,7 @@ export class NotificationOutboxService {
 
         for (const email of recipients) {
           await this.push.send(email, message, row.schoolId);
+          await this.whatsapp.send(email, message, row.schoolId);
         }
 
         await db.notificationOutbox.update({

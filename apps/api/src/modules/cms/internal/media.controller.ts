@@ -21,7 +21,7 @@ import { MediaService } from './media.service';
 import { ListMediaDto } from './cms.dto';
 import { assertUploadKind, IMAGE_KINDS } from '../../../common/storage/upload-kind';
 
-const KINDS = ['LOGO', 'FAVICON', 'HERO', 'GALLERY', 'STAFF', 'PRINCIPAL', 'COURSE', 'HOF', 'ABOUT', 'EVENT'];
+const KINDS = ['LOGO', 'FAVICON', 'HERO', 'GALLERY', 'STAFF', 'PRINCIPAL', 'COURSE', 'HOF', 'ABOUT', 'EVENT', 'FESTIVE'];
 
 @Controller('site/media')
 // Any write here drops this school's cached pages — see the interceptor.

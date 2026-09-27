@@ -66,6 +66,13 @@ export class EmailSettingsController {
   }
 
   /** Sends a sample through whatever is in force right now. */
+  /** Clear an address the school saw bounce, once the office has fixed or confirmed it. */
+  @Post('unsuppress')
+  @HttpCode(200)
+  unsuppress(@Body() dto: SendTestEmailDto) {
+    return this.settings.unsuppress(this.sid(), dto.to);
+  }
+
   @Post('test')
   @HttpCode(200)
   sendTest(@Body() dto: SendTestEmailDto) {

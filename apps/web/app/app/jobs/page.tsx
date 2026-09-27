@@ -152,7 +152,7 @@ export default function JobsPage() {
         </button>
       </div>
 
-      <nav className="sk-tabs sk-lib-tabs" style={{ marginTop: 18 }} aria-label="Jobs sections">
+      <nav className="sk-tabs" style={{ marginTop: 18 }} aria-label="Jobs sections">
         {(['vacancies', 'applications'] as const).map((t) => (
           <button
             key={t}

@@ -1,5 +1,6 @@
 import type { BlogBlock } from '@skoolos/db';
 import BlogQuiz from './BlogQuiz';
+import { optimised } from '@/lib/img';
 
 /**
  * Server-rendered block renderer for BlogPost.sections. Everything except the
@@ -27,7 +28,7 @@ export default function BlogBlocks({ blocks }: { blocks: BlogBlock[] }) {
             return (
               <figure className="blog-img" key={i}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={block.url} alt={block.alt} width={1600} height={900} loading="lazy" />
+                <img src={optimised(block.url, 1600)} alt={block.alt} width={1600} height={900} loading="lazy" />
                 {block.caption && <figcaption>{block.caption}</figcaption>}
               </figure>
             );

@@ -17,6 +17,8 @@ import { resolveStudentRecipients } from '../../common/notifications/recipients'
 import { runInBackground } from '../../common/notifications/run-in-background';
 import { requireClassAccess } from './internal/class-access';
 import { istTodayISO } from './internal/timetable-date';
+import { offReason, schoolCalendar } from './internal/school-calendar';
+import { MONTH_RE, dateRangeInclusive, monthSpan, toDateStr } from './internal/leave-dates';
 import type { CreateDiaryEntryDto, UpdateDiaryEntryDto } from './management.dto';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
@@ -487,8 +489,16 @@ export class DiaryService {
    * rendered (idempotent via `one_ack_per_entry_student`), which is what feeds
    * the teacher's "23 of 28 families have opened this" receipt.
    */
-  async studentDiary(schoolId: string, userId: string, date?: string): Promise<StudentDiaryResult> {
+  async studentDiary(
+    schoolId: string,
+    userId: string,
+    date?: string,
+    month?: string,
+  ): Promise<StudentDiaryResult> {
     if (date) this.assertDate(date);
+    if (month && !MONTH_RE.test(month)) {
+      throw new ApiError('VALIDATION', 'month must be YYYY-MM', 400, 'month');
+    }
 
     return withTenant(schoolId, async (tx) => {
       const student = await tx.student.findFirst({
@@ -500,10 +510,21 @@ export class DiaryService {
       const since = new Date();
       since.setDate(since.getDate() - STUDENT_WINDOW_DAYS);
 
+      // The month grid asks for a whole month at once, deliberately: opening a
+      // date then costs nothing, because the answer is already in hand. A
+      // class's month of diary is on the order of a hundred lines.
+      // The month rides along on the span so it stays narrowed to a string
+      // inside this closure — `span !== null` says nothing about `month`.
+      const span = month ? { ...monthSpan(month), month } : null;
+
       const entries = await tx.diaryEntry.findMany({ take: LIST_CEILING.ACTIVITY,
         where: { schoolId,
           classSectionId: student.classSectionId,
-          ...(date ? { date: new Date(date) } : { date: { gte: since } }),
+          ...(date
+            ? { date: new Date(date) }
+            : span
+              ? { date: { gte: new Date(`${span.first}T00:00:00.000Z`), lte: new Date(`${span.last}T00:00:00.000Z`) } }
+              : { date: { gte: since } }),
           // A SELECTED entry is only this child's business if they are named
           // on it; an ALL entry belongs to the whole section.
           OR: [{ audience: 'ALL' }, { recipients: { some: { studentId: student.id } } }],
@@ -540,10 +561,49 @@ export class DiaryService {
         createdAt: e.createdAt.toISOString(),
       }));
 
-      return {
+      const result: StudentDiaryResult = {
         entries: rows,
         unsignedCount: rows.filter((r) => r.kind === 'REMARK' && !r.signedAt).length,
       };
+      if (!span) return result;
+
+      // One square per day of the month, closed days included — a day with
+      // nothing on it is an answer, and the reason it is empty is the answer.
+      const [cal, year] = await Promise.all([
+        schoolCalendar(tx, schoolId, span.first, span.last),
+        tx.academicYear.findFirst({
+          where: { schoolId, isCurrent: true },
+          select: { startDate: true, endDate: true },
+        }),
+      ]);
+
+      const byDate = new Map<string, { items: number; remarks: number; unsigned: number }>();
+      for (const r of rows) {
+        const tally = byDate.get(r.date) ?? { items: 0, remarks: 0, unsigned: 0 };
+        if (r.kind === 'REMARK') {
+          tally.remarks += 1;
+          if (!r.signedAt) tally.unsigned += 1;
+        } else {
+          tally.items += 1;
+        }
+        byDate.set(r.date, tally);
+      }
+
+      result.month = {
+        month: span.month,
+        days: dateRangeInclusive(span.first, span.last).map((d) => ({
+          date: d,
+          items: byDate.get(d)?.items ?? 0,
+          remarks: byDate.get(d)?.remarks ?? 0,
+          unsigned: byDate.get(d)?.unsigned ?? 0,
+          offReason: offReason(cal, d),
+        })),
+        // The arrows stop at the session. Without a session on file they stop
+        // at the month being shown, which is the only honest bound available.
+        firstMonth: year ? toDateStr(year.startDate).slice(0, 7) : span.month,
+        lastMonth: year ? toDateStr(year.endDate).slice(0, 7) : span.month,
+      };
+      return result;
     });
   }
 

@@ -11,13 +11,13 @@ import { NAV_MODEL, groupOf, leafActive, navLeaves, visibleModel } from './nav-m
 const EVERY_ROUTE = [
   '/app',
   '/app/website', '/app/blog', '/app/events',
-  '/app/enquiries',
-  '/app/students', '/app/teachers', '/app/staff', '/app/classes',
-      '/app/sessions', '/app/jobs',
+  '/app/enquiries', '/app/concerns',
+  '/app/students', '/app/teachers', '/app/staff', '/app/classes', '/app/class-teachers',
+      '/app/sessions', '/app/onboarding', '/app/jobs',
   '/app/staff-attendance', '/app/leave', '/app/requests',
   '/app/timetable', '/app/availability',
   '/app/exam-hall', '/app/press', '/app/press/orders',
-  '/app/fees', '/app/library', '/app/sports', '/app/announcements', '/app/alumni', '/app/settings',
+  '/app/fees', '/app/pay', '/app/library', '/app/sports', '/app/announcements', '/app/alumni', '/app/profile', '/app/settings',
 ].sort();
 
 describe('the grouped sidebar model', () => {
@@ -49,7 +49,7 @@ describe('the grouped sidebar model', () => {
     const labels = model.map((e) => (e.kind === 'item' ? e.item.label : `▾${e.label}`));
     // Website group survives (the Website page itself is ungated), Admissions
     // survives via ENQUIRY; People/Attendance/Timetable/Exams vanish whole.
-    expect(labels).toEqual(['Dashboard', '▾Website', '▾Admissions', 'Announcements']);
+    expect(labels).toEqual(['Dashboard', '▾Website', '▾Admissions', 'Announcements', 'My profile']);
   });
 
   it('null features (still loading) shows everything — a slow fetch must not hide screens', () => {

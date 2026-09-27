@@ -15,6 +15,7 @@ import {
   Inbox,
   LayoutDashboard,
   Megaphone,
+  MessageSquareWarning,
   Newspaper,
   NotebookPen,
   Printer,
@@ -22,10 +23,12 @@ import {
   Settings,
   Store,
   UserCog,
+  UserCheck,
   Users,
   Wallet,
+  Receipt,
   CalendarRange,
-} from 'lucide-react';
+  UserRound, FileSpreadsheet } from 'lucide-react';
 
 /**
  * The admin sidebar's shape — approved 2 Sept 2026 after the flat list hit 22
@@ -75,6 +78,7 @@ export const NAV_MODEL: NavEntry[] = [
     kind: 'group', key: 'admissions', label: 'Admissions', icon: Inbox,
     items: [
       { href: '/app/enquiries', label: 'Enquiries', icon: Inbox, requiredFeature: 'ENQUIRY' },
+      { href: '/app/concerns', label: 'Complaint Box', icon: MessageSquareWarning, requiredFeature: 'MANAGEMENT' },
     ],
   },
   {
@@ -84,7 +88,9 @@ export const NAV_MODEL: NavEntry[] = [
       { href: '/app/teachers', label: 'Teachers', icon: GraduationCap, requiredFeature: 'MANAGEMENT' },
       { href: '/app/staff', label: 'Staff', icon: UserCog, requiredFeature: 'MANAGEMENT' },
       { href: '/app/classes', label: 'Classes', icon: School, requiredFeature: 'MANAGEMENT' },
+      { href: '/app/class-teachers', label: 'Class teachers', icon: UserCheck, requiredFeature: 'MANAGEMENT' },
       { href: '/app/sessions', label: 'Sessions', icon: CalendarRange, requiredFeature: 'MANAGEMENT' },
+      { href: '/app/onboarding', label: 'Onboarding', icon: FileSpreadsheet, requiredFeature: 'MANAGEMENT' },
       { href: '/app/jobs', label: 'Jobs', icon: Briefcase, requiredFeature: 'HIRING' },
     ],
   },
@@ -112,6 +118,15 @@ export const NAV_MODEL: NavEntry[] = [
   },
 
   { kind: 'item', item: { href: '/app/fees', label: 'Fees', icon: Wallet, requiredFeature: 'FEES' } },
+  // "Pay", one word, so it sits in the same line as Fees and finishes the
+  // sentence the nav already started: Fees is the money coming in, Pay is the
+  // money going out. "Salary" named only half of what the room holds once
+  // reimbursements and settlements arrive. Expenses, when it comes, is a
+  // SIBLING of this and not a tab inside it: pay is monthly, statutory and
+  // private; a vendor bill is none of those.
+  // The FEATURE KEY stays 'SALARY' — it is a stored value in FeatureOverride,
+  // and renaming it would mean a data migration for a word nobody sees.
+  { kind: 'item', item: { href: '/app/pay', label: 'Pay', icon: Receipt, requiredFeature: 'SALARY' } },
   // The shop, not the exams: track print orders, place new ones. Lives under
   // /app/press/orders route-wise (deep links keep working) but stands alone
   // in the nav — leafActive's longest-href rule keeps the two tabs distinct.
@@ -120,6 +135,9 @@ export const NAV_MODEL: NavEntry[] = [
   { kind: 'item', item: { href: '/app/sports', label: 'Sports', icon: Trophy, requiredFeature: 'SPORTS' } },
   { kind: 'item', item: { href: '/app/announcements', label: 'Announcements', icon: Megaphone } },
   { kind: 'item', item: { href: '/app/alumni', label: 'Alumni', icon: Handshake, requiredFeature: 'ALUMNI' } },
+  // The person's own page — name, password, WhatsApp number, what reaches
+  // them. Above Settings because Settings is the school's, this is theirs.
+  { kind: 'item', item: { href: '/app/profile', label: 'My profile', icon: UserRound } },
   { kind: 'item', item: { href: '/app/settings', label: 'Settings', icon: Settings, requiredFeature: 'MANAGEMENT' } },
 ];
 

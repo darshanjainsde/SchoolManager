@@ -93,6 +93,18 @@ export class OwnerController {
     res.send(body);
   }
 
+  /**
+   * One school's data, whole, as JSON — to reproduce a reported problem
+   * locally. Owner-only (this controller), secrets redacted (school-snapshot).
+   */
+  @Get('schools/:id/snapshot.json')
+  @Header('Content-Type', 'application/json; charset=utf-8')
+  async snapshot(@Param('id', ParseUUIDPipe) id: string, @Res() res: Response) {
+    const snap = await this.schools.snapshot(id);
+    res.setHeader('Content-Disposition', `attachment; filename="school-${id}-snapshot-${new Date().toISOString().slice(0, 10)}.json"`);
+    res.send(JSON.stringify(snap));
+  }
+
   /** Runtime health: which rung of the scaling ladder we are on. */
   @Get('ops')
   ops() {

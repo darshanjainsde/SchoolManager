@@ -10,6 +10,7 @@ import { useAuthStore } from '@/lib/auth-store';
 import { homeForRole } from '@/lib/role-routes';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
 import { ROLE_TABS, type LoginTheme, type RoleTab } from './gatehouse-theme';
+import { OtpLogin } from './OtpLogin';
 
 // The identifier is an email for staff and a student code / admission no. OR
 // email for students, so it can't be a blanket z.string().email().
@@ -20,6 +21,8 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 const LAST_ROLE_KEY = 'sk-login-role';
+const LAST_MODE_KEY = 'sk-login-mode';
+type Mode = 'phone' | 'password';
 
 /** Friendly destination line for the gate-open moment, keyed by the API role. */
 const DESTINATION: Record<string, string> = {
@@ -97,6 +100,26 @@ export default function GatehouseLogin({ theme }: { theme: LoginTheme }) {
     }
   }
 
+  // Phone first (design §5): families do not remember passwords. The last
+  // choice is remembered; the door hides itself when no sender can carry a
+  // code yet (the platform not set up), so nobody is shown a dead form.
+  const [mode, setMode] = useState<Mode>('phone');
+  const [otpReady, setOtpReady] = useState<boolean | null>(null);
+  useEffect(() => {
+    const saved = localStorage.getItem(LAST_MODE_KEY);
+    if (saved === 'phone' || saved === 'password') setMode(saved);
+  }, []);
+  useEffect(() => {
+    if (!host) return;
+    api.get<{ ready: boolean }>('/auth/otp/ready').then((r) => setOtpReady(r.ready)).catch(() => setOtpReady(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [host]);
+  function pickMode(next: Mode) {
+    setMode(next);
+    try { localStorage.setItem(LAST_MODE_KEY, next); } catch { /* private mode */ }
+  }
+  const phoneDoor = mode === 'phone' && otpReady !== false;
+
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { identifier: '', password: '' },
@@ -132,25 +155,28 @@ export default function GatehouseLogin({ theme }: { theme: LoginTheme }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [host]);
 
+  // The one landing every door shares: tokens in, /auth/me decides where
+  // the person goes. Never trust the selector or the chooser for that.
+  async function land(res: { accessToken: string; refreshToken?: string }) {
+    setTokens({ ...res, audience: 'school' });
+    const me = await api.get<{ userId: string; schoolId?: string; role?: string; staffRole?: string | null }>(
+      '/auth/me',
+    );
+    setMe(me);
+    const target = homeForRole(me.role, me.staffRole);
+    setDestination(target === '/library' ? 'Opening the library' : (DESTINATION[me.role ?? ''] ?? 'Opening your portal'));
+    setPhase('open');
+    // Let the flood play one beat; routing happens under it.
+    setTimeout(() => router.replace(target), 900);
+  }
+
   async function onSubmit(values: FormValues) {
     try {
       const res = await api.post<{ accessToken: string; refreshToken: string }>('/auth/login', {
         identifier: values.identifier.trim(),
         password: values.password,
       });
-      setTokens({ ...res, audience: 'school' });
-      const me = await api.get<{ userId: string; schoolId?: string; role?: string; staffRole?: string | null }>(
-        '/auth/me',
-      );
-
-      setMe(me);
-      // Never trust the selector — the API's role decides where the user
-      // lands. The gate-open line reads the API's answer for the same reason.
-      const target = homeForRole(me.role, me.staffRole);
-      setDestination(target === '/library' ? 'Opening the library' : (DESTINATION[me.role ?? ''] ?? 'Opening your portal'));
-      setPhase('open');
-      // Let the flood play one beat; routing happens under it.
-      setTimeout(() => router.replace(target), 900);
+      await land(res);
     } catch (e) {
       setShaking(true);
       shakeTimer.current = setTimeout(() => setShaking(false), 500);
@@ -211,6 +237,31 @@ export default function GatehouseLogin({ theme }: { theme: LoginTheme }) {
         {/* ── Form panel ── */}
         <div className="gh-right">
           <form className="gh-form" onSubmit={form.handleSubmit(onSubmit)}>
+            {otpReady !== false && (
+              <div className="gh-modes" role="radiogroup" aria-label="Sign in with">
+                {([['phone', 'Mobile number'], ['password', 'Email & password']] as const).map(([m, label]) => (
+                  <button key={m} type="button" role="radio" aria-checked={mode === m} className="gh-mode" onClick={() => pickMode(m)}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {phoneDoor ? (
+              <OtpLogin
+                api={api}
+                disabled={phase === 'open'}
+                onTokens={async (t) => {
+                  try {
+                    await land(t);
+                  } catch (e) {
+                    setShaking(true);
+                    shakeTimer.current = setTimeout(() => setShaking(false), 500);
+                    toast.error((e as Error).message);
+                  }
+                }}
+              />
+            ) : (
+            <>
             <p className="gh-label gh-signin-as">Sign in as</p>
             <div className="gh-roles" role="radiogroup" aria-label="Sign in as">
               {ROLE_TABS.map((t) => (
@@ -269,6 +320,8 @@ export default function GatehouseLogin({ theme }: { theme: LoginTheme }) {
             <a href="/forgot-password" className="gh-forgot">
               Forgot password?
             </a>
+            </>
+            )}
             {theme.branded && (
               <p className="gh-powered">
                 Powered by <b>Sckools</b>

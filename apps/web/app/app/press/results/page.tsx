@@ -248,7 +248,7 @@ export default function ResultRoomPage() {
   const dueIn = w?.resultDay ? daysTo(w.resultDay) : null;
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-5">
+    <div className="flex flex-col gap-5">
       <header className="sk-pagehead">
         <Link href="/app/press" className="sk-seelink" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
           <ArrowLeft size={13} aria-hidden="true" /> The Press

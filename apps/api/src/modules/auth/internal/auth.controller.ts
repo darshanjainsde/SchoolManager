@@ -7,6 +7,7 @@ import { AuthService } from './auth.service';
 import { PasswordResetService } from './password-reset.service';
 import { ForgotPasswordDto, ImpersonateDto, LoginDto, RefreshDto, ResetByCodeDto, ResetPasswordDto, ResolveSchoolDto } from './dto';
 import { SchoolResolveService } from './school-resolve.service';
+import { OtpAuthService } from './otp-auth.service';
 import { TenantContextService } from '../../tenancy';
 import { FeatureResolverService } from '../../features';
 import { Public } from '../../../common/auth/public.decorator';
@@ -35,6 +36,7 @@ export class AuthController {
     private readonly tenantCtx: TenantContextService,
     private readonly features: FeatureResolverService,
     private readonly schoolResolve: SchoolResolveService,
+    private readonly otpAuth: OtpAuthService,
   ) {}
 
   /**
@@ -104,11 +106,16 @@ export class AuthController {
   @Public()
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('forgot-password')
-  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+  async forgotPassword(@Req() req: Request, @Body() dto: ForgotPasswordDto) {
     const ctx = this.tenantCtx.requireTenant();
     await this.passwordReset.requestReset(ctx.schoolId, dto.email);
-    // Identical response whether or not the account exists.
-    return { ok: true };
+    // A login with a phone we can reach also gets a one-time code (design
+    // §4) — the client then offers "type the code" beside "check your
+    // email". Without a phone the answer is the plain ok it always was.
+    const fwd = req.headers['x-forwarded-for'];
+    const ip = (Array.isArray(fwd) ? fwd[0] : fwd?.split(',')[0]) ?? req.ip ?? null;
+    const code = await this.otpAuth.startReset(ctx.schoolId, dto.email, ip);
+    return code ? { ok: true, ...code } : { ok: true };
   }
 
   /**

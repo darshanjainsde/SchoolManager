@@ -41,7 +41,8 @@ export function ClassChips({
               paddingVertical: 9,
               paddingHorizontal: 13,
             }}
-          >
+            accessibilityRole="button"
+            >
             <Text
               style={{
                 fontSize: 12.5,

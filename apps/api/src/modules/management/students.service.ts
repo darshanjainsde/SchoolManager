@@ -1,3 +1,4 @@
+import { toE164 } from '../../common/otp/phone-identity';
 import { randomBytes } from 'node:crypto';
 import {
   BadRequestException,
@@ -53,6 +54,50 @@ export const ROSTER_SELECT = {
   rollNo: true,
 } as const;
 
+/**
+ * The admin list projection — an explicit field list, not `include`.
+ *
+ * `include: { classSection: … }` narrows the RELATION and says nothing about
+ * the columns, so every one of Student's 36 scalars shipped: the CBSE and
+ * transfer-certificate block, both parents' names, nationality, category,
+ * previous school, the PEN id, the E.164 phone twin, who last changed the
+ * status and when. The roster screen renders seven columns and its edit form
+ * reads eleven more; none of the rest appears anywhere on it.
+ *
+ * At roughly 1,082 B per row for the full record against 365 B for this one,
+ * a two-thousand-child school was sending about 2.1 MB to draw a table — and
+ * the admin-onboarding work is teaching schools to fill in exactly the fields
+ * that were riding along, so it was getting heavier every term.
+ *
+ * The rule this file was already following one function up: a payload should
+ * be a deliberate list, not whatever the model happens to grow next.
+ */
+export const LIST_SELECT = {
+  id: true,
+  admissionNo: true,
+  firstName: true,
+  lastName: true,
+  email: true,
+  classSectionId: true,
+  rollNo: true,
+  guardianName: true,
+  guardianPhone: true,
+  photoAssetId: true,
+  userId: true,
+  status: true,
+  leftOn: true,
+  alumniBatch: true,
+  dob: true,
+  showOnWebsite: true,
+  photoConsent: true,
+  classSection: {
+    select: {
+      name: true,
+      grade: { select: { name: true } },
+    },
+  },
+} as const;
+
 export type { RosterStudent };
 
 /**
@@ -100,18 +145,7 @@ export class StudentsService {
     }
 
     return withTenant(schoolId, (tx) =>
-      tx.student.findMany({ take: LIST_CEILING.ROSTER,
-        where,
-        orderBy,
-        include: {
-          classSection: {
-            select: {
-              name: true,
-              grade: { select: { name: true } },
-            },
-          },
-        },
-      }),
+      tx.student.findMany({ take: LIST_CEILING.ROSTER, where, orderBy, select: { ...LIST_SELECT } }),
     );
   }
 
@@ -138,6 +172,8 @@ export class StudentsService {
         return tx.student.create({
           data: {
             ...rest,
+            // The E.164 twin of the office-typed number: the phone login's index.
+            guardianPhoneE164: toE164(rest.guardianPhone),
             schoolId,
             code,
             dob: dob ? new Date(dob) : undefined,
@@ -193,6 +229,7 @@ export class StudentsService {
           where: { id },
           data: {
             ...rest,
+            ...(rest.guardianPhone !== undefined ? { guardianPhoneE164: toE164(rest.guardianPhone) } : {}),
             ...(dob !== undefined ? { dob: new Date(dob) } : {}),
             ...(firstAdmissionDate !== undefined ? { firstAdmissionDate: new Date(firstAdmissionDate) } : {}),
           },

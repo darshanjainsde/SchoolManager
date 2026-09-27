@@ -5,6 +5,7 @@ import type { AvatarUploadResponse, TeacherProfile } from '@skoolos/types';
 import { Input } from '@/components/ui/input';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
+import { PhoneCard } from '@/components/phone-card';
 
 const fieldCls =
   'rounded-[10px] border border-[var(--sk-line-2)] bg-[var(--sk-card)] px-[11px] py-[9px] text-[13.5px] text-[var(--sk-ink)] placeholder:text-[var(--sk-ink-3)] focus-visible:outline-none focus-visible:border-[var(--sk-brand)] focus-visible:shadow-[0_0_0_3px_var(--sk-brand-tint)] disabled:opacity-60 disabled:cursor-not-allowed';
@@ -230,6 +231,8 @@ export default function TeacherProfilePage() {
           )}
         </div>
       </div>
+
+      <PhoneCard role="teacher" />
 
       <div className="sk-card">
         <div className="sk-card-h">

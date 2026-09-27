@@ -124,3 +124,16 @@ export async function resolveStudentRecipients(
   }
   return recipients;
 }
+
+/**
+ * Every active SCHOOL_ADMIN login of the school — the people who act on a
+ * request. Email reaches all of them; WhatsApp reaches those whose number
+ * is verified (the channel decides that, not this resolver).
+ */
+export async function resolveAdminRecipients(db: TenantTx, schoolId: string): Promise<{ userId: string; email: string }[]> {
+  const admins = await db.user.findMany({
+    where: { schoolId, role: 'SCHOOL_ADMIN', isActive: true },
+    select: { id: true, email: true },
+  });
+  return admins.filter((a) => a.email).map((a) => ({ userId: a.id, email: a.email }));
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Toaster } from 'sonner';
 import type { StudentDiaryEntry, StudentDiaryResult } from '@skoolos/types';
@@ -62,14 +62,18 @@ beforeEach(() => {
 });
 
 describe('PortalDiaryPage', () => {
-  it('shows the page and says how many remarks still need signing', async () => {
+  it('falls back to the day list when the API predates the month grid', async () => {
+    // The web deploys before the API, so for a few minutes a family's console
+    // asks for a month and gets an answer without one. Drawing an empty
+    // calendar would be worse than the list it replaced, so the list stays.
     vi.mocked(useApi).mockReturnValue(
       stub({ entries: [ITEM, REMARK], unsignedCount: 1 }) as never,
     );
     renderPage();
 
     expect(await screen.findByText('Maths worksheet 7.3.')).toBeInTheDocument();
-    expect(screen.getByText(/1 still to sign/)).toBeInTheDocument();
+    expect(screen.getByText(/1 remark still to sign/)).toBeInTheDocument();
+    expect(document.querySelector('.sk-dcal')).toBeNull();
   });
 
   it('an ordinary entry has no signature line', async () => {
@@ -125,5 +129,74 @@ describe('PortalDiaryPage', () => {
 
     expect(await screen.findByTestId('signed-e2')).toHaveTextContent('by Priya Sharma');
     expect(screen.queryByTestId('sign-e2')).not.toBeInTheDocument();
+  });
+});
+
+// ── the month grid ───────────────────────────────────────────────────────────
+
+describe('PortalDiaryPage, the month grid', () => {
+  /** A September with a shut Sunday, a named holiday and one remark to sign. */
+  const SEPT = Array.from({ length: 30 }, (_, i) => {
+    const date = `2026-09-${String(i + 1).padStart(2, '0')}`;
+    const sunday = new Date(`${date}T00:00:00Z`).getUTCDay() === 0;
+    return {
+      date,
+      items: date === '2026-09-17' ? 1 : 0,
+      remarks: date === '2026-09-17' ? 1 : 0,
+      unsigned: date === '2026-09-17' ? 1 : 0,
+      offReason: sunday ? 'Sunday' : date === '2026-09-21' ? 'Ganesh Chaturthi break' : null,
+    };
+  });
+  const MONTH = {
+    entries: [{ ...ITEM, id: 'm1', date: '2026-09-17' }],
+    unsignedCount: 1,
+    month: { month: '2026-09', days: SEPT, firstMonth: '2026-04', lastMonth: '2027-03' },
+  };
+
+  const openMonth = () => {
+    vi.mocked(useApi).mockReturnValue(stub(MONTH) as never);
+    renderPage();
+  };
+
+  it('draws every day of the month, closed days included', async () => {
+    openMonth();
+    expect(await screen.findByTestId('diary-day-2026-09-01')).toBeInTheDocument();
+    expect(screen.getByTestId('diary-day-2026-09-30')).toBeInTheDocument();
+    // A day the school was shut is still a square — a parent looking for it
+    // must find it where the date is, not find a gap.
+    expect(screen.getByTestId('diary-day-2026-09-06')).toHaveAttribute('data-diary', 'off');
+  });
+
+  it('marks the day that still needs a signature above everything else', async () => {
+    openMonth();
+    const day = await screen.findByTestId('diary-day-2026-09-17');
+    expect(day).toHaveAttribute('data-diary', 'remark');
+    expect(day.querySelector('.sk-cell-dot')).not.toBeNull();
+  });
+
+  it('says WHY a day is empty, rather than just showing nothing', async () => {
+    openMonth();
+    const holiday = await screen.findByTestId('diary-day-2026-09-21');
+    fireEvent.click(holiday);
+    expect(await screen.findByTestId('diary-empty-day')).toBeInTheDocument();
+    expect(screen.getByText(/Ganesh Chaturthi break/)).toBeInTheDocument();
+  });
+
+  it('opens a date without asking the server again', async () => {
+    const api = stub(MONTH);
+    vi.mocked(useApi).mockReturnValue(api as never);
+    renderPage();
+    const before = (api.get as ReturnType<typeof vi.fn>).mock.calls.length;
+    fireEvent.click(await screen.findByTestId('diary-day-2026-09-17'));
+    expect(await screen.findByText('Maths worksheet 7.3.')).toBeInTheDocument();
+    // The month came in one answer, so a tap is a re-render, not a round trip.
+    expect((api.get as ReturnType<typeof vi.fn>).mock.calls.length).toBe(before);
+  });
+
+  it('stops the arrows at the session rather than paging into an empty year', async () => {
+    openMonth();
+    await screen.findByTestId('diary-day-2026-09-01');
+    expect(screen.getByTestId('diary-prev-month')).not.toBeDisabled();
+    expect(screen.getByTestId('diary-next-month')).not.toBeDisabled();
   });
 });

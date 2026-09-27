@@ -249,7 +249,8 @@ export default function ClassNotesHistory() {
                 borderTopWidth: 1,
                 borderTopColor: tokens.color.line,
               }}
-            >
+              accessibilityRole="button"
+              >
               <TickBox done={t.done} testID={`todo-box-${t.id}`} />
               <Text
                 style={{
@@ -280,7 +281,8 @@ export default function ClassNotesHistory() {
               paddingVertical: 8,
               paddingHorizontal: 13,
             }}
-          >
+            accessibilityRole="button"
+            >
             <Text
               style={{
                 fontSize: 12.5,
@@ -302,7 +304,8 @@ export default function ClassNotesHistory() {
               paddingVertical: 8,
               paddingHorizontal: 13,
             }}
-          >
+            accessibilityRole="button"
+            >
             <Text
               style={{
                 fontSize: 12.5,
@@ -356,7 +359,8 @@ export default function ClassNotesHistory() {
             paddingHorizontal: 18,
             opacity: adding || body.trim().length === 0 ? 0.6 : 1,
           }}
-        >
+          accessibilityRole="button"
+          >
           <Text style={{ color: tokens.color.onBrand, fontWeight: '700', fontSize: 13 }}>
             {adding ? 'Adding…' : mode === 'note' ? 'Add note' : 'Add to-do'}
           </Text>

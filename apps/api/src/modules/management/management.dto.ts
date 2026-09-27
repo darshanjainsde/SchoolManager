@@ -20,7 +20,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { RESULT_STATUSES, STUDENT_CATEGORIES } from '@skoolos/types';
+import { BLOOD_GROUPS, EMPLOYMENT_TYPES, GENDERS, POLICE_VERIFICATION, RESULT_STATUSES, STUDENT_CATEGORIES, TEACHER_DESIGNATIONS, TET_STATUSES, codesOf } from '@skoolos/types';
 import {
   ASSIGNMENT_ATTACHMENT_KINDS,
   AssignmentAttachmentKind,
@@ -196,6 +196,38 @@ export class CreateTeacherDto {
   bio?: string;
 
   // `isActive` mirrors `status` and is written only by release / reactivate.
+  // ── Onboarding record — every field optional; lists come from @skoolos/types ──
+  @IsOptional() @IsIn(codesOf(GENDERS)) gender?: string;
+  @IsOptional() @IsDateString() dob?: string;
+  @IsOptional() @IsIn([...BLOOD_GROUPS]) bloodGroup?: string;
+  @IsOptional() @IsString() @Length(0, 30) whatsappPhone?: string;
+  @IsOptional() @IsBoolean() whatsappOptIn?: boolean;
+  @IsOptional() @IsString() @Length(0, 40) employeeCode?: string;
+  @IsOptional() @IsIn(codesOf(TEACHER_DESIGNATIONS)) designation?: string;
+  @IsOptional() @IsString() @Length(0, 80) department?: string;
+  @IsOptional() @IsIn(codesOf(EMPLOYMENT_TYPES)) employmentType?: string;
+  @IsOptional() @IsDateString() joinedOn?: string;
+  @IsOptional() @IsString() @Length(0, 120) highestQualification?: string;
+  @IsOptional() @IsString() @Length(0, 60) professionalQualification?: string;
+  @IsOptional() @IsIn(codesOf(TET_STATUSES)) tetStatus?: string;
+  @IsOptional() @IsString() @Length(0, 60) tetCertificateNo?: string;
+  @IsOptional() @IsDateString() tetValidTill?: string;
+  @IsOptional() @IsString() @Length(0, 120) specialisation?: string;
+  @IsOptional() @IsInt() @Min(0) @Max(60) experienceYears?: number;
+  @IsOptional() @IsString() @Length(0, 160) previousSchool?: string;
+  @IsOptional() @IsString() @Length(0, 160) addressLine1?: string;
+  @IsOptional() @IsString() @Length(0, 160) addressLine2?: string;
+  @IsOptional() @IsString() @Length(0, 80) city?: string;
+  @IsOptional() @IsString() @Length(0, 80) region?: string;
+  @IsOptional() @IsString() @Length(0, 12) postalCode?: string;
+  @IsOptional() @IsString() @Length(0, 120) emergencyContactName?: string;
+  @IsOptional() @IsString() @Length(0, 30) emergencyContactPhone?: string;
+  @IsOptional() @IsString() @Length(0, 40) emergencyContactRelation?: string;
+  @IsOptional() @IsIn(codesOf(POLICE_VERIFICATION)) policeVerification?: string;
+  @IsOptional() @IsDateString() policeVerifiedOn?: string;
+  @IsOptional() @IsDateString() medicalFitnessOn?: string;
+  @IsOptional() @IsDateString() pocsoTrainedOn?: string;
+
 }
 
 export class UpdateTeacherDto {
@@ -230,6 +262,38 @@ export class UpdateTeacherDto {
   bio?: string;
 
   // `isActive` mirrors `status` and is written only by release / reactivate.
+  // ── Onboarding record — every field optional; lists come from @skoolos/types ──
+  @IsOptional() @IsIn(codesOf(GENDERS)) gender?: string;
+  @IsOptional() @IsDateString() dob?: string;
+  @IsOptional() @IsIn([...BLOOD_GROUPS]) bloodGroup?: string;
+  @IsOptional() @IsString() @Length(0, 30) whatsappPhone?: string;
+  @IsOptional() @IsBoolean() whatsappOptIn?: boolean;
+  @IsOptional() @IsString() @Length(0, 40) employeeCode?: string;
+  @IsOptional() @IsIn(codesOf(TEACHER_DESIGNATIONS)) designation?: string;
+  @IsOptional() @IsString() @Length(0, 80) department?: string;
+  @IsOptional() @IsIn(codesOf(EMPLOYMENT_TYPES)) employmentType?: string;
+  @IsOptional() @IsDateString() joinedOn?: string;
+  @IsOptional() @IsString() @Length(0, 120) highestQualification?: string;
+  @IsOptional() @IsString() @Length(0, 60) professionalQualification?: string;
+  @IsOptional() @IsIn(codesOf(TET_STATUSES)) tetStatus?: string;
+  @IsOptional() @IsString() @Length(0, 60) tetCertificateNo?: string;
+  @IsOptional() @IsDateString() tetValidTill?: string;
+  @IsOptional() @IsString() @Length(0, 120) specialisation?: string;
+  @IsOptional() @IsInt() @Min(0) @Max(60) experienceYears?: number;
+  @IsOptional() @IsString() @Length(0, 160) previousSchool?: string;
+  @IsOptional() @IsString() @Length(0, 160) addressLine1?: string;
+  @IsOptional() @IsString() @Length(0, 160) addressLine2?: string;
+  @IsOptional() @IsString() @Length(0, 80) city?: string;
+  @IsOptional() @IsString() @Length(0, 80) region?: string;
+  @IsOptional() @IsString() @Length(0, 12) postalCode?: string;
+  @IsOptional() @IsString() @Length(0, 120) emergencyContactName?: string;
+  @IsOptional() @IsString() @Length(0, 30) emergencyContactPhone?: string;
+  @IsOptional() @IsString() @Length(0, 40) emergencyContactRelation?: string;
+  @IsOptional() @IsIn(codesOf(POLICE_VERIFICATION)) policeVerification?: string;
+  @IsOptional() @IsDateString() policeVerifiedOn?: string;
+  @IsOptional() @IsDateString() medicalFitnessOn?: string;
+  @IsOptional() @IsDateString() pocsoTrainedOn?: string;
+
 }
 
 // ── Staff (non-teaching) ────────────────────────────────────────────────────
@@ -241,7 +305,7 @@ export class UpdateTeacherDto {
  * The login role stays STAFF — the job title, not the account type, is what
  * makes a librarian.
  */
-const STAFF_ROLES = ['OFFICE', 'SUPPORT', 'DRIVER', 'HELPER', 'SECURITY', 'LIBRARIAN', 'SPORTS', 'OTHER'] as const;
+const STAFF_ROLES = ['OFFICE', 'SUPPORT', 'DRIVER', 'HELPER', 'SECURITY', 'LIBRARIAN', 'SPORTS', 'ACCOUNTS', 'OTHER'] as const;
 export type StaffRoleValue = (typeof STAFF_ROLES)[number];
 
 export class CreateStaffDto {
@@ -663,6 +727,11 @@ export class CreateLeaveDto {
   @IsString()
   @Length(1, 2000)
   reason?: string;
+
+  /** One date at half strength. The DB CHECKs that start and end agree. */
+  @IsOptional()
+  @IsBoolean()
+  halfDay?: boolean;
 }
 
 export class AssignSubstitutionDto {
@@ -692,6 +761,22 @@ export class CreateLeaveTypeDefDto {
   @Min(0)
   @Max(366)
   carryForwardCap?: number;
+  /**
+   * The same type, a different audience. Teachers and non-teaching staff are
+   * rarely given the same number of days, and one column would have forced
+   * the larger of the two on everybody.
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(366)
+  defaultAnnualStaff?: number;
+
+  /** Never costs pay, whatever the balance says — maternity, bereavement. */
+  @IsOptional()
+  @IsBoolean()
+  neverDeduct?: boolean;
+
 }
 
 export class UpdateLeaveTypeDefDto {
@@ -719,6 +804,22 @@ export class UpdateLeaveTypeDefDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+  /**
+   * The same type, a different audience. Teachers and non-teaching staff are
+   * rarely given the same number of days, and one column would have forced
+   * the larger of the two on everybody.
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(366)
+  defaultAnnualStaff?: number;
+
+  /** Never costs pay, whatever the balance says — maternity, bereavement. */
+  @IsOptional()
+  @IsBoolean()
+  neverDeduct?: boolean;
+
 }
 
 export class SetLeaveAllocationDto {
@@ -1169,4 +1270,13 @@ export class ReleaseStaffDto {
 
   @IsOptional() @IsString() @Length(0, 2000)
   note?: string;
+}
+
+/** One section's class teacher. `null` clears it — an empty string would be a uuid error. */
+export class AssignClassTeacherDto {
+  @IsOptional() @ValidateIf((_o, v) => v !== null) @IsUUID() teacherId?: string | null;
+}
+
+export class CopyClassTeachersDto {
+  @IsUUID() fromYearId!: string;
 }

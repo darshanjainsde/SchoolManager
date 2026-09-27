@@ -2,6 +2,7 @@ import { Global, Module } from '@nestjs/common';
 import { getPlatformPrisma } from '@skoolos/db';
 import { EmailChannel } from './email.channel';
 import { PushChannel } from './push.channel';
+import { WhatsAppChannel } from './whatsapp.channel';
 import { NOTIFICATION_CHANNELS } from './notification-channels.token';
 import { NotificationService } from './notification.service';
 
@@ -9,9 +10,10 @@ import { NotificationService } from './notification.service';
  * Global (mirrors MailModule) so any module can inject `NotificationService`
  * without importing this module explicitly.
  *
- * To add WhatsApp later: implement `WhatsAppChannel` (NotificationChannel),
- * add it to `providers`, and add it to the `NOTIFICATION_CHANNELS` factory's
- * array + `inject` list below. No other file changes.
+ * `WhatsAppChannel` is wired exactly as this docstring once promised: a
+ * provider, an entry in the `NOTIFICATION_CHANNELS` array, nothing else.
+ * Whether a given school actually receives WhatsApp is the channel's own
+ * decision (per-school switch), not this module's.
  *
  * `PushChannel` is built via its own `useFactory` (rather than letting Nest
  * construct it off `@Injectable()` metadata) because its one dependency is a
@@ -30,9 +32,13 @@ import { NotificationService } from './notification.service';
       useFactory: () => new PushChannel(getPlatformPrisma()),
     },
     {
+      provide: WhatsAppChannel,
+      useFactory: () => new WhatsAppChannel(getPlatformPrisma()),
+    },
+    {
       provide: NOTIFICATION_CHANNELS,
-      useFactory: (email: EmailChannel, push: PushChannel) => [email, push],
-      inject: [EmailChannel, PushChannel],
+      useFactory: (email: EmailChannel, push: PushChannel, whatsapp: WhatsAppChannel) => [email, push, whatsapp],
+      inject: [EmailChannel, PushChannel, WhatsAppChannel],
     },
     NotificationService,
   ],
@@ -41,6 +47,6 @@ import { NotificationService } from './notification.service';
   // it directly and send push for a drained outbox row without re-running it
   // through `NotificationService.notify()`'s all-channels fan-out — the
   // outbox is push-only by design (see notify()'s onlyChannels docstring).
-  exports: [NotificationService, PushChannel],
+  exports: [NotificationService, PushChannel, WhatsAppChannel],
 })
 export class NotificationModule {}

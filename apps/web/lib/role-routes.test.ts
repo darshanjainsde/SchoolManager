@@ -14,6 +14,16 @@ describe('homeForRole', () => {
     expect(homeForRole('STAFF')).toBe('/staff');
   });
 
+  it('routes the accounts officer (STAFF + staffRole ACCOUNTS) to Pay, and no other role there', () => {
+    // The JOB opens the door; SalaryGuard still asks whether they hold the
+    // salary right. Landing them anywhere else would mean a login that has to
+    // be told where its own work is.
+    expect(homeForRole('STAFF', 'ACCOUNTS')).toBe('/app/pay');
+    expect(homeForRole('TEACHER', 'ACCOUNTS')).toBe('/teacher');
+    expect(homeForRole('SCHOOL_ADMIN', 'ACCOUNTS')).toBe('/app');
+    expect(homeForRole('STAFF', null)).toBe('/staff');
+  });
+
   it('routes the sports teacher (STAFF + staffRole SPORTS) to /sports, and no other role there', () => {
     expect(homeForRole('STAFF', 'SPORTS')).toBe('/sports');
     expect(homeForRole('TEACHER', 'SPORTS')).toBe('/teacher');

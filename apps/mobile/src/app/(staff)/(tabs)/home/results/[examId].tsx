@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Animated, Pressable, Text, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState, memo, useMemo } from 'react';
+import { Alert, Animated, Pressable, Text, TextInput, View, type TextStyle } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import type {
   Exam,
@@ -97,6 +97,76 @@ const PUBLISH_WARNING =
   'Publishing makes every saved mark visible to students and parents, and emails them that ' +
   'results are out. Save any pending marks first — only marks already saved get published.';
 
+/**
+ * ONE STUDENT'S MARK. Memoised, because the roster is 40–60 rows and every
+ * keystroke used to clone the whole entries map and re-render all of them —
+ * visible typing lag on a class of 50 (perf audit 2026-09-22, #4). The box is
+ * also 44 dp of hit area now, and the return key walks to the next student
+ * instead of dismissing the keyboard (UI audit #2).
+ */
+const MarkRow = memo(function MarkRow({
+  student,
+  value,
+  maxMarks,
+  inputStyle,
+  doneInputStyle,
+  inputRef,
+  onChange,
+  onSubmit,
+  last,
+}: {
+  student: RosterStudent;
+  value: string;
+  maxMarks: number;
+  inputStyle: TextStyle;
+  doneInputStyle: TextStyle;
+  inputRef: (el: TextInput | null) => void;
+  onChange: (id: string, v: string) => void;
+  onSubmit: (id: string) => void;
+  last: boolean;
+}) {
+  const tokens = useTokens();
+  const bad = markOutOfRange(value, maxMarks);
+  const filled = value.trim().length > 0 && !bad;
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 9,
+        paddingVertical: 7,
+        borderBottomWidth: 1,
+        borderBottomColor: tokens.color.line,
+      }}
+    >
+      <Text style={{ fontFamily: font.mono, fontSize: 10.5, color: tokens.color.sub, width: 24, textAlign: 'right' }}>
+        {student.rollNo ?? '—'}
+      </Text>
+      <Text style={{ fontWeight: '600', fontSize: 13, color: tokens.color.ink, flex: 1 }}>
+        {student.firstName} {student.lastName}
+      </Text>
+      <TextInput
+        ref={inputRef}
+        testID={`mark-${student.id}`}
+        accessibilityLabel={`Marks for ${student.firstName} ${student.lastName}`}
+        value={value}
+        onChangeText={(v) => onChange(student.id, v)}
+        keyboardType="numeric"
+        returnKeyType={last ? 'done' : 'next'}
+        blurOnSubmit={last}
+        onSubmitEditing={() => onSubmit(student.id)}
+        placeholder="—"
+        placeholderTextColor={tokens.color.placeholder}
+        style={[
+          inputStyle,
+          filled ? doneInputStyle : null,
+          bad ? { borderColor: tokens.color.red, color: tokens.color.red } : null,
+        ]}
+      />
+    </View>
+  );
+});
+
 export default function ExamResults() {
   const tokens = useTokens();
   // `.mkrow input` — a small mono box, because a column of marks is a column
@@ -113,6 +183,9 @@ export default function ExamResults() {
     color: tokens.color.ink,
     backgroundColor: tokens.color.appBg,
     width: 56,
+    // 32 dp tall before — under the 44 a thumb needs, forty times down a
+    // column where a mis-tap lands on the wrong student (UI audit #2).
+    minHeight: 44,
     textAlign: 'center' as const,
   };
   // `.mkrow input.doneIn` — a filled, in-range box turns green-tinted. Not a
@@ -215,11 +288,24 @@ export default function ExamResults() {
   const alreadyPublished = (saved ?? []).some((r) => r.publishedAt !== null);
   const publishedAt = (saved ?? []).find((r) => r.publishedAt !== null)?.publishedAt ?? null;
 
-  const parsed = buildResultsPayload(students, entries);
+  // Stable so a memoised row is not re-created by every parent render.
+  const setMark = useCallback((id: string, v: string) => setEntries((m) => ({ ...m, [id]: v })), []);
+  const inputs = useRef<Record<string, TextInput | null>>({});
+  const focusNext = useCallback(
+    (id: string) => {
+      const order = students.map((st) => st.id);
+      const next = order[order.indexOf(id) + 1];
+      if (next) inputs.current[next]?.focus();
+    },
+    [students],
+  );
+
+  // Recomputed over the whole roster on every keystroke before.
+  const parsed = useMemo(() => buildResultsPayload(students, entries), [students, entries]);
   // The out-of-range guard: nothing gets saved unless every parsed mark is
   // finite and within 0..maxMarks. Deleting this check (or marksValid's own
   // range test) would let an out-of-range batch reach the PUT below.
-  const valid = !!exam && marksValid(parsed, exam.maxMarks);
+  const valid = useMemo(() => !!exam && marksValid(parsed, exam.maxMarks), [exam, parsed]);
 
   const save = async () => {
     if (!valid || saving || !exam) return;
@@ -335,52 +421,22 @@ export default function ExamResults() {
           {/* `.mkrow` — roll, name, box. The roll leads the row (as it does on
               a paper mark sheet) so the teacher can read down a dictated list
               of numbers without hunting for names. */}
-          {students.map((s) => {
-            const raw = entries[s.id] ?? '';
-            const bad = markOutOfRange(raw, exam.maxMarks);
-            const filled = raw.trim().length > 0 && !bad;
-            return (
-              <View
-                key={s.id}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 9,
-                  paddingVertical: 7,
-                  borderBottomWidth: 1,
-                  borderBottomColor: tokens.color.line,
-                }}
-              >
-                <Text
-                  style={{
-                    fontFamily: font.mono,
-                    fontSize: 10.5,
-                    color: tokens.color.sub,
-                    width: 24,
-                    textAlign: 'right',
-                  }}
-                >
-                  {s.rollNo ?? '—'}
-                </Text>
-                <Text style={{ fontWeight: '600', fontSize: 13, color: tokens.color.ink, flex: 1 }}>
-                  {s.firstName} {s.lastName}
-                </Text>
-                <TextInput
-                  testID={`mark-${s.id}`}
-                  value={raw}
-                  onChangeText={(v) => setEntries((m) => ({ ...m, [s.id]: v }))}
-                  keyboardType="numeric"
-                  placeholder="—"
-                  placeholderTextColor={tokens.color.placeholder}
-                  style={[
-                    inputStyle,
-                    filled ? doneInputStyle : null,
-                    bad ? { borderColor: tokens.color.red, color: tokens.color.red } : null,
-                  ]}
-                />
-              </View>
-            );
-          })}
+          {students.map((s, i) => (
+            <MarkRow
+              key={s.id}
+              student={s}
+              value={entries[s.id] ?? ''}
+              maxMarks={exam.maxMarks}
+              inputStyle={inputStyle}
+              doneInputStyle={doneInputStyle}
+              inputRef={(el) => {
+                inputs.current[s.id] = el;
+              }}
+              onChange={setMark}
+              onSubmit={focusNext}
+              last={i === students.length - 1}
+            />
+          ))}
           {/* THE INK LINE plus its count — the pitch's `.mprog` + `#mkcount`. */}
           <View style={{ paddingTop: 10, paddingBottom: 12, gap: 4 }}>
             <InkProgress done={parsed.length} total={students.length} />
@@ -425,7 +481,8 @@ export default function ExamResults() {
               padding: 12,
               opacity: !valid || saving ? 0.6 : 1,
             }}
-          >
+            accessibilityRole="button"
+            >
             <Text style={{ color: tokens.color.onBrand, fontWeight: '700', textAlign: 'center', fontSize: 13 }}>
               {saving ? 'Saving…' : 'Save marks'}
             </Text>
@@ -442,7 +499,8 @@ export default function ExamResults() {
                 padding: 12,
                 opacity: publishing ? 0.6 : 1,
               }}
-            >
+              accessibilityRole="button"
+              >
               <Text style={{ color: tokens.color.late, fontWeight: '700', textAlign: 'center', fontSize: 13 }}>
                 {publishing ? 'Publishing…' : 'Publish results'}
               </Text>

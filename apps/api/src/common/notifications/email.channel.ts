@@ -36,6 +36,12 @@ export class EmailChannel implements NotificationChannel {
         return this.mail.sendDiaryRemark(to, message.payload, schoolId);
       case 'LOW_ATTENDANCE':
         return this.mail.sendLowAttendance(to, message.payload, schoolId);
+      case 'LEAVE_APPLIED':
+        return this.mail.sendLeaveApplied(to, message.payload, schoolId);
+      case 'LEAVE_DECIDED':
+        return this.mail.sendLeaveDecided(to, message.payload, schoolId);
+      case 'COVER_ASSIGNED':
+        return this.mail.sendCoverAssigned(to, message.payload, schoolId);
       default: {
         // Exhaustiveness guard — a new NotificationKind must be handled above.
         const _exhaustive: never = message;

@@ -200,7 +200,9 @@ export const brand = {
      */
     now: ['#4F46E5', '#6D5CF0'] as const,
     indigo: ['#4F46E5', '#6D5CF0', '#8B5CF6'] as const,
-    green: ['#10B981', '#0EA5A4', '#22C55E'] as const,
+    // Darkened so white ink on the hero clears AA (was #10B981/#0EA5A4/#22C55E,
+    // ≈2.0:1 against white — the weekend card at the top of Home; UI audit #19).
+    green: ['#047857', '#0F766E', '#15803D'] as const,
     done: ['#334155', '#4338CA', '#6D5CF0'] as const,
     ctaInk: '#4338CA',
     ctaInkGreen: '#047857',

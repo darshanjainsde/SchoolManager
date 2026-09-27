@@ -12,7 +12,7 @@ import type { NotificationRow } from '@skoolos/types';
  * copy would drift the first time a new `kind` shipped).
  */
 
-export type NotificationGroup = '(family)' | '(staff)';
+export type NotificationGroup = '(family)' | '(staff)' | '(worker)';
 
 /**
  * Drawn duotone glyph (components/icons.tsx) per notification kind — pitch №4
@@ -35,6 +35,9 @@ export const KIND_ICON: Record<string, string> = {
   FEE_VERIFIED: 'fees',
   FEE_REJECTED: 'fees',
   FEE_DUE: 'fees',
+  LEAVE_APPLIED: 'calendar',
+  LEAVE_DECIDED: 'calendar',
+  COVER_ASSIGNED: 'calendar',
 };
 
 /**
@@ -45,6 +48,12 @@ export const KIND_ICON: Record<string, string> = {
  * list screen for that kind.
  */
 export function routeFor(group: NotificationGroup, n: NotificationRow): Href | null {
+  // The non-teaching staff portal has one destination of its own — its own
+  // attendance. Everything else marks read and stays put rather than pushing
+  // a screen that does not exist for this role.
+  if (group === '(worker)') {
+    return n.kind === 'ATTENDANCE' ? ('/(worker)/(tabs)/today' as Href) : null;
+  }
   if (n.linkType === 'thread' && n.linkId)
     return `/${group}/(tabs)/home/messages/${n.linkId}` as Href;
   if (group === '(family)') {
@@ -75,6 +84,8 @@ export function routeFor(group: NotificationGroup, n: NotificationRow): Href | n
   }
   // staff
   if (n.kind === 'LIBRARY') return '/(staff)/(tabs)/home/library';
+  // The teacher's own leave: the decision, and a class to cover.
+  if (n.kind === 'LEAVE_DECIDED' || n.kind === 'COVER_ASSIGNED' || n.kind === 'LEAVE_APPLIED') return '/(staff)/(tabs)/home/requests';
   if (n.kind === 'REQUEST_DECISION') return '/(staff)/(tabs)/home/requests';
   if (n.kind === 'DIARY') return '/(staff)/(tabs)/home/diary';
   return null;

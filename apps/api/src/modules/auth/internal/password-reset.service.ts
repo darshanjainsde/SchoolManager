@@ -122,15 +122,22 @@ export class PasswordResetService {
       row.user.schoolId !== schoolId;
     if (invalid) throw new BadRequestException('This reset link is invalid or has expired — request a new one.');
 
+    await db.passwordResetToken.update({ where: { id: row.id }, data: { usedAt: new Date() } });
+    await this.setPassword(row.user.id, newPassword);
+  }
+
+  /**
+   * The one place a password is replaced: new hash, lock cleared, EVERY
+   * refresh token revoked so whoever held the old password is signed out —
+   * the password may have leaked. Shared by the link flow above and the
+   * one-time-code flow (OtpAuthService.resetWithOtp).
+   */
+  async setPassword(userId: string, newPassword: string): Promise<void> {
+    const db = getPlatformPrisma();
     const passwordHash = await this.passwords.hash(newPassword);
     await db.$transaction([
-      db.user.update({ where: { id: row.user.id }, data: { passwordHash, failedLoginAttempts: 0, lockedUntil: null } }),
-      db.passwordResetToken.update({ where: { id: row.id }, data: { usedAt: new Date() } }),
-      // Log out every existing session — the password may have leaked.
-      db.refreshToken.updateMany({
-        where: { userId: row.user.id, revokedAt: null },
-        data: { revokedAt: new Date() },
-      }),
+      db.user.update({ where: { id: userId }, data: { passwordHash, failedLoginAttempts: 0, lockedUntil: null } }),
+      db.refreshToken.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } }),
     ]);
   }
 }

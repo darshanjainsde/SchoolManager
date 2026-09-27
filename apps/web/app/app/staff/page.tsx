@@ -6,6 +6,7 @@ import { BookOpen, Plus, Trash2, Pencil, X, KeyRound, CheckCircle2, Send, UserMi
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import DialogShell from '@/components/ui/dialog-shell';
+import { EmailHint } from '@/components/use-email-check';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -14,7 +15,7 @@ import DialogShell from '@/components/ui/dialog-shell';
  * LIBRARIAN and SPORTS are JOBS — the login each gets is ordinary STAFF; the
  * door follows from /auth/me's staffRole (see lib/role-routes.ts).
  */
-const STAFF_ROLES = ['OFFICE', 'SUPPORT', 'DRIVER', 'HELPER', 'SECURITY', 'LIBRARIAN', 'SPORTS', 'OTHER'] as const;
+const STAFF_ROLES = ['OFFICE', 'SUPPORT', 'DRIVER', 'HELPER', 'SECURITY', 'LIBRARIAN', 'SPORTS', 'ACCOUNTS', 'OTHER'] as const;
 type StaffRoleValue = (typeof STAFF_ROLES)[number];
 
 const ROLE_LABELS: Record<StaffRoleValue, string> = {
@@ -25,6 +26,7 @@ const ROLE_LABELS: Record<StaffRoleValue, string> = {
   SECURITY: 'Security',
   LIBRARIAN: 'Librarian',
   SPORTS: 'Sports teacher',
+  ACCOUNTS: 'Accounts officer',
   OTHER: 'Other',
 };
 
@@ -103,7 +105,7 @@ function StaffReleaseDialog({
           <h3 id="staff-release-h">Remove {fullName(member)} from this school</h3>
           <p>
             Their record and history stay. Their login closes
-            {member.role === 'LIBRARIAN' ? ', and the library counter with it' : member.role === 'SPORTS' ? ', and the sports desk with it' : ''}.
+            {member.role === 'LIBRARIAN' ? ', and the library counter with it' : member.role === 'SPORTS' ? ', and the sports desk with it' : member.role === 'ACCOUNTS' ? ', and their way into Pay with it' : ''}.
           </p>
         </div>
         <div className="sk-card-b" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.4fr)', gap: 10 }}>
@@ -357,6 +359,7 @@ function StaffForm({ title, initial = {}, onSave, isSaving, onCancel, roles }: S
               onChange={(e) => setEmail(e.target.value)}
               placeholder="ravi.kumar@school.com"
             />
+          <EmailHint value={email} onFix={setEmail} />
           </Field>
           <Field label="Phone (optional)" htmlFor="sf-phone">
             <input
@@ -435,10 +438,13 @@ export default function StaffPage() {
   });
   const hasLibrary = meQuery.data?.features?.includes('LIBRARY') ?? false;
   const hasSports = meQuery.data?.features?.includes('SPORTS') ?? false;
+  const hasSalary = meQuery.data?.features?.includes('SALARY') ?? false;
   // Librarian only appears where the school has a library. Offering it
   // otherwise creates a person whose login lands on a counter that refuses
   // her, which reads as a bug in the product rather than a missing feature.
-  const allowedRoles = STAFF_ROLES.filter((r) => (r === 'LIBRARIAN' ? hasLibrary : r === 'SPORTS' ? hasSports : true));
+  const allowedRoles = STAFF_ROLES.filter((r) => (
+    r === 'LIBRARIAN' ? hasLibrary : r === 'SPORTS' ? hasSports : r === 'ACCOUNTS' ? hasSalary : true
+  ));
 
   // ── Mutations ─────────────────────────────────────────────────────────────
   const addMutation = useMutation({
@@ -498,7 +504,7 @@ export default function StaffPage() {
   // with curl. What was missing was any way to do it from the console, which
   // meant the LIBRARIAN role shipped unreachable.
   const createLoginMutation = useMutation({
-    mutationFn: ({ staffId, role }: { staffId: string; role?: 'LIBRARIAN' | 'SPORTS' }) =>
+    mutationFn: ({ staffId, role }: { staffId: string; role?: 'LIBRARIAN' | 'SPORTS' | 'ACCOUNTS' }) =>
       api.post<LoginInviteResult>(`/manage/staff/${staffId}/login`, role ? { role } : {}),
     onSuccess: (result, { staffId }) => {
       void queryClient.invalidateQueries({ queryKey: ['mng-staff'] });
@@ -685,7 +691,7 @@ export default function StaffPage() {
                       style={{
                         marginTop: 2,
                         fontWeight: 650,
-                        color: member.role === 'LIBRARIAN' || member.role === 'SPORTS' ? 'var(--sk-brand-2)' : 'var(--sk-ink-2)',
+                        color: member.role === 'LIBRARIAN' || member.role === 'SPORTS' || member.role === 'ACCOUNTS' ? 'var(--sk-brand-2)' : 'var(--sk-ink-2)',
                       }}
                     >
                       {ROLE_LABELS[member.role]}

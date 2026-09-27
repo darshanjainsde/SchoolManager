@@ -1,6 +1,7 @@
 import type { BirthdayRow, BirthdaysResult } from '@/lib/public-api';
 import type { CelebrationsPage } from '../celebrations-config';
 import { fillWish } from '../celebrations-config';
+import { optimised } from '@/lib/img';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const MONTHS_LONG = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -39,7 +40,7 @@ function firstNameOf(name: string): string {
 function Coin({ row, i, size }: { row: BirthdayRow; i: number; size: number }) {
   if (row.photoUrl) {
     // eslint-disable-next-line @next/next/no-img-element -- operator-supplied photo, sized by the coin
-    return <img src={row.photoUrl} alt="" width={size} height={size} className="ps-bd-coin ps-bd-coin-photo" style={{ width: size, height: size }} />;
+    return <img src={optimised(row.photoUrl, size * 2)} alt="" width={size} height={size} className="ps-bd-coin ps-bd-coin-photo" style={{ width: size, height: size }} />;
   }
   return (
     <span className="ps-bd-coin" style={{ width: size, height: size, background: COIN_TINTS[i % COIN_TINTS.length], fontSize: Math.round(size * 0.32) }} aria-hidden="true">

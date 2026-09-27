@@ -1,10 +1,11 @@
-import { useCallback, useRef, useState } from 'react';
+import { useReload } from '@/lib/query';
+import { useCallback, useRef, useState, useMemo } from 'react';
 import { Animated, Pressable, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
-import type { AttendanceSummary } from '@/lib/portal';
+import { formatDate, type AttendanceSummary } from '@/lib/portal';
 import { buildAttendanceGrid, currentMonthKey, monthKeyLabel, shiftMonthKey } from '@/lib/attendance-grid';
-import { Card, Pill, Screen, SectionTitle } from '@/components/ui';
+import { Card, ErrorState, Pill, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { DUR, inkWidth, useGesture } from '@/theme/motion';
 import { useTokens } from '@/theme/theme-context';
@@ -212,8 +213,28 @@ function monthLabel(key: string): string {
   });
 }
 
+/**
+ * What a day IS, in words and in a mark — so the calendar does not depend on
+ * colour to say it. Same marks as the teacher's register (`STATUS_GLYPH` in
+ * (staff)/take/[classSectionId].tsx).
+ */
+const STATUS_WORD: Record<string, string> = {
+  PRESENT: 'present',
+  ABSENT: 'absent',
+  LATE: 'late',
+  ON_LEAVE: 'on leave',
+};
+const STATUS_MARK: Record<string, string | null> = {
+  PRESENT: null,
+  ABSENT: '✕',
+  LATE: 'L',
+  ON_LEAVE: '•',
+};
+
 export default function Attendance() {
   const tokens = useTokens();
+  // Try again / pull-to-refresh for this screen's own focus effect.
+  const [reloadKey, reload] = useReload();
   const [summary, setSummary] = useState<AttendanceSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   // The month currently shown, once known — null until the first response
@@ -242,7 +263,8 @@ export default function Attendance() {
         if (requestIdRef.current !== id) return;
         setError(e instanceof ApiError ? e.message : 'Something went wrong.');
       });
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadKey]);
 
   // Refetch on focus, same convention as every other family screen — a
   // fresh attendance mark should show up without a manual pull-to-refresh.
@@ -274,14 +296,16 @@ export default function Attendance() {
   const total = summary ? summary.present + summary.absent + summary.late : 0;
   const recent = summary ? [...summary.days].reverse().slice(0, 5) : [];
 
+  // Rebuilt on every render before — including every minute, from the clock
+
+  // tick (perf audit 2026-09-22, #18).
+
+  const grid = useMemo(() => (summary ? buildAttendanceGrid(summary) : []), [summary]);
+
   return (
-    <Screen>
+    <Screen onRefresh={reload}>
       <SectionTitle title="Attendance" />
-      {error && (
-        <Card>
-          <Text style={{ color: tokens.color.red }}>{error}</Text>
-        </Card>
-      )}
+      {error && <ErrorState error={error} onRetry={reload} />}
       {summary === null && !error && (
         <LoadingRows label="Loading attendance…" rows={3} />
       )}
@@ -339,12 +363,21 @@ export default function Attendance() {
                       {d}
                     </Text>
                   ))}
-                  {buildAttendanceGrid(summary).map((cell, i) => {
+                  {grid.map((cell, i) => {
                     const { bg, fg, border } = cellColors(tokens, cell.status);
+                    // Colour alone told a colour-blind parent nothing and a
+                    // screen reader read "12" (UI audit 2026-09-22, #9). The
+                    // glyph and the spoken label come from the same map the
+                    // teacher's own register uses.
+                    const word = cell.status ? STATUS_WORD[cell.status] : null;
+                    const glyph = cell.status ? STATUS_MARK[cell.status] : null;
                     return (
                       <View
                         key={`cell-${i}`}
                         testID={`attn-cell-${i}`}
+                        accessible={cell.day !== null}
+                        accessibilityRole="text"
+                        accessibilityLabel={cell.day === null ? undefined : word ? `${cell.day}, ${word}` : `${cell.day}, no school`}
                         // NO `maxWidth` here. The weekday header above is laid
                         // out on the same `100/7%` column, with no cap — clamp
                         // only the cells and the two rows stop agreeing, so
@@ -374,6 +407,14 @@ export default function Attendance() {
                             >
                               {cell.day}
                             </Text>
+                            {glyph ? (
+                              <Text
+                                testID={`attn-mark-${cell.day}`}
+                                style={{ position: 'absolute', bottom: 1, fontSize: 8, fontWeight: '800', color: fg }}
+                              >
+                                {glyph}
+                              </Text>
+                            ) : null}
                           </View>
                         )}
                       </View>
@@ -421,7 +462,7 @@ export default function Attendance() {
                       borderBottomColor: tokens.color.line,
                     }}
                   >
-                    <Text style={{ fontFamily: font.mono, fontSize: 12, color: tokens.color.ink2 }}>{d.date}</Text>
+                    <Text style={{ fontFamily: font.mono, fontSize: 12, color: tokens.color.ink2 }}>{formatDate(d.date)}</Text>
                     <Pill tone={d.status === 'PRESENT' ? 'green' : d.status === 'LATE' ? 'amber' : 'red'}>
                       {d.status === 'PRESENT' ? 'Present' : d.status === 'LATE' ? 'Late' : 'Absent'}
                     </Pill>

@@ -122,12 +122,22 @@ describe('StudentsService.list', () => {
     });
   });
 
-  it('keeps the full row + classSection include for the admin projection', async () => {
+  it('sends the admin projection a chosen field list, not every column', async () => {
+    // This used to assert the opposite — `include`, no `select` — which is
+    // what shipped all 36 of Student's scalars to draw a seven-column table:
+    // both parents' names, nationality, category, previous school, the PEN id,
+    // the E.164 phone twin, who last changed the status and when. About
+    // 1,082 B per row against 365 B for what the screen renders, so a
+    // two-thousand-child school sent roughly 2.1 MB to list its roll.
     await svc.list(SCHOOL, { projection: 'full' });
 
     const args = txMock.student.findMany.mock.calls[0][0];
-    expect(args.select).toBeUndefined();
-    expect(args.include).toEqual({
+    expect(args.include).toBeUndefined();
+    expect(args.select).toEqual({
+      id: true, admissionNo: true, firstName: true, lastName: true, email: true,
+      classSectionId: true, rollNo: true, guardianName: true, guardianPhone: true,
+      photoAssetId: true, userId: true, status: true, leftOn: true,
+      alumniBatch: true, dob: true, showOnWebsite: true, photoConsent: true,
       classSection: { select: { name: true, grade: { select: { name: true } } } },
     });
     expect(args.where).toEqual({ schoolId: SCHOOL, status: 'ACTIVE' });
@@ -164,6 +174,13 @@ describe('StudentsService.create — every student gets a code', () => {
   // happened to invite them. On production that was 300 of 300 students, and
   // the student-code login the school had been told about worked for none of
   // them, with nothing on screen to explain why.
+  it('writes the E.164 twin of the guardian phone beside the raw one (the phone login\'s index)', async () => {
+    const out = await svc.create(SCHOOL, { firstName: 'A', lastName: 'B', admissionNo: 'A-9', guardianPhone: '98765 43210' } as never);
+    expect(out).toMatchObject({ guardianPhone: '98765 43210', guardianPhoneE164: '+919876543210' });
+    const landline = await svc.create(SCHOOL, { firstName: 'A', lastName: 'B', admissionNo: 'A-10', guardianPhone: '0141 2345678' } as never);
+    expect(landline).toMatchObject({ guardianPhoneE164: null });
+  });
+
   it('allocates a code when the student is created, not when they are invited', async () => {
     const out = await svc.create(SCHOOL, { firstName: 'A', lastName: 'B', admissionNo: 'A-1' } as never);
     expect(out).toMatchObject({ code: 'RAF-00001' });

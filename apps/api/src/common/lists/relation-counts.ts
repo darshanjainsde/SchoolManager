@@ -87,6 +87,30 @@ export async function unreadCountsByThread(
   return toMap(rows as Tally<'threadId'>, 'threadId');
 }
 
+/**
+ * Comments per concern — the Complaint Box's list. Seeks on
+ * `ConcernComment(schoolId, concernId, createdAt)`; Prisma's `_count` would
+ * aggregate every comment on the platform to draw one school's box.
+ */
+export async function commentCountsByConcern(
+  tx: TenantTx,
+  schoolId: string,
+  concernIds: string[],
+): Promise<Map<string, number>> {
+  // Bounded by the rows actually being drawn, not by the school's whole
+  // history: the Complaint Box shows at most one page of concerns, while the
+  // comment table grows for as long as the school uses the product. Counting
+  // every comment ever written to put a number on twenty rows is work that
+  // gets slower every term for no gain.
+  if (concernIds.length === 0) return new Map();
+  const rows = await tx.concernComment.groupBy({
+    by: ['concernId'],
+    where: { schoolId, concernId: { in: concernIds } },
+    _count: { _all: true },
+  });
+  return toMap(rows as Tally<'concernId'>, 'concernId');
+}
+
 /** Seating plans per room. Seeks on `SeatingPlan(schoolId, roomId)`. */
 export async function seatingPlanCountsByRoom(
   tx: TenantTx,

@@ -70,14 +70,20 @@ it('renders the full body of every notice, not just the title', async () => {
   expect(await findByText('Chapter 4 exercises due Friday.')).toBeTruthy();
 });
 
-it('rows are tappable: pressing one toggles its expanded state', async () => {
+it('rows are tappable: a notice longer than two lines offers "Show more", and it toggles', async () => {
   (api.request as jest.Mock).mockResolvedValue([
     { id: 'a1', classSectionId: null, title: 'Annual Day on Aug 12', body: 'Details inside.', createdAt: new Date().toISOString() },
   ]);
 
-  const { findByTestId, findByText } = render(<Notices />);
+  const { findByTestId, findByText, queryByText } = render(<Notices />);
 
   const row = await findByTestId('notice-a1');
+  // The affordance appears only once the body has actually overflowed — a
+  // one-line notice used to invite a tap that changed nothing (UI audit #27).
+  expect(queryByText('Show more')).toBeNull();
+  fireEvent(await findByTestId('notice-body-a1'), 'textLayout', {
+    nativeEvent: { lines: [{}, {}, {}] },
+  });
   expect(await findByText('Show more')).toBeTruthy();
 
   fireEvent.press(row);
@@ -85,6 +91,16 @@ it('rows are tappable: pressing one toggles its expanded state', async () => {
 
   fireEvent.press(row);
   await waitFor(async () => expect(await findByText('Show more')).toBeTruthy());
+});
+
+it('a notice that fits offers nothing to expand', async () => {
+  (api.request as jest.Mock).mockResolvedValue([
+    { id: 'a2', classSectionId: null, title: 'Short', body: 'One line.', createdAt: new Date().toISOString() },
+  ]);
+  const { findByTestId, queryByText } = render(<Notices />);
+  await findByTestId('notice-a2');
+  fireEvent(await findByTestId('notice-body-a2'), 'textLayout', { nativeEvent: { lines: [{}, {}] } });
+  expect(queryByText('Show more')).toBeNull();
 });
 
 it('shows the empty state when there are no notices', async () => {

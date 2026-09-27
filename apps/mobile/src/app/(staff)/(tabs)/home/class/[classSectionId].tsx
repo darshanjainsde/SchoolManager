@@ -1,10 +1,11 @@
+import { useReload } from '@/lib/query';
 import { useCallback, useState } from 'react';
 import { Text, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import type { AttendanceStatusValue } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { todayISO } from '@/lib/attendance';
-import { Card, Page, PageHeader, Screen, SectionTitle } from '@/components/ui';
+import { Card, ErrorState, Page, PageHeader, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { Touchable } from '@/components/Touchable';
 import { Icon } from '@/components/icons';
@@ -86,6 +87,10 @@ export default function ClassScreen() {
   }>();
   const date = todayISO();
 
+  // Try again / pull-to-refresh for this screen's own focus effect.
+
+  const [reloadKey, reload] = useReload();
+
   const [roster, setRoster] = useState<RosterRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -122,7 +127,7 @@ export default function ClassScreen() {
       return () => {
         cancelled = true;
       };
-    }, [classSectionId, date]),
+    }, [classSectionId, date, reloadKey]),
   );
 
   const rows = roster ?? [];
@@ -152,7 +157,7 @@ export default function ClassScreen() {
   }
 
   return (
-    <Screen>
+    <Screen onRefresh={reload}>
       <SectionTitle title={subject ? `${className} · ${subject}` : className} />
       {(period || start) && (
         <Text style={{ marginHorizontal: 4, marginTop: -6, fontSize: 12, color: tokens.color.sub }}>
@@ -160,11 +165,7 @@ export default function ClassScreen() {
         </Text>
       )}
 
-      {error && (
-        <Card>
-          <Text style={{ color: tokens.color.red }}>{error}</Text>
-        </Card>
-      )}
+      {error && <ErrorState error={error} onRetry={reload} />}
 
       {roster === null && !error && <LoadingRows label="Loading the class…" rows={6} />}
 

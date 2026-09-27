@@ -8,6 +8,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { writeFileSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { appCss } from './app-css';
 import { it, expect } from 'vitest';
 import { LibraryView } from '@/app/portal/library/library-view';
 import { SportsView } from '@/app/portal/sports/sports-view';
@@ -86,7 +87,7 @@ it('writes the real student-portal screens for a browser to measure', () => {
   // shell's width and padding are the ones being measured.
   const body = panels.map(([name, node]) =>
     `<section class="audit-panel" data-panel="${name}"><h2 class="audit-h">${name}</h2><main class="sk-main">${renderToStaticMarkup(node)}</main></section>`).join('\n');
-  const css = readFileSync(resolve(process.cwd(), 'app/sk-theme.css'), 'utf8');
+  const css = appCss();
   writeFileSync(resolve(process.cwd(), 'audit/screens-portal.html'), `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>${css}</style>

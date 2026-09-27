@@ -1,5 +1,7 @@
 import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { getPlatformPrisma, resolveFeatures, Prisma, DEFAULT_COURSES } from '@skoolos/db';
+import { countryPack } from '@skoolos/types';
+import { buildSnapshot } from './school-snapshot';
 import { randomBytes } from 'node:crypto';
 import { PasswordService } from '../../auth';
 import { FeatureResolverService } from '../../features';
@@ -111,6 +113,17 @@ export class OwnerSchoolsService {
     };
   }
 
+  /** See school-snapshot.ts. Platform client: an owner action across every tenant table. */
+  async snapshot(id: string) {
+    const db = getPlatformPrisma();
+    try {
+      return await buildSnapshot(db as unknown as Parameters<typeof buildSnapshot>[0], id);
+    } catch (e) {
+      if ((e as Error).message === 'School not found') throw new NotFoundException(`School ${id} not found`);
+      throw e;
+    }
+  }
+
   async create(dto: CreateSchoolDto): Promise<{ id: string; slug: string; tempPassword: string }> {
     const db = getPlatformPrisma();
     const clash = await db.school.findFirst({
@@ -125,7 +138,17 @@ export class OwnerSchoolsService {
     let school;
     try {
       school = await db.$transaction(async (tx) => {
-        const s = await tx.school.create({ data: { name: dto.name, slug: dto.slug, tier: dto.tier, status: 'SETUP' } });
+        // The country is the switch every per-country behaviour hangs off, so
+        // it is written at birth together with the defaults its pack carries.
+        // Today every pack inherits India's, which is exactly what the schema
+        // defaults were — nothing changes for a school created without one.
+        const pack = countryPack(dto.countryCode);
+        const s = await tx.school.create({
+          data: {
+            name: dto.name, slug: dto.slug, tier: dto.tier, status: 'SETUP',
+            countryCode: pack.code, timezone: pack.timezone, locale: pack.locale, currency: pack.currency,
+          },
+        });
         await tx.domain.create({
           data: { schoolId: s.id, hostname: dto.domainHostname, type: 'CUSTOM', status: 'PENDING', isPrimary: true },
         });

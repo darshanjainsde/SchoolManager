@@ -30,6 +30,11 @@ const SCHEMA = join(__dirname, '..', 'prisma', 'schema.prisma');
 const ALLOWED_WITHOUT_RLS: Record<string, string> = {
   // Prisma's own migration bookkeeping, not application data.
   _prisma_migrations: 'Prisma internal',
+  // A one-time code for a phone number, minted BEFORE anyone is signed in and
+  // before a tenant is known (the app has no school host at login). Holds only
+  // a phone, a code hash and counters — no tenant data — and is read solely
+  // through the platform client by the OTP engine.
+  OtpChallenge: 'pre-tenant login state (apps/api/src/common/otp)',
 };
 
 function modelTables(): string[] {

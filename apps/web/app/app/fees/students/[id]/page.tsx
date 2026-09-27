@@ -42,7 +42,7 @@ export default function StudentFeeDetailPage() {
   const owes = d.balanceMinor > 0;
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-4">
+    <div className="flex flex-col gap-4">
       <Link href="/app/fees/students"
             className="inline-flex w-fit items-center gap-1 text-[12.5px] font-semibold"
             style={{ color: 'var(--sk-ink-3)' }}>

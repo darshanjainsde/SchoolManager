@@ -62,13 +62,17 @@ describe('LibraryShell — the section strip', () => {
     expect(screen.getByRole('link', { name: 'Counter' })).toHaveAttribute('aria-current', 'page');
   });
 
-  it('does not inherit the portal topbar strip centring', () => {
-    // `.sk-tabs` centres itself at 68rem for the phone-first portals. Inside a
-    // page — under a left-aligned pagehead — that floats the strip away from the
-    // heading on any wide screen. `.sk-lib-tabs` is what corrects it.
+  it('leaves the strip to the page column, not to a topbar width', () => {
+    // A page strip must line up with the left-aligned pagehead above it. This
+    // used to be corrected per page with an `.sk-lib-tabs` class, and the two
+    // pages that forgot it (Pay, Alumni) drew the strip floating to the right
+    // on any wide screen. Plain `.sk-tabs` is now the page shape, and the
+    // 68rem centring belongs to `.sk-topbar .sk-tabs` — so the assertion is
+    // that this nav carries NO width correction of its own.
     pathname = '/app/library';
     render();
 
-    expect(screen.getByRole('navigation', { name: 'Library sections' })).toHaveClass('sk-lib-tabs');
+    const nav = screen.getByRole('navigation', { name: 'Library sections' });
+    expect(nav.className.trim()).toBe('sk-tabs');
   });
 });

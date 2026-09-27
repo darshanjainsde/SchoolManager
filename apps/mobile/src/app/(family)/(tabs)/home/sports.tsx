@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Text, View } from 'react-native';
 import { formatMark } from '@skoolos/types';
 import { ApiError } from '@/lib/api';
@@ -33,9 +34,13 @@ export default function Sports() {
   }
 
   const live = d ? d.tournaments.filter((t) => t.status !== 'DONE') : [];
-  const nexts = live
-    .flatMap((t) => t.events.map((e) => ({ t, e, n: nextOf(e) })).filter((x) => x.n))
-    .sort((a, b) => (slotMin(a.n) ?? Infinity) - (slotMin(b.n) ?? Infinity));
+  const nexts = useMemo(
+    () =>
+      live
+        .flatMap((t) => t.events.map((e) => ({ t, e, n: nextOf(e) })).filter((x) => x.n))
+        .sort((a, b) => (slotMin(a.n) ?? Infinity) - (slotMin(b.n) ?? Infinity)),
+    [live],
+  );
   const first = nexts[0] ?? null;
   // "Red house" means little until it says 2nd with 42 points.
   const houses = d?.houses ?? []; // an older API sends none

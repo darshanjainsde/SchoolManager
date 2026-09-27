@@ -243,6 +243,8 @@ export interface Profile {
   rollNo: string | null;
   className: string | null;
   photoUrl: string | null;
+  /** Who owns this child's class — the person the Complaint Box can reach. Null when the section has nobody. */
+  classTeacherName?: string | null;
 }
 
 export interface AttendanceDay {
@@ -324,6 +326,8 @@ export interface LeaveApplication {
   endDate: string;
   reason: string | null;
   status: LeaveStatusValue;
+  /** A single date taken at half strength — costs half a day of balance and pay. */
+  halfDay: boolean;
   createdAt: string;
 }
 
@@ -336,8 +340,12 @@ export interface LeaveTypeDefRow {
   /** The built-in enum value this row mirrors; null for a school's custom type. */
   builtin: LeaveTypeValue | null;
   isPaid: boolean;
-  /** Days/year that "apply defaults" grants. 0 = no standing quota. */
+  /** Days/year that "apply defaults" grants a TEACHER. 0 = no standing quota. */
   defaultAnnual: number;
+  /** The same, for non-teaching staff — a driver rarely gets a teacher's quota. */
+  defaultAnnualStaff: number;
+  /** Never costs pay, whatever the balance says — maternity, bereavement. */
+  neverDeduct: boolean;
   /** Max unused days that survive a year close. 0 = lapse. */
   carryForwardCap: number;
   isActive: boolean;
@@ -356,7 +364,7 @@ export interface LeaveAllocationCell {
 /** Mirrors LeavePolicyService.grid — `GET /manage/leave-policy/allocations`. */
 export interface LeaveAllocationGrid {
   academicYear: { id: string; name: string };
-  types: Pick<LeaveTypeDefRow, 'id' | 'name' | 'isPaid' | 'defaultAnnual' | 'carryForwardCap'>[];
+  types: Pick<LeaveTypeDefRow, 'id' | 'name' | 'isPaid' | 'defaultAnnual' | 'defaultAnnualStaff' | 'neverDeduct' | 'carryForwardCap'>[];
   teachers: { id: string; name: string; cells: LeaveAllocationCell[] }[];
 }
 
@@ -575,7 +583,7 @@ export interface TeacherReplyInput {
 // HolidayTypeValue above, both also String columns).
 
 /** The events that write a `NotificationOutbox` row today. */
-export const NOTIFICATION_OUTBOX_KINDS = ['RESULT_PUBLISHED', 'EXAM_SCHEDULED', 'ASSIGNMENT_POSTED', 'MESSAGE_RECEIVED', 'LIBRARY_NOTICE', 'SESSION_STARTED', 'SPORTS_NOTICE', 'FEE_VERIFIED', 'FEE_REJECTED', 'FEE_DUE'] as const;
+export const NOTIFICATION_OUTBOX_KINDS = ['RESULT_PUBLISHED', 'EXAM_SCHEDULED', 'ASSIGNMENT_POSTED', 'MESSAGE_RECEIVED', 'LIBRARY_NOTICE', 'SESSION_STARTED', 'SPORTS_NOTICE', 'FEE_VERIFIED', 'FEE_REJECTED', 'FEE_DUE', 'LEAVE_APPLIED', 'LEAVE_DECIDED', 'COVER_ASSIGNED', 'CONCERN_RAISED', 'CONCERN_REPLIED', 'CONCERN_RESOLVED'] as const;
 export type NotificationOutboxKind = (typeof NOTIFICATION_OUTBOX_KINDS)[number];
 
 /**
@@ -604,6 +612,7 @@ export function assertNotificationOutboxKind(
 export * from './sports/catalogue';
 export * from './sports/maths';
 export * from './sports/perms';
+export * from './payroll';
 export * from './fees/receipt';
 
 export const NOTIFICATION_KINDS = [
@@ -638,6 +647,9 @@ export const NOTIFICATION_KINDS = [
   'FEE_VERIFIED',
   'FEE_REJECTED',
   'FEE_DUE',
+  'LEAVE_APPLIED',
+  'LEAVE_DECIDED',
+  'COVER_ASSIGNED',
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 
@@ -794,11 +806,51 @@ export interface StudentDiaryEntry {
   createdAt: string; // ISO
 }
 
+/**
+ * One square of the diary's month grid.
+ *
+ * The grid exists so a parent can open a date that has already gone by — the
+ * list could only show days that had something, newest first, and stopped
+ * after thirty. A day with nothing is an ANSWER, so every day of the month is
+ * here, including the closed ones.
+ */
+export interface DiaryDayMark {
+  date: string; // YYYY-MM-DD
+  /** Homework and notices written for this day. */
+  items: number;
+  /** Remarks written about this child. */
+  remarks: number;
+  /** Remarks this family has not signed yet — the one thing they must act on. */
+  unsigned: number;
+  /** Why the school was shut: "Sunday", "Diwali break". Null when it was open. */
+  offReason: string | null;
+}
+
+/** The month the grid is showing, and how far the arrows may go. */
+export interface StudentDiaryMonth {
+  /** YYYY-MM. */
+  month: string;
+  /** Every day of it, first to last — closed days included. */
+  days: DiaryDayMark[];
+  /** The academic year's bounds, so the arrows stop at the session. */
+  firstMonth: string;
+  lastMonth: string;
+}
+
 /** `GET /me/diary?date=` — the child's page, newest day first when undated. */
 export interface StudentDiaryResult {
   entries: StudentDiaryEntry[];
   /** REMARKs still waiting for a parent's signature — the red dot's count. */
   unsignedCount: number;
+  /**
+   * Present only for `?month=YYYY-MM`. Optional because the web deploys
+   * before the API: a console talking to the older API gets `undefined` and
+   * falls back to the list, rather than drawing an empty calendar.
+   *
+   * When it is present, `entries` holds the WHOLE month, so opening a date
+   * costs nothing — the month is one request, not one per day.
+   */
+  month?: StudentDiaryMonth;
 }
 
 /**
@@ -1389,6 +1441,28 @@ export interface DashboardPulse {
     series: { date: string; count: number }[];
   };
   roll: { students: number; teachers: number; classes: number };
+  /**
+   * Whether each first-run setup step has been done.
+   *
+   * The console home used to answer these six questions by DOWNLOADING each
+   * collection and asking whether the array was empty — every academic year,
+   * period, subject, class, teacher and, worst of all, every student on the
+   * roll (measured at 227 KB per 500 children) to render six tick marks. They
+   * are six existence checks and they ride along with the pulse the page was
+   * already asking for.
+   *
+   * Optional because the web deploys before the API: a console talking to the
+   * older API gets `undefined` and hides the checklist, which is right — six
+   * wrong red crosses on an established school would be worse than nothing.
+   */
+  setup?: {
+    year: boolean;
+    periods: boolean;
+    subjects: boolean;
+    classes: boolean;
+    teachers: boolean;
+    students: boolean;
+  };
 }
 
 // ── Press Orders (print fulfilment) ──────────────────────────────────────────
@@ -1630,3 +1704,109 @@ export type EventArtKey = (typeof EVENT_ART_KEYS)[number];
  */
 export const EVENT_COVER_FOCUS = ['top', 'middle', 'bottom'] as const;
 export type EventCoverFocus = (typeof EVENT_COVER_FOCUS)[number];
+export * from './countries';
+export * from './country-pack';
+export * from './teacher-record';
+
+/* ── The Complaint Box ──────────────────────────────────────────────────────
+   One place a family raises something and watches it get read, answered and
+   resolved. The family chooses WHO sees it; the class-teacher route is
+   snapshotted when it is written, so a later reassignment never loses it. */
+
+export const CONCERN_CATEGORIES = [
+  'BUS', 'FEES', 'TEACHING', 'SAFETY', 'CANTEEN', 'FACILITIES', 'OTHER',
+] as const;
+export type ConcernCategory = (typeof CONCERN_CATEGORIES)[number];
+export const CONCERN_CATEGORY_LABEL: Record<ConcernCategory, string> = {
+  BUS: 'School bus', FEES: 'Fees', TEACHING: 'Teaching', SAFETY: 'Safety',
+  CANTEEN: 'Canteen', FACILITIES: 'Facilities', OTHER: 'Something else',
+};
+
+/** Who the family chose to send it to. Nobody else in the school can read it. */
+export const CONCERN_AUDIENCES = ['OFFICE', 'CLASS_TEACHER'] as const;
+export type ConcernAudience = (typeof CONCERN_AUDIENCES)[number];
+
+export const CONCERN_STATUSES = ['OPEN', 'IN_PROGRESS', 'RESOLVED'] as const;
+export type ConcernStatus = (typeof CONCERN_STATUSES)[number];
+export const CONCERN_STATUS_LABEL: Record<ConcernStatus, string> = {
+  OPEN: 'Open', IN_PROGRESS: 'Looking into it', RESOLVED: 'Resolved',
+};
+export const CONCERN_STATUS_TONE: Record<ConcernStatus, 'info' | 'warn' | 'good'> = {
+  OPEN: 'info', IN_PROGRESS: 'warn', RESOLVED: 'good',
+};
+
+/** How long after Resolved a family may reopen the same concern, once. */
+export const CONCERN_REOPEN_DAYS = 7;
+
+export type ConcernAuthorRole = 'STUDENT' | 'PARENT' | 'TEACHER' | 'ADMIN';
+
+export interface ConcernRow {
+  id: string;
+  status: ConcernStatus;
+  category: ConcernCategory;
+  audience: ConcernAudience;
+  title: string;
+  createdAt: string;
+  lastActivityAt: string;
+  resolvedAt: string | null;
+  escalatedAt: string | null;
+  /** Unread for the reader asking — the office's flag or the teacher's, never both. */
+  unread: boolean;
+  student: { id: string; name: string; className: string | null };
+  /** The class teacher it was routed to, as at the moment it was raised. */
+  assignedTeacher: { id: string; name: string } | null;
+  raisedBy: { name: string; role: ConcernAuthorRole };
+  /** Replies and notes the asking reader may see. */
+  commentCount: number;
+}
+
+export interface ConcernCommentRow {
+  id: string;
+  body: string;
+  createdAt: string;
+  visibleToFamily: boolean;
+  statusFrom: ConcernStatus | null;
+  statusTo: ConcernStatus | null;
+  author: { name: string; role: ConcernAuthorRole };
+}
+
+export interface ConcernDetail extends ConcernRow {
+  body: string;
+  attachments: { id: string; url: string }[];
+  comments: ConcernCommentRow[];
+  /** True when the asking family may still reopen it (RESOLVED, inside the window, not reopened before). */
+  canReopen: boolean;
+}
+
+export interface ConcernCounts {
+  unread: number;
+  open: number;
+  withClassTeachers: number;
+  resolvedThisMonth: number;
+  /** Median days from raised to resolved this month; null until something is resolved. */
+  medianDaysToResolve: number | null;
+  topCategory: ConcernCategory | null;
+}
+
+/* ── Class teachers ────────────────────────────────────────────────────── */
+
+export interface ClassTeacherRow {
+  classSectionId: string;
+  label: string;
+  gradeName: string;
+  sectionName: string;
+  gradeOrder: number;
+  students: number;
+  teacher: { id: string; name: string } | null;
+  /** This teacher also holds another section this session — allowed, and said out loud. */
+  alsoHolds: string[];
+}
+
+export interface ClassTeacherDesk {
+  academicYear: { id: string; name: string } | null;
+  rows: ClassTeacherRow[];
+  teachers: { id: string; name: string; sections: string[] }[];
+  counts: { sections: number; assigned: number; unassigned: number; holdingMoreThanOne: number };
+  /** The session to copy from, when this one is not set up yet. */
+  previousYear: { id: string; name: string; assigned: number } | null;
+}

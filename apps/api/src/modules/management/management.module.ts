@@ -37,6 +37,7 @@ import { NotificationOutboxService } from './notification-outbox.service';
 import { NotificationOutboxController } from './notification-outbox.controller';
 import { CronSecretGuard } from '../../common/auth/cron-secret.guard';
 import { LoginInviteService } from './internal/login-invite.service';
+import { LeaveDeskGuard } from './internal/leave-desk.guard';
 import { LeaveService } from './leave.service';
 import { BellService } from './bell.service';
 import { ConsoleSearchService } from './console-search.service';
@@ -47,6 +48,10 @@ import { PressModule } from '../press';
 import { FeesModule } from '../fees';
 import { BellController } from './bell.controller';
 import { LeaveController, SubstitutionController } from './leave.controller';
+import { ClassTeachersController } from './class-teachers.controller';
+import { ClassTeachersService } from './class-teachers.service';
+import { OnboardingController } from './onboarding/onboarding.controller';
+import { OnboardingService } from './onboarding/onboarding.service';
 import { LeavePolicyService } from './leave-policy.service';
 import { LeavePolicyController } from './leave-policy.controller';
 import { HolidaysService } from './holidays.service';
@@ -75,8 +80,10 @@ import { SeatingController } from './seating.controller';
 
 @Module({
   imports: [AuthModule, FeaturesModule, TenancyModule, PressModule, FeesModule, AlumniModule, LibraryModule],
-  providers: [EmailSettingsService, CatalogService, TeachersService, StaffService, ClassesService, StudentsService, StudentLifecycleService, SessionsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, ExamRemindersService, NotificationOutboxService, CronSecretGuard, LoginInviteService, LeaveService, BellService, ConsoleSearchService, PulseService, StudentReportService, LeavePolicyService, HolidaysService, ClassNotesService, RegisterChangeService, AssignmentsService, MessagesService, NotificationsService, PhotoService, DiaryService, AttendanceBarService, RoomsService, SeatingService],
+  providers: [LeaveDeskGuard, EmailSettingsService, CatalogService, TeachersService, StaffService, ClassesService, StudentsService, StudentLifecycleService, SessionsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, ExamRemindersService, NotificationOutboxService, CronSecretGuard, LoginInviteService, LeaveService, BellService, ConsoleSearchService, PulseService, StudentReportService, LeavePolicyService, HolidaysService, ClassNotesService, RegisterChangeService, AssignmentsService, MessagesService, NotificationsService, PhotoService, DiaryService, AttendanceBarService, RoomsService, SeatingService, OnboardingService, ClassTeachersService],
   controllers: [
+    OnboardingController,
+    ClassTeachersController,
     SessionsController,
     SessionsCronController,
     CatalogController,

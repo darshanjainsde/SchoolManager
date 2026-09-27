@@ -83,6 +83,24 @@ export class ApiClient {
   }
 
   async request<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
+    return parse<T>(await this.send(path, init));
+  }
+
+  /**
+   * A FILE, not JSON: a spreadsheet template, an export, a snapshot. Same
+   * headers, same tenant host, same silent refresh as `request`; the body is
+   * handed back as a Blob with the name the server chose.
+   */
+  async download(path: string, init: RequestInit = {}): Promise<{ blob: Blob; filename: string | null }> {
+    const res = await this.send(path, init);
+    if (!res.ok) return parse(res); // throws the API's own error, as every other call does
+    const cd = res.headers.get('Content-Disposition') ?? '';
+    const m = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(cd);
+    return { blob: await res.blob(), filename: m ? decodeURIComponent(m[1]) : null };
+  }
+
+  /** The request with auth, tenant host and one silent refresh on 401 — the Response, unparsed. */
+  private async send(path: string, init: RequestInit = {}): Promise<Response> {
     const baseUrl = this.opts.baseUrl ?? DEFAULT_BASE;
     const headers = new Headers(init.headers);
     if (this.opts.hostHeader) {
@@ -112,7 +130,7 @@ export class ApiClient {
         // ("Invalid credentials", "Session expired", …) rather than the
         // internal refresh error — otherwise a mistyped password reports
         // "Refresh failed", which is both wrong and unactionable.
-        return parse<T>(res);
+        return res;
       }
       const retryHeaders = new Headers(init.headers);
       if (this.opts.hostHeader) {
@@ -124,11 +142,10 @@ export class ApiClient {
       if (init.body && !(init.body instanceof FormData) && !retryHeaders.has('Content-Type')) {
         retryHeaders.set('Content-Type', 'application/json');
       }
-      const retry = await fetch(url, { ...init, headers: retryHeaders, credentials: 'include' });
-      return parse<T>(retry);
+      return fetch(url, { ...init, headers: retryHeaders, credentials: 'include' });
     }
 
-    return parse<T>(res);
+    return res;
   }
 
   async get<T = unknown>(path: string): Promise<T> {

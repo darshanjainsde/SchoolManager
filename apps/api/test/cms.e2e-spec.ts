@@ -12,7 +12,14 @@
  *   beacon admin: admin@beacon.test / Passw0rd!  host: beacon.localhost
  */
 
-const BASE = 'http://localhost:3001';
+import { describeLiveApi, LIVE_API_BASE } from './requires-live-api';
+
+// A smoke test against a separately booted API, like student/public/owner/
+// community — and, unlike those four, it was never wired to the opt-in when
+// they were. So it failed twenty-odd assertions on every machine with no API
+// on :3001 and read as a broken product rather than a missing prerequisite,
+// which is the exact noise requires-live-api.ts was written to stop.
+const BASE = LIVE_API_BASE;
 
 async function schoolToken(slug: string): Promise<string> {
   const res = await fetch(`${BASE}/auth/login`, {
@@ -28,7 +35,7 @@ async function schoolToken(slug: string): Promise<string> {
   return body.accessToken as string;
 }
 
-describe('CMS e2e', () => {
+describeLiveApi('CMS e2e', () => {
   let acmeToken: string;
   let originalHeadline: string | null = null;
   const createdStaffIds: string[] = [];

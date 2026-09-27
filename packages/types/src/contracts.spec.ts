@@ -131,7 +131,7 @@ describe('shared portal contracts', () => {
   it('a LeaveApplication admits every declared type and status', () => {
     const leave: LeaveApplication = {
       id: 'l1', type: 'SICK', startDate: '2026-07-20', endDate: '2026-07-22',
-      reason: null, status: 'PENDING', createdAt: '2026-07-19T00:00:00.000Z',
+      reason: null, status: 'PENDING', halfDay: false, createdAt: '2026-07-19T00:00:00.000Z',
     };
     expect(leave.status).toBe('PENDING');
   });
@@ -175,11 +175,21 @@ describe('shared portal contracts', () => {
   it('declares exactly the NotificationOutbox kinds the API writes', () => {
     expect([...NOTIFICATION_OUTBOX_KINDS].sort()).toEqual([
       'ASSIGNMENT_POSTED',
+      // The Complaint Box: raised (to whoever the family chose), replied and
+      // resolved (back to the family).
+      'CONCERN_RAISED',
+      'CONCERN_REPLIED',
+      'CONCERN_RESOLVED',
+      // A substitute told which class to cover.
+      'COVER_ASSIGNED',
       'EXAM_SCHEDULED',
       // The fee desk: an instalment falling due, and the office's decision on a claim.
       'FEE_DUE',
       'FEE_REJECTED',
       'FEE_VERIFIED',
+      // A teacher's leave: to every admin on apply, back to the teacher on the decision.
+      'LEAVE_APPLIED',
+      'LEAVE_DECIDED',
       'LIBRARY_NOTICE',
       'MESSAGE_RECEIVED',
       'RESULT_PUBLISHED',

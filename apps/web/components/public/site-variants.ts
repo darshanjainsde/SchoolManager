@@ -1,4 +1,6 @@
+import { countryPack } from '@skoolos/types';
 import type { StyleOption } from './site-style';
+import { sceneVariants, type SceneVariant } from './festive/scene-variants';
 
 /**
  * The Website Studio increment: every NEW design axis in one pure module,
@@ -442,14 +444,51 @@ export type FestivalKey =
   | 'CHILDRENS'
   | 'TEACHERS'
   | 'CHRISTMAS'
-  | 'NEWYEAR';
+  | 'NEWYEAR'
+  | 'DURGA'
+  | 'VASANT'
+  | 'UGADI'
+  | 'BAISAKHI'
+  | 'GURUNANAK'
+  | 'LOHRI'
+  | 'GANDHI';
 export type FestiveIntensity = 'LAYER' | 'FULL';
+/**
+ * HOW LOUD. The same five for every festival, so a school learns them once:
+ *   LAYER  — the school's own look plus the festival's decorations and accent
+ *            (the 2026-07 behaviour, unchanged).
+ *   CHROME — lights only: a string above the menu and in the footer, a warm
+ *            greeting strip. Colours untouched. The Google-doodle model.
+ *   HERO   — the first screen takes the festival's light colours (a gradient,
+ *            soft out-of-focus lights, one drawn mark); everything below stays
+ *            exactly the school's. The Amazon model.
+ *   WASH   — the whole page warms to the festival's light colours; ink stays
+ *            dark. What the light "Full takeover" should have been.
+ *   NIGHT  — the whole page goes dark in the festival's colours; ink goes
+ *            light. The old FULL for night festivals, on tokens.
+ *
+ * A treatment never writes copy into the page: the school's own headline,
+ * data and buttons stay. Only the ribbon carries a greeting, and the ribbon
+ * is the school's own switch.
+ */
+export type FestiveTreatment = 'LAYER' | 'CHROME' | 'HERO' | 'WASH' | 'NIGHT';
+export const TREATMENTS: StyleOption<FestiveTreatment>[] = [
+  { value: 'LAYER', label: 'A touch', hint: 'Your own look, plus the festival\u2019s decorations and accent colour.' },
+  { value: 'CHROME', label: 'Lights only', hint: 'A string of lights above the menu and in the footer. Your colours stay.' },
+  { value: 'HERO', label: 'First screen', hint: 'The top of the page takes the festival\u2019s colours. Everything below stays yours.' },
+  { value: 'WASH', label: 'Whole page, light', hint: 'The page warms to the festival\u2019s light colours. Text stays dark.' },
+  { value: 'NIGHT', label: 'Whole page, night', hint: 'A dark page in the festival\u2019s colours. Text goes light.' },
+];
 export interface FestiveTheme {
   festival: FestivalKey;
   variant: string;
+  treatment: FestiveTreatment;
+  /** Derived from `treatment` for readers written before treatments existed. */
   intensity: FestiveIntensity;
   ribbon: boolean;
   recolor: boolean;
+  /** MediaAsset(kind FESTIVE) the school chose for the scene's picture, if any. */
+  imageAssetId: string | null;
 }
 export interface FestivalDef {
   value: FestivalKey;
@@ -457,236 +496,285 @@ export interface FestivalDef {
   emoji: string;
   /** Accent used when recolor is on (LAYER) — swaps --ps2 only. */
   accent: string;
-  /** FULL palette: retints both brand stops for the takeover. */
+  /** Festival palette: retints both brand stops for WASH / NIGHT. */
   full: { ps1: string; ps2: string };
   /**
-   * FULL surface for night festivals: the page paper and heading ink go dark.
-   * Absent = the takeover keeps the light paper (Holi, Independence Day).
-   * Presence also switches body text via the ps-fest-dark class.
+   * NIGHT surface. Absent = derived from `full.ps1` (a very dark tint of the
+   * festival's own colour) — so every festival CAN be a night, but only those
+   * that declare one, or list NIGHT in `treatments`, are offered it.
    */
   fullSurface?: { paper: string; ink: string };
+  /** HERO gradient, light to light. Absent = derived from `full` as pale tints. */
+  heroWash?: [string, string];
+  /**
+   * Which countries' calendars this festival is on (ISO 3166-1 alpha-2).
+   * The Studio offers a school the festivals of its country's pack — see
+   * @skoolos/types country-pack.ts. Every festival here is on India's calendar
+   * today; a country that writes its own pack lists the keys it wants.
+   */
+  countries: readonly string[];
+  /** Treatments this festival offers. Absent = all five if it has a night surface, else all but NIGHT. */
+  treatments?: readonly FestiveTreatment[];
   greeting: string;
-  variants: StyleOption<string>[];
-  /** Decoration sets layered IN ADDITION to the chosen one at FULL. */
-  fullExtras: string[];
+  /** The scenes this festival offers — from festive/scene-variants.ts; the first is the default. */
+  variants: SceneVariant[];
 }
-export const FESTIVALS: FestivalDef[] = [
+type FestivalSeed = Omit<FestivalDef, 'variants'>;
+const FESTIVAL_SEEDS: FestivalSeed[] = [
   {
     value: 'DIWALI',
     label: 'Diwali',
     emoji: '🪔',
+    countries: ['IN'],
     accent: '#e8a020',
     full: { ps1: '#e8a020', ps2: '#ff9d5c' },
-    fullSurface: { paper: '#1b1129', ink: '#f6e9cd' },
+    // Every reference photograph of Diwali night is amber on navy-black; the
+    // first draft's violet was a computer's idea of night, not a courtyard's.
+    fullSurface: { paper: '#10182a', ink: '#f3e9d2' },
+    // The gradient from the reference the owner approved: gold to rose.
+    heroWash: ['#fbd47f', '#f0a37a'],
     greeting: 'Happy Diwali from all of us — may the season glow bright',
-    variants: [
-      { value: 'DIYAS', label: 'Diyas & string lights', hint: 'Glowing lamps in the corners, lights along the top.' },
-      { value: 'FIREWORKS', label: 'Night fireworks', hint: 'Slow celebratory bursts over the page.' },
-      { value: 'RANGOLI', label: 'Rangoli corners', hint: 'Patterned rings tucked into the page corners.' },
-    ],
-    fullExtras: ['DIYAS', 'FIREWORKS'],
   },
   {
     value: 'HOLI',
     label: 'Holi',
     emoji: '🎨',
+    countries: ['IN'],
     accent: '#c2367f',
     full: { ps1: '#c2367f', ps2: '#26c281' },
     greeting: 'Happy Holi — may the year ahead be full of colour',
-    variants: [
-      { value: 'SPLASH', label: 'Colour splashes', hint: 'Soft gulal clouds washing the corners.' },
-      { value: 'CONFETTI', label: 'Gulal drift', hint: 'Colour flecks drifting gently down the page.' },
-    ],
-    fullExtras: ['SPLASH', 'CONFETTI'],
   },
   {
     value: 'EID',
     label: 'Eid',
     emoji: '🌙',
+    countries: ['IN'],
     accent: '#2e9d6b',
     full: { ps1: '#3ecf8e', ps2: '#e8c76a' },
     fullSurface: { paper: '#0e2b26', ink: '#eaf5ef' },
     greeting: 'Eid Mubarak from our whole school family',
-    variants: [
-      { value: 'LANTERNS', label: 'Hanging lanterns', hint: 'Lanterns swinging gently from the top edge.' },
-      { value: 'CRESCENT', label: 'Crescent & stars', hint: 'A glowing crescent with drifting stars.' },
-      { value: 'GLOW', label: 'Golden glow lights', hint: 'A warm gold light string along the top.' },
-    ],
-    fullExtras: ['LANTERNS', 'CRESCENT'],
   },
   {
     value: 'NAVRATRI',
     label: 'Navratri & Dussehra',
     emoji: '🪘',
+    countries: ['IN'],
     accent: '#c41e3a',
     full: { ps1: '#c41e3a', ps2: '#e8b923' },
     greeting: 'Shubh Navratri — nine nights of colour, music and devotion',
-    variants: [
-      { value: 'MARIGOLD', label: 'Marigold garland', hint: 'A genda-phool garland swaying along the top.' },
-      { value: 'GARBA', label: 'Garba colours', hint: 'Red, gold and pink flecks drifting like twirling dancers.' },
-      { value: 'RANGOLI', label: 'Rangoli corners', hint: 'Patterned rings tucked into the page corners.' },
-    ],
-    fullExtras: ['MARIGOLD', 'GARBA'],
   },
   {
     value: 'GANESH',
     label: 'Ganesh Chaturthi',
     emoji: '🌺',
+    countries: ['IN'],
     accent: '#f4772e',
-    full: { ps1: '#f4772e', ps2: '#d3492f' },
+    // ps2 was #d3492f: a mid-tone no label can read on (white 4.41, ink 4.40). A touch deeper carries white at 5.2.
+    full: { ps1: '#f4772e', ps2: '#c43d22' },
     greeting: 'Ganpati Bappa Morya — a blessed Ganesh Chaturthi to every family',
-    variants: [
-      { value: 'PETALS', label: 'Falling petals', hint: 'Hibiscus and marigold petals drifting down.' },
-      { value: 'MARIGOLD', label: 'Marigold garland', hint: 'A flower garland swaying along the top.' },
-      { value: 'DIYAS', label: 'Diyas & string lights', hint: 'Glowing lamps in the corners, lights along the top.' },
-    ],
-    fullExtras: ['PETALS', 'MARIGOLD'],
   },
   {
     value: 'JANMASHTAMI',
     label: 'Janmashtami',
     emoji: '🦚',
+    countries: ['IN'],
     accent: '#2e5eaa',
     full: { ps1: '#2e5eaa', ps2: '#ffc93c' },
     fullSurface: { paper: '#101a33', ink: '#e9eefb' },
     greeting: 'Happy Janmashtami — celebrating the joy of little Krishna',
-    variants: [
-      { value: 'PEACOCK', label: 'Peacock feathers', hint: 'Feathers in the corners with a gentle drift of plumes.' },
-      { value: 'CRESCENT', label: 'Midnight sky', hint: 'The midnight moon and stars of Krishna’s birth.' },
-    ],
-    fullExtras: ['PEACOCK', 'CRESCENT'],
   },
   {
     value: 'ONAM',
     label: 'Onam',
     emoji: '🌼',
+    countries: ['IN'],
     accent: '#c9a227',
     full: { ps1: '#1e7a46', ps2: '#c9a227' },
     greeting: 'Happy Onam — wishing every family a joyous Thiruvonam',
-    variants: [
-      { value: 'RANGOLI', label: 'Pookalam rings', hint: 'Flower-carpet rings blooming in the page corners.' },
-      { value: 'PETALS', label: 'Falling petals', hint: 'Pookalam flowers drifting gently down.' },
-      { value: 'MARIGOLD', label: 'Flower garland', hint: 'A floral garland swaying along the top.' },
-    ],
-    fullExtras: ['RANGOLI', 'PETALS'],
   },
   {
     value: 'SANKRANTI',
     label: 'Sankranti & Pongal',
     emoji: '🪁',
+    countries: ['IN'],
     accent: '#e8862a',
     full: { ps1: '#1978a5', ps2: '#e8862a' },
     greeting: 'Happy Sankranti & Pongal — may the harvest bring abundance',
-    variants: [
-      { value: 'KITES', label: 'Kite sky', hint: 'Kites drifting across the page.' },
-      { value: 'SUN', label: 'Morning sun', hint: 'A warm rising sun with gentle sparkle.' },
-      { value: 'HARVEST', label: 'Harvest corners', hint: 'Wheat sheaves in the corners with a soft shimmer.' },
-    ],
-    fullExtras: ['KITES', 'SUN'],
   },
   {
     value: 'RAKSHA',
     label: 'Raksha Bandhan',
     emoji: '🪢',
+    countries: ['IN'],
     accent: '#e0447c',
-    full: { ps1: '#e63946', ps2: '#d4a017' },
+    // ps1 was #e63946 — a mid-tone whose best label measured 4.497. A touch lighter carries the dark label at 5.9.
+    full: { ps1: '#ee4a56', ps2: '#d4a017' },
     greeting: 'Happy Raksha Bandhan — celebrating the bond between siblings',
-    variants: [
-      { value: 'RAKHI', label: 'Rakhi medallions', hint: 'Thread medallions turning slowly in the corners.' },
-      { value: 'MITHAI', label: 'Gifts & sweets', hint: 'Gifts and mithai drifting gently down.' },
-      { value: 'GLOW', label: 'Golden thread lights', hint: 'A warm gold light string along the top.' },
-    ],
-    fullExtras: ['RAKHI', 'MITHAI'],
   },
   {
     value: 'INDEPENDENCE',
     label: 'Independence Day',
     emoji: '🇮🇳',
+    countries: ['IN'],
     accent: '#e8862a',
     full: { ps1: '#c26a1a', ps2: '#2e9d6b' },
     greeting: 'Happy Independence Day — Jai Hind',
-    variants: [
-      { value: 'BUNTING', label: 'Tricolour bunting', hint: 'A flag garland along the top of the page.' },
-      { value: 'KITES', label: 'Kite sky', hint: 'Kites drifting across the page.' },
-      { value: 'TRICOLOR', label: 'Tricolour drift', hint: 'Saffron, white and green flecks drifting down.' },
-    ],
-    fullExtras: ['BUNTING', 'KITES'],
   },
   {
     value: 'REPUBLIC',
     label: 'Republic Day',
     emoji: '🇮🇳',
+    countries: ['IN'],
     accent: '#2e5eaa',
     full: { ps1: '#c26a1a', ps2: '#2e9d6b' },
     greeting: 'Happy Republic Day — celebrating our constitution, Jai Hind',
-    variants: [
-      { value: 'BUNTING', label: 'Tricolour bunting', hint: 'A flag garland along the top of the page.' },
-      { value: 'TRICOLOR', label: 'Tricolour drift', hint: 'Saffron, white and green flecks drifting down.' },
-      { value: 'KITES', label: 'Kite sky', hint: 'Kites drifting across the page.' },
-    ],
-    fullExtras: ['BUNTING', 'TRICOLOR'],
   },
   {
     value: 'CHILDRENS',
     label: 'Children’s Day',
     emoji: '🎈',
-    accent: '#e91e8c',
+    countries: ['IN'],
+    // was #e91e8c — best label 4.49. Lighter carries the dark label at 5.7.
+    accent: '#f0409c',
     full: { ps1: '#2196f3', ps2: '#ffc107' },
     greeting: 'Happy Children’s Day — today the school belongs to you',
-    variants: [
-      { value: 'BALLOONS', label: 'Rising balloons', hint: 'Balloons floating up the page.' },
-      { value: 'DOODLES', label: 'Doodle rain', hint: 'Stars, rockets and crayons drifting down.' },
-      { value: 'CRAYONS', label: 'Crayon lights', hint: 'A bright crayon-colour light string along the top.' },
-    ],
-    fullExtras: ['BALLOONS', 'DOODLES'],
   },
   {
     value: 'TEACHERS',
     label: 'Teacher’s Day',
     emoji: '🍎',
+    countries: ['IN'],
     accent: '#c0392b',
     full: { ps1: '#1f3a5f', ps2: '#c0392b' },
     greeting: 'Happy Teacher’s Day — thank you for lighting the way',
-    variants: [
-      { value: 'BOOKS', label: 'Books & apples', hint: 'Books, pencils and apples drifting gently down.' },
-      { value: 'GOLDDUST', label: 'Gold sparkle', hint: 'A quiet drift of golden sparkles.' },
-    ],
-    fullExtras: ['BOOKS', 'GOLDDUST'],
   },
   {
     value: 'CHRISTMAS',
     label: 'Christmas',
     emoji: '🎄',
+    countries: ['IN'],
     accent: '#c0392b',
     full: { ps1: '#4cc38a', ps2: '#e46a5d' },
     fullSurface: { paper: '#12291d', ink: '#f2f7f0' },
     greeting: 'Merry Christmas and a joyful winter break',
-    variants: [
-      { value: 'SNOW', label: 'Snowfall', hint: 'Flakes drifting gently down the page.' },
-      { value: 'LIGHTS', label: 'Fairy lights', hint: 'A multicolour light string along the top.' },
-      { value: 'GIFTS', label: 'Gifts & stars', hint: 'Presents and stars drifting down the page.' },
-    ],
-    fullExtras: ['SNOW', 'LIGHTS'],
   },
   {
     value: 'NEWYEAR',
     label: 'New Year',
     emoji: '🎉',
+    countries: ['IN'],
     accent: '#b8912f',
     full: { ps1: '#5b2fb8', ps2: '#e5c77b' },
     fullSurface: { paper: '#12101f', ink: '#f1ead6' },
     greeting: 'Happy New Year — to a bright year of learning ahead',
-    variants: [
-      { value: 'FIREWORKS', label: 'Midnight fireworks', hint: 'Slow celebratory bursts over the page.' },
-      { value: 'GOLDDUST', label: 'Champagne sparkle', hint: 'Gold and silver sparkles drifting down.' },
-      { value: 'GLOW', label: 'Golden glow lights', hint: 'A warm gold light string along the top.' },
-    ],
-    fullExtras: ['FIREWORKS', 'GOLDDUST'],
   },
 ];
+FESTIVAL_SEEDS.push(
+  {
+    value: 'DURGA',
+    label: 'Durga Puja',
+    emoji: '🌺',
+    countries: ['IN'],
+    accent: '#c41e3a',
+    full: { ps1: '#a3162d', ps2: '#f2c14e' },
+    fullSurface: { paper: '#24080f', ink: '#f8e9dd' },
+    greeting: 'Shubho Sharadiya — a joyous Durga Puja to every family',
+  },
+  {
+    value: 'VASANT',
+    label: 'Vasant Panchami',
+    emoji: '🌼',
+    countries: ['IN'],
+    accent: '#d9a400',
+    full: { ps1: '#b8860b', ps2: '#f6d36b' },
+    heroWash: ['#fff1b8', '#ffe27a'],
+    treatments: ['LAYER', 'CHROME', 'HERO', 'WASH'],
+    greeting: 'Happy Vasant Panchami — Saraswati Puja, the day of books and learning',
+  },
+  {
+    value: 'UGADI',
+    label: 'Ugadi & Gudi Padwa',
+    emoji: '🌿',
+    countries: ['IN'],
+    accent: '#2e9d6b',
+    full: { ps1: '#1e7a46', ps2: '#f2c14e' },
+    treatments: ['LAYER', 'CHROME', 'HERO', 'WASH'],
+    greeting: 'Happy Ugadi and Gudi Padwa — a new year of learning begins',
+  },
+  {
+    value: 'BAISAKHI',
+    label: 'Baisakhi',
+    emoji: '🌾',
+    countries: ['IN'],
+    accent: '#e8862a',
+    full: { ps1: '#c26a1a', ps2: '#f6d36b' },
+    treatments: ['LAYER', 'CHROME', 'HERO', 'WASH'],
+    greeting: 'Happy Baisakhi — a harvest of good things for every family',
+  },
+  {
+    value: 'GURUNANAK',
+    label: 'Guru Nanak Jayanti',
+    emoji: '🪔',
+    countries: ['IN'],
+    accent: '#e8a020',
+    full: { ps1: '#1f3a8a', ps2: '#f2a93b' },
+    fullSurface: { paper: '#0f1a3a', ink: '#f3ecdc' },
+    greeting: 'Happy Gurpurab — light, service and learning for all',
+  },
+  {
+    value: 'LOHRI',
+    label: 'Lohri & Bihu',
+    emoji: '🔥',
+    countries: ['IN'],
+    accent: '#e8862a',
+    full: { ps1: '#b8451a', ps2: '#f2a93b' },
+    fullSurface: { paper: '#1e120c', ink: '#f6e9cf' },
+    greeting: 'Happy Lohri and Bihu — warmth, harvest and song',
+  },
+  {
+    value: 'GANDHI',
+    label: 'Gandhi Jayanti',
+    emoji: '🕊️',
+    countries: ['IN'],
+    accent: '#2e9d6b',
+    full: { ps1: '#1f6b4a', ps2: '#c8b48a' },
+    treatments: ['LAYER', 'CHROME'],
+    greeting: 'Gandhi Jayanti — be the change you wish to see in the world',
+  },
+);
+/** Every festival, with its scene options attached. A festival with no scene is a build error, not a blank hero. */
+export const FESTIVALS: FestivalDef[] = FESTIVAL_SEEDS.map((f) => {
+  const variants = sceneVariants(f.value);
+  if (!variants.length) throw new Error(`festival ${f.value} has no scene`);
+  return { ...f, variants };
+});
+
 export function festivalDef(key: string | null | undefined): FestivalDef | null {
   return FESTIVALS.find((f) => f.value === key) ?? null;
 }
+const ALL_TREATMENTS: readonly FestiveTreatment[] = ['LAYER', 'CHROME', 'HERO', 'WASH', 'NIGHT'];
+
+/** The treatments a festival offers. NIGHT only where the festival has (or declares) a night. */
+export function treatmentsFor(def: FestivalDef): readonly FestiveTreatment[] {
+  if (def.treatments) return def.treatments;
+  return def.fullSurface ? ALL_TREATMENTS : ALL_TREATMENTS.filter((t) => t !== 'NIGHT');
+}
+
+/**
+ * The festivals a school in `countryCode` is offered — THE COUNTRY SWITCH as
+ * the Studio sees it. The pack decides: 'SHARED' means every festival on that
+ * country's calendar (a country inheriting India's pack gets India's), and a
+ * pack that lists keys gets exactly those, in that order.
+ */
+export function festivalsFor(countryCode: string | null | undefined): FestivalDef[] {
+  const pack = countryPack(countryCode);
+  if (pack.festivals !== 'SHARED') {
+    return pack.festivals.map((k) => festivalDef(k)).filter((d): d is FestivalDef => !!d);
+  }
+  const calendar = pack.inheritedFrom ?? pack.code;
+  return FESTIVALS.filter((f) => f.countries.includes(calendar));
+}
+
 export function normalizeFestiveTheme(raw: unknown): FestiveTheme | null {
   if (!raw || typeof raw !== 'object') return null;
   const r = raw as Record<string, unknown>;
@@ -696,27 +784,38 @@ export function normalizeFestiveTheme(raw: unknown): FestiveTheme | null {
     typeof r.variant === 'string' && def.variants.some((v) => v.value === r.variant)
       ? (r.variant as string)
       : def.variants[0].value;
+  const offered = treatmentsFor(def);
+  // Rows written before treatments existed carry only `intensity`. FULL on a
+  // night festival was a dark page — that is NIGHT; FULL on a day festival
+  // retinted a light page — that is WASH. LAYER is LAYER. No school's site
+  // changes shape on the deploy that adds this field.
+  const legacy: FestiveTreatment =
+    r.intensity === 'FULL' ? (def.fullSurface ? 'NIGHT' : 'WASH') : 'LAYER';
+  const asked = typeof r.treatment === 'string' && (ALL_TREATMENTS as readonly string[]).includes(r.treatment)
+    ? (r.treatment as FestiveTreatment)
+    : legacy;
+  // A treatment the festival does not offer falls to the nearest it does.
+  const treatment = offered.includes(asked) ? asked : (offered.includes('WASH') && asked === 'NIGHT' ? 'WASH' : offered[0]);
   return {
     festival: def.value,
     variant,
-    intensity: r.intensity === 'FULL' ? 'FULL' : 'LAYER',
+    treatment,
+    intensity: treatment === 'WASH' || treatment === 'NIGHT' ? 'FULL' : 'LAYER',
     ribbon: r.ribbon !== false,
     recolor: r.recolor !== false,
+    imageAssetId: typeof r.imageAssetId === 'string' && r.imageAssetId ? r.imageAssetId : null,
   };
 }
-/** Which decoration sets to render — the chosen one, plus the festival's
- *  signature extras when the takeover is on. */
-export function festiveDecorations(f: FestiveTheme): string[] {
-  const def = festivalDef(f.festival);
-  if (!def) return [];
-  const sets = new Set<string>([f.variant]);
-  if (f.intensity === 'FULL') for (const x of def.fullExtras) sets.add(x);
-  return [...sets];
-}
-/** Root classes. LAYER decorates without touching the base palette classes. */
+/**
+ * Root classes. `ps-fest-<treatment>` is what the stylesheet keys off;
+ * `ps-fest-full` + `ps-fest-dark` are kept for rules written against the old
+ * model, and NIGHT is the only treatment that is dark.
+ */
 export function festiveClasses(f: FestiveTheme | null): string {
   if (!f) return '';
-  return f.intensity === 'FULL' ? `ps-fest ps-fest-full ps-fest-${f.festival.toLowerCase()}` : 'ps-fest';
+  const cls = ['ps-fest', `ps-fest-${f.treatment.toLowerCase()}`, `ps-fest-${f.festival.toLowerCase()}`];
+  if (f.treatment === 'WASH' || f.treatment === 'NIGHT') cls.push('ps-fest-full');
+  return cls.join(' ');
 }
 
 /* ── Custom code (the operator escape hatch) ──────────────────────────────

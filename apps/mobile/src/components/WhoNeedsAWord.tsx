@@ -165,7 +165,8 @@ export function WhoNeedsAWord({
                     borderTopColor: tokens.color.line,
                     opacity: off ? 0.5 : 1,
                   }}
-                >
+                  accessibilityRole="button"
+                  >
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: tokens.color.ink, fontSize: 13.5, fontWeight: '700' }}>
                       {s.name}
@@ -210,7 +211,8 @@ export function WhoNeedsAWord({
                 paddingVertical: 13,
                 opacity: sending || willNotify.length === 0 ? 0.45 : 1,
               }}
-            >
+              accessibilityRole="button"
+              >
               <Text
                 style={{
                   color: tokens.color.onBrand,

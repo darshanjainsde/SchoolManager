@@ -6,6 +6,7 @@ import { CurrentUser } from '../../common/auth/current-user.decorator';
 import type { SchoolJwtPayload } from '../../common/auth/jwt-payload';
 import { RequireFeature, RequireFeatureGuard } from '../features';
 import { TenantContextService } from '../tenancy';
+import { LeaveDeskGuard } from './internal/leave-desk.guard';
 import { LeaveService } from './leave.service';
 import { AssignSubstitutionDto, CreateLeaveDto } from './management.dto';
 
@@ -23,48 +24,51 @@ export class LeaveController {
   }
 
   @Post()
-  @Roles('TEACHER')
+  @Roles('TEACHER', 'STAFF')
   apply(@Body() dto: CreateLeaveDto, @CurrentUser() u: SchoolJwtPayload) {
     return this.leave.apply(this.sid(), u.sub, dto);
   }
 
   @Get('mine')
-  @Roles('TEACHER')
+  @Roles('TEACHER', 'STAFF')
   mine(@CurrentUser() u: SchoolJwtPayload) {
     return this.leave.mine(this.sid(), u.sub);
   }
 
   @Get('coverage')
-  @Roles('SCHOOL_ADMIN')
+  @Roles('SCHOOL_ADMIN', 'STAFF')
+  @UseGuards(LeaveDeskGuard)
   coverage(@Query('from') from: string, @Query('to') to: string) {
     return this.leave.coverage(this.sid(), from, to);
   }
 
   @Get()
-  @Roles('SCHOOL_ADMIN')
+  @Roles('SCHOOL_ADMIN', 'STAFF')
+  @UseGuards(LeaveDeskGuard)
   list(@Query('status') status?: string) {
     return this.leave.list(this.sid(), status);
   }
 
   @Post(':id/approve')
-  @Roles('SCHOOL_ADMIN')
+  @Roles('SCHOOL_ADMIN', 'STAFF')
+  @UseGuards(LeaveDeskGuard)
   approve(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() u: SchoolJwtPayload) {
     return this.leave.approve(this.sid(), id, u.sub);
   }
 
   @Post(':id/reject')
-  @Roles('SCHOOL_ADMIN')
+  @Roles('SCHOOL_ADMIN', 'STAFF')
+  @UseGuards(LeaveDeskGuard)
   reject(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() u: SchoolJwtPayload) {
     return this.leave.reject(this.sid(), id, u.sub);
   }
 
   /**
-   * Open to both roles — `LeaveService.cancel` enforces that a TEACHER
-   * caller may only cancel their OWN application; a SCHOOL_ADMIN may cancel
-   * any.
+   * `LeaveService.cancel` enforces that a TEACHER or STAFF caller may only
+   * cancel their OWN application; a SCHOOL_ADMIN may cancel any.
    */
   @Post(':id/cancel')
-  @Roles('TEACHER', 'SCHOOL_ADMIN')
+  @Roles('TEACHER', 'STAFF', 'SCHOOL_ADMIN')
   cancel(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() u: SchoolJwtPayload) {
     return this.leave.cancel(this.sid(), id, u.sub, u.role);
   }

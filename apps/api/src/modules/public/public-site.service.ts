@@ -8,6 +8,13 @@ import type { PublicSiteData } from './public.dto';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
 import { normalizeRecordsConfig } from '../cms';
 
+/** festiveTheme is Json; the image id inside it, if any. */
+function festiveImageIdOf(raw: unknown): string | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const id = (raw as { imageAssetId?: unknown }).imageAssetId;
+  return typeof id === 'string' && id ? id : null;
+}
+
 @Injectable()
 export class PublicSiteService {
   constructor(
@@ -97,6 +104,7 @@ export class PublicSiteService {
         homepage?.aboutImageAssetId,
         ...staff.map((s) => s.photoAssetId),
         ...courses.map((c) => c.imageAssetId),
+        festiveImageIdOf(rawProfile?.festiveTheme),
         ...photoAssetIdsOf(hofRead),
       ].filter(Boolean) as string[];
 
@@ -171,6 +179,9 @@ export class PublicSiteService {
               heroVideoUrl: profile.heroVideoUrl,
               sectionVariants: profile.sectionVariants,
               festiveTheme: profile.festiveTheme,
+              // The school's own festival image, resolved to a URL here so the
+              // renderer never has to ask for it.
+              festiveImageUrl: urlOf(festiveImageIdOf(profile.festiveTheme)),
               footerConfig: profile.footerConfig,
               customSectionCss: profile.customSectionCss,
               customHtmlBlock: profile.customHtmlBlock,
