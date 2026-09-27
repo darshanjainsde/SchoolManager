@@ -115,9 +115,9 @@ export class PortalService {
    * resolves the Student row from this JWT `sub` exactly like `myStudent`
    * does and never takes a student id from the caller.
    */
-  async diary(userId: string, date?: string): Promise<StudentDiaryResult> {
+  async diary(userId: string, date?: string, month?: string): Promise<StudentDiaryResult> {
     const { schoolId } = this.tenant.requireTenant();
-    return this.diarySvc.studentDiary(schoolId, userId, date);
+    return this.diarySvc.studentDiary(schoolId, userId, date, month);
   }
 
   /** The parent's signature on a red-ink remark. */

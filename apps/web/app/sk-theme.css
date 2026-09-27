@@ -1882,6 +1882,68 @@ html[data-theme='light'] .sk-clsrow .ic { color: #fff; }
 .sk-cell[data-att="none"] { border-color: var(--sk-line); }
 .sk-cell[data-today="true"] { box-shadow: 0 0 0 1px var(--sk-card), 0 0 0 3px var(--sk-brand); }
 .sk-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 15px; font-size: 11.5px; color: var(--sk-ink-3); }
+
+/* ── THE DIARY'S MONTH ────────────────────────────────────────────────────
+   The same calendar language as attendance above — `.sk-cal` grid, `.sk-cell`
+   squares — because a family reads both and a second calendar idiom would
+   make them learn twice. What differs is what a square MEANS: attendance has
+   one status per school day, the diary has a count of things plus, sometimes,
+   a remark that is still waiting to be signed.
+
+   So the fill says "there is something here" and a corner dot says "and one
+   of them needs you". A school day with nothing written stays an outline, the
+   same as an unmarked attendance day, and a day the school was shut is a flat
+   ground with no border at all — closed and open must not look alike. */
+.sk-dcal { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 900px) { .sk-dcal { grid-template-columns: 340px minmax(0, 1fr); gap: 18px; } }
+
+/* A calendar square is a date, not a tile: left to fill a one-column card on a
+   tablet it grew to 94px a side, which reads as a grid of buttons rather than
+   a month. Capped and centred, so a square stays between about 36 and 55px at
+   every width. The cap is under the 340px column above, so the two-column
+   case is untouched. */
+/* `width: min(100%, 420px)`, not `max-width` — the card body is a flex
+   column, so a grid with `margin-inline: auto` and an AUTO width shrinks to
+   its own content instead of filling: measured, every square collapsed to
+   26px, under the size a finger can hit. A definite width fills up to the cap
+   and centres beyond it. */
+.sk-dcal .sk-cal { width: min(100%, 420px); margin-inline: auto; }
+
+.sk-dcal-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.sk-dcal-head h3 { flex: 1; text-align: center; margin: 0; }
+/* 36px, not the 32 an icon needs: this is the control a thumb uses to move a
+   month, and the ledger has a tap-target entry for exactly this shortcut. */
+.sk-dcal-arrow {
+  width: 36px; height: 36px; flex: none; display: grid; place-items: center;
+  border-radius: 9px; border: 1px solid var(--sk-line-2); background: var(--sk-card);
+  color: var(--sk-ink-2); cursor: pointer;
+}
+.sk-dcal-arrow:hover:not(:disabled) { border-color: var(--sk-brand); color: var(--sk-brand); }
+.sk-dcal-arrow:disabled { opacity: .4; cursor: default; }
+
+/* A square is a button here, so it has to shed the UA's button styling. */
+button.sk-cell { font: inherit; cursor: pointer; padding: 0; position: relative; }
+button.sk-cell:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: 2px; }
+
+.sk-cell[data-diary="items"] { background: var(--sk-brand-tint); color: var(--sk-brand-2); border-color: color-mix(in srgb, var(--sk-brand) 22%, transparent); font-weight: 700; }
+.sk-cell[data-diary="remark"] { background: var(--sk-amber-tint); color: var(--sk-amber-ink); border-color: color-mix(in srgb, var(--sk-amber-ink) 30%, transparent); font-weight: 800; }
+.sk-cell[data-diary="none"] { border-color: var(--sk-line); }
+/* Shut. No border, so it reads as ground rather than an empty slot waiting
+   to be filled — "the school was closed" is not the same as "nothing yet". */
+.sk-cell[data-diary="off"] { background: var(--sk-bg-2); color: var(--sk-ink-3); border-color: transparent; }
+.sk-cell[data-diary="future"] { border-color: color-mix(in srgb, var(--sk-line) 55%, transparent); color: var(--sk-ink-3); opacity: .65; }
+.sk-cell[data-selected="true"] { outline: 2px solid var(--sk-brand); outline-offset: 2px; }
+
+/* The one thing a parent must not miss. A dot, not a fill, because the fill is
+   already saying "there is something here" and the two facts are separate. */
+.sk-cell .sk-cell-dot {
+  position: absolute; right: 4px; top: 4px; width: 6px; height: 6px;
+  border-radius: 999px; background: var(--sk-amber-ink);
+}
+
+.sk-dcal-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; padding: 34px 18px; }
+.sk-dcal-empty .t { font-size: 14px; font-weight: 600; color: var(--sk-ink); }
+.sk-dcal-empty .w { font-size: 12.5px; line-height: 1.55; color: var(--sk-ink-3); max-width: 34ch; margin: 0; }
 .sk-legend b { width: 11px; height: 11px; border-radius: 4px; display: inline-block; vertical-align: -1px; margin-right: 6px; }
 
 /* ---- results ----

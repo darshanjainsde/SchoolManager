@@ -806,11 +806,51 @@ export interface StudentDiaryEntry {
   createdAt: string; // ISO
 }
 
+/**
+ * One square of the diary's month grid.
+ *
+ * The grid exists so a parent can open a date that has already gone by — the
+ * list could only show days that had something, newest first, and stopped
+ * after thirty. A day with nothing is an ANSWER, so every day of the month is
+ * here, including the closed ones.
+ */
+export interface DiaryDayMark {
+  date: string; // YYYY-MM-DD
+  /** Homework and notices written for this day. */
+  items: number;
+  /** Remarks written about this child. */
+  remarks: number;
+  /** Remarks this family has not signed yet — the one thing they must act on. */
+  unsigned: number;
+  /** Why the school was shut: "Sunday", "Diwali break". Null when it was open. */
+  offReason: string | null;
+}
+
+/** The month the grid is showing, and how far the arrows may go. */
+export interface StudentDiaryMonth {
+  /** YYYY-MM. */
+  month: string;
+  /** Every day of it, first to last — closed days included. */
+  days: DiaryDayMark[];
+  /** The academic year's bounds, so the arrows stop at the session. */
+  firstMonth: string;
+  lastMonth: string;
+}
+
 /** `GET /me/diary?date=` — the child's page, newest day first when undated. */
 export interface StudentDiaryResult {
   entries: StudentDiaryEntry[];
   /** REMARKs still waiting for a parent's signature — the red dot's count. */
   unsignedCount: number;
+  /**
+   * Present only for `?month=YYYY-MM`. Optional because the web deploys
+   * before the API: a console talking to the older API gets `undefined` and
+   * falls back to the list, rather than drawing an empty calendar.
+   *
+   * When it is present, `entries` holds the WHOLE month, so opening a date
+   * costs nothing — the month is one request, not one per day.
+   */
+  month?: StudentDiaryMonth;
 }
 
 /**
