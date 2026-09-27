@@ -58,10 +58,36 @@ describe('WhatsAppChannel', () => {
   });
 
   it('a teacher login reaches the teacher, not a guardian', async () => {
-    const d = db({ student: { findFirst: jest.fn().mockResolvedValue(null) }, teacher: { findFirst: jest.fn().mockResolvedValue({ phone: '+91 91234 56789' }) } });
+    const d = db({ student: { findFirst: jest.fn().mockResolvedValue(null) }, teacher: { findFirst: jest.fn().mockResolvedValue({ phone: '+91 91234 56789', whatsappOptIn: true }) } });
     const f = okFetch();
     await new WhatsAppChannel(d as never, () => CFG, f).send('t@x', MSG, SCHOOL);
     expect(JSON.parse(f.mock.calls[0][1].body).to).toBe('919123456789');
+  });
+
+  it('a teacher who said no is not messaged', async () => {
+    // The record carries `whatsappOptIn` and the teacher onboarding sheet asks
+    // for it in as many words. Nothing read it on the way out, so a teacher
+    // who declined was messaged anyway — the wrong side of WhatsApp's own
+    // policy, which permits contact only where the recipient has confirmed
+    // they want it, and the fastest way to collect the blocks that pause a
+    // template for three hours, then six, then disable it for good.
+    const d = db({ student: { findFirst: jest.fn().mockResolvedValue(null) }, teacher: { findFirst: jest.fn().mockResolvedValue({ phone: '+91 91234 56789', whatsappOptIn: false }) } });
+    const f = okFetch();
+    expect(await new WhatsAppChannel(d as never, () => CFG, f).send('t@x', MSG, SCHOOL)).toBe(false);
+    expect(f).not.toHaveBeenCalled();
+  });
+
+  it('refusing is about the PERSON, not the phone column', async () => {
+    // A teacher who declined but has a verified login number would otherwise
+    // still be reachable, because the verified number is tried first.
+    const d = db({
+      user: { findFirst: jest.fn().mockResolvedValue({ id: 'u1', phone: '+91 90000 11111', phoneVerifiedAt: new Date() }) },
+      student: { findFirst: jest.fn().mockResolvedValue(null) },
+      teacher: { findFirst: jest.fn().mockResolvedValue({ phone: null, whatsappOptIn: false }) },
+    });
+    const f = okFetch();
+    expect(await new WhatsAppChannel(d as never, () => CFG, f).send('t@x', MSG, SCHOOL)).toBe(false);
+    expect(f).not.toHaveBeenCalled();
   });
 
   it('no usable phone → nothing sent, nothing recorded', async () => {
