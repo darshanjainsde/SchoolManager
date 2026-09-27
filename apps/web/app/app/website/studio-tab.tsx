@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import ImageUploader from './image-uploader';
+import ThemeManager, { liveTemplateId } from './theme-manager';
 import { FONT_OPTIONS, MOTION_OPTIONS } from '@/lib/theme-presets';
 import { START_THEMES, themeInUse, type StartTheme } from '@/lib/start-themes';
 import { STYLE_PRESETS, MOTION_GESTURES, BACKGROUND_TEXTURES } from '@/components/public/site-style';
@@ -86,7 +87,7 @@ interface SiteContent {
   school?: { features?: string[]; countryCode?: string } | null;
   courses?: unknown[];
 }
-interface DesignDraft { id: string; name: string; config: Record<string, unknown>; publishAt: string | null; revertAt: string | null; }
+interface DesignDraft { id: string; name: string; config: Record<string, unknown>; publishAt: string | null; revertAt: string | null; updatedAt?: string; }
 interface SchoolPage { id: string; slug: string; title: string; blocks: unknown[]; published: boolean; showInNav?: boolean; }
 interface MediaAsset { id: string; url: string }
 
@@ -212,14 +213,23 @@ export default function StudioTab() {
   // You edit ONE theme at a time — the Live site or a saved draft. Its id is
   // editingId. In-progress edits live in `working[id]`, kept per theme so
   // switching never loses anything; Save/Publish is what persists them.
-  const [editingId, setEditingId] = useState<string>('live');
+  // null = "not chosen yet": once the templates arrive, open the one that is
+  // live, else the newest. 'live' is reachable only from the Homepage
+  // structure group — the live design itself is never edited directly, it is
+  // always "the template you put live" (theme-manager.tsx).
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [working, setWorking] = useState<Record<string, Look>>({});
   const draftsById = useMemo(
     () => Object.fromEntries((drafts.data ?? []).map((d) => [d.id, d])),
     [drafts.data],
   );
-  // Fall back to Live if the edited draft was deleted elsewhere.
-  const activeId = editingId !== 'live' && drafts.data && !draftsById[editingId] ? 'live' : editingId;
+  const pickConfig = useCallback((c: Record<string, unknown>) => pickLook(c), []);
+  const liveId = useMemo(() => liveTemplateId(drafts.data ?? [], savedLook, pickConfig), [drafts.data, savedLook, pickConfig]);
+  const newestId = useMemo(() => [...(drafts.data ?? [])].sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))[0]?.id ?? null, [drafts.data]);
+  const activeId: string =
+    editingId === 'live' ? 'live'
+    : editingId && draftsById[editingId] ? editingId
+    : (liveId ?? newestId ?? 'live');
   const baseLook = useCallback(
     (id: string): Look => (id === 'live' ? savedLook : pickLook((draftsById[id]?.config ?? {}) as Record<string, unknown>)),
     [savedLook, draftsById],
@@ -227,6 +237,10 @@ export default function StudioTab() {
   const base = baseLook(activeId);
   const current: Look = working[activeId] ?? base;
   const dirty = !!working[activeId] && sig(working[activeId]) !== sig(base);
+  const unsavedIds = useMemo(
+    () => new Set(Object.keys(working).filter((id) => id !== 'live' && sig(working[id]) !== sig(baseLook(id)))),
+    [working, sig, baseLook],
+  );
   const setLook = useCallback(
     (patch: Look) => setWorking((w) => ({ ...w, [activeId]: { ...(w[activeId] ?? base), ...patch } })),
     [activeId, base],
@@ -235,8 +249,6 @@ export default function StudioTab() {
     (id: string) => setWorking((w) => { const n = { ...w }; delete n[id]; return n; }),
     [],
   );
-  const editingName = activeId === 'live' ? 'Live site' : (draftsById[activeId]?.name ?? 'Draft');
-  const [showSchedule, setShowSchedule] = useState(false);
 
   // Menu arrangement lives in the look (live-previews + publishes with it),
   // gated by the same validator the standalone editor used.
@@ -332,30 +344,29 @@ export default function StudioTab() {
   // Editing the LIVE theme: push the working changes to the public site.
   const publishLive = useMutation({
     mutationFn: () => api.put('/site/profile', current),
-    onSuccess: () => { invalidateContent(); clearWorking('live'); toast.success('Published — visitors now see this look'); },
-    onError: (err: Error) => toast.error(`Publish failed: ${err.message}`),
+    onSuccess: () => { invalidateContent(); clearWorking('live'); toast.success('Saved to the live site'); },
+    onError: (err: Error) => toast.error(`Could not save: ${err.message}`),
   });
   // Save the working changes to the DRAFT being edited (keeps its name/schedule).
   const saveDraftMut = useMutation({
-    mutationFn: (id: string) => api.put(`/site/design-drafts/${id}`, { name: draftsById[id]?.name ?? 'Draft', config: working[id] ?? base }),
-    onSuccess: (_d, id) => { invalidateDrafts(); clearWorking(id); toast.success('Saved to this draft'); },
+    mutationFn: (id: string) => api.put(`/site/design-drafts/${id}`, { name: draftsById[id]?.name ?? 'Template', config: working[id] ?? base }),
+    onSuccess: (_d, id) => { invalidateDrafts(); clearWorking(id); toast.success('Template saved — put it live from the Live site card when you are ready'); },
     onError: (err: Error) => toast.error(`Could not save: ${err.message}`),
   });
   // Create a NEW draft from whatever is currently being edited, and switch to it.
-  const [newName, setNewName] = useState('');
   const newDraftMut = useMutation({
-    mutationFn: () => api.post<{ id: string }>('/site/design-drafts', { name: newName.trim() || 'New theme', config: current }),
+    mutationFn: ({ name, from }: { name: string; from: 'live' | 'editing' }) =>
+      api.post<{ id: string }>('/site/design-drafts', { name, config: from === 'live' ? savedLook : current }),
     onSuccess: (created) => {
-      setNewName('');
       invalidateDrafts();
-      if (created?.id) { clearWorking(activeId); setEditingId(created.id); }
-      toast.success('New draft created — you are editing it now');
+      if (created?.id) setEditingId(created.id);
+      toast.success('Template created — you are editing it now');
     },
-    onError: (err: Error) => toast.error(`Could not create the draft: ${err.message}`),
+    onError: (err: Error) => toast.error(`Could not create the template: ${err.message}`),
   });
   const publishDraftMut = useMutation({
     mutationFn: (id: string) => api.post(`/site/design-drafts/${id}/publish`),
-    onSuccess: (_d, id) => { invalidateContent(); invalidateDrafts(); clearWorking(id); setEditingId('live'); toast.success('Published — this theme is now live'); },
+    onSuccess: (_d, id) => { invalidateContent(); invalidateDrafts(); toast.success(`Live — visitors now see “${draftsById[id]?.name ?? 'this template'}”`); },
     onError: (err: Error) => toast.error(err.message),
   });
   const renameDraftMut = useMutation({
@@ -370,7 +381,7 @@ export default function StudioTab() {
   });
   const deleteDraftMut = useMutation({
     mutationFn: (id: string) => api.del(`/site/design-drafts/${id}`),
-    onSuccess: (_d, id) => { invalidateDrafts(); clearWorking(id); if (activeId === id) setEditingId('live'); toast.success('Draft deleted'); },
+    onSuccess: (_d, id) => { invalidateDrafts(); clearWorking(id); if (activeId === id) setEditingId(null); toast.success('Template deleted'); },
     onError: (err: Error) => toast.error(err.message),
   });
   const codeMutation = useMutation({
@@ -543,108 +554,30 @@ export default function StudioTab() {
   const rail = (
     <GroupCtx.Provider value={groupCtx}>
     <div className="flex flex-col gap-2.5">
-      {/* Theme manager — always visible. You edit ONE theme; it's obvious which. */}
-      <Card className="p-3.5">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-800">Themes</h3>
-          <span className={['rounded-full border px-2.5 py-0.5 text-[11px] font-bold',
-            dirty ? 'border-amber-300 bg-amber-50 text-amber-700' : 'border-slate-200 bg-slate-50 text-slate-400'].join(' ')}>
-            {dirty ? (activeId === 'live' ? '● Unpublished changes' : '● Unsaved changes') : (activeId === 'live' ? '✓ Matches live' : '✓ Saved')}
-          </span>
-        </div>
-        <p className="mt-1 text-xs text-slate-500">Pick a theme to edit — your live site or a saved draft. Everything below changes the one you&rsquo;re editing, live on the right.</p>
+      {/* Templates, and which one is live — theme-manager.tsx. */}
+      <ThemeManager
+        templates={drafts.data ?? []}
+        liveLook={savedLook}
+        pickLook={pickConfig}
+        activeId={drafts.data ? activeId : null}
+        unsavedIds={unsavedIds}
+        dirty={dirty}
+        navErrors={navCheck.ok ? [] : navCheck.errors}
+        busy={{ saving: saveDraftMut.isPending, creating: newDraftMut.isPending, publishing: publishDraftMut.isPending }}
+        onOpen={(id) => setEditingId(id)}
+        onBackToTemplates={() => setEditingId(null)}
+        onSave={(id) => saveDraftMut.mutate(id)}
+        onDiscard={(id) => clearWorking(id)}
+        onDelete={(id) => deleteDraftMut.mutate(id)}
+        onRename={(id, name) => renameDraftMut.mutate({ id, name })}
+        onMakeLive={(id) => publishDraftMut.mutate(id)}
+        onCreate={(name, from) => newDraftMut.mutate({ name, from })}
+        onSchedule={(id, body) => scheduleDraftMut.mutate({ id, body: { name: draftsById[id]?.name ?? 'Template', config: draftsById[id]?.config ?? {}, ...body } })}
+      />
 
-        {/* The list of themes to choose from */}
-        <div className="mt-2.5 flex flex-col gap-1.5">
-          {[{ id: 'live', name: 'Live site', publishAt: null as string | null }, ...(drafts.data ?? [])].map((t) => {
-            const selected = activeId === t.id;
-            const hasEdits = !!working[t.id] && sig(working[t.id]) !== sig(baseLook(t.id));
-            return (
-              <button key={t.id} type="button" onClick={() => { setEditingId(t.id); setShowSchedule(false); }} aria-pressed={selected}
-                className={['sk-press flex items-center gap-2 rounded-lg border px-3 py-2 text-left transition-colors',
-                  selected ? 'border-teal-600 bg-teal-50' : 'border-slate-200 hover:border-slate-300'].join(' ')}>
-                <span className={`h-2 w-2 flex-none rounded-full ${t.id === 'live' ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                <span className="flex-1 truncate text-sm font-semibold text-slate-700">{t.name}</span>
-                {t.id === 'live' && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">LIVE</span>}
-                {(t as { publishAt?: string | null }).publishAt && <span className="text-[10px] text-slate-400">📅 {fmtDate((t as { publishAt: string }).publishAt)}</span>}
-                {hasEdits && <span className="h-1.5 w-1.5 flex-none rounded-full bg-amber-400" title="Unsaved edits" />}
-              </button>
-            );
-          })}
-          <div className="mt-0.5 flex gap-2">
-            <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="New theme name (e.g. Diwali ✨)" maxLength={80} className="h-8 text-sm" />
-            <Button size="sm" variant="outline" onClick={() => newDraftMut.mutate()} disabled={newDraftMut.isPending}>+ New draft</Button>
-          </div>
-        </div>
-
-        {/* Actions for the theme you're editing */}
-        <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/70 p-2.5">
-          <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Editing</div>
-          {activeId === 'live' ? (
-            <div className="text-sm font-semibold text-slate-800">Live site</div>
-          ) : (
-            // Uncontrolled + commit on blur: renaming on every keystroke would
-            // round-trip to the server and jump the cursor. key resets it per theme.
-            <Input key={activeId} defaultValue={draftsById[activeId]?.name ?? ''} maxLength={80} aria-label="Theme name"
-              onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== draftsById[activeId]?.name) renameDraftMut.mutate({ id: activeId, name: v }); }}
-              className="mt-0.5 h-8 text-sm font-semibold" />
-          )}
-
-          {!navCheck.ok && (
-            <div role="alert" className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-2 text-[11px] text-amber-800">
-              <b>The menu needs fixing before you can publish:</b>
-              <ul className="mt-1 list-disc pl-4">{navCheck.errors.map((e) => <li key={e}>{e}</li>)}</ul>
-            </div>
-          )}
-
-          {activeId === 'live' ? (
-            <div className="mt-2 flex flex-wrap gap-2">
-              <Button size="sm" onClick={() => publishLive.mutate()} disabled={!dirty || !navCheck.ok || publishLive.isPending}>
-                {publishLive.isPending ? 'Publishing…' : 'Publish changes'}
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => clearWorking('live')} disabled={!dirty}>Discard</Button>
-            </div>
-          ) : (
-            <>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <Button size="sm" onClick={() => saveDraftMut.mutate(activeId)} disabled={!dirty || saveDraftMut.isPending}>
-                  {saveDraftMut.isPending ? 'Saving…' : 'Save'}
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => clearWorking(activeId)} disabled={!dirty}>Discard</Button>
-                <Button size="sm" variant="outline" onClick={() => publishDraftMut.mutate(activeId)} disabled={!navCheck.ok || publishDraftMut.isPending}>Publish now → live</Button>
-                <button type="button" className="text-xs font-semibold text-rose-500 hover:text-rose-700" onClick={() => deleteDraftMut.mutate(activeId)}>Delete</button>
-              </div>
-              <button type="button" onClick={() => setShowSchedule((s) => !s)} aria-expanded={showSchedule}
-                className="mt-2 text-[11px] font-semibold text-slate-500 hover:text-slate-700">
-                {showSchedule ? '▾' : '▸'} Schedule this theme (festival editions)
-              </button>
-              {showSchedule && (
-                <div className="mt-2">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="mb-1 block text-[11px] text-slate-500">Go live on</label>
-                      <input type="date" aria-label="Go live date"
-                        value={draftsById[activeId]?.publishAt ? draftsById[activeId]!.publishAt!.slice(0, 10) : ''}
-                        onChange={(e) => scheduleDraftMut.mutate({ id: activeId, body: { name: draftsById[activeId]?.name ?? 'Draft', config: draftsById[activeId]?.config ?? {}, publishAt: e.target.value || null } })}
-                        className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs" />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-[11px] text-slate-500">Revert on</label>
-                      <input type="date" aria-label="Revert date"
-                        value={draftsById[activeId]?.revertAt ? draftsById[activeId]!.revertAt!.slice(0, 10) : ''}
-                        onChange={(e) => scheduleDraftMut.mutate({ id: activeId, body: { name: draftsById[activeId]?.name ?? 'Draft', config: draftsById[activeId]?.config ?? {}, revertAt: e.target.value || null } })}
-                        className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs" />
-                    </div>
-                  </div>
-                  <p className="mt-1.5 text-[11px] text-slate-400">This theme goes live by itself on the go-live date and reverts after the revert date — no clicks needed. Save your edits first so the scheduled version includes them.</p>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      </Card>
-
-      {/* ── Brand & theme ── */}
+      {/* Editing the live site's STRUCTURE: content only — the look groups
+          are hidden so the live design is never edited by accident. */}
+      {activeId !== 'live' && (<>
       {/* ── Start from a theme ── */}
       <Group id="start-theme" title="Start from a theme" summary="A complete, ready-made design to begin from">
         <p className="mb-2 text-[11px] text-slate-500">Pick a complete design as your starting point — colours, font, first screen, section style, navbar and footer, all at once. Then change anything below; it&rsquo;s still your look.</p>
@@ -809,18 +742,19 @@ export default function StudioTab() {
         })}
       </Group>
 
+      </>)}
+
       {/* ── Homepage structure: band order + admin-built sections. These are
           CONTENT, not styling, so they are edited on the live site only —
           a saved look neither carries nor deletes them. ── */}
       <Group id="structure" title="Homepage structure" summary={homeSecs.length ? `Band order · ${homeSecs.length} custom section${homeSecs.length === 1 ? '' : 's'}` : 'Band order & your own sections'}>
         {activeId !== 'live' ? (
           <div>
-            <p className="text-[11px] text-slate-400">The section order and your own sections belong to the live site (they’re content, not styling), so a saved look never changes them.</p>
+            <p className="text-[11px] text-slate-400">The section order and your own sections belong to the live site (they’re content, not design), so a template never changes them.</p>
             {/* Without this button the feature reads as MISSING: an admin who
-                happens to have a draft theme selected sees only a note and no
-                way in. One click routes them to where the controls live. */}
+                has a template open sees only a note and no way in. */}
             <Button size="sm" variant="outline" className="mt-2" onClick={() => setEditingId('live')}>
-              Switch to Live site to edit ↩
+              Edit the live site’s structure ↩
             </Button>
           </div>
         ) : (<>
@@ -898,9 +832,19 @@ export default function StudioTab() {
             </div>
           </div>
         )}
+        {/* Structure is saved straight to the live site — it used to ride on
+            the manager's Publish button, which is gone with the live-edit mode. */}
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+          <Button size="sm" onClick={() => publishLive.mutate()} disabled={!dirty || publishLive.isPending}>
+            {publishLive.isPending ? 'Saving…' : 'Save structure to the live site'}
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => clearWorking('live')} disabled={!dirty}>Discard</Button>
+          {dirty && <span className="text-[11px] text-amber-700">● Unsaved</span>}
+        </div>
         </>)}
       </Group>
 
+      {activeId !== 'live' && (<>
       {/* ── Navigation ── */}
       <Group id="nav" title="Navigation" summary={`${(current.navStyle as string) ?? 'CLASSIC'} bar · menu`}>
         <FieldLabel>Navbar style</FieldLabel>
@@ -1013,6 +957,8 @@ export default function StudioTab() {
         <FieldLabel>Tagline</FieldLabel>
         <Input value={footer.tagline ?? ''} maxLength={160} placeholder="Nurturing confident, compassionate lifelong learners." onChange={(e) => setLook({ footerConfig: { ...footer, tagline: e.target.value || null } })} className="h-9 text-sm" />
       </Group>
+
+      </>)}
 
       {/* ── Custom pages ── */}
       <Group id="pages" title="Custom pages" summary={`${(pages.data ?? []).length} page${(pages.data ?? []).length === 1 ? '' : 's'}`}>
