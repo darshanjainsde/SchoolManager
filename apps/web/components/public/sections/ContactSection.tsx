@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Ico, telHref } from './ContactIcon';
 import type { PublicSiteData } from '@/lib/public-api';
 import { safeHttpUrl, safeHttpsUrl } from '../site-utils';
 import { submitEnquiry } from '../enquiry-client';
@@ -86,8 +87,8 @@ export default function ContactSection({
             </div>
             {(profile?.phone || profile?.email) && (
               <div className="mt-10 flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-slate-500">
-                {profile?.phone && <span>📞 {profile.phone}</span>}
-                {profile?.email && <span>✉️ {profile.email}</span>}
+                {profile?.phone && <a href={telHref(profile.phone)} className="ps-foot-line hover:opacity-80 transition"><Ico name="phone" />{profile.phone}</a>}
+                {profile?.email && <a href={`mailto:${profile.email}`} className="ps-foot-line hover:opacity-80 transition"><Ico name="mail" />{profile.email}</a>}
               </div>
             )}
           </div>
@@ -113,13 +114,16 @@ export default function ContactSection({
             )}
             {(profile?.phone || profile?.email || profile?.addressLine1) && (
               <div className="mt-6 space-y-2 text-sm text-white/90">
-                {profile?.phone && <div>📞 {profile.phone}</div>}
-                {profile?.email && <div>✉️ {profile.email}</div>}
+                {profile?.phone && <a href={telHref(profile.phone)} className="ps-foot-line hover:opacity-80 transition"><Ico name="phone" />{profile.phone}</a>}
+                {profile?.email && <a href={`mailto:${profile.email}`} className="ps-foot-line hover:opacity-80 transition"><Ico name="mail" />{profile.email}</a>}
                 {profile?.addressLine1 && (
-                  <div>
-                    📍 {profile.addressLine1}
-                    {profile.city ? `, ${profile.city}` : ''}
-                    {profile.postalCode ? ` ${profile.postalCode}` : ''}
+                  <div className="ps-foot-line">
+                    <Ico name="pin" />
+                    <span>
+                      {profile.addressLine1}
+                      {profile.city ? `, ${profile.city}` : ''}
+                      {profile.postalCode ? ` ${profile.postalCode}` : ''}
+                    </span>
                   </div>
                 )}
               </div>
@@ -145,7 +149,8 @@ export default function ContactSection({
             {!map.embedSrc && map.linkHref && (
               <a href={map.linkHref} target="_blank" rel="noreferrer"
                 className="ps-cf-chip mt-6 inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium hover:opacity-80 transition">
-                📍 View on Google Maps
+                <Ico name="pin" />
+                View on Google Maps
               </a>
             )}
           </div>
@@ -183,13 +188,16 @@ export default function ContactSection({
           )}
           {(profile?.phone || profile?.email || profile?.addressLine1) && (
             <div className="mt-6 space-y-2 text-sm text-slate-700">
-              {profile?.phone && <div>📞 {profile.phone}</div>}
-              {profile?.email && <div>✉️ {profile.email}</div>}
+              {profile?.phone && <a href={telHref(profile.phone)} className="ps-foot-line hover:opacity-80 transition"><Ico name="phone" />{profile.phone}</a>}
+              {profile?.email && <a href={`mailto:${profile.email}`} className="ps-foot-line hover:opacity-80 transition"><Ico name="mail" />{profile.email}</a>}
               {profile?.addressLine1 && (
-                <div>
-                  📍 {profile.addressLine1}
-                  {profile.city ? `, ${profile.city}` : ''}
-                  {profile.postalCode ? ` ${profile.postalCode}` : ''}
+                <div className="ps-foot-line">
+                  <Ico name="pin" />
+                  <span>
+                    {profile.addressLine1}
+                    {profile.city ? `, ${profile.city}` : ''}
+                    {profile.postalCode ? ` ${profile.postalCode}` : ''}
+                  </span>
                 </div>
               )}
             </div>
@@ -234,7 +242,8 @@ export default function ContactSection({
                   rel="noreferrer"
                   className="ps-chip mt-6 inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium hover:opacity-80 transition"
                 >
-                  📍 View on Google Maps
+                  <Ico name="pin" />
+                View on Google Maps
                 </a>
               );
             }

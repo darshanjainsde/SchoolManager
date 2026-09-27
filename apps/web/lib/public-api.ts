@@ -20,6 +20,8 @@ export interface PublicSiteData {
     postalCode: string | null;
     country: string | null;
     mapEmbedUrl: string | null;
+    /** CBSE/ICSE/state board affiliation number; optional on older payloads. */
+    affiliationNo?: string | null;
     headingFont: string;
     heroStyle: string;
     animationLevel: string;

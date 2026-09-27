@@ -152,6 +152,9 @@ export class PublicSiteService {
               postalCode: has('ABOUT_CONTACT') ? profile.postalCode : null,
               country: has('ABOUT_CONTACT') ? profile.country : null,
               mapEmbedUrl: has('ABOUT_CONTACT') ? profile.mapEmbedUrl : null,
+              // The board number Indian parents look for and school footers
+              // never carry. Contact data, so it rides ABOUT_CONTACT.
+              affiliationNo: has('ABOUT_CONTACT') ? profile.affiliationNo : null,
               headingFont: profile.headingFont,
               heroStyle: profile.heroStyle,
               animationLevel: profile.animationLevel,
