@@ -2231,7 +2231,12 @@ model LeadActivity {
   @@index([leadId, createdAt])
 }
 
-/// Singleton (id = "default"): owner-editable pricing + public contact info.
+/// THE PLATFORM'S SINGLE CONFIG ROW (id = "default").
+///
+/// Named for what it first held — the marketing site's prices and contact
+/// details — and it is now the one row the owner console edits for anything
+/// true of the whole platform rather than of one school. The name is the
+/// debt; a second singleton table for one boolean would be worse.
 model MarketingConfig {
   id            String   @id @default("default")
   priceBasicUsd Int      @default(19)
@@ -2242,6 +2247,19 @@ model MarketingConfig {
   priceProInr   Int      @default(4999)
   contactEmail  String   @default("admin@sckools.com")
   contactPhone  String   @default("")
+
+  /// Whether the login page offers "sign in with a code".
+  ///
+  /// OFF by default, because the door has never worked: Meta refuses every
+  /// AUTHENTICATION-category template on this account (subcode 2388185), so
+  /// nothing can carry the code. A door that cannot open is worse than no
+  /// door — it is the one a parent tries first.
+  ///
+  /// The OWNER's, not a school's: whether codes can be sent at all is a fact
+  /// about the platform's messaging account, and no school admin can change
+  /// it by trying.
+  loginOtpEnabled Boolean @default(false)
+
   updatedAt     DateTime @updatedAt
 }
 

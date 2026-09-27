@@ -192,6 +192,9 @@ export type ErrorCode =
   | 'OTP_RATE_LIMITED'
   /** No sender could deliver the code (not on WhatsApp, SMS not enabled, platform not set up). */
   | 'OTP_UNDELIVERABLE'
+  /** The owner has not switched sign-in by code on. A DECISION, not a fault —
+   *  distinct from OTP_UNDELIVERABLE, which is "we tried and could not". */
+  | 'OTP_DISABLED'
   | 'OTP_EXPIRED'
   | 'OTP_WRONG'
   /** Five wrong tries on one code. */

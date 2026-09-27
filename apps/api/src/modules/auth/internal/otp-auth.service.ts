@@ -36,8 +36,51 @@ export class OtpAuthService {
     private readonly jwt: JwtService,
   ) {}
 
-  get ready(): boolean {
-    return this.otp.ready;
+  /**
+   * Whether the login page should offer the phone door at all.
+   *
+   * TWO things have to be true, and they are different questions. The owner's
+   * switch is a DECISION — "we offer this" — and the sender check is a FACT —
+   * "a code can physically be carried". Readiness used to be the fact alone,
+   * which is why a door nobody could open was on the login page: a sender was
+   * configured, and Meta refused the template every time.
+   *
+   * Cached for a minute. This is read on every visit to /login, by people who
+   * are not signed in, and the answer changes about once a year.
+   */
+  async isReady(): Promise<boolean> {
+    if (!this.otp.ready) return false;
+    const now = Date.now();
+    if (now - this.switchAt > 60_000) {
+      try {
+        const row = await getPlatformPrisma().marketingConfig.findUnique({
+          where: { id: 'default' },
+          select: { loginOtpEnabled: true },
+        });
+        // No row yet means nobody has ever opened the owner console. Off is
+        // the honest default: the door has never worked.
+        this.switchOn = row?.loginOtpEnabled ?? false;
+      } catch {
+        // A migration not yet run, or a database blip, must not put an
+        // unopenable door back on the login page.
+        this.switchOn = false;
+      }
+      this.switchAt = now;
+    }
+    return this.switchOn;
+  }
+
+  /** Test seam and cache, so the switch is read once a minute, not per visit. */
+  private switchOn = false;
+  private switchAt = 0;
+  /**
+   * Drop the cached switch. The owner's save does NOT call this — it would
+   * couple the owner module to auth for one boolean — so a change takes up to
+   * the minute above to reach the login page, and the owner console says so.
+   * Used by the tests to flip the switch without waiting.
+   */
+  forgetSwitch(): void {
+    this.switchAt = 0;
   }
 
   /**
@@ -46,6 +89,17 @@ export class OtpAuthService {
    * response never says which (design §6 "unknown number").
    */
   async request(rawPhone: string, schoolId: string | null, ip: string | null) {
+    // Hiding the door is not closing it. Anything can POST here, so the
+    // switch is enforced where the work happens, not only where the button is
+    // drawn — otherwise turning it off would be decoration.
+    if (!(await this.isReady())) {
+      throw new ApiError(
+        'OTP_DISABLED',
+        'Signing in by code is not switched on. Please sign in with your password instead.',
+        400,
+        'phone',
+      );
+    }
     const phone = toE164(rawPhone);
     if (!phone) throw new ApiError('BAD_PHONE', 'That does not look like a mobile number.', 400, 'phone');
     const profiles = await this.profiles.resolve(phone, { schoolId, forLogin: true });

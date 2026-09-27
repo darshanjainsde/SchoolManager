@@ -63,7 +63,7 @@ try {
 
   // ── the numbers ────────────────────────────────────────────────────────
   line();
-  const nums = await graph(`${waba}/phone_numbers?fields=id,display_phone_number,verified_name,name_status,code_verification_status,quality_rating,messaging_limit_tier,platform_type,status&limit=50`);
+  const nums = await graph(`${waba}/phone_numbers?fields=id,display_phone_number,verified_name,name_status,code_verification_status,quality_rating,messaging_limit_tier,platform_type,status,webhook_configuration&limit=50`);
   const rows = nums.data ?? [];
   line(`Numbers on this account: ${rows.length}`);
   for (const n of rows) {
@@ -77,6 +77,16 @@ try {
     line(`    ${tick(nameOk)} display name   ${n.verified_name ?? '—'}  (${n.name_status ?? 'unknown'})`);
     line(`    ${tick(codeOk)} code verified  ${n.code_verification_status ?? 'unknown'}`);
     line(`      quality        ${n.quality_rating ?? '—'}`);
+    // WHERE META ACTUALLY DELIVERS — the one thing that cannot be checked from
+    // our side. A callback URL is set per APP, so staging and production
+    // compete for it, and pressing "Verify and save" against the value already
+    // in the box changes nothing while looking like it did. Both endpoints
+    // answer the handshake correctly, so nothing on our side goes red; the
+    // events simply arrive somewhere else. Print it, and say which one it is.
+    const cb = n.webhook_configuration?.application ?? null;
+    const where = !cb ? 'NOT SET' : cb.includes('api.test.') ? 'STAGING' : cb.includes('api.sckools.com') ? 'PRODUCTION' : 'somewhere else';
+    line(`    ${tick(where === 'PRODUCTION')} webhook goes to ${where}`);
+    line(`      ${cb ?? '(no callback URL on the app)'}`);
     line(`      messaging tier ${n.messaging_limit_tier ?? '—'}`);
     line(`      status         ${n.status ?? '—'}`);
     try {

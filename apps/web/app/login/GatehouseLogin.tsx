@@ -118,7 +118,10 @@ export default function GatehouseLogin({ theme }: { theme: LoginTheme }) {
     setMode(next);
     try { localStorage.setItem(LAST_MODE_KEY, next); } catch { /* private mode */ }
   }
-  const phoneDoor = mode === 'phone' && otpReady !== false;
+  // `=== true`, not `!== false`: readiness starts as null while the answer is
+  // in flight, so `!== false` drew the door first and took it away a moment
+  // later. A door that appears and vanishes is worse than one that never was.
+  const phoneDoor = mode === 'phone' && otpReady === true;
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -237,7 +240,7 @@ export default function GatehouseLogin({ theme }: { theme: LoginTheme }) {
         {/* ── Form panel ── */}
         <div className="gh-right">
           <form className="gh-form" onSubmit={form.handleSubmit(onSubmit)}>
-            {otpReady !== false && (
+            {otpReady === true && (
               <div className="gh-modes" role="radiogroup" aria-label="Sign in with">
                 {([['phone', 'Mobile number'], ['password', 'Email & password']] as const).map(([m, label]) => (
                   <button key={m} type="button" role="radio" aria-checked={mode === m} className="gh-mode" onClick={() => pickMode(m)}>
