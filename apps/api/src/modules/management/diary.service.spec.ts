@@ -2,7 +2,10 @@ const txMock = {
   classSection: { findFirst: jest.fn() },
   teacher: { findFirst: jest.fn(), findMany: jest.fn() },
   substitution: { findFirst: jest.fn() },
-  school: { findFirst: jest.fn() },
+  school: { findFirst: jest.fn(), findUnique: jest.fn() },
+  // The month grid asks the school calendar which days it was open.
+  holiday: { findMany: jest.fn() },
+  academicYear: { findFirst: jest.fn() },
   student: { findMany: jest.fn(), findFirst: jest.fn(), groupBy: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
   diaryEntry: {
     findMany: jest.fn(),
@@ -312,5 +315,89 @@ describe('DiaryService', () => {
         response: { code: 'NOT_FOUND' },
       });
     });
+  });
+});
+
+// ── the month grid ───────────────────────────────────────────────────────────
+
+describe('studentDiary, asked for a month', () => {
+  const SCHOOL = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const USER = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    txMock.student.findFirst.mockResolvedValue({ id: 's1', classSectionId: 'c1' });
+    txMock.diaryAck.createMany.mockResolvedValue({ count: 0 });
+    txMock.teacher.findMany.mockResolvedValue([{ id: 't1', firstName: 'Rajeshwari', lastName: 'Balasubramanian' }]);
+    // Monday to Saturday, so Sunday is the weekly closure.
+    txMock.school.findUnique.mockResolvedValue({ workingDays: [1, 2, 3, 4, 5, 6] });
+    txMock.holiday.findMany.mockResolvedValue([
+      { name: 'Ganesh Chaturthi break', startDate: new Date('2026-09-21T00:00:00Z'), endDate: new Date('2026-09-22T00:00:00Z') },
+    ]);
+    txMock.academicYear.findFirst.mockResolvedValue({
+      startDate: new Date('2026-04-01T00:00:00Z'),
+      endDate: new Date('2027-03-31T00:00:00Z'),
+    });
+    txMock.diaryEntry.findMany.mockResolvedValue([
+      { id: 'd1', date: new Date('2026-09-17T00:00:00Z'), kind: 'REMARK', body: 'Geometry box', authorTeacherId: 't1', audience: 'SELECTED', subject: null, acks: [], recipients: [{ id: 'r1' }], createdAt: new Date('2026-09-17T09:00:00Z') },
+      { id: 'd2', date: new Date('2026-09-17T00:00:00Z'), kind: 'ITEM', body: 'Exercise 7.2', authorTeacherId: 't1', audience: 'ALL', subject: { name: 'Mathematics' }, acks: [], recipients: [], createdAt: new Date('2026-09-17T09:05:00Z') },
+      { id: 'd3', date: new Date('2026-09-02T00:00:00Z'), kind: 'REMARK', body: 'Signed already', authorTeacherId: 't1', audience: 'SELECTED', subject: null, acks: [{ signedAt: new Date('2026-09-03T05:00:00Z'), signedName: 'Amma' }], recipients: [{ id: 'r2' }], createdAt: new Date('2026-09-02T09:00:00Z') },
+    ]);
+  });
+
+  const notifications = { notify: jest.fn() };
+  const svc = () => new DiaryService(notifications as unknown as NotificationService);
+
+  it('returns one square per calendar day, closed days included', async () => {
+    const out = await svc().studentDiary(SCHOOL, USER, undefined, '2026-09');
+    expect(out.month?.days).toHaveLength(30);
+    expect(out.month?.days[0].date).toBe('2026-09-01');
+    expect(out.month?.days[29].date).toBe('2026-09-30');
+  });
+
+  it('says WHY a day was empty — the holiday by name, the weekly closure by weekday', async () => {
+    // A blank square is the answer the list could never give. "Ganesh
+    // Chaturthi break" tells a parent something; "Sunday" tells them the
+    // other thing; and a school day with nothing written is neither.
+    const days = (await svc().studentDiary(SCHOOL, USER, undefined, '2026-09')).month!.days;
+    const on = (d: string) => days.find((x) => x.date === d)!;
+    expect(on('2026-09-21').offReason).toBe('Ganesh Chaturthi break');
+    expect(on('2026-09-22').offReason).toBe('Ganesh Chaturthi break');
+    expect(on('2026-09-06').offReason).toBe('Sunday');
+    expect(on('2026-09-07').offReason).toBeNull();
+  });
+
+  it('counts what is on a day, and separates the remarks still to sign', async () => {
+    const days = (await svc().studentDiary(SCHOOL, USER, undefined, '2026-09')).month!.days;
+    const on = (d: string) => days.find((x) => x.date === d)!;
+    expect(on('2026-09-17')).toMatchObject({ items: 1, remarks: 1, unsigned: 1 });
+    // Signed, so it still shows as something on the day but asks for nothing.
+    expect(on('2026-09-02')).toMatchObject({ items: 0, remarks: 1, unsigned: 0 });
+    expect(on('2026-09-08')).toMatchObject({ items: 0, remarks: 0, unsigned: 0 });
+  });
+
+  it('reads the whole month in ONE query, so opening a date costs nothing', async () => {
+    await svc().studentDiary(SCHOOL, USER, undefined, '2026-09');
+    expect(txMock.diaryEntry.findMany).toHaveBeenCalledTimes(1);
+    const where = txMock.diaryEntry.findMany.mock.calls[0][0].where;
+    expect(where.date.gte.toISOString().slice(0, 10)).toBe('2026-09-01');
+    expect(where.date.lte.toISOString().slice(0, 10)).toBe('2026-09-30');
+  });
+
+  it('bounds the arrows to the session', async () => {
+    const m = (await svc().studentDiary(SCHOOL, USER, undefined, '2026-09')).month!;
+    expect(m.firstMonth).toBe('2026-04');
+    expect(m.lastMonth).toBe('2027-03');
+  });
+
+  it('leaves the undated call exactly as it was — the app and /me/home use it', async () => {
+    const out = await svc().studentDiary(SCHOOL, USER);
+    expect(out.month).toBeUndefined();
+    expect(txMock.school.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('refuses a month that is not YYYY-MM rather than guessing one', async () => {
+    await expect(svc().studentDiary(SCHOOL, USER, undefined, '2026-9')).rejects.toBeTruthy();
+    await expect(svc().studentDiary(SCHOOL, USER, undefined, '2026-13')).rejects.toBeTruthy();
   });
 });

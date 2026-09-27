@@ -107,6 +107,35 @@ describe('the content column', () => {
   });
 });
 
+describe("the diary's month grid", () => {
+  it('takes a definite width, so it fills its card instead of shrinking to its content', () => {
+    // The card body is a flex column. `max-width` with `margin-inline: auto`
+    // makes a flex item shrink-wrap: measured, the grid went from 338px to
+    // 218px at every width and each square from 39px to 26px — under the size
+    // a finger can hit, while the CSS still read as correct.
+    expect(css).toMatch(/\.sk-dcal \.sk-cal \{[^}]*width:\s*min\(100%,\s*420px\)/);
+    expect(css).not.toMatch(/\.sk-dcal \.sk-cal \{[^}]*max-width/);
+  });
+
+  it('gives a square its own meaning, separate from attendance', () => {
+    // Same grid and square as the attendance calendar — one calendar language
+    // for a family that reads both — but its own states, because a diary day
+    // holds a count of things, not one status.
+    for (const state of ['items', 'remark', 'none', 'off', 'future']) {
+      expect(css).toMatch(new RegExp(`\\.sk-cell\\[data-diary="${state}"\\]`));
+    }
+    // Closed days carry no border: "the school was shut" must not look like
+    // "nothing written yet".
+    expect(rule('.sk-cell[data-diary="off"]')).toMatch(/border-color:\s*transparent/);
+  });
+
+  it('keeps the month arrows big enough for a thumb', () => {
+    const arrow = rule('.sk-dcal-arrow {');
+    expect(arrow).toMatch(/width:\s*36px/);
+    expect(arrow).toMatch(/height:\s*36px/);
+  });
+});
+
 describe('the standalone desks sit in that column too', () => {
   for (const f of ['app/library/layout.tsx', 'app/sports/layout.tsx']) {
     it(`${f} caps and centres its content`, () => {
