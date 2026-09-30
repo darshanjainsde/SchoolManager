@@ -2,7 +2,7 @@ import { Logger } from '@nestjs/common';
 import type { PrismaClient } from '@skoolos/db';
 import type { NotificationChannel, NotificationMessage } from './notification.types';
 import { toE164 } from './whatsapp/phone';
-import { sendTemplate, whatsAppConfig, WhatsAppApiError, type SendResult, type WhatsAppConfig, whatsAppConfigProblem } from './whatsapp/graph.client';
+import { WhatsAppApiError, sendTemplate, senderDisplayNumber, type SendResult, type WhatsAppConfig, whatsAppConfig, whatsAppConfigProblem } from './whatsapp/graph.client';
 import { templateFor, type WhatsAppTemplate } from './whatsapp/templates';
 
 /**
@@ -52,6 +52,12 @@ export class WhatsAppChannel implements NotificationChannel {
   /** The platform credentials, or null when the environment has none. */
   get configured(): boolean {
     return this.config() !== null;
+  }
+
+  /** The number families see messages come FROM, for copy that has to name it. */
+  async senderNumber(): Promise<string | null> {
+    const cfg = this.config();
+    return cfg ? senderDisplayNumber(cfg, { fetchImpl: this.fetchImpl }) : null;
   }
 
   /**

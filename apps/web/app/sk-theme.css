@@ -4144,6 +4144,12 @@ html[data-theme='light'] .skosx { color-scheme: light; }
 .ph-form label { font-size: 12.5px; font-weight: 600; color: var(--sk-ink-2); }
 .ph-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .ph-row .sk-input { flex: 1 1 160px; min-width: 0; box-sizing: border-box; }
+/* The one failure that is an INSTRUCTION — go and message the number, then
+   come back. It stays on the card rather than sliding away in a toast, and
+   it wraps: naming the number makes it two lines on a phone. */
+.ph-err { margin: 2px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--sk-red, #b4462b);
+  background: var(--sk-red-soft, #fbe7e4); border: 1px solid color-mix(in srgb, var(--sk-red, #b4462b) 28%, transparent);
+  border-radius: 9px; padding: 8px 11px; max-width: 46rem; }
 .ph-row .sk-input.ph-code { flex: 0 1 140px; font-family: var(--sk-mono); font-size: 16px; letter-spacing: 0.18em; }
 .ph-num { font-family: var(--sk-mono); font-size: 14px; font-weight: 600; }
 .ph-hint { font-size: 11.5px; color: var(--sk-ink-3); }

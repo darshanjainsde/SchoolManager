@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { loadEnv } from '@skoolos/config';
 import { WhatsAppChannel } from '../notifications/whatsapp.channel';
-import { sendTemplate } from '../notifications/whatsapp/graph.client';
+import { sendTemplate, sendText } from '../notifications/whatsapp/graph.client';
 import { VERIFY_CODE, verifyCodeTemplate } from '../notifications/whatsapp/templates';
 
 /**
@@ -39,6 +39,10 @@ export class WhatsAppOtpSender implements OtpSender {
   enabled(): boolean {
     return this.channel.configured;
   }
+  /** The number to write to, for the copy that has to name it. */
+  senderNumber(): Promise<string | null> {
+    return this.channel.senderNumber();
+  }
   async send(phone: string, code: string, ctx: OtpSendContext): Promise<OtpSendResult> {
     // The AUTHENTICATION template: Meta writes the body, we supply the code
     // and the copy-code button. Bypasses nothing — the per-school switch is
@@ -46,24 +50,47 @@ export class WhatsAppOtpSender implements OtpSender {
     const r = await this.channel.deliverWith(ctx.schoolId, phone, `OTP_${ctx.purpose}`, VERIFY_CODE, (cfg, pnid, f) =>
       sendTemplate(cfg, phone, verifyCodeTemplate(code), { phoneNumberId: pnid, fetchImpl: f }),
     );
+    if (r.ok) return { ok: true, code: null };
+
+    // ── The session-window fallback ───────────────────────────────────────
+    // 132001 means the template does not exist on this business account, and
+    // for the code template that is permanent, not a blip: Meta gates the
+    // AUTHENTICATION category per account and refuses ours (subcode 2388185 —
+    // verified against the Graph API on 2026-09-30, while a plain UTILITY
+    // template was accepted, so it is the CATEGORY that is blocked and not
+    // the token, the app or the account's health).
+    //
+    // A free-form text needs no template at all — Meta allows one inside the
+    // 24-hour service window a person opens by writing to the business. That
+    // window is exactly the right property here: only somebody holding the
+    // number can open it AND read the reply, so this proves the same thing
+    // the template would have proved. Outside the window Meta refuses with
+    // 131047, which is not a failure to report as "try again" — it is an
+    // instruction, and `reason` carries it upward intact.
+    if (r.code === 132001) {
+      const t = await this.channel.deliverWith(ctx.schoolId, phone, `OTP_${ctx.purpose}`, 'session_text', (cfg, pnid, f) =>
+        sendText(cfg, phone, `${code} is your Sckools verification code. It expires in ten minutes. Do not share it with anyone.`, {
+          phoneNumberId: pnid,
+          fetchImpl: f,
+        }),
+      );
+      if (t.ok) return { ok: true, code: null };
+      return {
+        ok: false,
+        code: t.code,
+        reason: t.code === 131047 || t.code === 470 ? 'no open WhatsApp window' : 'the code template is not approved on this WhatsApp account',
+      };
+    }
+
     return {
-      ok: r.ok,
+      ok: false,
       code: r.code,
-      reason: r.ok
-        ? undefined
-        : r.code === 131026
+      reason:
+        r.code === 131026
           ? 'not on WhatsApp'
           : r.code === 131030
             ? 'not on the Meta test list'
-            // 132001 = the template does not exist on this business account.
-            // For the code template that is not a transient failure: Meta gates
-            // the AUTHENTICATION category per account, and ours is not enabled
-            // (both the API and WhatsApp Manager refuse to create it). Naming
-            // it separately keeps a permanent block out of the "try again in a
-            // minute" bucket, where it would have people retrying forever.
-            : r.code === 132001
-              ? 'the code template is not approved on this WhatsApp account'
-              : 'WhatsApp did not deliver',
+            : 'WhatsApp did not deliver',
     };
   }
 }
@@ -119,6 +146,15 @@ export class OtpSenders {
 
   enabledNames(): string[] {
     return this.senders.filter((s) => s.enabled()).map((s) => s.name);
+  }
+
+  /**
+   * The number a person must write to in order to open the 24-hour window the
+   * free-text code travels in. Null when WhatsApp is not configured at all.
+   */
+  async whatsappSenderNumber(): Promise<string | null> {
+    const wa = this.senders.find((x): x is WhatsAppOtpSender => x.name === 'whatsapp');
+    return wa && wa.enabled() ? wa.senderNumber() : null;
   }
 
   async fanOut(phone: string, code: string, ctx: OtpSendContext): Promise<FanOutResult> {

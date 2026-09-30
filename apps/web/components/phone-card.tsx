@@ -33,10 +33,16 @@ export function PhoneCard({ role }: { role: 'admin' | 'teacher' | 'staff' }) {
   const key = ['me-phone', host];
 
   const q = useQuery({ queryKey: key, enabled: !!host, retry: false, queryFn: () => api.get<PhoneStatus>('/me/phone') });
+  // A toast is the wrong home for THIS failure. When WhatsApp cannot carry
+  // the code the server answers with an instruction to go and do something in
+  // another app ("message the Sckools number, then press Send code again") —
+  // and a message you must act on elsewhere cannot slide away after four
+  // seconds. It is kept on the card until the next attempt clears it.
+  const [sendError, setSendError] = useState<string | null>(null);
   const request = useMutation({
-    mutationFn: (p: string) => api.post<{ ok: boolean; pending: string }>('/me/phone/request', { phone: p }),
+    mutationFn: (p: string) => { setSendError(null); return api.post<{ ok: boolean; pending: string }>('/me/phone/request', { phone: p }); },
     onSuccess: (r) => { toast.success(`Code sent to ${r.pending} on WhatsApp.`); setCode(''); qc.invalidateQueries({ queryKey: key }); },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => setSendError(e.message),
   });
   const verify = useMutation({
     mutationFn: (c: string) => api.post<PhoneStatus>('/me/phone/verify', { code: c }),
@@ -89,6 +95,9 @@ export function PhoneCard({ role }: { role: 'admin' | 'teacher' | 'staff' }) {
                   </button>
                   {editing ? <button type="button" className="sk-btn ghost" onClick={() => { setEditing(false); setPhone(''); }}>Cancel</button> : null}
                 </div>
+                {sendError ? (
+                  <p className="ph-err" role="alert" data-testid="phone-send-error">{sendError}</p>
+                ) : null}
               </form>
             )}
 

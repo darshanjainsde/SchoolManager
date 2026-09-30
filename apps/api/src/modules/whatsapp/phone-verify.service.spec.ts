@@ -14,7 +14,7 @@ const codeOf = (data: Record<string, unknown>) => {
 };
 
 describe('PhoneVerifyService', () => {
-  const senders = { enabledNames: jest.fn().mockReturnValue(['whatsapp']), fanOut: jest.fn().mockResolvedValue({ sentVia: ['whatsapp'], failures: [], nothingEnabled: false }) };
+  const senders = { enabledNames: jest.fn().mockReturnValue(['whatsapp']), fanOut: jest.fn().mockResolvedValue({ sentVia: ['whatsapp'], failures: [], nothingEnabled: false }), whatsappSenderNumber: jest.fn().mockResolvedValue('+91 95999 15010') };
   const svc = () => new PhoneVerifyService(senders as never);
   beforeEach(() => { jest.clearAllMocks(); senders.enabledNames.mockReturnValue(['whatsapp']); senders.fanOut.mockResolvedValue({ sentVia: ['whatsapp'], failures: [], nothingEnabled: false }); });
 
@@ -44,6 +44,46 @@ describe('PhoneVerifyService', () => {
     user.findFirst.mockResolvedValueOnce({ phoneOtpExpiresAt: null }).mockResolvedValueOnce(null);
     senders.fanOut.mockResolvedValueOnce({ sentVia: [], failures: [{ name: 'whatsapp', code: 131026, reason: 'not on WhatsApp' }], nothingEnabled: false });
     await expect(svc().request(SCHOOL, 'u1', '9876543210')).rejects.toMatchObject({ status: 502, response: { message: 'That number is not on WhatsApp.' } });
+  });
+
+  /**
+   * Meta refuses to create our AUTHENTICATION template on this account
+   * (subcode 2388185 — the category is blocked, verified against the Graph
+   * API), so a code can only travel as free text, and free text is only
+   * allowed inside the 24-hour window a person opens by writing to the
+   * business. When that window is shut the answer is not "try again" — it is
+   * the one instruction that makes the next try work, and it has to name the
+   * number, because "message the Sckools number" is not an instruction.
+   */
+  it('request: with no open window, the error is an instruction naming the number to write to', async () => {
+    user.findFirst.mockResolvedValueOnce({ phoneOtpExpiresAt: null }).mockResolvedValueOnce(null);
+    senders.fanOut.mockResolvedValueOnce({ sentVia: [], failures: [{ name: 'whatsapp', code: 131047, reason: 'no open WhatsApp window' }], nothingEnabled: false });
+    await expect(svc().request(SCHOOL, 'u1', '9876543210')).rejects.toMatchObject({
+      status: 502,
+      response: { message: 'Send any WhatsApp message — “Hi” is enough — to +91 95999 15010 from +919876543210, then press Send code again within 24 hours.' },
+    });
+    // Nothing is held against the next try: the person is about to make one.
+    expect(user.update.mock.calls[1][0].data).toMatchObject({ phonePending: null, phoneOtpHash: null, phoneOtpAttempts: 0 });
+  });
+
+  it('request: the instruction still reads when Meta will not tell us our own number', async () => {
+    user.findFirst.mockResolvedValueOnce({ phoneOtpExpiresAt: null }).mockResolvedValueOnce(null);
+    senders.whatsappSenderNumber.mockResolvedValueOnce(null);
+    senders.fanOut.mockResolvedValueOnce({ sentVia: [], failures: [{ name: 'whatsapp', code: 131047, reason: 'no open WhatsApp window' }], nothingEnabled: false });
+    await expect(svc().request(SCHOOL, 'u1', '9876543210')).rejects.toMatchObject({
+      response: { message: expect.stringContaining('the Sckools number') },
+    });
+  });
+
+  it('request: both doors shut sends them to their admin, and never invites a retry', async () => {
+    user.findFirst.mockResolvedValueOnce({ phoneOtpExpiresAt: null }).mockResolvedValueOnce(null);
+    senders.fanOut.mockResolvedValueOnce({ sentVia: [], failures: [{ name: 'whatsapp', code: 132001, reason: 'the code template is not approved on this WhatsApp account' }], nothingEnabled: false });
+    await expect(svc().request(SCHOOL, 'u1', '9876543210')).rejects.toMatchObject({
+      status: 502,
+      response: { message: 'Confirming a number by WhatsApp is not switched on yet. Ask your admin to set the number on your staff record instead.' },
+    });
+    // The number is only looked up for the instruction that needs it.
+    expect(senders.whatsappSenderNumber).not.toHaveBeenCalled();
   });
 
   it('verify: the right code within ten minutes moves pending → phone + verifiedAt and clears the code', async () => {
