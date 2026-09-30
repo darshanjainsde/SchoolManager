@@ -42,7 +42,15 @@ export function PhoneCard({ role }: { role: 'admin' | 'teacher' | 'staff' }) {
   const request = useMutation({
     mutationFn: (p: string) => { setSendError(null); return api.post<{ ok: boolean; pending: string }>('/me/phone/request', { phone: p }); },
     onSuccess: (r) => { toast.success(`Code sent to ${r.pending} on WhatsApp.`); setCode(''); qc.invalidateQueries({ queryKey: key }); },
-    onError: (e: Error) => setSendError(e.message),
+    onError: (e: Error) => {
+      setSendError(e.message);
+      // AND re-read the status. When a send fails the server clears the
+      // pending number, but this screen used to keep the answer it had
+      // cached — so the card went on saying "Code sent to +91 63••• •9877"
+      // over an attempt Meta had refused, and offered a box for a code that
+      // was never sent. The pill has to tell the truth about the last try.
+      qc.invalidateQueries({ queryKey: key });
+    },
   });
   const verify = useMutation({
     mutationFn: (c: string) => api.post<PhoneStatus>('/me/phone/verify', { code: c }),

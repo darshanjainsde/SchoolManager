@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { schoolIcon, schoolIconMetadata } from '@/lib/school-metadata';
 import { notFound } from 'next/navigation';
 import { isPlatformHost } from '@/lib/hosts';
 import { getRequestHost } from '@/lib/request';
@@ -36,6 +37,9 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: `Blog | ${name}`,
     description: `The latest posts from ${name}.`,
+    // The school's own mark. A school with no logo yet falls through to the
+    // platform icon by file convention, which is the right fallback.
+    ...schoolIconMetadata(schoolIcon(site?.profile)),
   };
 }
 

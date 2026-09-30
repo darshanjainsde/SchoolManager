@@ -1,8 +1,16 @@
+import { schoolChrome } from '@/lib/school-metadata';
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { isPlatformHost } from '@/lib/hosts';
 import { getRequestHost } from '@/lib/request';
 import { fetchTvScreen } from '@/lib/tv-api';
 import { TvLoop } from './tv-loop';
+
+/** The school's own name and mark in the tab — see lib/school-metadata.ts. */
+export function generateMetadata(): Promise<Metadata> {
+  return schoolChrome('Display');
+}
+
 
 /**
  * Sckools TV — any television with a browser and this one URL.

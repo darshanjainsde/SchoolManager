@@ -195,7 +195,7 @@ export class AuthController {
    * and enforce another.
    */
   private async meFor(user: Pick<SchoolJwtPayload, 'sub' | 'schoolId' | 'role'>) {
-    const [features, name, staffRole] = await Promise.all([
+    const [features, name, staffRole, schoolMarkUrl] = await Promise.all([
       this.features.getFeatures(user.schoolId),
       // The clients have nowhere else to learn the signed-in person's NAME:
       // the login response carries none, and `User` has no name column. Without
@@ -206,6 +206,14 @@ export class AuthController {
       // Which KIND of staff (LIBRARIAN, OFFICE, …) — how the web login lands a
       // librarian on /library instead of /staff. Null for non-STAFF logins.
       this.auth.staffRoleFor(user.schoolId, user.sub, user.role),
+      // The school's own mark, so its console and portals can wear it in the
+      // browser tab. Every one of those screens is a CLIENT shell, and Next
+      // forbids a client file from exporting metadata — reading the host in a
+      // server layout instead would have cost the prerendered console shell
+      // (measured 2026-09-30: /app, /portal and /teacher all fell from
+      // prerendered to dynamic). So the mark travels on the payload these
+      // screens already fetch, and the client sets the icon.
+      this.auth.schoolMarkFor(user.schoolId),
     ]);
     return {
       userId: user.sub,
@@ -214,6 +222,7 @@ export class AuthController {
       name,
       staffRole,
       features: [...features],
+      schoolMarkUrl,
     };
   }
 }

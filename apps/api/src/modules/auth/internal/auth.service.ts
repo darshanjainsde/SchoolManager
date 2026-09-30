@@ -396,6 +396,28 @@ export class AuthService {
   }
 
   /**
+   * THE SCHOOL'S OWN MARK, for the browser tab of its console and portals.
+   *
+   * A school that uploaded a favicon meant it; the logo is the fallback, and
+   * null is the third answer — a school with no mark yet keeps the platform's
+   * Tassel-S, which is better than a broken image.
+   *
+   * Cheap enough to sit on `/auth/me`: two nullable id columns and at most one
+   * asset row, on a payload every console already fetches once per session.
+   */
+  async schoolMarkFor(schoolId: string): Promise<string | null> {
+    const db = getPlatformPrisma();
+    const profile = await db.schoolProfile.findUnique({
+      where: { schoolId },
+      select: { faviconAssetId: true, logoAssetId: true },
+    });
+    const assetId = profile?.faviconAssetId ?? profile?.logoAssetId ?? null;
+    if (!assetId) return null;
+    const asset = await db.mediaAsset.findFirst({ where: { id: assetId, schoolId }, select: { url: true } });
+    return asset?.url ?? null;
+  }
+
+  /**
    * THE PERSON'S OWN NAME, for greeting them by it.
    *
    * `User` carries credentials, not identity — it has an email and a username
