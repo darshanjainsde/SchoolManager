@@ -107,6 +107,45 @@ export async function sendTemplate(
   return post(cfg, phoneNumberId, body, f);
 }
 
+/**
+ * The sender's own number, as Meta prints it ("+91 95999 15010").
+ *
+ * Needed the moment an error has to tell somebody WHERE to write — "message
+ * the school's number" is not an instruction unless it names the number.
+ * Cached for the life of the process: it changes when the school buys a new
+ * number, which is a deploy, not a minute.
+ */
+let displayNumberCache: { id: string; value: string | null } | null = null;
+export async function senderDisplayNumber(
+  cfg: WhatsAppConfig,
+  opts: { phoneNumberId?: string | null; fetchImpl?: typeof fetch } = {},
+): Promise<string | null> {
+  const id = opts.phoneNumberId || cfg.phoneNumberId;
+  if (displayNumberCache?.id === id) return displayNumberCache.value;
+  const f = opts.fetchImpl ?? fetch;
+  let value: string | null = null;
+  try {
+    const res = await f(`https://graph.facebook.com/${cfg.graphVersion}/${id}?fields=display_phone_number`, {
+      headers: { Authorization: `Bearer ${cfg.token}` },
+    });
+    if (res.ok) {
+      const j = (await res.json()) as { display_phone_number?: string };
+      value = j.display_phone_number ?? null;
+    }
+  } catch {
+    // An error message is not worth failing over; the caller says something
+    // slightly vaguer instead.
+    value = null;
+  }
+  displayNumberCache = { id, value };
+  return value;
+}
+
+/** Tests: forget the cached number. */
+export function resetSenderDisplayNumberForTests(): void {
+  displayNumberCache = null;
+}
+
 /** Free text — allowed only inside the 24-hour window the person opened by writing or tapping. */
 export function sendText(cfg: WhatsAppConfig, to: string, text: string, opts: { phoneNumberId?: string | null; fetchImpl?: typeof fetch } = {}): Promise<SendResult> {
   return post(cfg, opts.phoneNumberId || cfg.phoneNumberId, { messaging_product: 'whatsapp', to: forGraph(to), type: 'text', text: { body: text.slice(0, 4096), preview_url: false } }, opts.fetchImpl ?? fetch);
