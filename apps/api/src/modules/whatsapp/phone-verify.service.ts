@@ -76,18 +76,28 @@ export class PhoneVerifyService {
         data: { phonePending: null, phoneOtpHash: null, phoneOtpExpiresAt: null, phoneOtpAttempts: 0 },
       }).catch(() => undefined);
 
+      // No open window is not a failure — it is the one instruction that
+      // makes the fallback work, so it is answered first and by name. Meta
+      // has never approved our AUTHENTICATION template (the category is
+      // blocked on this account), so a code can only travel as free text,
+      // and free text is only allowed inside the 24 hours that open when the
+      // person writes to the business. Naming the number is the whole
+      // message: "message the school's number" is not an instruction.
+      const needsWindow = sent.failures.some((f) => f.reason === 'no open WhatsApp window');
+      const sender = needsWindow ? await this.senders.whatsappSenderNumber() : null;
       const why = sent.nothingEnabled
         ? 'One-time codes are not set up on the platform yet.'
         : sent.failures.some((f) => f.code === 131026)
           ? 'That number is not on WhatsApp.'
           : sent.failures.some((f) => f.code === 131030)
             ? 'This number is not on the WhatsApp test list yet. Add it in Meta (WhatsApp → API Setup → To) and try again in a minute.'
-            : sent.failures.some((f) => f.code === 132001)
-              // A permanent block, not a blip: WhatsApp has not approved the
-              // code template on this account, so retrying cannot help. Say so
-              // rather than inviting them to press the button again.
-              ? 'Confirming a number by WhatsApp is not switched on yet — WhatsApp has not approved our code message. Your admin can set the number for you in the meantime.'
-              : 'The code could not be delivered just now.';
+            : needsWindow
+              ? `Send any WhatsApp message — “Hi” is enough — to ${sender ?? 'the Sckools number'} from ${phone}, then press Send code again within 24 hours.`
+              : sent.failures.some((f) => f.code === 132001)
+                // Both doors shut: the template is not approved AND the free-text
+                // window could not be used. Retrying cannot help.
+                ? 'Confirming a number by WhatsApp is not switched on yet. Ask your admin to set the number on your staff record instead.'
+                : 'The code could not be delivered just now.';
       throw new ApiError('WHATSAPP_UNREACHABLE', why, 502, 'phone');
     }
     return { ok: true, pending: maskPhone(phone), expiresInSeconds: CODE_TTL_MS / 1000 };
