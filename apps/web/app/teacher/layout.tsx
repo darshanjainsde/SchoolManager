@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { useSchoolMark } from '@/components/use-school-mark';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -78,8 +79,11 @@ export default function TeacherLayout({ children }: { children: ReactNode }) {
   const me = useQuery({
     queryKey: ['me'],
     enabled: status === 'authed' && audience === 'school' && !!host,
-    queryFn: () => api.get<{ role: string; features?: string[] }>('/auth/me'),
+    queryFn: () => api.get<{ role: string; features?: string[]; schoolMarkUrl?: string | null }>('/auth/me'),
   });
+  // The school's mark in the tab — see components/use-school-mark.ts.
+  useSchoolMark(me.data?.schoolMarkUrl);
+
 
   // Feature-gated entries (Library) hide once features load and say the plan
   // lacks them — and show until then, so a slow fetch never blanks a tab the

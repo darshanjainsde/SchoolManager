@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import { getRequestHost } from '@/lib/request';
+import { isPlatformHost } from '@/lib/hosts';
 import { cache } from 'react';
 import { fetchPublicSite } from '@/lib/public-api';
 
@@ -34,6 +36,28 @@ export function schoolIcon(profile: { faviconUrl?: string | null; logoUrl?: stri
  *  added-to-home-screen shortcut is the school's too. */
 export function schoolIconMetadata(icon: string | null): Pick<Metadata, 'icons'> {
   return icon ? { icons: { icon, shortcut: icon, apple: icon } } : {};
+}
+
+/**
+ * THE CHROME FOR ANYTHING SERVED ON A SCHOOL'S HOST.
+ *
+ * One rule, applied everywhere: if the address is the school's, the tab is
+ * the school's. Not only its public website — its console, its portals, its
+ * careers page, its invite and reset pages. A head teacher with five tabs
+ * open was looking at five identical Sckools marks and the word "Sckools"
+ * five times; the product they are paying for is supposed to be theirs.
+ *
+ * A platform host (sckools.com, the owner console) gets `{}` and keeps the
+ * Tassel-S by file convention — there the mark IS the right answer.
+ *
+ * Reading the host makes a route dynamic, which is why this is never used on
+ * the cacheable public-site routes under `/s/[host]`: those take the host
+ * from the path and call `schoolMetadata`/`schoolPageMetadata` instead.
+ */
+export async function schoolChrome(page: string | null): Promise<Metadata> {
+  const host = await getRequestHost();
+  if (isPlatformHost(host)) return {};
+  return schoolPageMetadata(host, page);
 }
 
 /**

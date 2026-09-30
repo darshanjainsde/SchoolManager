@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { schoolChrome } from '@/lib/school-metadata';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { isPlatformHost } from '@/lib/hosts';
@@ -6,10 +7,21 @@ import { getRequestHost } from '@/lib/request';
 import { EMPLOYMENT_LABEL, fetchJobs, formatPay } from '@/lib/jobs-api';
 import PlatformBlogNav from '@/components/blog/PlatformBlogNav';
 
-export const metadata: Metadata = {
-  title: 'Teaching jobs across the Sckools network',
-  description: 'Open roles at schools using Sckools — teaching, support and leadership.',
-};
+/**
+ * On sckools.com this is the network's job board; on a school's own host it
+ * is THAT school's careers page and wears its name and mark. `metadata` and
+ * `generateMetadata` cannot both be exported, so the platform copy moved in
+ * here rather than staying a constant beside it.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  const school = await schoolChrome('Careers');
+  return Object.keys(school).length
+    ? school
+    : {
+        title: 'Teaching jobs across the Sckools network',
+        description: 'Open roles at schools using Sckools — teaching, support and leadership.',
+      };
+}
 
 /**
  * The network jobs board.
