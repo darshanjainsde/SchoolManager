@@ -1,5 +1,6 @@
 'use client';
 import { SwitchProfile } from '@/components/switch-profile';
+import { useSchoolMark } from '@/components/use-school-mark';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -242,10 +243,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   // `role` gates the console itself — see the redirect effect below.
   const { data: me } = useQuery({
     queryKey: ['me', host],
-    queryFn: () => api.get<{ features?: string[]; role?: string; staffRole?: string | null; name?: string | null }>('/auth/me'),
+    queryFn: () => api.get<{ features?: string[]; role?: string; staffRole?: string | null; name?: string | null; schoolMarkUrl?: string | null }>('/auth/me'),
     enabled: hydrated && isSchoolHost(host) && hasSession && audience === 'school',
     staleTime: 5 * 60_000,
   });
+  // The school's mark in the tab — see components/use-school-mark.ts.
+  useSchoolMark(me?.schoolMarkUrl);
+
   const features = me?.features;
   // Until features load, show every item (avoids hiding things on a slow fetch).
   const model = visibleModel(features ?? null);

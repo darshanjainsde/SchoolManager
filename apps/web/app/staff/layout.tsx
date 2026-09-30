@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { useSchoolMark } from '@/components/use-school-mark';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -34,8 +35,11 @@ export default function StaffLayout({ children }: { children: ReactNode }) {
   const me = useQuery({
     queryKey: ['me'],
     enabled: status === 'authed' && audience === 'school' && !!host,
-    queryFn: () => api.get<{ role: string; staffRole?: string | null; features?: string[] }>('/auth/me'),
+    queryFn: () => api.get<{ role: string; staffRole?: string | null; features?: string[]; schoolMarkUrl?: string | null }>('/auth/me'),
   });
+  // The school's mark in the tab — see components/use-school-mark.ts.
+  useSchoolMark(me.data?.schoolMarkUrl);
+
 
   useEffect(() => {
     if (hydrated && (status === 'anon' || (status === 'authed' && audience !== 'school'))) router.replace('/login');

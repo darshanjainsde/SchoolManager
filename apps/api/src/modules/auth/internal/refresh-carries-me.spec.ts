@@ -43,6 +43,9 @@ function build() {
     }),
     displayNameFor: jest.fn().mockResolvedValue('Dr Aadhya Venkataraghavan'),
     staffRoleFor: jest.fn().mockResolvedValue(null),
+    // The school's own mark, which both /auth/me and the refresh boot carry
+    // so a console can wear it in the browser tab.
+    schoolMarkFor: jest.fn().mockResolvedValue('https://cdn/school-crest.png'),
   } as unknown as AuthService;
 
   const features = {
@@ -89,6 +92,11 @@ describe('POST /auth/refresh carries the me payload', () => {
       name: 'Dr Aadhya Venkataraghavan',
       staffRole: null,
       features: ['GALLERY', 'FEES'],
+      // The school's own mark. It rides THIS payload rather than a server
+      // `generateMetadata` because every console shell is a client component,
+      // and reading the host in a server layout cost the prerendered shells
+      // (measured 2026-09-30).
+      schoolMarkUrl: 'https://cdn/school-crest.png',
     });
   });
 
