@@ -73,6 +73,15 @@ CREATE UNIQUE INDEX "SchoolRestore_one_running_per_school" ON "SchoolRestore"("s
 GRANT SELECT, INSERT, UPDATE, DELETE ON "SchoolBackup" TO skoolos_platform;
 GRANT SELECT, INSERT, UPDATE, DELETE ON "SchoolRestore" TO skoolos_platform;
 
+-- ...and the tenant role must never see a register that names every school's
+-- backups, so the platform_only shape (as MetricRollup, LeadActivity): RLS on,
+-- a policy that is always false, deliberately NOT forced so the platform
+-- client — the only reader — still reaches it.
+ALTER TABLE "SchoolBackup" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY platform_only ON "SchoolBackup" USING (false) WITH CHECK (false);
+ALTER TABLE "SchoolRestore" ENABLE ROW LEVEL SECURITY;
+CREATE POLICY platform_only ON "SchoolRestore" USING (false) WITH CHECK (false);
+
 -- 3. The two append-only registers could never be deleted — not even with the
 --    school. Both trigger functions raised on EVERY delete, for every role
 --    (row triggers fire for the table owner too; the fees migration's comment
