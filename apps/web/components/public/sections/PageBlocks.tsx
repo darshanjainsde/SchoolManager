@@ -1,6 +1,5 @@
-import { Fragment } from 'react';
 import { normalizePageBlocks, type BlockAlign, type PageBlock } from '../site-variants';
-import { parseRichText, type Span } from '../page-text';
+import { RichText } from '../RichText';
 import { optimised } from '@/lib/img';
 
 /**
@@ -30,72 +29,6 @@ const alignOf = (a?: BlockAlign) => (a ? ALIGN_CLASS[a] : '');
 
 /** A picture painted at most 1200px wide in the column, or the full bleed. */
 const IMAGE_REQUEST: Record<string, number> = { COLUMN: 800, WIDE: 1200, FULL: 1920 };
-
-function Marks({ spans }: { spans: Span[] }) {
-  return (
-    <>
-      {spans.map((s, i) => {
-        // The order wraps bold outside italic, so **_both_** reads as one word.
-        let node: React.ReactNode = s.text;
-        if (s.italic) node = <em key="i">{node}</em>;
-        if (s.bold) node = <strong key="b">{node}</strong>;
-        if (s.href) {
-          const external = /^https?:/i.test(s.href);
-          node = (
-            <a
-              href={s.href}
-              className="ps-pg-link"
-              {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-            >
-              {node}
-            </a>
-          );
-        }
-        return <Fragment key={i}>{node}</Fragment>;
-      })}
-    </>
-  );
-}
-
-/** A paragraph block: the school's typed marks, become elements. */
-function RichText({ text }: { text: string }) {
-  const lines = parseRichText(text);
-  return (
-    <>
-      {lines.map((l, i) => {
-        if (l.kind === 'ul') {
-          return (
-            <ul key={i} className="ps-pg-list">
-              {l.items.map((item, j) => (
-                <li key={j}>
-                  <Marks spans={item} />
-                </li>
-              ))}
-            </ul>
-          );
-        }
-        if (l.kind === 'ol') {
-          return (
-            <ol key={i} className="ps-pg-list ps-pg-list-num">
-              {l.items.map((item, j) => (
-                <li key={j}>
-                  <Marks spans={item} />
-                </li>
-              ))}
-            </ol>
-          );
-        }
-        return (
-          // `whitespace-pre-line` keeps the single newlines a school typed, as
-          // it did before the marks existed.
-          <p key={i} className="whitespace-pre-line">
-            <Marks spans={l.spans} />
-          </p>
-        );
-      })}
-    </>
-  );
-}
 
 function Block({ b, delay }: { b: PageBlock; delay: React.CSSProperties }) {
   switch (b.t) {

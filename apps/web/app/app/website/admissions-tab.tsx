@@ -9,6 +9,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { FormatTextarea } from './format-textarea';
+
+/** Mirrors ADMISSION_STEP_BODY_MAX in the api's cms.dto.ts. */
+const STEP_BODY_MAX = 1500;
 
 interface StepRow {
   title: string;
@@ -105,15 +109,39 @@ export default function AdmissionsTab() {
           <CardTitle>Admission process steps</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          <p className="text-sm text-slate-500">
+            Each step has a heading and its details. New lines stay as you type them, and lines starting
+            with <code className="rounded bg-slate-100 px-1">-</code> or <code className="rounded bg-slate-100 px-1">1.</code> become
+            a list, so use the toolbar or type them.
+          </p>
           {steps.length === 0 && (
-            <p className="text-sm text-slate-400">No steps yet — add the first one below.</p>
+            <p className="text-sm text-slate-500">No steps yet — add the first one below.</p>
           )}
           {steps.map((s, i) => (
             <div key={i} className="flex items-start gap-2 rounded-lg border border-slate-200 p-3">
-              <span className="mt-2 text-xs font-bold text-slate-400 w-6 shrink-0">{String(i + 1).padStart(2, '0')}</span>
+              <span className="mt-8 text-xs font-bold text-slate-500 w-6 shrink-0">{String(i + 1).padStart(2, '0')}</span>
               <div className="flex-1 space-y-2">
-                <Input value={s.title} onChange={(e) => updateStep(i, 'title', e.target.value)} placeholder="Step title (e.g. Campus visit)" />
-                <Input value={s.description} onChange={(e) => updateStep(i, 'description', e.target.value)} placeholder="One line describing this step (optional)" />
+                <div className="space-y-1">
+                  <Label htmlFor={`step-title-${i}`} className="text-xs text-slate-500">Heading</Label>
+                  <Input
+                    id={`step-title-${i}`}
+                    value={s.title}
+                    maxLength={120}
+                    onChange={(e) => updateStep(i, 'title', e.target.value)}
+                    placeholder="e.g. Campus visit"
+                    className="font-semibold"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <span className="block text-xs font-medium text-slate-500">Details (optional)</span>
+                  <FormatTextarea
+                    value={s.description}
+                    onChange={(v) => updateStep(i, 'description', v)}
+                    maxLength={STEP_BODY_MAX}
+                    ariaLabel={`Step ${i + 1} details`}
+                    placeholder={'Write it the way it should read. For example:\nBring these on the day:\n- Birth certificate\n- Two passport photos'}
+                  />
+                </div>
               </div>
               <div className="flex flex-col gap-1 shrink-0">
                 <Button variant="ghost" size="sm" disabled={i === 0} onClick={() => moveStep(i, -1)} aria-label="Move up">

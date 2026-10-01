@@ -1,5 +1,6 @@
 import type { PublicCourse, PublicSiteData } from '@/lib/public-api';
 import { admissionsHasContent } from '../site-utils';
+import { RichText } from '../RichText';
 
 type Admissions = PublicSiteData['admissions'];
 
@@ -134,7 +135,11 @@ export default function AdmissionsSection({
                   style={{ transitionDelay: `${0.55 + i * 0.28}s` }}
                 >
                   <h3 className="ps-head font-bold">{s.title}</h3>
-                  {s.description && <p className="text-[13px] text-slate-500 mt-1">{s.description}</p>}
+                  {s.description && (
+                <div className="ps-pg-text ps-step-body text-[13px] text-slate-600 leading-relaxed mt-1.5">
+                  <RichText text={s.description} />
+                </div>
+              )}
                 </div>
               </div>
             ))}
@@ -160,7 +165,11 @@ export default function AdmissionsSection({
                 {String(i + 1).padStart(2, '0')}
               </span>
               <h3 className="ps-head font-bold mt-3">{s.title}</h3>
-              {s.description && <p className="text-[13px] text-slate-500 mt-1">{s.description}</p>}
+              {s.description && (
+                <div className="ps-pg-text ps-step-body text-[13px] text-slate-600 leading-relaxed mt-1.5">
+                  <RichText text={s.description} />
+                </div>
+              )}
             </div>
           ))}
         </div>

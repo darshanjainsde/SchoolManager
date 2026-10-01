@@ -1370,6 +1370,11 @@
   .ps-pg-list { list-style: disc; }
   .ps-pg-list-num { list-style: decimal; }
   .ps-pg-list li::marker { color: var(--ps1); }
+  /* An admission step's body is the same grammar inside a narrow card at
+     13px: the page's .85rem paragraph gap and 1.3rem indent read as holes
+     there, so the card gets its own, tighter rhythm. */
+  .ps-step-body > * + * { margin-top: .45rem; }
+  .ps-step-body .ps-pg-list { padding-left: 1.1rem; gap: .2rem; }
 
   /* Picture width. COLUMN sits inside the reading measure; WIDE is the column
      itself (the old behaviour); FULL breaks out to the page edges. */
