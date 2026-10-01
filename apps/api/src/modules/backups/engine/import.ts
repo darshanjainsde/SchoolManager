@@ -84,14 +84,16 @@ export async function preflightImport(deps: ImportDeps, reader: ArchiveReader<Ma
   if (!SLUG_RULE.test(slug)) {
     throw new ImportRefused('BAD_SLUG', `"${slug}" cannot be a school address — use 2 to 32 lowercase letters, digits or dashes.`);
   }
+  // A DIFFERENT school on the address is checked first: a replace that also
+  // renames must not sail past it just because its own copy is still here.
+  const [taken] = await deps.db.query<{ name: string }>(`SELECT name FROM "School" WHERE slug = $1 AND id <> $2::uuid`, slug, school.id);
+  if (taken) throw new ImportRefused('SLUG_TAKEN', `The address "${slug}" already belongs to ${taken.name}. Choose another address for this school.`);
   const [existing] = await deps.db.query<{ slug: string }>(`SELECT slug FROM "School" WHERE id = $1::uuid`, school.id);
   if (existing) {
     throw new ImportRefused('ALREADY_HERE', options.mode === 'replace'
       ? `The current copy of this school (${existing.slug}) is still here. Replacing removes it first — that step did not happen.`
       : `This school is already on this machine as "${existing.slug}". Choose "Replace current data" to overwrite it.`);
   }
-  const [taken] = await deps.db.query<{ name: string }>(`SELECT name FROM "School" WHERE slug = $1`, slug);
-  if (taken) throw new ImportRefused('SLUG_TAKEN', `The address "${slug}" already belongs to ${taken.name}. Choose another address for this school.`);
 
   return {
     schoolId: school.id, slug, options,

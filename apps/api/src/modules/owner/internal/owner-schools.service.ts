@@ -5,9 +5,7 @@ import { buildSnapshot } from './school-snapshot';
 import { randomBytes } from 'node:crypto';
 import { PasswordService } from '../../auth';
 import { FeatureResolverService } from '../../features';
-import { StorageService } from '../../../common/storage/storage.service';
-import { SchoolLookupService } from '../../tenancy';
-import { loadEnv } from '@skoolos/config';
+import { BackupsService } from '../../backups';
 import { CreateSchoolDto } from './owner.dto';
 
 export interface StatsResponse {
@@ -36,74 +34,19 @@ export class OwnerSchoolsService {
   constructor(
     private readonly featureResolver: FeatureResolverService,
     private readonly passwords: PasswordService,
-    private readonly storage: StorageService,
-    private readonly lookup?: SchoolLookupService,
+    private readonly backups: BackupsService,
   ) {}
 
-  private readonly env = loadEnv();
-
   /**
-   * Permanently removes a school and everything under it. Guarded to
-   * SUSPENDED schools so deletion is always a deliberate two-step
-   * (suspend → delete).
-   *
-   * ORDER IS THE CONTRACT:
-   *  1. Database first, in ONE transaction. A failure here leaves the school
-   *     exactly as it was — files included. (It used to delete files first,
-   *     so a failed row delete left a live school with broken images.)
-   *  2. Rows that would BLOCK the School cascade go before it: four fee links
-   *     and one ticket link are ON DELETE RESTRICT, and Postgres checks those
-   *     mid-cascade, so a school with bills or tickets could not be deleted.
-   *  3. Rows the cascade cannot reach go explicitly: `Exam` has a schoolId but
-   *     no foreign key at all, and `OtpChallenge` is keyed by phone.
-   *  4. Then storage, by FOLDER — every object under schools/<id>/ and
-   *     print-orders/<id>/ in both buckets. MediaAsset rows only ever covered
-   *     site images; fee PDFs, payment proofs, homework, gifts and print
-   *     orders were left behind.
-   *  5. Then the caches, so the address stops resolving now, not at TTL.
-   * AuditLog and EmailSuppression are SetNull on purpose: the trail outlives
-   * the tenant.
+   * Permanently removes a school and everything under it — rows in every
+   * table, every stored file, the cached address. Refused unless the school is
+   * SUSPENDED and a READY backup was taken after it was suspended: no delete
+   * can lose data that is not in a backup. The console's "Delete school" uses
+   * POST /owner/schools/:id/delete, which takes that backup and deletes in one
+   * job; this route is for a backup already taken. See BackupsService.
    */
-  async deleteSchool(id: string): Promise<{ ok: true; files: number }> {
-    const db = getPlatformPrisma();
-    const school = await db.school.findUnique({
-      where: { id },
-      select: {
-        id: true, slug: true, status: true,
-        media: { select: { storageKey: true } },
-        domains: { select: { hostname: true } },
-      },
-    });
-    if (!school) throw new NotFoundException(`School ${id} not found`);
-    if (school.status !== 'SUSPENDED') {
-      throw new ConflictException('Suspend the school first — only suspended schools can be deleted.');
-    }
-
-    const byId = { schoolId: id };
-    await db.$transaction([
-      db.feeInvoice.deleteMany({ where: byId }), // lines cascade from the invoice
-      db.feePlanItem.deleteMany({ where: byId }),
-      db.eventRegistration.deleteMany({ where: { OR: [byId, { event: { schoolId: id } }] } }),
-      db.exam.deleteMany({ where: byId }), // results cascade from the exam
-      db.otpChallenge.deleteMany({ where: byId }),
-      db.school.delete({ where: { id } }),
-    ]);
-
-    let files = 0;
-    for (const prefix of [`schools/${id}/`, `print-orders/${id}/`]) {
-      files += await this.storage.deletePrefix(prefix);
-    }
-    // A key written outside the school's folder (none today) still goes.
-    for (const m of school.media) {
-      if (!m.storageKey.startsWith(`schools/${id}/`)) await this.storage.delete(m.storageKey);
-    }
-
-    await this.featureResolver.invalidate(id);
-    const hosts = [`${school.slug}.${this.env.PLATFORM_HOST}`, ...school.domains.map((d) => d.hostname)];
-    for (const h of hosts) await this.lookup?.invalidate(h.toLowerCase());
-
-    this.logger.warn(`School ${school.slug} (${id}) permanently deleted — ${files} stored files removed`);
-    return { ok: true, files };
+  async deleteSchool(id: string): Promise<{ ok: true; files: number; backupId: string }> {
+    return this.backups.deleteSchoolNow(id);
   }
 
   async stats(): Promise<StatsResponse> {
@@ -240,7 +183,7 @@ export class OwnerSchoolsService {
   async setStatus(id: string, status: 'SETUP' | 'LIVE' | 'SUSPENDED'): Promise<SchoolDetail> {
     const db = getPlatformPrisma();
     try {
-      await db.school.update({ where: { id }, data: { status } });
+      await db.school.update({ where: { id }, data: { status, statusChangedAt: new Date() } });
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
         throw new NotFoundException(`School ${id} not found`);

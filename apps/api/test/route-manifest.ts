@@ -459,6 +459,26 @@ export const AUTHZ_REVIEWED: string[] = [
   "GET /owner/print-orders/counts",
   "GET /site/enquiries/:id",
   "POST /site/enquiries/:id/notes",
+  // School backups — backups-authz.e2e-spec.ts: every owner route proven four
+  // ways (anonymous, school token on owner host, platform token on school
+  // host, operator); the engine room refuses any caller without the cron
+  // secret. The delete gate (suspended + a backup taken after suspension) is
+  // asserted there too; the engine is proven in school-backup.e2e-spec.ts.
+  "GET /owner/schools/:id/backups",
+  "POST /owner/schools/:id/backups",
+  "POST /owner/schools/:id/delete",
+  "GET /owner/backups/:id",
+  "POST /owner/backups/:id/step",
+  "GET /owner/backups/:id/download",
+  "POST /owner/backups/upload-url",
+  "POST /owner/backups/uploaded",
+  "GET /owner/deleted-schools",
+  "POST /owner/restores",
+  "GET /owner/restores/:id",
+  "POST /owner/restores/:id/step",
+  "GET /internal/cron/school-backups",
+  "POST /internal/cron/school-backups",
+  "GET /internal/cron/school-backups/weekly",
 ];
 
 /**

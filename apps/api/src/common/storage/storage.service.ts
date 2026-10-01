@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { S3Client, PutObjectCommand, DeleteObjectCommand, DeleteObjectsCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { randomUUID } from 'node:crypto';
@@ -20,7 +20,7 @@ export interface UploadResult {
  * a key lives in on read — an object written before S3_PRIVATE_BUCKET was set
  * is still in the public one, and both must keep resolving.
  */
-export const PRIVATE_PREFIXES = ['print-orders/', 'fee-proofs/'] as const;
+export const PRIVATE_PREFIXES = ['print-orders/', 'fee-proofs/', 'backups/'] as const;
 
 export interface UploadOptions {
   /**
@@ -130,41 +130,6 @@ export class StorageService {
     } catch (e) {
       this.logger.warn(`Failed to delete ${key}: ${(e as Error).message}`);
     }
-  }
-
-  /**
-   * Delete EVERY object under a prefix, in every bucket it could live in.
-   * Used when a whole school goes: `delete(key)` only reaches files someone
-   * kept a row for, and fee PDFs, payment proofs, homework attachments, gift
-   * files and print orders never had a MediaAsset row. Best-effort like
-   * `delete` — returns how many objects went, never throws.
-   */
-  async deletePrefix(prefix: string): Promise<number> {
-    if (!/^[a-z-]+\/[0-9a-f-]{36}\/$/i.test(prefix)) {
-      // A whole-tenant wipe must name ONE tenant. Anything looser ('schools/')
-      // would empty the bucket for everyone.
-      throw new Error(`deletePrefix refuses "${prefix}" — expected "<area>/<uuid>/"`);
-    }
-    const buckets = [...new Set([this.env.S3_BUCKET, this.env.S3_PRIVATE_BUCKET].filter(Boolean) as string[])];
-    let removed = 0;
-    for (const Bucket of buckets) {
-      try {
-        let ContinuationToken: string | undefined;
-        do {
-          const page = await this.client.send(new ListObjectsV2Command({ Bucket, Prefix: prefix, ContinuationToken }));
-          const keys = (page.Contents ?? []).map((o) => o.Key).filter((k): k is string => !!k);
-          for (let i = 0; i < keys.length; i += 1000) {
-            const batch = keys.slice(i, i + 1000);
-            await this.client.send(new DeleteObjectsCommand({ Bucket, Delete: { Objects: batch.map((Key) => ({ Key })), Quiet: true } }));
-            removed += batch.length;
-          }
-          ContinuationToken = page.IsTruncated ? page.NextContinuationToken : undefined;
-        } while (ContinuationToken);
-      } catch (e) {
-        this.logger.warn(`Failed to empty ${Bucket}/${prefix}: ${(e as Error).message}`);
-      }
-    }
-    return removed;
   }
 
   /** Read-only presigned URL (5 min). */
