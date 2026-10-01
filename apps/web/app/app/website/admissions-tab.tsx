@@ -155,7 +155,7 @@ export default function AdmissionsTab() {
               type="checkbox"
               checked={showFees}
               onChange={(e) => setShowFees(e.target.checked)}
-              className="mt-0.5 h-4 w-4 accent-emerald-700"
+              className="sk-check mt-0.5 accent-emerald-700"
             />
             <span>
               <span className="block text-sm font-medium text-slate-800">Show fee structure publicly</span>

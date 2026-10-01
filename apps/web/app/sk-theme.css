@@ -4361,6 +4361,19 @@ html[data-theme='light'] .skosx { color-scheme: light; }
   .sk-paycheck { width: 24px; height: 24px; margin: -4px; }
 }
 
+/* THE CONSOLE'S CHECKBOX, wherever one appears. Same rule as `.sk-paycheck`
+   above, under a name that is not one module's — that one should fold into
+   this when Pay is next touched.
+   The size is on the BOX and not on padding: a checkbox renders with
+   `appearance: auto`, and the UA ignores padding on it entirely, so the usual
+   padding-plus-negative-margin trick measures exactly 14px and changes
+   nothing. The negative margin gives the 8px back to the layout, so a row
+   holding one does not grow on a phone. */
+.sk-check { width: 16px; height: 16px; flex: none; cursor: pointer; }
+@media (pointer: coarse), (max-width: 640px) {
+  .sk-check { width: 24px; height: 24px; margin: -4px; }
+}
+
 /* ---- the editor ----
    A drawer, not a section under the table. Rendering it after a
    long roster put it below the fold, so pressing "Set pay" looked

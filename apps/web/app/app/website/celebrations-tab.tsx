@@ -356,6 +356,7 @@ export default function CelebrationsTab({ onGoToHomepage }: { onGoToHomepage: ()
               <label className="sk-cel-consent">
                 <input
                   type="checkbox"
+                  className="sk-check"
                   checked={config.consentConfirmed}
                   onChange={(e) => set({ consentConfirmed: e.target.checked })}
                 />

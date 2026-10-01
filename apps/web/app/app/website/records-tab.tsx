@@ -102,12 +102,12 @@ export default function RecordsTab({ onGoToStudio }: { onGoToStudio: () => void 
             <p className="text-xs text-slate-500">A page at <span className="font-mono">/records</span> and a band on the homepage. Records come straight from the sports desk; nothing is typed twice.</p>
           </div>
           <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-            <input type="checkbox" role="switch" aria-checked={draft.enabled} checked={draft.enabled} disabled={!hasSports} onChange={(e) => set({ enabled: e.target.checked })} />
+            <input type="checkbox" className="sk-check" role="switch" aria-checked={draft.enabled} checked={draft.enabled} disabled={!hasSports} onChange={(e) => set({ enabled: e.target.checked })} />
             {draft.enabled ? 'On' : 'Off'}
           </label>
         </div>
         <label className="flex items-start gap-2 text-sm text-slate-700">
-          <input type="checkbox" className="mt-0.5" checked={draft.consentConfirmed} disabled={!hasSports} onChange={(e) => set({ consentConfirmed: e.target.checked })} />
+          <input type="checkbox" className="sk-check mt-0.5" checked={draft.consentConfirmed} disabled={!hasSports} onChange={(e) => set({ consentConfirmed: e.target.checked })} />
           <span>The school may name its record holders on the public website (children’s names, the mark and the year — never a class, a photo or a date of birth).</span>
         </label>
         <Field label="Names on the page">
@@ -121,7 +121,7 @@ export default function RecordsTab({ onGoToStudio }: { onGoToStudio: () => void 
           <Cards options={RECORDS_PAGE_STYLES} value={draft.pageLayout} onPick={(v) => set({ pageLayout: v })} disabled={!hasSports} />
         </Field>
         <label className="flex items-center gap-2 text-sm text-slate-700">
-          <input type="checkbox" checked={draft.showTopFive} disabled={!hasSports} onChange={(e) => set({ showTopFive: e.target.checked })} />
+          <input type="checkbox" className="sk-check" checked={draft.showTopFive} disabled={!hasSports} onChange={(e) => set({ showTopFive: e.target.checked })} />
           Show the all-time top five under each record (from every ranked heat, plus the book)
         </label>
         {groups.length > 1 ? (
@@ -129,7 +129,7 @@ export default function RecordsTab({ onGoToStudio }: { onGoToStudio: () => void 
             <div className="flex flex-wrap gap-3">
               {groups.map(([key, label]) => (
                 <label key={key} className="flex items-center gap-1.5 text-sm text-slate-700">
-                  <input type="checkbox" checked={draft.groups.length === 0 || draft.groups.includes(key)} disabled={!hasSports}
+                  <input type="checkbox" className="sk-check" checked={draft.groups.length === 0 || draft.groups.includes(key)} disabled={!hasSports}
                     onChange={(e) => {
                       const all = groups.map(([k]) => k);
                       const cur = draft.groups.length === 0 ? all : draft.groups;
@@ -165,7 +165,7 @@ export default function RecordsTab({ onGoToStudio }: { onGoToStudio: () => void 
             <div className="grid gap-1 sm:grid-cols-2">
               {withRecord.map((l) => (
                 <label key={l.key} className="flex items-center gap-2 text-sm text-slate-700">
-                  <input type="checkbox" checked={draft.pinned.includes(l.key)} disabled={!hasSports}
+                  <input type="checkbox" className="sk-check" checked={draft.pinned.includes(l.key)} disabled={!hasSports}
                     onChange={(e) => set({ pinned: e.target.checked ? [...draft.pinned, l.key] : draft.pinned.filter((k) => k !== l.key) })} />
                   {l.label}
                   {draft.pinned.includes(l.key) ? <span className="ml-auto text-xs text-slate-400">#{draft.pinned.indexOf(l.key) + 1}</span> : null}

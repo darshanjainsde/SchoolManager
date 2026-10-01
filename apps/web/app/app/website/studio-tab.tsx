@@ -1,5 +1,6 @@
 'use client';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { BlockPalette, BlockRow, BLOCK_NAMES, ICON_BTN, newBlock, type Block } from './block-editor';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Monitor, Smartphone, RotateCw, ChevronRight, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, X, Upload, CornerLeftUp } from 'lucide-react';
@@ -34,7 +35,6 @@ import {
   TREATMENTS,
   festivalsFor,
   homeSectionsOf,
-  isSafeBlockUrl,
   normalizeFestiveTheme,
   normalizeFooterConfig,
   normalizeHomeSections,
@@ -109,12 +109,7 @@ function pickLook(profile: Record<string, unknown> | null | undefined): Look {
   return out;
 }
 
-type Block =
-  | { t: 'h'; text: string } | { t: 'p'; text: string }
-  | { t: 'img'; url: string; caption?: string | null }
-  | { t: 'imgtext'; url: string | null; text: string }
-  | { t: 'cta'; label: string; href?: string | null };
-const BLOCK_NAMES: Record<Block['t'], string> = { h: 'Heading', p: 'Text', img: 'Image', imgtext: 'Image & text', cta: 'Button' };
+
 
 const AVAIL_ALWAYS = ['about', 'hof', 'admissions', 'contact'];
 function availablePages(c: SiteContent | undefined): string[] {
@@ -159,7 +154,7 @@ function Toggle({ checked, onChange, label, disabled }: { checked: boolean; onCh
   return (
     <label className={`flex items-center justify-between gap-3 text-sm ${disabled ? 'cursor-not-allowed text-slate-400' : 'cursor-pointer text-slate-600'}`}>
       <span>{label}</span>
-      <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} className="h-4 w-4 accent-teal-600 disabled:opacity-50" />
+      <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} className="sk-check accent-teal-600 disabled:opacity-50" />
     </label>
   );
 }
@@ -664,10 +659,10 @@ export default function StudioTab() {
                     {id ? (
                       <div className="group relative h-20 w-28 overflow-hidden rounded-lg border border-slate-200">
                         {url ? (/* eslint-disable-next-line @next/next/no-img-element */ <img src={url} alt={`Hero ${i + 1}`} className="h-full w-full object-cover" />) : <div className="grid h-full w-full place-items-center bg-slate-100 text-[10px] text-slate-400">image {i + 1}</div>}
-                        <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-black/45 px-1 py-0.5 opacity-0 transition group-hover:opacity-100">
-                          <button type="button" aria-label="Move image left" disabled={i === 0} onClick={() => { const ids = [...slotIds]; [ids[i - 1], ids[i]] = [ids[i], ids[i - 1]]; void saveSlots(ids); }} className="rounded p-0.5 text-white hover:bg-white/20 disabled:opacity-30"><ArrowLeft className="h-3 w-3" /></button>
-                          <button type="button" aria-label="Remove image" onClick={() => void saveSlots(slotIds.filter((_, j) => j !== i))} className="rounded p-0.5 text-white hover:bg-rose-500/60"><X className="h-3 w-3" /></button>
-                          <button type="button" aria-label="Move image right" disabled={i >= slotIds.length - 1} onClick={() => { const ids = [...slotIds]; [ids[i + 1], ids[i]] = [ids[i], ids[i + 1]]; void saveSlots(ids); }} className="rounded p-0.5 text-white hover:bg-white/20 disabled:opacity-30"><ArrowRight className="h-3 w-3" /></button>
+                        <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-black/45 px-1">
+                          <button type="button" aria-label="Move image left" disabled={i === 0} onClick={() => { const ids = [...slotIds]; [ids[i - 1], ids[i]] = [ids[i], ids[i - 1]]; void saveSlots(ids); }} className={`${ICON_BTN} text-white hover:bg-white/20 disabled:opacity-30`}><ArrowLeft className="h-3 w-3" /></button>
+                          <button type="button" aria-label="Remove image" onClick={() => void saveSlots(slotIds.filter((_, j) => j !== i))} className={`${ICON_BTN} text-white hover:bg-rose-500/60`}><X className="h-3 w-3" /></button>
+                          <button type="button" aria-label="Move image right" disabled={i >= slotIds.length - 1} onClick={() => { const ids = [...slotIds]; [ids[i + 1], ids[i]] = [ids[i], ids[i + 1]]; void saveSlots(ids); }} className={`${ICON_BTN} text-white hover:bg-white/20 disabled:opacity-30`}><ArrowRight className="h-3 w-3" /></button>
                         </div>
                       </div>
                     ) : (
@@ -824,8 +819,8 @@ export default function StudioTab() {
             return (
               <div key={k} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2 py-1.5">
                 <span className="flex-1 truncate text-sm text-slate-700">{label}{custom && <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wider text-teal-600">custom</span>}</span>
-                <button type="button" aria-label={`Move ${label} up`} disabled={i === 0} className="px-1 text-xs text-slate-400 hover:text-slate-700 disabled:opacity-30" onClick={() => moveBand(i, -1)}>▲</button>
-                <button type="button" aria-label={`Move ${label} down`} disabled={i === order.length - 1} className="px-1 text-xs text-slate-400 hover:text-slate-700 disabled:opacity-30" onClick={() => moveBand(i, 1)}>▼</button>
+                <button type="button" aria-label={`Move ${label} up`} disabled={i === 0} className={`${ICON_BTN} text-slate-400 hover:text-slate-700 disabled:opacity-30`} onClick={() => moveBand(i, -1)}>▲</button>
+                <button type="button" aria-label={`Move ${label} down`} disabled={i === order.length - 1} className={`${ICON_BTN} text-slate-400 hover:text-slate-700 disabled:opacity-30`} onClick={() => moveBand(i, 1)}>▼</button>
               </div>
             );
           })}
@@ -837,7 +832,7 @@ export default function StudioTab() {
             <span className="flex-1 truncate text-sm font-semibold text-slate-700">{s.title || 'Untitled section'}</span>
             <span className="text-[11px] text-slate-400">{s.blocks.length} block{s.blocks.length === 1 ? '' : 's'}</span>
             <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => setEditingSection({ id: s.id, title: s.title, blocks: (s.blocks as Block[]).map((b) => ({ ...b })) })}>Edit</Button>
-            <button type="button" aria-label={`Remove ${s.title || 'section'}`} className="text-xs text-rose-500 hover:text-rose-700" onClick={() => removeSection(s.id)}>✕</button>
+            <button type="button" aria-label={`Remove ${s.title || 'section'}`} className={`${ICON_BTN} text-rose-500 hover:text-rose-700`} onClick={() => removeSection(s.id)}>✕</button>
           </div>
         ))}
         {!editingSection && (
@@ -851,36 +846,21 @@ export default function StudioTab() {
             <div><Label className="text-xs">Section heading (shown centred above its content)</Label>
               <Input value={editingSection.title} maxLength={120} placeholder="Why families choose us" onChange={(e) => setEditingSection({ ...editingSection, title: e.target.value })} className="mt-1 h-9 bg-white text-sm" /></div>
             {editingSection.blocks.map((b, i) => (
-              <div key={i} className="rounded-md border border-slate-200 bg-white p-2">
-                <div className="flex items-center gap-1">
-                  <span className="flex-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">{BLOCK_NAMES[b.t]}</span>
-                  <button type="button" aria-label="Move up" disabled={i === 0} className="px-1 text-xs text-slate-400 hover:text-slate-700 disabled:opacity-30" onClick={() => moveSecBlock(i, -1)}>▲</button>
-                  <button type="button" aria-label="Move down" disabled={i === editingSection.blocks.length - 1} className="px-1 text-xs text-slate-400 hover:text-slate-700 disabled:opacity-30" onClick={() => moveSecBlock(i, 1)}>▼</button>
-                  <button type="button" aria-label="Remove block" className="px-1 text-xs text-rose-400 hover:text-rose-600" onClick={() => setEditingSection({ ...editingSection, blocks: editingSection.blocks.filter((_, j) => j !== i) })}>✕</button>
-                </div>
-                {(b.t === 'h' || b.t === 'cta') && <Input value={b.t === 'h' ? b.text : b.label} maxLength={b.t === 'h' ? 200 : 80} placeholder={b.t === 'h' ? 'Heading' : 'Button label'} onChange={(e) => editSecBlock(i, b.t === 'h' ? { text: e.target.value } : { label: e.target.value })} className="mt-1 h-8 text-sm" />}
-                {(b.t === 'p' || b.t === 'imgtext') && <Textarea value={b.text} rows={2} placeholder="Write something…" onChange={(e) => editSecBlock(i, { text: e.target.value })} className="mt-1 text-sm" />}
-                {(b.t === 'img' || b.t === 'imgtext') && (
-                  <div className="mt-1 flex gap-1.5">
-                    <Input value={b.url ?? ''} placeholder="https://… image URL" onChange={(e) => editSecBlock(i, { url: e.target.value })} className={`h-8 flex-1 text-xs${b.url && !isSafeBlockUrl(b.url) ? ' border-rose-300' : ''}`} />
-                    {(galleryMedia.data ?? []).length > 0 && (
-                      <select aria-label="Use a gallery photo" className="h-8 rounded-md border border-slate-200 text-xs text-slate-500" value="" onChange={(e) => e.target.value && editSecBlock(i, { url: e.target.value })}>
-                        <option value="">Gallery…</option>{(galleryMedia.data ?? []).map((m, j) => <option key={m.id} value={m.url}>Photo {j + 1}</option>)}
-                      </select>
-                    )}
-                  </div>
-                )}
-                {(b.t === 'img' || b.t === 'imgtext') && !!b.url && !isSafeBlockUrl(b.url) && (
-                  <p className="mt-1 text-[10px] text-rose-500">Use a full https:// address (or a /path on your site) — anything else is dropped.</p>
-                )}
-              </div>
+              <BlockRow
+                key={i}
+                b={b}
+                index={i}
+                total={editingSection.blocks.length}
+                photos={galleryMedia.data ?? []}
+                onChange={(patch) => editSecBlock(i, patch)}
+                onMove={(dir) => moveSecBlock(i, dir)}
+                onRemove={() => setEditingSection({ ...editingSection, blocks: editingSection.blocks.filter((_, j) => j !== i) })}
+              />
             ))}
-            <div className="flex flex-wrap gap-1.5">
-              {(Object.keys(BLOCK_NAMES) as Block['t'][]).map((t) => (
-                <button key={t} type="button" disabled={editingSection.blocks.length >= 40} className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-500 hover:text-slate-700 disabled:opacity-40"
-                  onClick={() => { if (editingSection.blocks.length >= 40) return; setEditingSection({ ...editingSection, blocks: [...editingSection.blocks, t === 'h' ? { t, text: '' } : t === 'p' ? { t, text: '' } : t === 'img' ? { t, url: '' } : t === 'imgtext' ? { t, url: null, text: '' } : { t, label: 'Learn more' }] }); }}>+ {BLOCK_NAMES[t]}</button>
-              ))}
-            </div>
+            <BlockPalette
+              count={editingSection.blocks.length}
+              onAdd={(t) => setEditingSection({ ...editingSection, blocks: [...editingSection.blocks, newBlock(t)] })}
+            />
             <div className="flex gap-2">
               <Button size="sm" onClick={saveSection} disabled={!sectionSaveable}>Save section</Button>
               <Button size="sm" variant="outline" onClick={() => setEditingSection(null)}>Cancel</Button>
@@ -1032,7 +1012,7 @@ export default function StudioTab() {
             <span className="flex-1 text-sm font-semibold text-slate-700">{p.title}</span>
             <span className="text-[11px] text-slate-400">/p/{p.slug}</span>
             <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => setEditingPage({ id: p.id, title: p.title, published: p.published, showInNav: p.showInNav !== false, blocks: ((p.blocks ?? []) as Block[]).filter((b) => b && (b.t in BLOCK_NAMES)) })}>Edit</Button>
-            <button type="button" aria-label={`Delete ${p.title}`} className="text-xs text-rose-500 hover:text-rose-700" onClick={() => pageDelete.mutate(p.id)}>✕</button>
+            <button type="button" aria-label={`Delete ${p.title}`} className={`${ICON_BTN} text-rose-500 hover:text-rose-700`} onClick={() => pageDelete.mutate(p.id)}>✕</button>
           </div>
         ))}
         {!editingPage && <Button size="sm" variant="outline" onClick={() => setEditingPage({ id: null, title: '', blocks: [{ t: 'h', text: '' }, { t: 'p', text: '' }], published: true, showInNav: true })}>+ New page</Button>}
@@ -1041,33 +1021,21 @@ export default function StudioTab() {
             <div><Label className="text-xs">Page title (its address is fixed on first save)</Label>
               <Input value={editingPage.title} maxLength={120} placeholder="Scholarships" onChange={(e) => setEditingPage({ ...editingPage, title: e.target.value })} className="mt-1 h-9 bg-white text-sm" /></div>
             {editingPage.blocks.map((b, i) => (
-              <div key={i} className="rounded-md border border-slate-200 bg-white p-2">
-                <div className="flex items-center gap-1">
-                  <span className="flex-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">{BLOCK_NAMES[b.t]}</span>
-                  <button type="button" aria-label="Move up" disabled={i === 0} className="px-1 text-xs text-slate-400 hover:text-slate-700 disabled:opacity-30" onClick={() => moveBlock(i, -1)}>▲</button>
-                  <button type="button" aria-label="Move down" disabled={i === editingPage.blocks.length - 1} className="px-1 text-xs text-slate-400 hover:text-slate-700 disabled:opacity-30" onClick={() => moveBlock(i, 1)}>▼</button>
-                  <button type="button" aria-label="Remove block" className="px-1 text-xs text-rose-400 hover:text-rose-600" onClick={() => setEditingPage({ ...editingPage, blocks: editingPage.blocks.filter((_, j) => j !== i) })}>✕</button>
-                </div>
-                {(b.t === 'h' || b.t === 'cta') && <Input value={b.t === 'h' ? b.text : b.label} maxLength={b.t === 'h' ? 200 : 80} placeholder={b.t === 'h' ? 'Heading' : 'Button label'} onChange={(e) => editBlock(i, b.t === 'h' ? { text: e.target.value } : { label: e.target.value })} className="mt-1 h-8 text-sm" />}
-                {(b.t === 'p' || b.t === 'imgtext') && <Textarea value={b.text} rows={2} placeholder="Write something…" onChange={(e) => editBlock(i, { text: e.target.value })} className="mt-1 text-sm" />}
-                {(b.t === 'img' || b.t === 'imgtext') && (
-                  <div className="mt-1 flex gap-1.5">
-                    <Input value={b.url ?? ''} placeholder="https://… image URL" onChange={(e) => editBlock(i, { url: e.target.value })} className="h-8 flex-1 text-xs" />
-                    {(galleryMedia.data ?? []).length > 0 && (
-                      <select aria-label="Use a gallery photo" className="h-8 rounded-md border border-slate-200 text-xs text-slate-500" value="" onChange={(e) => e.target.value && editBlock(i, { url: e.target.value })}>
-                        <option value="">Gallery…</option>{(galleryMedia.data ?? []).map((m, j) => <option key={m.id} value={m.url}>Photo {j + 1}</option>)}
-                      </select>
-                    )}
-                  </div>
-                )}
-              </div>
+              <BlockRow
+                key={i}
+                b={b}
+                index={i}
+                total={editingPage.blocks.length}
+                photos={galleryMedia.data ?? []}
+                onChange={(patch) => editBlock(i, patch)}
+                onMove={(dir) => moveBlock(i, dir)}
+                onRemove={() => setEditingPage({ ...editingPage, blocks: editingPage.blocks.filter((_, j) => j !== i) })}
+              />
             ))}
-            <div className="flex flex-wrap gap-1.5">
-              {(Object.keys(BLOCK_NAMES) as Block['t'][]).map((t) => (
-                <button key={t} type="button" disabled={editingPage.blocks.length >= 40} className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-500 hover:text-slate-700 disabled:opacity-40"
-                  onClick={() => { if (editingPage.blocks.length >= 40) return; setEditingPage({ ...editingPage, blocks: [...editingPage.blocks, t === 'h' ? { t, text: '' } : t === 'p' ? { t, text: '' } : t === 'img' ? { t, url: '' } : t === 'imgtext' ? { t, url: null, text: '' } : { t, label: 'Learn more' }] }); }}>+ {BLOCK_NAMES[t]}</button>
-              ))}
-            </div>
+            <BlockPalette
+              count={editingPage.blocks.length}
+              onAdd={(t) => setEditingPage({ ...editingPage, blocks: [...editingPage.blocks, newBlock(t)] })}
+            />
             <Toggle checked={editingPage.published} onChange={(v) => setEditingPage({ ...editingPage, published: v })} label="Published (visible on your site)" />
             <Toggle checked={editingPage.showInNav} onChange={(v) => setEditingPage({ ...editingPage, showInNav: v })} label="Show in the navbar (off = footer only)" />
             <div className="flex gap-2">
