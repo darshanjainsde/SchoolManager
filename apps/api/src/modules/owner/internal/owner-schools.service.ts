@@ -184,6 +184,10 @@ export class OwnerSchoolsService {
     const db = getPlatformPrisma();
     try {
       await db.school.update({ where: { id }, data: { status, statusChangedAt: new Date() } });
+      // Take effect NOW: the host lookup is cached for 60 s, and a school that
+      // still answers after "Suspend" is not frozen — a final backup taken in
+      // that minute could miss a write that its delete then removes.
+      await this.backups.forgetSchool(id);
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
         throw new NotFoundException(`School ${id} not found`);

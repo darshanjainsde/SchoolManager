@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { PutObjectCommand, DeleteObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'node:crypto';
 import { getPlatformPrisma, Prisma } from '@skoolos/db';
@@ -12,7 +12,7 @@ import { ArchiveReader } from './engine/archive';
 import { ArchiveError } from './engine/container';
 import { rawDbFromPrisma } from './engine/db';
 import { ExportState, Manifest, beginExport, runExport } from './engine/export';
-import { FinalStatus, ImportRefused, ImportState, preflightImport, rollbackImport, runImport } from './engine/import';
+import { FinalStatus, ImportFailed, ImportRefused, ImportState, preflightImport, rollbackImport, runImport } from './engine/import';
 import { machineFromEnv } from './engine/machine';
 import { purgeSchoolFiles, purgeSchoolRows } from './engine/purge';
 import { buildSchemaPlan } from './engine/schema-plan';
@@ -25,15 +25,25 @@ const DAY = 86_400_000;
 /** How long each kind of backup is kept (decided 2026-10-01). WEEKLY also keeps only the last 4. */
 const KEEP: Record<string, number> = { MANUAL: 90 * DAY, WEEKLY: 35 * DAY, BEFORE_DELETE: 365 * DAY, BEFORE_REPLACE: 90 * DAY, UPLOADED: 90 * DAY };
 const WEEKLY_KEPT = 4;
+/** A step that is cut off this many times in a row stops the job instead of retrying forever. */
+const MAX_ATTEMPTS = 5;
+/**
+ * A final backup (before a delete or a replace) waits this long after the
+ * school was suspended before reading a row: the host lookup is cached for
+ * 60 s and requests already in flight must finish, or a late write could land
+ * after its table was copied and be lost with the school.
+ */
+const SETTLE_MS = 70_000;
 
 type BackupReason = 'MANUAL' | 'BEFORE_DELETE' | 'BEFORE_REPLACE' | 'WEEKLY' | 'UPLOADED';
-interface BackupJobState { export: ExportState; sink: MultipartState | null; progress: number }
+interface BackupJobState { export: ExportState; sink: MultipartState | null; progress: number; attempts?: number; waiting?: boolean }
 interface RestoreJobState {
   phase: 'awaiting-backup' | 'import';
   preBackupId?: string;
   previousStatus?: string;
   import: ImportState | null;
   progress: number;
+  attempts?: number;
 }
 
 export interface BackupView {
@@ -41,6 +51,10 @@ export interface BackupView {
   reason: string; status: string; progress: number;
   sizeBytes: number | null; rowCount: number | null; fileCount: number | null;
   warnings: string[]; error: string | null; deleteSchoolAfter: boolean;
+  /** READY, but the school it was taken to delete is not gone yet (retried by the cron). */
+  deletePending: boolean;
+  /** A final backup waiting for the suspended school to go quiet. */
+  waiting: boolean;
   createdAt: Date; finishedAt: Date | null; expiresAt: Date | null;
 }
 
@@ -104,6 +118,8 @@ export class BackupsService {
       sizeBytes: b.sizeBytes == null ? null : Number(b.sizeBytes),
       rowCount: b.rowCount, fileCount: b.fileCount,
       warnings: m?.warnings ?? [], error: b.error, deleteSchoolAfter: b.deleteSchoolAfter,
+      deletePending: b.deleteSchoolAfter && b.status === 'READY',
+      waiting: b.status === 'RUNNING' && !!st?.waiting,
       createdAt: b.createdAt, finishedAt: b.finishedAt, expiresAt: b.expiresAt,
     };
   }
@@ -178,16 +194,38 @@ export class BackupsService {
     if (!(await this.lease('schoolBackup', id))) return this.get(id);
     const b = await db.schoolBackup.findUniqueOrThrow({ where: { id } });
     const st = b.state as unknown as BackupJobState;
+    const fail = async (msg: string, sinkState: MultipartState | null) => {
+      if (sinkState) await S3MultipartSink.abort(this.s3, sinkState);
+      await db.schoolBackup.update({ where: { id }, data: { status: 'FAILED', error: msg.slice(0, 2000), state: Prisma.DbNull, lockedUntil: null, finishedAt: new Date() } });
+      return this.get(id);
+    };
+
+    // A step that never finishes (killed at the time limit, out of memory)
+    // must not be retried forever, holding the school's one backup slot.
+    const attempts = (st.attempts ?? 0) + 1;
+    if (attempts > MAX_ATTEMPTS) {
+      return fail(`Stopped after ${MAX_ATTEMPTS} tries in a row that were cut off before finishing. Nothing was deleted. Try again, or use the command line (pnpm school export) for a school this large.`, st.sink);
+    }
+
+    if ((b.reason === 'BEFORE_DELETE' || b.reason === 'BEFORE_REPLACE') && st.export.table === 0 && !st.export.writer) {
+      const school = await db.school.findUnique({ where: { id: b.sourceSchoolId }, select: { statusChangedAt: true } });
+      if (school?.statusChangedAt && Date.now() - school.statusChangedAt.getTime() < SETTLE_MS) {
+        await db.schoolBackup.update({ where: { id }, data: { lockedUntil: null, state: { ...st, waiting: true } as unknown as Prisma.InputJsonValue } });
+        return this.get(id);
+      }
+    }
+    await db.schoolBackup.update({ where: { id }, data: { state: { ...st, attempts, waiting: false } as unknown as Prisma.InputJsonValue } });
+
     let sink: S3MultipartSink | null = null;
     try {
       const password = this.password();
       sink = st.sink ? await S3MultipartSink.resume(this.s3, st.sink) : await S3MultipartSink.start(this.s3, this.bucket, b.storageKey);
       const r = await runExport({ ...this.deps(), appVersion: process.env.VERCEL_GIT_COMMIT_SHA ?? null }, st.export, sink, password, { deadline: Date.now() + STEP_MS });
       if (!r.done) {
-        const s = r.state;
+        const s2 = r.state;
         const tables = this.plan.insertOrder.length;
-        const progress = s.phase === 'rows' ? 0.9 * (s.table / tables) : 0.9 + 0.1 * (s.files?.length ? s.file / s.files.length : 0);
-        await db.schoolBackup.update({ where: { id }, data: { state: { export: s, sink: sink.state, progress } as unknown as Prisma.InputJsonValue, lockedUntil: null } });
+        const progress = s2.phase === 'rows' ? 0.9 * (s2.table / tables) : 0.9 + 0.1 * (s2.files?.length ? s2.file / s2.files.length : 0);
+        await db.schoolBackup.update({ where: { id }, data: { state: { export: s2, sink: sink.state, progress, attempts: 0 } as unknown as Prisma.InputJsonValue, lockedUntil: null } });
         return this.get(id);
       }
       // Proof it can be read back: header, password, footer and the sealed
@@ -203,16 +241,43 @@ export class BackupsService {
           expiresAt: new Date(Date.now() + (KEEP[b.reason] ?? 90 * DAY)),
         },
       });
-      if (b.deleteSchoolAfter) await this.deleteSchoolNow(b.sourceSchoolId);
-      if (b.reason === 'WEEKLY') await this.pruneWeekly(b.sourceSchoolId);
-      return this.get(id);
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : (e as Error).message;
       this.logger.error(`backup ${id} failed: ${msg}`);
-      if (sink) await S3MultipartSink.abort(this.s3, sink.state);
-      else if (st.sink) await S3MultipartSink.abort(this.s3, st.sink);
-      await db.schoolBackup.update({ where: { id }, data: { status: 'FAILED', error: msg.slice(0, 2000), state: Prisma.DbNull, lockedUntil: null, finishedAt: new Date() } });
-      return this.get(id);
+      return fail(msg, sink?.state ?? st.sink);
+    }
+    // From here the backup is READY and stays READY, whatever happens next.
+    if (b.deleteSchoolAfter) await this.finishPendingDelete(id);
+    if (b.reason === 'WEEKLY') await this.pruneWeekly(b.sourceSchoolId).catch((e) => this.logger.warn(`weekly prune: ${(e as Error).message}`));
+    return this.get(id);
+  }
+
+  /**
+   * The delete that a "Delete school" backup was taken for. Never touches the
+   * backup's status: a failure is written on it and retried by the cron.
+   */
+  private async finishPendingDelete(backupId: string): Promise<void> {
+    const db = getPlatformPrisma();
+    const b = await db.schoolBackup.findUnique({ where: { id: backupId } });
+    if (!b || b.status !== 'READY' || !b.deleteSchoolAfter) return;
+    try {
+      const school = await db.school.findUnique({ where: { id: b.sourceSchoolId }, select: { status: true } });
+      if (school && school.status !== 'SUSPENDED') {
+        await db.schoolBackup.update({ where: { id: backupId }, data: { deleteSchoolAfter: false, error: 'Not deleted: the school was taken off Suspended while its final backup ran. The backup is kept.' } });
+        return;
+      }
+      if (school) {
+        await this.deleteSchoolNow(b.sourceSchoolId, backupId);
+      } else {
+        // An earlier attempt removed the rows and was cut off before the files.
+        await purgeSchoolFiles(this.files, b.sourceSchoolId);
+        await this.forget(b.sourceSchoolId, [`${b.schoolSlug}.${this.env.PLATFORM_HOST}`]);
+      }
+      await db.schoolBackup.update({ where: { id: backupId }, data: { deleteSchoolAfter: false, error: null } });
+    } catch (e) {
+      const msg = (e as Error).message;
+      this.logger.error(`delete after backup ${backupId} did not finish: ${msg}`);
+      await db.schoolBackup.update({ where: { id: backupId }, data: { error: `The backup is safe. The delete did not finish (${msg.slice(0, 300)}); it is retried automatically.` } });
     }
   }
 
@@ -277,22 +342,43 @@ export class BackupsService {
    * taken after it was suspended — so no delete can ever lose data that is
    * not in a backup.
    */
-  async deleteSchoolNow(schoolId: string): Promise<{ ok: true; files: number; backupId: string }> {
+  async deleteSchoolNow(schoolId: string, backupId?: string): Promise<{ ok: true; files: number; backupId: string }> {
     const db = getPlatformPrisma();
     const school = await db.school.findUnique({ where: { id: schoolId }, select: { id: true, slug: true, status: true, statusChangedAt: true, domains: { select: { hostname: true } } } });
     if (!school) throw new ApiError('NOT_FOUND', 'No such school.', 404);
     if (school.status !== 'SUSPENDED') throw new ApiError('SCHOOL_NOT_SUSPENDED', 'Suspend the school first — only suspended schools can be deleted.', 409);
     const backup = await db.schoolBackup.findFirst({
-      where: { sourceSchoolId: schoolId, status: 'READY', reason: { not: 'UPLOADED' }, ...(school.statusChangedAt ? { createdAt: { gte: school.statusChangedAt } } : {}) },
+      where: {
+        ...(backupId ? { id: backupId } : {}),
+        sourceSchoolId: schoolId, status: 'READY', reason: { not: 'UPLOADED' },
+        ...(school.statusChangedAt ? { createdAt: { gte: school.statusChangedAt } } : {}),
+      },
       orderBy: { createdAt: 'desc' },
     });
     if (!backup) throw new ApiError('BACKUP_REQUIRED', 'Take a backup of the school first — a school is never deleted without one taken after it was suspended.', 409);
+    // The file must really be there — a register row is not a backup.
+    try {
+      await this.s3.send(new HeadObjectCommand({ Bucket: this.bucket, Key: backup.storageKey }));
+    } catch {
+      throw new ApiError('BACKUP_REQUIRED', 'The backup file for this school is missing from storage, so it was not deleted. Take a new backup.', 409);
+    }
+    // The school's last backup is kept as long as a deleted school's is.
+    const keepUntil = new Date(Date.now() + KEEP.BEFORE_DELETE);
+    if (!backup.expiresAt || backup.expiresAt < keepUntil) {
+      await db.schoolBackup.update({ where: { id: backup.id }, data: { expiresAt: keepUntil } });
+    }
 
     await purgeSchoolRows(this.deps().db, this.plan, schoolId);
     const files = await purgeSchoolFiles(this.files, schoolId);
     await this.forget(schoolId, [school.slug + '.' + this.env.PLATFORM_HOST, ...school.domains.map((d) => d.hostname)]);
     this.logger.warn(`School ${school.slug} (${schoolId}) deleted — ${files} files; final backup ${backup.id}`);
     return { ok: true, files, backupId: backup.id };
+  }
+
+  /** Drops the cached host lookup and feature flags, so a change takes effect now, not in a minute. */
+  async forgetSchool(schoolId: string): Promise<void> {
+    const s = await getPlatformPrisma().school.findUnique({ where: { id: schoolId }, select: { slug: true, domains: { select: { hostname: true } } } });
+    if (s) await this.forget(schoolId, [`${s.slug}.${this.env.PLATFORM_HOST}`, ...s.domains.map((d) => d.hostname)]);
   }
 
   private async forget(schoolId: string, hosts: string[]): Promise<void> {
@@ -329,7 +415,16 @@ export class BackupsService {
     if (input.mode === 'replace') {
       // Freeze the current copy, then back it up, BEFORE anything is removed.
       await db.school.update({ where: { id: schoolId }, data: { status: 'SUSPENDED', statusChangedAt: new Date() } });
-      const pre = await this.start(schoolId, 'BEFORE_REPLACE', actor);
+      await this.forgetSchool(schoolId);
+      let pre: BackupView;
+      try {
+        pre = await this.start(schoolId, 'BEFORE_REPLACE', actor);
+      } catch (e) {
+        // Nothing has been touched yet — put the school back as it was.
+        await db.school.update({ where: { id: schoolId }, data: { status: existing!.status, statusChangedAt: new Date() } });
+        await this.forgetSchool(schoolId);
+        throw e;
+      }
       state = { phase: 'awaiting-backup', preBackupId: pre.id, previousStatus: existing!.status, import: null, progress: 0 };
     } else {
       state = { phase: 'import', import: importState, progress: 0 };
@@ -385,6 +480,12 @@ export class BackupsService {
       await db.schoolRestore.update({ where: { id }, data: { status: 'FAILED', error: msg.slice(0, 2000), lockedUntil: null, finishedAt: new Date() } });
       return this.getRestore(id);
     };
+    const attempts = (st.attempts ?? 0) + 1;
+    if (attempts > MAX_ATTEMPTS && st.phase === 'import') {
+      if (st.import?.started) await rollbackImport(deps, st.import).catch((e) => this.logger.error(`rollback: ${(e as Error).message}`));
+      return fail(`Stopped after ${MAX_ATTEMPTS} tries in a row that were cut off before finishing; nothing of the import was kept.${st.preBackupId ? ` The school as it was before is in backup ${st.preBackupId}.` : ''} Use the command line (pnpm school import) for a school this large.`);
+    }
+    if (st.phase === 'import') await db.schoolRestore.update({ where: { id }, data: { state: { ...st, attempts } as unknown as Prisma.InputJsonValue } });
     try {
       if (st.phase === 'awaiting-backup') {
         const pre = await this.step(st.preBackupId!);
@@ -417,7 +518,7 @@ export class BackupsService {
       if (!res.done) {
         const s = res.state;
         const prog = base + (1 - base) * (s.phase === 'rows' ? 0.85 * (s.table / this.plan.insertOrder.length) : 0.9);
-        await db.schoolRestore.update({ where: { id }, data: { state: { ...st, import: s, progress: prog } as unknown as Prisma.InputJsonValue, lockedUntil: null } });
+        await db.schoolRestore.update({ where: { id }, data: { state: { ...st, import: s, progress: prog, attempts: 0 } as unknown as Prisma.InputJsonValue, lockedUntil: null } });
         return this.getRestore(id);
       }
       await db.schoolRestore.update({
@@ -428,11 +529,14 @@ export class BackupsService {
       await this.forget(r.sourceSchoolId, [`${r.targetSlug}.${this.env.PLATFORM_HOST}`, ...doms.map((d) => d.hostname)]);
       return this.getRestore(id);
     } catch (e) {
-      const msg = e instanceof ApiError || e instanceof ImportRefused ? e.message : (e as Error).message;
+      const msg = e instanceof ApiError || e instanceof ImportRefused || e instanceof ImportFailed ? e.message : (e as Error).message;
       this.logger.error(`restore ${id} failed: ${msg}`);
-      if (st.import?.started) {
+      // The import may have got further than the saved state says (the School
+      // row is written in the same step that failed) — use the state it reached.
+      const reached = e instanceof ImportFailed ? e.state : st.import;
+      if (reached?.started) {
         try {
-          await rollbackImport(deps, st.import);
+          await rollbackImport(deps, reached);
         } catch (re) {
           this.logger.error(`restore ${id} rollback failed: ${(re as Error).message}`);
         }
@@ -453,6 +557,11 @@ export class BackupsService {
       await this.expire(b.id, b.storageKey);
       expired += 1;
     }
+    // Deletes whose backup is safe but whose delete was cut off or failed.
+    for (const b of await db.schoolBackup.findMany({ where: { status: 'READY', deleteSchoolAfter: true }, take: 20, select: { id: true } })) {
+      if (Date.now() + STEP_MS > deadline) break;
+      await this.finishPendingDelete(b.id);
+    }
     let stepped = 0;
     for (;;) {
       if (Date.now() + STEP_MS > deadline) break;
@@ -464,7 +573,9 @@ export class BackupsService {
       else if (nextBackup) await this.step(nextBackup.id);
       stepped += 1;
     }
-    const left = (await db.schoolBackup.count({ where: { status: 'RUNNING' } })) + (await db.schoolRestore.count({ where: { status: 'RUNNING' } }));
+    const left = (await db.schoolBackup.count({ where: { status: 'RUNNING' } }))
+      + (await db.schoolRestore.count({ where: { status: 'RUNNING' } }))
+      + (await db.schoolBackup.count({ where: { status: 'READY', deleteSchoolAfter: true, error: null } }));
     return { moreWork: left > 0, expired, stepped };
   }
 
@@ -486,8 +597,10 @@ export class BackupsService {
     for (const b of old) await this.expire(b.id, b.storageKey);
   }
 
+  /** Marked EXPIRED first, so nothing (a delete, a restore) can pick it up while its file goes. */
   private async expire(id: string, key: string): Promise<void> {
+    const r = await getPlatformPrisma().schoolBackup.updateMany({ where: { id, status: 'READY', deleteSchoolAfter: false }, data: { status: 'EXPIRED' } });
+    if (r.count === 0) return;
     await this.s3.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key })).catch((e) => this.logger.warn(`could not remove ${key}: ${(e as Error).message}`));
-    await getPlatformPrisma().schoolBackup.update({ where: { id }, data: { status: 'EXPIRED' } });
   }
 }

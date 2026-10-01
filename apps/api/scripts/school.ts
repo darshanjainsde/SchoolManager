@@ -79,7 +79,7 @@ async function main() {
   const { ArchiveReader } = await import('../src/modules/backups/engine/archive');
   const { rawDbFromPrisma } = await import('../src/modules/backups/engine/db');
   const { beginExport, runExport } = await import('../src/modules/backups/engine/export');
-  const { preflightImport, runImport, rollbackImport } = await import('../src/modules/backups/engine/import');
+  const { preflightImport, runImport, rollbackImport, ImportFailed } = await import('../src/modules/backups/engine/import');
   const { machineFromEnv } = await import('../src/modules/backups/engine/machine');
   const { purgeSchoolFiles, purgeSchoolRows } = await import('../src/modules/backups/engine/purge');
   const { buildSchemaPlan } = await import('../src/modules/backups/engine/schema-plan');
@@ -167,8 +167,18 @@ async function main() {
   if (existing) {
     safety = here(`${existing.slug}-before-replace-${new Date().toISOString().replace(/[:.]/g, '-')}.sckools`);
     console.log(`Saving the current copy first → ${safety}`);
-    await deps.db.execute(`UPDATE "School" SET status = 'SUSPENDED', "statusChangedAt" = now() WHERE id = $1::uuid`, m.source.schoolId);
-    await exportTo(m.source.schoolId, safety);
+    await deps.db.execute(`UPDATE "School" SET status = 'SUSPENDED', "statusChangedAt" = $2::timestamp(3) WHERE id = $1::uuid`, m.source.schoolId, new Date().toISOString());
+    try {
+      const saved = await exportTo(m.source.schoolId, safety);
+      // Read it back before anything is removed — a file that does not open is not a backup.
+      const check = await FileSource.open(safety);
+      const back = await ArchiveReader.open<Manifest>(check, pw);
+      await check.close();
+      if (back.manifest.rowCount !== saved.manifest!.rowCount) throw new Error('the safety backup does not read back the same');
+    } catch (e) {
+      await deps.db.execute(`UPDATE "School" SET status = $2::"SchoolStatus", "statusChangedAt" = $3::timestamp(3) WHERE id = $1::uuid`, m.source.schoolId, existing.status, new Date().toISOString());
+      fail(`The current copy could not be saved (${(e as Error).message}), so nothing was replaced. The school is back as it was.`);
+    }
     console.log('\n  removing the current copy…');
     await purgeSchoolRows(deps.db, deps.plan, m.source.schoolId);
     await purgeSchoolFiles(deps.files, m.source.schoolId);
@@ -194,7 +204,8 @@ async function main() {
     }
   } catch (e) {
     console.error(`\n✗ ${(e as Error).message}\n  Removing what this import wrote…`);
-    await rollbackImport(deps, state!).catch((re: Error) => console.error(`  rollback failed: ${re.message}`));
+    const reached = e instanceof ImportFailed ? e.state : state!;
+    await rollbackImport(deps, reached).catch((re: Error) => console.error(`  rollback failed: ${re.message}`));
     if (safety) console.error(`  The school as it was before is in ${safety} — import that to bring it back.`);
     process.exit(1);
   } finally {

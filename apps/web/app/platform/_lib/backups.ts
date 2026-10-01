@@ -17,6 +17,10 @@ export interface BackupRow {
   warnings: string[];
   error: string | null;
   deleteSchoolAfter: boolean;
+  /** READY, but the school it was taken to delete is not gone yet. */
+  deletePending: boolean;
+  /** A final backup waiting for the suspended school to go quiet. */
+  waiting: boolean;
   createdAt: string;
   finishedAt: string | null;
   expiresAt: string | null;
@@ -62,7 +66,12 @@ export function useJob<T extends { status: string }>(api: ApiClient, kind: 'back
     queryKey: ['owner-job', kind, id],
     enabled: !!id,
     queryFn: () => api.post<T>(`/owner/${kind}/${id}/step`),
-    refetchInterval: (q) => (q.state.data && q.state.data.status !== 'RUNNING' ? false : 2000),
+    // A finished backup that still has a delete to finish keeps being followed.
+    refetchInterval: (q) => {
+      const d = q.state.data as { status: string; deletePending?: boolean; error?: string | null } | undefined;
+      if (!d || d.status === 'RUNNING') return 2000;
+      return d.deletePending && !d.error ? 3000 : false;
+    },
     refetchIntervalInBackground: true,
   });
 }

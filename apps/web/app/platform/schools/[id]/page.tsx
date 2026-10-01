@@ -355,14 +355,18 @@ function DangerZoneCard({ school }: { school: SchoolDetail }) {
   });
 
   const status = job.data?.status;
+  // Gone only when the backup is READY and its delete has finished.
+  const gone = status === 'READY' && !job.data?.deletePending;
+  const deleteNote = status === 'READY' && job.data?.deletePending ? job.data.error : null;
   useEffect(() => {
-    if (status === 'READY') {
+    if (gone && !job.data?.error) {
       toast.success(`${school.name} deleted — its final backup is under Deleted schools`);
       void qc.invalidateQueries({ queryKey: ['owner-schools'] });
       router.replace('/platform/backups');
     }
+    if (gone && job.data?.error) toast.error(job.data.error);
     if (status === 'FAILED') toast.error(`Nothing was deleted: ${job.data?.error ?? 'the final backup failed'}`);
-  }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [status, gone]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Card className="border-rose-200">
@@ -381,7 +385,13 @@ function DangerZoneCard({ school }: { school: SchoolDetail }) {
         )}
         {backupId && status !== 'FAILED' && (
           <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900" role="status">
-            Taking the final backup — {Math.round((job.data?.progress ?? 0) * 100)}%. The school is deleted only after it is safely stored.
+            {job.data?.waiting
+              ? 'Waiting about a minute for the suspended school to go quiet, so the final backup misses nothing…'
+              : deleteNote
+                ? deleteNote
+                : status === 'READY'
+                  ? 'The final backup is safe. Deleting the school…'
+                  : `Taking the final backup — ${Math.round((job.data?.progress ?? 0) * 100)}%. The school is deleted only after it is safely stored.`}
           </div>
         )}
         <div className="flex flex-wrap items-end gap-3">

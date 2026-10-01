@@ -31,6 +31,18 @@ export class ImportRefused extends Error {
   }
 }
 
+/**
+ * A failure DURING an import, carrying the state it had reached — which may
+ * be further than the caller's saved copy (the School row may exist already).
+ * Roll back with `failed.state`, never with the state you passed in.
+ */
+export class ImportFailed extends Error {
+  constructor(readonly cause: unknown, readonly state: ImportState) {
+    super((cause as Error)?.message ?? String(cause));
+    this.name = 'ImportFailed';
+  }
+}
+
 export interface ImportState {
   schoolId: string;
   slug: string;
@@ -80,6 +92,9 @@ export async function preflightImport(deps: ImportDeps, reader: ArchiveReader<Ma
     throw new ImportRefused('NEWER_SCHEMA', `This backup was made by a newer version of Sckools. This machine is missing ${missing.length} database change(s) — ${missing.slice(0, 3).join(', ')}${missing.length > 3 ? ', …' : ''}. Update the code and run migrations, then import again.`);
   }
   const school = JSON.parse((await reader.read('school.json')).toString('utf8')) as { id: string; slug: string };
+  if (school.id !== m.source?.schoolId) {
+    throw new ImportRefused('NOT_A_SCHOOL_BACKUP', 'This file is inconsistent: its index and its contents name different schools.');
+  }
   const slug = (options.slug ?? school.slug).trim().toLowerCase();
   if (!SLUG_RULE.test(slug)) {
     throw new ImportRefused('BAD_SLUG', `"${slug}" cannot be a school address — use 2 to 32 lowercase letters, digits or dashes.`);
@@ -116,6 +131,16 @@ export async function runImport(
   deps: ImportDeps, reader: ArchiveReader<Manifest>, input: ImportState, opts: { deadline: number },
 ): Promise<ImportStepResult> {
   const st: ImportState = structuredClone(input);
+  try {
+    return await importSteps(deps, reader, st, opts);
+  } catch (e) {
+    throw e instanceof ImportFailed ? e : new ImportFailed(e, st);
+  }
+}
+
+async function importSteps(
+  deps: ImportDeps, reader: ArchiveReader<Manifest>, st: ImportState, opts: { deadline: number },
+): Promise<ImportStepResult> {
   // At least one unit of work per call, whatever the clock says — otherwise a
   // step handed an already-passed deadline returns unchanged, and a driver
   // calling it in a loop spins forever.
@@ -224,8 +249,8 @@ export async function runImport(
 
   if (st.phase === 'finish') {
     await deps.db.execute(
-      `UPDATE "School" SET status = $1::"SchoolStatus", "statusChangedAt" = now() WHERE id = $2::uuid`,
-      st.options.finalStatus, st.schoolId,
+      `UPDATE "School" SET status = $1::"SchoolStatus", "statusChangedAt" = $3::timestamp(3) WHERE id = $2::uuid`,
+      st.options.finalStatus, st.schoolId, new Date().toISOString(),
     );
     st.phase = 'done';
   }

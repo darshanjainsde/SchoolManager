@@ -34,7 +34,6 @@ export interface ExportState {
   files: { bucket: BucketKind; key: string }[] | null;
   file: number;
   counts: Record<string, number>;
-  secrets: OpenedSecret[];
   warnings: string[];
   fileCount: number;
   fileBytes: number;
@@ -57,7 +56,7 @@ export async function beginExport(deps: ExportDeps, schoolId: string): Promise<E
   if (!row) throw new Error(`School ${schoolId} does not exist`);
   return {
     schoolId, phase: 'rows', table: 0, after: null, seq: 0, files: null, file: 0,
-    counts: {}, secrets: [], warnings: [], fileCount: 0, fileBytes: 0,
+    counts: {}, warnings: [], fileCount: 0, fileBytes: 0,
     source: { school: JSON.parse(row.j), migrations: await appliedMigrations(deps.db), takenAt: new Date().toISOString(), machine: faceOf(deps.machine) },
     writer: null,
   };
@@ -108,14 +107,6 @@ export async function runExport(
       throw new Error(`${t.table} holds more than ${WHOLE_TABLE_LIMIT} rows for one school and has no single key to page by`);
     }
     if (rows.length > 0) {
-      const sealed = SEALED_COLUMNS.find((c) => c.table === t.table);
-      if (sealed) {
-        for (const r of rows) {
-          const { secret, warnings } = openRowSecrets(sealed, JSON.parse(r.j), st.schoolId, deps.machine);
-          if (secret) st.secrets.push(secret);
-          for (const w of warnings) st.warnings.push(`${w.table}.${w.column} (${w.id}): ${w.reason}`);
-        }
-      }
       const ndjson = Buffer.from(rows.map((r) => r.j).join('\n'), 'utf8');
       await writer.add(`rows/${t.table}/${String(st.seq).padStart(6, '0')}`, gzipSync(ndjson), { rows: rows.length });
       st.counts[t.table] = (st.counts[t.table] ?? 0) + rows.length;
@@ -150,7 +141,24 @@ export async function runExport(
   }
 
   // ── finish ──────────────────────────────────────────────────────────────
-  await writer.add('secrets.json', Buffer.from(JSON.stringify(st.secrets)));
+  // Sealed secrets are opened HERE, at the last moment, and go straight into
+  // the locked file. They are never part of the saved job state, which lives
+  // in the database between steps — plaintext there would undo the sealing.
+  const secrets: OpenedSecret[] = [];
+  for (const sealed of SEALED_COLUMNS) {
+    const rows = await deps.db.query<{ j: string }>(`SELECT row_to_json(t)::text AS j FROM ${q(sealed.table)} t WHERE t."schoolId" = $1::uuid`, st.schoolId);
+    for (const r of rows) {
+      const { secret, warnings } = openRowSecrets(sealed, JSON.parse(r.j), st.schoolId, deps.machine);
+      if (secret) secrets.push(secret);
+      for (const w of warnings) st.warnings.push(`${w.table}.${w.column} (${w.id}): ${w.reason}`);
+    }
+  }
+  // Invitations this school sent to OTHER schools for its network events are
+  // those schools' rows, not this one's; say so rather than lose them quietly.
+  const [{ n: invites }] = await deps.db.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM "EventAudienceSchool" a JOIN "Event" e ON e.id = a."eventId" WHERE e."schoolId" = $1::uuid AND a."schoolId" <> $1::uuid`, st.schoolId);
+  if (invites > 0) st.warnings.push(`${invites} invitation(s) to other schools for this school's network events are not in this backup — re-invite them after a restore`);
+  await writer.add('secrets.json', Buffer.from(JSON.stringify(secrets)));
   const school = st.source.school as { id: string; slug: string; name: string; status: string };
   const manifest: Manifest = {
     kind: BACKUP_KIND, format: 1, takenAt: st.source.takenAt, appVersion: deps.appVersion ?? null,

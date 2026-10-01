@@ -21,7 +21,7 @@ import { OwnerSchoolsService } from './owner-schools.service';
 function make() {
   const passwords = { hash: jest.fn().mockResolvedValue('hash') };
   const featureResolver = { invalidate: jest.fn() };
-  const backups = { deleteSchoolNow: jest.fn() };
+  const backups = { deleteSchoolNow: jest.fn(), forgetSchool: jest.fn() };
   // Constructor order read from the service: (featureResolver, passwords, backups).
   return new (OwnerSchoolsService as unknown as new (...a: unknown[]) => OwnerSchoolsService)(featureResolver, passwords, backups);
 }

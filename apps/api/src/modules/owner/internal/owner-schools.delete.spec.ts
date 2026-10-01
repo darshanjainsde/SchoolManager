@@ -8,7 +8,7 @@ jest.mock('@skoolos/db', () => ({ ...jest.requireActual('@skoolos/db'), getPlatf
 import { OwnerSchoolsService } from './owner-schools.service';
 
 const ID = '834652cc-876d-417a-b3cf-498b46d2320f';
-const backups = { deleteSchoolNow: jest.fn() };
+const backups = { deleteSchoolNow: jest.fn(), forgetSchool: jest.fn() };
 const make = () =>
   new (OwnerSchoolsService as unknown as new (...a: unknown[]) => OwnerSchoolsService)({ invalidate: jest.fn() }, {}, backups);
 
@@ -37,5 +37,12 @@ describe('changing a school’s status', () => {
     expect(data.status).toBe('SUSPENDED');
     expect(data.statusChangedAt).toBeInstanceOf(Date);
     expect(data.statusChangedAt.getTime()).toBeGreaterThanOrEqual(t0);
+  });
+
+  it('drops the cached address at once, so a suspended school stops answering now — not in a minute', async () => {
+    db.school.update.mockResolvedValue({});
+    db.school.findUnique.mockResolvedValue({ id: ID, name: 'X', slug: 'x', tier: 'PRO', status: 'SUSPENDED', domains: [], featureOverrides: [] });
+    await make().setStatus(ID, 'SUSPENDED');
+    expect(backups.forgetSchool).toHaveBeenCalledWith(ID);
   });
 });

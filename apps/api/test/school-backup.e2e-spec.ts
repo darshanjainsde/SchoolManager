@@ -26,7 +26,7 @@ import { getPlatformPrisma, disconnectAll } from '@skoolos/db';
 import { ArchiveReader, ArchiveWriter, MemorySink, MemorySource } from '../src/modules/backups/engine/archive';
 import { RawDb, rawDbFromPrisma } from '../src/modules/backups/engine/db';
 import { Manifest, beginExport, runExport } from '../src/modules/backups/engine/export';
-import { ImportRefused, ImportState, preflightImport, rollbackImport, runImport } from '../src/modules/backups/engine/import';
+import { ImportFailed, ImportRefused, ImportState, preflightImport, rollbackImport, runImport } from '../src/modules/backups/engine/import';
 import { Machine } from '../src/modules/backups/engine/machine';
 import { purgeSchoolFiles, purgeSchoolRows } from '../src/modules/backups/engine/purge';
 import { buildSchemaPlan, q } from '../src/modules/backups/engine/schema-plan';
@@ -188,6 +188,19 @@ describe('2 · backup', () => {
     expect(out.manifest.source.machine).toEqual({ platformHost: A.platformHost, publicBase: A.publicBase });
   });
 
+  it('the saved job state between steps never holds an opened secret', async () => {
+    const deps = { db: dbA, files: filesA, machine: A, plan, pageRows: 300 };
+    let state = await beginExport(deps, schoolId);
+    const sink = new MemorySink();
+    for (let i = 0; i < 400; i += 1) {
+      const r = await runExport(deps, state, sink, PW, { deadline: 0, kdf: KDF });
+      expect(JSON.stringify(r.state)).not.toContain('salt-live-123');
+      expect(JSON.stringify(r.state)).not.toContain('mailbox-pass');
+      if (r.done) break;
+      state = r.state;
+    }
+  });
+
   it('the file says nothing readable without the password', async () => {
     expect(archive.includes(Buffer.from('salt-live-123'))).toBe(false);
     expect(archive.includes(Buffer.from('Backup Source School'))).toBe(false);
@@ -305,14 +318,44 @@ describe('5 · import on another machine', () => {
     const reader = await ArchiveReader.open<Manifest>(new MemorySource(archive), PW);
     const deps = { db: flaky, files: filesB, machine: B, plan };
     let state = await preflightImport(deps, reader, { mode: 'restore', finalStatus: 'LIVE' });
-    await expect((async () => {
-      for (;;) { const r = await runImport(deps, reader, state, { deadline: 0 }); if (r.done) return; state = r.state; }
-    })()).rejects.toThrow(/connection lost/);
-    expect(state.started).toBe(true);
-    await rollbackImport({ db: dbB, files: filesB, machine: B, plan }, state);
+    const err = await (async () => {
+      for (;;) { const r = await runImport(deps, reader, state, { deadline: 0 }); if (r.done) return null; state = r.state; }
+    })().catch((e) => e);
+    expect(err).toBeInstanceOf(ImportFailed);
+    expect(err.message).toMatch(/connection lost/);
+    expect(err.state.started).toBe(true);
+    await rollbackImport({ db: dbB, files: filesB, machine: B, plan }, err.state);
     expect(total(await snapshot(dbB, schoolId))).toBe(0);
     expect(await dbB.query(`SELECT 1 FROM "School" WHERE id = $1::uuid`, schoolId)).toEqual([]);
     expect(await filesB.list(`schools/${schoolId}/`)).toEqual([]);
+  });
+
+  it('a failure in the FIRST step — after the school row is written, before any state is saved — is still rolled back', async () => {
+    let n = 0;
+    const flaky: RawDb = { ...dbB, transaction: async (s) => { n += 1; if (n === 3) throw new Error('killed mid-step'); return dbB.transaction(s); } };
+    const reader = await ArchiveReader.open<Manifest>(new MemorySource(archive), PW);
+    const deps = { db: flaky, files: filesB, machine: B, plan };
+    const saved = await preflightImport(deps, reader, { mode: 'restore', finalStatus: 'LIVE' });
+    // One long step, as a small school would take: the caller's copy never learns the school row exists.
+    const err = await runImport(deps, reader, saved, { deadline: Date.now() + 600_000 }).then(() => null, (e) => e);
+    expect(err).toBeInstanceOf(ImportFailed);
+    expect(saved.started).toBe(false);
+    expect((err as ImportFailed).state.started).toBe(true);
+    expect(await dbB.query(`SELECT 1 FROM "School" WHERE id = $1::uuid`, schoolId)).toHaveLength(1);
+    await rollbackImport({ db: dbB, files: filesB, machine: B, plan }, (err as ImportFailed).state);
+    expect(await dbB.query(`SELECT 1 FROM "School" WHERE id = $1::uuid`, schoolId)).toEqual([]);
+    expect(total(await snapshot(dbB, schoolId))).toBe(0);
+  });
+
+  it('refuses a file whose index and contents name different schools', async () => {
+    const sink = new MemorySink();
+    const w = await ArchiveWriter.create(sink, PW, KDF);
+    await w.add('school.json', Buffer.from(JSON.stringify({ id: otherSchoolId, slug: 'x' })));
+    const real = (await ArchiveReader.open<Manifest>(new MemorySource(archive), PW)).manifest;
+    await w.finish({ ...real } as unknown as Record<string, unknown>);
+    const reader = await ArchiveReader.open<Manifest>(new MemorySource(sink.buffer()), PW);
+    await expect(preflightImport({ db: dbB, files: filesB, machine: B, plan }, reader, { mode: 'restore', slug: 'zz-mismatch', finalStatus: 'LIVE' }))
+      .rejects.toMatchObject({ code: 'NOT_A_SCHOOL_BACKUP' });
   });
 
   it('imports with everything machine-bound fitted to machine B, and reports what B could not take', async () => {
