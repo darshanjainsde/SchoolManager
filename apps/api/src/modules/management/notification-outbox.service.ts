@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { readableIstDate } from '../../common/dates/timetable-date';
 import { runInBackground } from '../../common/notifications/run-in-background';
 import { getPlatformPrisma } from '@skoolos/db';
 import { assertNotificationOutboxKind, type NotificationOutboxKind } from '@skoolos/types';
@@ -83,7 +84,7 @@ const PURGE_DELIVERED_AFTER_DAYS = 30;
  * `classSectionName`/`maxMarks` fields the push text doesn't render today),
  * so building the narrower message is a plain field pick, not a lookup.
  */
-function toNotificationMessage(kind: NotificationOutboxKind, payload: unknown): NotificationMessage {
+function toNotificationMessage(kind: NotificationOutboxKind, payload: unknown, postedOn = readableIstDate()): NotificationMessage {
   if (kind === 'EXAM_SCHEDULED') {
     const p = payload as ExamScheduledOutboxPayload;
     return {
@@ -120,6 +121,7 @@ function toNotificationMessage(kind: NotificationOutboxKind, payload: unknown): 
         title: p.title,
         body: p.body,
         className: 'Library',
+        postedOn,
       },
     };
   }
@@ -146,7 +148,7 @@ function toNotificationMessage(kind: NotificationOutboxKind, payload: unknown): 
     const p = payload as FeeDecisionOutboxPayload;
     return {
       kind: 'ANNOUNCEMENT',
-      payload: { schoolName: p.schoolName, title: p.title, body: p.body, className: 'Fees' },
+      payload: { schoolName: p.schoolName, title: p.title, body: p.body, className: 'Fees', postedOn },
     };
   }
   if (kind === 'SESSION_STARTED') {
@@ -154,7 +156,7 @@ function toNotificationMessage(kind: NotificationOutboxKind, payload: unknown): 
     const p = payload as SessionStartedOutboxPayload;
     return {
       kind: 'ANNOUNCEMENT',
-      payload: { schoolName: p.schoolName, title: p.title, body: p.body, className: null },
+      payload: { schoolName: p.schoolName, title: p.title, body: p.body, className: null, postedOn },
     };
   }
   if (kind === 'CONCERN_RAISED' || kind === 'CONCERN_REPLIED' || kind === 'CONCERN_RESOLVED') {
@@ -165,7 +167,7 @@ function toNotificationMessage(kind: NotificationOutboxKind, payload: unknown): 
     const p = payload as { schoolName: string; title: string; body: string };
     return {
       kind: 'ANNOUNCEMENT',
-      payload: { schoolName: p.schoolName, title: p.title, body: p.body, className: 'Complaint Box' },
+      payload: { schoolName: p.schoolName, title: p.title, body: p.body, className: 'Complaint Box', postedOn },
     };
   }
   if (kind === 'MESSAGE_RECEIVED') {
@@ -180,6 +182,7 @@ function toNotificationMessage(kind: NotificationOutboxKind, payload: unknown): 
         title: `New message from ${p.senderName}`,
         body: p.preview,
         className: p.subjectName,
+        postedOn,
       },
     };
   }
@@ -196,6 +199,7 @@ function toNotificationMessage(kind: NotificationOutboxKind, payload: unknown): 
       title: p.assignmentTitle,
       body: `${p.subjectName} — due ${p.dueDate}`,
       className: p.classSectionName,
+      postedOn,
     },
   };
 }

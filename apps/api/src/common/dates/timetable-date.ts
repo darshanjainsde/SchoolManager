@@ -58,3 +58,16 @@ export function resolveAsOfDate(dateParam: string | undefined, now: Date): Date 
 export function istTodayISO(now: Date = new Date()): string {
   return istDayString(now);
 }
+
+/**
+ * A date a parent reads, in the school's own idiom: "2 November".
+ *
+ * No year, because every notice that carries one is about this week or the
+ * next; no weekday, because the sentence around it already says what the day
+ * is for. Fixed to en-IN and IST so the same notice reads the same on a
+ * server in Mumbai and one in Washington — `toLocaleDateString` with no
+ * timezone would drift a day either side of midnight.
+ */
+export function readableIstDate(d: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'long', timeZone: 'Asia/Kolkata' }).format(d);
+}
