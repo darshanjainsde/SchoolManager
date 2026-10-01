@@ -60,8 +60,17 @@ export interface AbsenceNoticePayload {
 export interface AnnouncementPayload {
   schoolName: string;
   title: string;
+  /** The words themselves. Email carries them; WhatsApp deliberately does not. */
   body: string;
   className: string | null;
+  /**
+   * The day it was posted, already written for a reader ("2 November").
+   *
+   * Required, not optional, because the WhatsApp template needs it and this
+   * union exists so a missing field is a compile error rather than the word
+   * "undefined" in a parent's chat.
+   */
+  postedOn: string;
 }
 
 /**

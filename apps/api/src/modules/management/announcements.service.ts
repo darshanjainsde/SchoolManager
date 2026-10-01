@@ -5,6 +5,7 @@ import { ApiError } from '../../common/errors/api-error';
 import { NotificationService } from '../../common/notifications/notification.service';
 import { resolveSchoolRecipients, resolveSectionRecipients } from '../../common/notifications/recipients';
 import { runInBackground } from '../../common/notifications/run-in-background';
+import { readableIstDate } from '../../common/dates/timetable-date';
 import { isP2002, isP2025 } from '../../common/errors/prisma-errors';
 import { AttendanceService } from './attendance.service';
 import type { CreateAnnouncementDto, UpdateAnnouncementDto } from './management.dto';
@@ -176,6 +177,9 @@ export class AnnouncementsService {
     const targetSectionIds = targetIds; // captured for the closure below (string[] | null)
     runInBackground(
       async () => {
+        // ONE day for the whole fan-out: a notice posted at 23:59 must not
+        // reach half the school dated today and half tomorrow.
+        const postedOn = readableIstDate();
         const { recipients } = await withTenant(schoolId, async (tx) => {
           const school = await tx.school.findFirst({ where: { id: schoolId }, select: { name: true } });
           const schoolName = school?.name ?? FALLBACK_SCHOOL_NAME;
@@ -188,7 +192,7 @@ export class AnnouncementsService {
                 return emails.map((email) => ({
                   email,
                   schoolId,
-                  payload: { schoolName, title: dto.title, body: dto.body, className },
+                  payload: { schoolName, title: dto.title, body: dto.body, className, postedOn },
                 }));
               }),
             );
@@ -202,7 +206,7 @@ export class AnnouncementsService {
             recipients: emails.map((email) => ({
               email,
               schoolId,
-              payload: { schoolName, title: dto.title, body: dto.body, className: null },
+              payload: { schoolName, title: dto.title, body: dto.body, className: null, postedOn },
             })),
           };
         });

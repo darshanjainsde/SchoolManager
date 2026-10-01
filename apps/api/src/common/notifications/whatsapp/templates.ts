@@ -36,7 +36,9 @@ export const TEMPLATE_NAMES: Record<NotificationKind, string> = {
   TEST_REMINDER: `${TEMPLATE_PREFIX}test_reminder`,
   RESULTS_PUBLISHED: `${TEMPLATE_PREFIX}results_published`,
   ABSENCE_NOTICE: `${TEMPLATE_PREFIX}absence_notice`,
-  ANNOUNCEMENT: `${TEMPLATE_PREFIX}announcement`,
+  // NOT `announcement`: Meta moved that one to MARKETING on 2026-10-01 and a
+  // free-text catch-all can never come back (see the SUBMISSIONS note below).
+  ANNOUNCEMENT: `${TEMPLATE_PREFIX}notice_posted`,
   DIARY_REMARK: `${TEMPLATE_PREFIX}diary_remark`,
   LOW_ATTENDANCE: `${TEMPLATE_PREFIX}low_attendance`,
   LEAVE_APPLIED: `${TEMPLATE_PREFIX}leave_applied`,
@@ -141,7 +143,10 @@ export function templateFor(message: NotificationMessage, ctx: TemplateContext =
       // stays the same words for every child on the phone, so siblings on one
       // number get ONE copy (the channel drops identical text within a minute).
       const who = p.className ? childLabel(ctx, p.className) : 'the whole school';
-      return { name, language, params: [param(p.schoolName), who, param(p.title), param(p.body)] };
+      // THE BODY IS NOT SENT. It stays in the app, which is what makes this a
+      // UTILITY message instead of a MARKETING one, and keeps a school's words
+      // off a lock screen. Email still carries them in full.
+      return { name, language, params: [param(p.schoolName), param(p.title), param(p.postedOn), who] };
     }
     case 'DIARY_REMARK': {
       const p = message.payload;
@@ -220,7 +225,13 @@ export const SUBMISSIONS: Record<NotificationKind, { body: string; samples: stri
     samples: ['Raffles Public School', 'Ravi Sharma', 'Thu 18 Sep 2026'],
   },
   ANNOUNCEMENT: {
-    body: 'An announcement from {{1}}, for {{2}}. The subject is {{3}}. {{4}} You can read this again in the Sckools app.',
+    // Submitted 2026-10-01 and accepted as UTILITY, where the old wording had
+    // just been moved to MARKETING. The difference is not "free text" —
+    // `diary_remark` quotes a teacher's own words and is still UTILITY — it is
+    // that the FIXED words here name a concrete event (a notice, posted on a
+    // day, for a class) and an action, so Meta can tell what the message is.
+    // The old body described any message at all, and `{{4}}` was the message.
+    body: 'A school notice from {{1}}: "{{2}}", posted on {{3}} for {{4}}. Open the Sckools app to read it in full, with your child\'s other school updates.',
     samples: ['Raffles Public School', 'Ravi Sharma (5-B)', 'PTM on Saturday', 'Parent–teacher meeting this Saturday, 10 am to 1 pm, in the school hall.'],
   },
   DIARY_REMARK: {
