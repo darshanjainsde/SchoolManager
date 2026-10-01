@@ -94,6 +94,13 @@ const envSchema = z.object({
   // Unset → the gate endpoint answers 503 and only email login works.
   OWNER_GATE_PASSWORD: z.string().min(8).optional(),
 
+  // Locks every school backup (.sckools) this deployment writes, and opens
+  // every one it imports. Unset → backups and restores refuse with a message
+  // saying so; nothing falls back to a default. KEEP A COPY OUTSIDE THIS
+  // DEPLOYMENT: without it no backup it ever made can be opened — that is the
+  // point, and it is also the only way to lose them all.
+  SCHOOL_BACKUP_PASSWORD: z.string().min(12).optional(),
+
   JWT_SCHOOL_ACCESS_SECRET: z.string().min(16),
   JWT_SCHOOL_REFRESH_SECRET: z.string().min(16),
   JWT_PLATFORM_ACCESS_SECRET: z.string().min(16),

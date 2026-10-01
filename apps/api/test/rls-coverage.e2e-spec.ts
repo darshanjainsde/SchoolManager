@@ -153,7 +153,7 @@ describe('RLS coverage across every tenant table', () => {
    * every assertion in this file, and would ship with no policy at all while
    * this suite stayed green.
    *
-   * So the set of tables with no "schoolId" is pinned. Today it is six and
+   * So the set of tables with no "schoolId" is pinned. Today it is eight and
    * every one of them is deliberate: School matches on its own id, and the
    * rest are platform-only. Adding a seventh is a decision, and it should
    * cost a conversation rather than nothing.
@@ -179,6 +179,11 @@ describe('RLS coverage across every tenant table', () => {
       'MetricRollup',
       'PasswordResetToken',
       'School',
+      // Platform registers of school backups (20261001_000000). Deliberately
+      // NOT tenant tables: they must outlive the school they describe, and a
+      // "schoolId" column would make the backup engine back up backups.
+      'SchoolBackup',
+      'SchoolRestore',
     ]);
   });
 });

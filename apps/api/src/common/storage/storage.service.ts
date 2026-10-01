@@ -20,7 +20,7 @@ export interface UploadResult {
  * a key lives in on read — an object written before S3_PRIVATE_BUCKET was set
  * is still in the public one, and both must keep resolving.
  */
-export const PRIVATE_PREFIXES = ['print-orders/', 'fee-proofs/'] as const;
+export const PRIVATE_PREFIXES = ['print-orders/', 'fee-proofs/', 'backups/'] as const;
 
 export interface UploadOptions {
   /**

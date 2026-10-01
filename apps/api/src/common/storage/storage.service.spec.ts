@@ -37,3 +37,4 @@ describe('StorageService.upload — when the store is gone', () => {
     expect(out.url).toContain(out.key);
   });
 });
+

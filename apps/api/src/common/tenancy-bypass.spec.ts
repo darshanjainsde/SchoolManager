@@ -66,6 +66,8 @@ const ALLOWED: Record<string, string> = {
   'modules/owner/internal/owner-overview.service.ts': 'operator console',
   'modules/owner/internal/owner-domains.service.ts': 'operator console',
   'modules/owner/internal/owner-events.service.ts': 'operator console',
+  'modules/backups/backups.service.ts':
+    'backs up, restores and deletes ONE whole school for the owner console; every engine query names that school by schoolId (export/purge: WHERE "schoolId" = $1; import: rows carry the backup\'s own schoolId), and a school must be readable/writable across every table, which withTenant cannot do for a school being created or removed',
   'modules/owner/internal/impersonation.service.ts': 'operator console',
   'modules/press/operator-orders.service.ts':
     'the print-order desk at sckools.com/sv/orders — cross-tenant BY PURPOSE (every school\'s orders on one queue), behind OwnerHostGuard + platform JWT; writes touch one order by id and its events only',

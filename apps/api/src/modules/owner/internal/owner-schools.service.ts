@@ -5,7 +5,7 @@ import { buildSnapshot } from './school-snapshot';
 import { randomBytes } from 'node:crypto';
 import { PasswordService } from '../../auth';
 import { FeatureResolverService } from '../../features';
-import { StorageService } from '../../../common/storage/storage.service';
+import { BackupsService } from '../../backups';
 import { CreateSchoolDto } from './owner.dto';
 
 export interface StatsResponse {
@@ -34,33 +34,19 @@ export class OwnerSchoolsService {
   constructor(
     private readonly featureResolver: FeatureResolverService,
     private readonly passwords: PasswordService,
-    private readonly storage: StorageService,
+    private readonly backups: BackupsService,
   ) {}
 
   /**
-   * Permanently removes a school and everything under it. Guarded to
-   * SUSPENDED schools so deletion is always a deliberate two-step
-   * (suspend → delete). DB rows cascade from School; uploaded files are
-   * removed best-effort; the tenant-lookup cache expires on its own TTL.
+   * Permanently removes a school and everything under it — rows in every
+   * table, every stored file, the cached address. Refused unless the school is
+   * SUSPENDED and a READY backup was taken after it was suspended: no delete
+   * can lose data that is not in a backup. The console's "Delete school" uses
+   * POST /owner/schools/:id/delete, which takes that backup and deletes in one
+   * job; this route is for a backup already taken. See BackupsService.
    */
-  async deleteSchool(id: string): Promise<{ ok: true }> {
-    const db = getPlatformPrisma();
-    const school = await db.school.findUnique({
-      where: { id },
-      select: { id: true, slug: true, status: true, media: { select: { storageKey: true } } },
-    });
-    if (!school) throw new NotFoundException(`School ${id} not found`);
-    if (school.status !== 'SUSPENDED') {
-      throw new ConflictException('Suspend the school first — only suspended schools can be deleted.');
-    }
-
-    for (const m of school.media) {
-      await this.storage.delete(m.storageKey); // best-effort, never throws
-    }
-    await db.school.delete({ where: { id } });
-    await this.featureResolver.invalidate(id);
-    this.logger.warn(`School ${school.slug} (${id}) permanently deleted with ${school.media.length} stored files`);
-    return { ok: true };
+  async deleteSchool(id: string): Promise<{ ok: true; files: number; backupId: string }> {
+    return this.backups.deleteSchoolNow(id);
   }
 
   async stats(): Promise<StatsResponse> {
@@ -197,7 +183,11 @@ export class OwnerSchoolsService {
   async setStatus(id: string, status: 'SETUP' | 'LIVE' | 'SUSPENDED'): Promise<SchoolDetail> {
     const db = getPlatformPrisma();
     try {
-      await db.school.update({ where: { id }, data: { status } });
+      await db.school.update({ where: { id }, data: { status, statusChangedAt: new Date() } });
+      // Take effect NOW: the host lookup is cached for 60 s, and a school that
+      // still answers after "Suspend" is not frozen — a final backup taken in
+      // that minute could miss a write that its delete then removes.
+      await this.backups.forgetSchool(id);
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
         throw new NotFoundException(`School ${id} not found`);

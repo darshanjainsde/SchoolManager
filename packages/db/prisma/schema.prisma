@@ -307,6 +307,8 @@ model School {
   codePrefix          String?
   tier                Tier                @default(BASIC)
   status              SchoolStatus        @default(SETUP)
+  /// When `status` last changed — a delete needs a backup taken after suspension.
+  statusChangedAt     DateTime?
   timezone            String              @default("Asia/Kolkata")
   locale              String              @default("en-IN")
   /// ISO 3166-1 alpha-2. Decides which pay rule book applies (packages/types
@@ -5256,4 +5258,84 @@ model ConcernComment {
   @@index([schoolId, concernId, createdAt])
   @@index([concernId])
   @@index([authorId])
+}
+
+
+/// SCHOOL BACKUPS — platform data, never tenant data. No `schoolId` (so the
+/// engine that backs up every table carrying schoolId never backs up backups)
+/// and no relation to School (so a school's backups outlive the school).
+/// See migration 20261001_000000_school_backups.
+enum SchoolBackupStatus {
+  RUNNING
+  READY
+  FAILED
+  EXPIRED
+}
+
+enum SchoolBackupReason {
+  MANUAL
+  BEFORE_DELETE
+  BEFORE_REPLACE
+  WEEKLY
+  UPLOADED
+}
+
+enum SchoolRestoreStatus {
+  RUNNING
+  DONE
+  FAILED
+}
+
+model SchoolBackup {
+  id                String             @id @default(uuid()) @db.Uuid
+  sourceSchoolId    String             @db.Uuid
+  schoolSlug        String
+  schoolName        String
+  reason            SchoolBackupReason
+  status            SchoolBackupStatus @default(RUNNING)
+  /// The .sckools object in the private bucket (or the public one when none is configured).
+  storageKey        String             @unique
+  sizeBytes         BigInt?
+  rowCount          Int?
+  fileCount         Int?
+  /// The archive's manifest once READY: tables, counts, warnings, source machine.
+  manifest          Json?
+  /// Resumable job state while RUNNING (cursor, writer, sink).
+  state             Json?
+  error             String?
+  /// Set by "Delete school": the job deletes the school once this backup is verified.
+  deleteSchoolAfter Boolean            @default(false)
+  createdBy         String?
+  /// Lease: a step holds the job until this time, so two requests never write one archive.
+  lockedUntil       DateTime?
+  createdAt         DateTime           @default(now())
+  finishedAt        DateTime?
+  expiresAt         DateTime?
+  restores          SchoolRestore[]
+
+  @@index([sourceSchoolId, createdAt])
+  @@index([status])
+}
+
+model SchoolRestore {
+  id             String              @id @default(uuid()) @db.Uuid
+  backupId       String?             @db.Uuid
+  backup         SchoolBackup?       @relation(fields: [backupId], references: [id], onDelete: SetNull)
+  sourceSchoolId String              @db.Uuid
+  targetSlug     String
+  /// RESTORE (school absent here) or REPLACE (current copy backed up, then removed).
+  mode           String
+  finalStatus    String
+  status         SchoolRestoreStatus @default(RUNNING)
+  state          Json?
+  /// What happened: rows per table, files, warnings, anything dropped and why.
+  report         Json?
+  error          String?
+  createdBy      String?
+  lockedUntil    DateTime?
+  createdAt      DateTime            @default(now())
+  finishedAt     DateTime?
+
+  @@index([backupId])
+  @@index([sourceSchoolId])
 }

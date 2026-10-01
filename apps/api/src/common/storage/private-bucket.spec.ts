@@ -41,7 +41,15 @@ describe('private key prefixes', () => {
     expect(match('schools/s1/gifts/p1/abc.jpg')).toBe(false);
   });
 
-  it('names exactly the two categories that already presign on read', () => {
-    expect([...PRIVATE_PREFIXES].sort()).toEqual(['fee-proofs/', 'print-orders/']);
+  // A whole school — every student, mark and fee — locked with the backup
+  // password. Still never public: a leaked link should not even hand over the
+  // encrypted file.
+  it('covers school backups', () => {
+    expect(match('backups/schools/s1/snsps-2026-10-01-abcd1234.sckools')).toBe(true);
+    expect(match('backups/uploads/0b6c1f0e-1111-4c2a-9b2e-123456789abc.sckools')).toBe(true);
+  });
+
+  it('names exactly the categories that presign on read', () => {
+    expect([...PRIVATE_PREFIXES].sort()).toEqual(['backups/', 'fee-proofs/', 'print-orders/']);
   });
 });
