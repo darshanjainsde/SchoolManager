@@ -121,9 +121,11 @@ describe('switching a band off the homepage', () => {
   });
 
   it('keeps the band’s own page whole', () => {
-    // Hiding the homepage gallery band must not empty /gallery.
+    // Hiding the homepage gallery band must not empty /gallery. The photo is
+    // addressed through the optimiser now, so look for it encoded rather than
+    // raw (GallerySection.test.tsx owns that behaviour).
     const page = renderToStaticMarkup(<PublicSite data={siteData({ gallery: { hidden: true } })} view="gallery" />);
-    expect(page).toContain(`${M}/g1.jpg`);
+    expect(page).toContain(encodeURIComponent(`${M}/g1.jpg`));
   });
 
   it('leaves a layout choice on a hidden band alone, so switching back restores it', () => {

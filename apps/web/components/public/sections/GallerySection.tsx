@@ -1,19 +1,45 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { ArrowRight, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import type { PublicSiteData } from '@/lib/public-api';
+import { optimised } from '@/lib/img';
+
+/**
+ * A grid tile is painted at most ~264px wide (four columns inside a 1152px
+ * page) and ~170px on a phone; twice that is plenty on a dense screen. The
+ * lightbox fills up to 92vw, so it asks for a real width.
+ *
+ * This section was the ONLY one painting school photos that never went
+ * through the optimiser — Academics, Courses, Connect, Alumni, Birthdays and
+ * the footer all do. A school's 4MB phone photo was being sent whole into a
+ * thumbnail.
+ */
+const TILE_WIDTH = 640;
+const LIGHTBOX_WIDTH = 1920;
 
 export default function GallerySection({
   gallery,
   schoolName,
   onOwnPage,
+  limit,
 }: {
   gallery: PublicSiteData['gallery'];
   schoolName: string;
   /** True when this section IS /gallery: the masthead already introduced it. */
   onOwnPage?: boolean;
+  /**
+   * How many to show. Undefined on /gallery, where every photo belongs.
+   * On the homepage this is the whole point: see site-variants.ts.
+   */
+  limit?: number;
 }) {
+  // What this section actually paints — and what the lightbox steps through,
+  // so "3 / 8" on the homepage counts the eight a visitor can see rather than
+  // the three hundred they cannot.
+  const shown = useMemo(() => (limit === undefined ? gallery : gallery.slice(0, limit)), [gallery, limit]);
+  const hiddenCount = gallery.length - shown.length;
   // Lightbox: index of the open image, with a short closing phase so the
   // exit animation can play before unmount.
   const [lb, setLb] = useState<number | null>(null);
@@ -29,9 +55,9 @@ export default function GallerySection({
 
   const step = useCallback(
     (dir: -1 | 1) => {
-      setLb((cur) => (cur === null ? cur : (cur + dir + gallery.length) % gallery.length));
+      setLb((cur) => (cur === null ? cur : (cur + dir + shown.length) % shown.length));
     },
-    [gallery.length],
+    [shown.length],
   );
 
   // Keyboard: Esc closes, arrows navigate. Lock page scroll while open.
@@ -51,7 +77,7 @@ export default function GallerySection({
     };
   }, [lb, close, step]);
 
-  const open = lb === null ? null : gallery[lb];
+  const open = lb === null ? null : shown[lb];
 
   return (
     <section id="gallery" className="max-w-6xl mx-auto px-6 py-20">
@@ -82,7 +108,7 @@ export default function GallerySection({
         </div>
       ) : (
         <div className="ps-gallery-grid mt-10 grid grid-cols-2 md:grid-cols-4 gap-4">
-          {gallery.map((img, i) => (
+          {shown.map((img, i) => (
             <button
               key={i}
               type="button"
@@ -93,7 +119,7 @@ export default function GallerySection({
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={img.url}
+                src={optimised(img.url, TILE_WIDTH)}
                 alt={img.caption ?? `${schoolName} gallery ${i + 1}`}
                 className="h-48 w-full object-cover transition duration-500 group-hover:scale-105"
               loading="lazy" decoding="async" />
@@ -107,6 +133,17 @@ export default function GallerySection({
               )}
             </button>
           ))}
+        </div>
+      )}
+
+      {/* The way to the rest. Only when there IS a rest — a school with six
+          photos is not sent to a page that shows the same six. */}
+      {hiddenCount > 0 && (
+        <div className="reveal mt-7 flex justify-center">
+          <Link href="/gallery" className="ps-gal-more">
+            See all {gallery.length} photos
+            <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          </Link>
         </div>
       )}
 
@@ -131,7 +168,7 @@ export default function GallerySection({
             <X className="h-5 w-5" />
           </button>
 
-          {gallery.length > 1 && (
+          {shown.length > 1 && (
             <>
               <button
                 type="button"
@@ -156,16 +193,16 @@ export default function GallerySection({
           <figure key={lb} className="ps-lb-img max-w-[92vw]">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={open.url}
+              src={optimised(open.url, LIGHTBOX_WIDTH)}
               alt={open.caption ?? `${schoolName} gallery photo`}
               className="max-h-[82vh] max-w-full ps-panel-sm object-contain"
             />
-            {(open.caption || gallery.length > 1) && (
+            {(open.caption || shown.length > 1) && (
               <figcaption className="mt-3 flex items-baseline justify-between gap-4 text-sm text-white/85">
                 <span>{open.caption}</span>
-                {gallery.length > 1 && (
+                {shown.length > 1 && (
                   <span className="tabular-nums text-white/55">
-                    {(lb ?? 0) + 1} / {gallery.length}
+                    {(lb ?? 0) + 1} / {shown.length}
                   </span>
                 )}
               </figcaption>

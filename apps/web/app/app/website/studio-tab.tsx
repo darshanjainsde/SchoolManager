@@ -17,32 +17,34 @@ import { START_THEMES, themeInUse, type StartTheme } from '@/lib/start-themes';
 import { STYLE_PRESETS, MOTION_GESTURES, BACKGROUND_TEXTURES } from '@/components/public/site-style';
 import { SECTION_SHAPES } from '@/components/public/section-shape';
 import {
-  SCROLL_FEELS,
-  NAV_DROPDOWN_ANIMS,
-  HERO_MEDIA_OPTIONS,
-  SECTION_KEYS,
-  SECTION_VARIANT_DEFS,
   FESTIVALS,
-  FOOTER_LAYOUTS,
   FOOTER_COLORS,
-  normalizeFooterConfig,
-  normalizeFestiveTheme,
-  normalizeSectionVariants,
-  type SectionKey,
-  ORDERABLE_HOME_SECTIONS,
+  FOOTER_LAYOUTS,
+  GALLERY_HOME_DEFAULT,
+  HERO_MEDIA_OPTIONS,
+  HOME_COUNTS,
   HOME_SECTIONS_KEY,
-  SECTION_ORDER_KEY,
   HOME_SECTION_MAX,
-  homeSectionsOf,
-  sectionOrderOf,
-  normalizeSectionOrder,
-  normalizeHomeSections,
-  isSafeBlockUrl,
-  type HomeSection,
-  type SectionVariants,
+  NAV_DROPDOWN_ANIMS,
+  ORDERABLE_HOME_SECTIONS,
+  SCROLL_FEELS,
+  SECTION_KEYS,
+  SECTION_ORDER_KEY,
+  SECTION_VARIANT_DEFS,
   TREATMENTS,
   festivalsFor,
+  homeSectionsOf,
+  isSafeBlockUrl,
+  normalizeFestiveTheme,
+  normalizeFooterConfig,
+  normalizeHomeSections,
+  normalizeSectionOrder,
+  normalizeSectionVariants,
+  sectionOrderOf,
   treatmentsFor,
+  type HomeSection,
+  type SectionKey,
+  type SectionVariants,
 } from '@/components/public/site-variants';
 import { defaultNavConfig, validateNavConfig, type NavConfig, type NavConfigItem } from '@/components/public/sections/nav-config';
 import {
@@ -487,13 +489,16 @@ export default function StudioTab() {
     if (o.join('|') !== normalizeSectionOrder(undefined, ids).join('|')) blob[SECTION_ORDER_KEY] = o;
     setLook({ sectionVariants: blob });
   };
-  const setVariant = (key: SectionKey, patch: { layout?: string; gesture?: string; hidden?: boolean }) => {
+  const setVariant = (key: SectionKey, patch: { layout?: string; gesture?: string; hidden?: boolean; homeCount?: number }) => {
     // The preview follows the band being edited, not the group's first band.
     setFocus(key);
     const next = { ...(variants[key] ?? {}), ...patch };
     // Shown is the absence of the flag, not `hidden: false` — one way to say
     // it, and a school that never touches the switch keeps an empty entry.
     if (next.hidden !== true) delete next.hidden;
+    // "Layout default" is the ABSENCE of a count, so a school that never
+    // touches it keeps following the layout when the layout changes.
+    if (next.homeCount === undefined) delete next.homeCount;
     writeSectionConfig({ v: { ...variants, [key]: next } });
   };
   const moveBand = (i: number, by: number) => {
@@ -773,6 +778,20 @@ export default function StudioTab() {
               ) : null}
               <div className={`mt-1.5${off ? ' pointer-events-none opacity-40' : ''}`}><Chips options={def.layouts} value={variants[key]?.layout ?? def.layouts[0].value} onPick={(v) => setVariant(key, { layout: v })} /></div>
               <div className={`mt-1.5${off ? ' pointer-events-none opacity-40' : ''}`}><Chips options={[{ value: 'DEFAULT', label: 'Page default' }, { value: 'RISE', label: 'Rise' }, { value: 'SLIDE', label: 'Slide' }, { value: 'ZOOM', label: 'Zoom' }, { value: 'DRAW', label: 'Wipe' }, { value: 'CURTAIN', label: 'Curtain' }, { value: 'FLIP', label: 'Flip' }, { value: 'FADE', label: 'Fade' }]} value={variants[key]?.gesture ?? 'DEFAULT'} onPick={(v) => setVariant(key, { gesture: v })} /></div>
+              {key === 'gallery' && !off && (
+                <>
+                  <div className="mt-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">Photos on the homepage</div>
+                  <div className="mt-1"><Chips
+                    options={[
+                      { value: 'DEFAULT', label: `Layout default (${GALLERY_HOME_DEFAULT[variants.gallery?.layout ?? 'GRID'] ?? 8})` },
+                      ...HOME_COUNTS.map((n) => ({ value: String(n), label: String(n) })),
+                    ]}
+                    value={variants.gallery?.homeCount ? String(variants.gallery.homeCount) : 'DEFAULT'}
+                    onPick={(v) => setVariant('gallery', { homeCount: v === 'DEFAULT' ? undefined : Number(v) })}
+                  /></div>
+                  <p className="mt-1 text-[11px] text-slate-400">The homepage is a taste; the full album stays at <span className="font-mono">/gallery</span>, with a link under the band.</p>
+                </>
+              )}
             </div>
           );
         })}

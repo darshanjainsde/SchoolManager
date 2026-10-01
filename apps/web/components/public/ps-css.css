@@ -1220,6 +1220,21 @@
     font-weight: 700; transition: opacity .2s; }
   .ps-foot-social a:hover { opacity: 1; }
 
+  /* ── The homepage gallery's way to the rest ──────────────────────────────
+     The band shows a taste; /gallery holds the album. The link has to look
+     like a destination rather than a caption, and clear 44px for a thumb. */
+  .ps-gal-more { display: inline-flex; align-items: center; gap: .45rem;
+    min-height: 2.75rem; padding: 0 1.15rem; border-radius: 999px;
+    font-size: .88rem; font-weight: 700; color: var(--ps1);
+    border: 1.5px solid color-mix(in srgb, var(--ps1) 35%, transparent);
+    background: color-mix(in srgb, var(--ps1) 6%, transparent);
+    transition: background .2s, border-color .2s, transform .2s; }
+  .ps-gal-more:hover { background: color-mix(in srgb, var(--ps1) 12%, transparent);
+    border-color: color-mix(in srgb, var(--ps1) 55%, transparent);
+    transform: translateY(calc(-1px * var(--motion))); }
+  .ps-gal-more svg { transition: transform .2s; }
+  .ps-gal-more:hover svg { transform: translateX(calc(2px * var(--motion))); }
+
   /* ── Footer, shared by every layout ─────────────────────────────────────
      A contact line is an icon and a tappable value, not an emoji and a string
      of text nobody can press (the 2026-09-27 report). The icon is flex:none so
