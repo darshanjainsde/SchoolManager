@@ -97,7 +97,7 @@ export default function HomepageTab({ form, onGoToDesign, onGoToCelebrations }: 
                   checked={data?.homepage[s.key] ?? true}
                   disabled={sectionToggleMutation.isPending}
                   onChange={(e) => sectionToggleMutation.mutate({ [s.key]: e.target.checked })}
-                  className="mt-0.5 h-4 w-4 accent-emerald-700"
+                  className="sk-check mt-0.5 accent-emerald-700"
                 />
                 <span>
                   <span className="block text-sm text-slate-800">{s.label}</span>
