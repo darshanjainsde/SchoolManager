@@ -1,6 +1,6 @@
 'use client';
 import { useParams, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,6 +11,8 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useApi } from '@/lib/use-api';
 import { DomainsCard } from './domains-card';
+import { BackupsCard } from './backups-card';
+import { BackupRow, useJob } from '../../_lib/backups';
 import { OWNER_HOST } from '@/lib/hosts';
 import { useAuthStore } from '@/lib/auth-store';
 import { AdminAccessCard } from '@/components/admin-access-card';
@@ -322,46 +324,65 @@ export default function SchoolDetailPage() {
       {/* Domains — add, verify against real DNS, promote ────────────────── */}
       <DomainsCard schoolId={school.id} />
 
+      <BackupsCard school={school} />
+
       {/* Danger zone ─────────────────────────────────────────────────────── */}
       <DangerZoneCard school={school} />
     </div>
   );
 }
 
-// ── Danger zone: permanent deletion (suspend-first + typed-slug confirm) ────
+// ── Danger zone: final backup, then deletion — one job ──────────────────────
+//
+// The delete is never a bare row delete. The server takes a final backup of
+// the suspended school, reads it back, and only then removes the school — so
+// the school can always be brought back from Deleted schools.
 
 function DangerZoneCard({ school }: { school: SchoolDetail }) {
   const api = useApi({ audience: 'platform', hostHeader: OWNER_HOST });
   const qc = useQueryClient();
   const router = useRouter();
   const [confirmSlug, setConfirmSlug] = useState('');
+  const [backupId, setBackupId] = useState<string | null>(null);
+  const job = useJob<BackupRow>(api, 'backups', backupId);
   const suspended = school.status === 'SUSPENDED';
-  const armed = suspended && confirmSlug.trim() === school.slug;
+  const armed = suspended && confirmSlug.trim() === school.slug && !backupId;
 
-  const deleteMutation = useMutation({
-    mutationFn: () => api.request(`/owner/schools/${school.id}`, { method: 'DELETE' }),
-    onSuccess: () => {
-      toast.success(`${school.name} permanently deleted`);
-      qc.invalidateQueries({ queryKey: ['owner-schools'] });
-      router.replace('/platform/schools');
-    },
+  const start = useMutation({
+    mutationFn: () => api.post<BackupRow>(`/owner/schools/${school.id}/delete`),
+    onSuccess: (b) => setBackupId(b.id),
     onError: (e: Error) => toast.error(e.message),
   });
+
+  const status = job.data?.status;
+  useEffect(() => {
+    if (status === 'READY') {
+      toast.success(`${school.name} deleted — its final backup is under Deleted schools`);
+      void qc.invalidateQueries({ queryKey: ['owner-schools'] });
+      router.replace('/platform/backups');
+    }
+    if (status === 'FAILED') toast.error(`Nothing was deleted: ${job.data?.error ?? 'the final backup failed'}`);
+  }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Card className="border-rose-200">
       <CardHeader>
         <CardTitle className="text-rose-700">Danger zone</CardTitle>
         <CardDescription>
-          Permanently delete this school: its admins, website content, courses, enquiries, students,
-          domains and uploaded images. This cannot be undone.
+          Delete this school and everything in it — students, staff, marks, fees, website and every file.
+          A final backup is taken first and kept for a year, so it can be brought back from Deleted schools.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {!suspended && (
           <p className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">
-            Suspend the school first (Status above) — only suspended schools can be deleted.
+            Suspend the school first (Status above). Nothing can change while it is suspended, so the final backup is complete.
           </p>
+        )}
+        {backupId && status !== 'FAILED' && (
+          <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900" role="status">
+            Taking the final backup — {Math.round((job.data?.progress ?? 0) * 100)}%. The school is deleted only after it is safely stored.
+          </div>
         )}
         <div className="flex flex-wrap items-end gap-3">
           <div className="min-w-56">
@@ -373,16 +394,16 @@ function DangerZoneCard({ school }: { school: SchoolDetail }) {
               value={confirmSlug}
               onChange={(e) => setConfirmSlug(e.target.value)}
               placeholder={school.slug}
-              disabled={!suspended || deleteMutation.isPending}
+              disabled={!suspended || start.isPending || !!backupId}
             />
           </div>
           <Button
             variant="outline"
             className="border-rose-300 text-rose-700 hover:bg-rose-50 disabled:opacity-50"
-            disabled={!armed || deleteMutation.isPending}
-            onClick={() => deleteMutation.mutate()}
+            disabled={!armed || start.isPending}
+            onClick={() => start.mutate()}
           >
-            {deleteMutation.isPending ? 'Deleting…' : 'Delete school permanently'}
+            {start.isPending || backupId ? 'Backing up, then deleting…' : 'Back up and delete school'}
           </Button>
         </div>
       </CardContent>
