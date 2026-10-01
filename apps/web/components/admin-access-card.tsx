@@ -64,13 +64,16 @@ export function handoverMessage(school: AdminAccessSchool, email: string, passwo
  */
 export function AdminAccessCard({ school }: { school: AdminAccessSchool }) {
   const api = useApi({ audience: 'platform', hostHeader: OWNER_HOST });
-  const refreshToken = useAuthStore((s) => s.refreshToken);
+  // `status`, not `refreshToken`: the refresh token lives in an HttpOnly
+  // cookie now, so the store's copy stays empty after a page load. Gating on
+  // it left this card blank forever — no list, no reset (lib/auth-store.ts).
+  const signedIn = useAuthStore((s) => s.status) === 'authed';
   const [target, setTarget] = useState<AdminRow | null>(null);
 
   const { data: admins, isLoading, error } = useQuery({
     queryKey: ['owner-school-admins', school.id],
     queryFn: () => api.get<AdminRow[]>(`/owner/schools/${school.id}/admins`),
-    enabled: !!refreshToken,
+    enabled: signedIn,
   });
 
   return (
@@ -83,7 +86,9 @@ export function AdminAccessCard({ school }: { school: AdminAccessSchool }) {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {isLoading && <p className="sk-muted">Loading admins…</p>}
+        {/* Until the list is in, say so — a card with nothing under its
+            description reads as a feature that does not exist. */}
+        {(isLoading || (!admins && !error)) && <p className="sk-muted">Loading admins…</p>}
         {error && (
           <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-800" role="alert">
             {(error as Error).message}

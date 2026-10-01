@@ -9,8 +9,12 @@ const post = vi.fn();
 vi.mock('@/lib/use-api', () => ({
   useApi: () => ({ get: (...a: unknown[]) => get(...a), post: (...a: unknown[]) => post(...a) }),
 }));
+// The real signed-in shape after a page load: the refresh token is in an
+// HttpOnly cookie, so the store's copy is EMPTY and only `status` says
+// signed in. Mocking `refreshToken: 'rt'` here is what hid the blank card.
+const authState: { status: string; refreshToken?: string } = { status: 'authed', refreshToken: undefined };
 vi.mock('@/lib/auth-store', () => ({
-  useAuthStore: (pick: (s: { refreshToken: string }) => unknown) => pick({ refreshToken: 'rt' }),
+  useAuthStore: (pick: (s: typeof authState) => unknown) => pick(authState),
 }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
@@ -29,6 +33,7 @@ function renderCard() {
 beforeEach(() => {
   get.mockReset().mockResolvedValue([ADMIN]);
   post.mockReset();
+  authState.status = 'authed';
 });
 
 describe('Admin access — resetting a school admin from the owner console', () => {
@@ -80,6 +85,19 @@ describe('Admin access — resetting a school admin from the owner console', () 
 
     expect(post).toHaveBeenCalledWith('/owner/schools/school-1/admins/u-1/reset-password', { password: 'Chosen-2026' });
     expect(await screen.findByTestId('new-password')).toHaveTextContent('Chosen-2026');
+  });
+
+  it('loads for a signed-in owner whose refresh token is cookie-only', async () => {
+    // The staging defect: the card rendered its title and nothing else.
+    renderCard();
+    expect(await screen.findByRole('button', { name: 'Reset password' })).toBeInTheDocument();
+  });
+
+  it('says it is loading while the session is still being checked', () => {
+    authState.status = 'unknown';
+    renderCard();
+    expect(screen.getByText('Loading admins…')).toBeInTheDocument();
+    expect(get).not.toHaveBeenCalled();
   });
 
   it('cancel resets nothing', async () => {
