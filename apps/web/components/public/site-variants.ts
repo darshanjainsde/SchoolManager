@@ -1047,15 +1047,48 @@ export function buildCustomCss(map: unknown): string {
   return out;
 }
 
-/* ── Custom pages: typed blocks, never raw HTML ─────────────────────────── */
+/* ── Custom pages: typed blocks, never raw HTML ───────────────────────────
+   The set stays CLOSED. What each block gained in 2026-10 is OPTIONS — a
+   handful of named values the school's own theme defines — because the
+   complaint was never "I want a blank canvas", it was "I cannot centre a
+   heading, make a list, or show a poster without it being cropped".
+
+   Every option is OPTIONAL and every default is what the block did before,
+   so a page written last year renders identically. */
+
+/** Where a block sits. Absent = left, which is what every block did before. */
+export type BlockAlign = 'LEFT' | 'CENTER' | 'RIGHT';
+export const BLOCK_ALIGNS: BlockAlign[] = ['LEFT', 'CENTER', 'RIGHT'];
+
+/** How wide a picture runs. Absent = WIDE, the column it always filled. */
+export type ImageWidth = 'COLUMN' | 'WIDE' | 'FULL';
+export const IMAGE_WIDTHS: ImageWidth[] = ['COLUMN', 'WIDE', 'FULL'];
+
+/** CONTAIN shows the whole picture; COVER is the cropped band it always was. */
+export type ImageFit = 'COVER' | 'CONTAIN';
+
+export type CalloutTone = 'NOTE' | 'WARN' | 'GOOD';
+export const CALLOUT_TONES: CalloutTone[] = ['NOTE', 'WARN', 'GOOD'];
+
+export type DividerStyle = 'RULE' | 'SPACE' | 'DOTS';
+export const DIVIDER_STYLES: DividerStyle[] = ['RULE', 'SPACE', 'DOTS'];
+
 export type PageBlock =
-  | { t: 'h'; text: string }
-  | { t: 'p'; text: string }
-  | { t: 'img'; url: string; caption: string | null }
-  | { t: 'imgtext'; url: string | null; text: string }
-  | { t: 'cta'; label: string; href: string | null };
+  | { t: 'h'; text: string; level?: 3; align?: BlockAlign }
+  | { t: 'p'; text: string; align?: BlockAlign }
+  | { t: 'img'; url: string; caption: string | null; fit?: ImageFit; width?: ImageWidth; align?: BlockAlign }
+  | { t: 'imgtext'; url: string | null; text: string; flip?: true }
+  | { t: 'cta'; label: string; href: string | null; style?: 'GHOST'; align?: BlockAlign }
+  | { t: 'divider'; style?: DividerStyle }
+  | { t: 'quote'; text: string; by: string | null }
+  | { t: 'callout'; text: string; tone?: CalloutTone }
+  | { t: 'file'; url: string; label: string; note: string | null }
+  | { t: 'table'; rows: string[][]; header?: true };
 
 export const PAGE_BLOCK_MAX = 40;
+/** A table a phone can still scroll. Beyond this it is a spreadsheet, not a page. */
+export const TABLE_MAX_ROWS = 30;
+export const TABLE_MAX_COLS = 6;
 
 export function normalizePageBlocks(raw: unknown): PageBlock[] {
   if (!Array.isArray(raw)) return [];
@@ -1064,16 +1097,32 @@ export function normalizePageBlocks(raw: unknown): PageBlock[] {
     if (!b || typeof b !== 'object') continue;
     const r = b as Record<string, unknown>;
     const text = typeof r.text === 'string' ? r.text.slice(0, 4000) : '';
+    // Every option is read the same way: a known value, or absent. An unknown
+    // one is dropped rather than carried, so a page can never store a value
+    // the renderer has no branch for.
+    const pick = <T extends string>(v: unknown, allowed: readonly T[]): T | undefined =>
+      typeof v === 'string' && (allowed as readonly string[]).includes(v) ? (v as T) : undefined;
+    const align = pick(r.align, BLOCK_ALIGNS);
+    // LEFT is the absence of a choice, so the common page stores nothing.
+    const alignPart = align && align !== 'LEFT' ? { align } : {};
     switch (r.t) {
       case 'h':
-        if (text.trim()) out.push({ t: 'h', text: text.slice(0, 200) });
+        if (text.trim())
+          out.push({ t: 'h', text: text.slice(0, 200), ...(r.level === 3 ? { level: 3 as const } : {}), ...alignPart });
         break;
       case 'p':
-        if (text.trim()) out.push({ t: 'p', text });
+        if (text.trim()) out.push({ t: 'p', text, ...alignPart });
         break;
       case 'img':
         if (typeof r.url === 'string' && safeUrl(r.url))
-          out.push({ t: 'img', url: r.url, caption: typeof r.caption === 'string' ? r.caption.slice(0, 200) : null });
+          out.push({
+            t: 'img',
+            url: r.url,
+            caption: typeof r.caption === 'string' ? r.caption.slice(0, 200) : null,
+            ...(r.fit === 'CONTAIN' ? { fit: 'CONTAIN' as const } : {}),
+            ...(pick(r.width, IMAGE_WIDTHS) && r.width !== 'WIDE' ? { width: r.width as ImageWidth } : {}),
+            ...alignPart,
+          });
         break;
       case 'imgtext':
         if (text.trim())
@@ -1081,6 +1130,7 @@ export function normalizePageBlocks(raw: unknown): PageBlock[] {
             t: 'imgtext',
             url: typeof r.url === 'string' && safeUrl(r.url) ? r.url : null,
             text,
+            ...(r.flip === true ? { flip: true as const } : {}),
           });
         break;
       case 'cta':
@@ -1089,8 +1139,47 @@ export function normalizePageBlocks(raw: unknown): PageBlock[] {
             t: 'cta',
             label: r.label.slice(0, 80),
             href: typeof r.href === 'string' && safeHref(r.href) ? r.href : null,
+            ...(r.style === 'GHOST' ? { style: 'GHOST' as const } : {}),
+            ...alignPart,
           });
         break;
+      case 'divider': {
+        const style = pick(r.style, DIVIDER_STYLES);
+        out.push({ t: 'divider', ...(style && style !== 'RULE' ? { style } : {}) });
+        break;
+      }
+      case 'quote':
+        if (text.trim())
+          out.push({ t: 'quote', text: text.slice(0, 600), by: typeof r.by === 'string' && r.by.trim() ? r.by.slice(0, 120) : null });
+        break;
+      case 'callout': {
+        if (!text.trim()) break;
+        const tone = pick(r.tone, CALLOUT_TONES);
+        out.push({ t: 'callout', text: text.slice(0, 1000), ...(tone && tone !== 'NOTE' ? { tone } : {}) });
+        break;
+      }
+      case 'file':
+        // A file with no address is not a file; a label is what a reader taps.
+        if (typeof r.url === 'string' && safeUrl(r.url) && typeof r.label === 'string' && r.label.trim())
+          out.push({
+            t: 'file',
+            url: r.url,
+            label: r.label.slice(0, 120),
+            note: typeof r.note === 'string' && r.note.trim() ? r.note.slice(0, 60) : null,
+          });
+        break;
+      case 'table': {
+        if (!Array.isArray(r.rows)) break;
+        const rows = r.rows
+          .slice(0, TABLE_MAX_ROWS)
+          .filter((row): row is unknown[] => Array.isArray(row))
+          .map((row) => row.slice(0, TABLE_MAX_COLS).map((c) => (typeof c === 'string' ? c.slice(0, 200) : '')));
+        // A table of empty strings is a table of nothing.
+        if (rows.length && rows.some((row) => row.some((c) => c.trim()))) {
+          out.push({ t: 'table', rows, ...(r.header === true ? { header: true as const } : {}) });
+        }
+        break;
+      }
     }
   }
   return out;
