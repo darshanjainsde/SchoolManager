@@ -116,6 +116,12 @@ export interface SectionVariantChoice {
    * and the JSON stays small.
    */
   hidden?: boolean;
+  /**
+   * How many items the HOMEPAGE band shows. Only the gallery reads it today.
+   * Absent = the layout's own default, which is the right number for that
+   * arrangement rather than one number for all five.
+   */
+  homeCount?: number;
 }
 export type SectionVariants = Partial<Record<SectionKey, SectionVariantChoice>>;
 
@@ -243,6 +249,35 @@ const SECTION_DEFAULT_LAYOUT: Record<SectionKey, string> = {
  * (`x:<id>`) and `events` as well, and only the nine real section keys can be
  * hidden this way — anything else is never hidden by this switch.
  */
+/* ── How many a homepage band shows ──────────────────────────────────────
+   A gallery is the one band whose content a school keeps adding to. Left
+   uncapped the homepage rendered EVERY photo — 300 of them for a school that
+   has been uploading for a year — which buries every band below it, downloads
+   the lot as you scroll past, and (because each tile's reveal is delayed by
+   0.05s) takes fifteen seconds to finish animating. The page for all of them
+   already exists at /gallery; the homepage is a taste. */
+
+/** The counts a school may choose. No "all": that is what /gallery is for. */
+export const HOME_COUNTS = [4, 6, 8, 12] as const;
+
+/**
+ * The right number for each arrangement, not one number for all five: a film
+ * strip is a swipeable row and can hold more, a mosaic is one lead photo and
+ * four around it, polaroids need room to tilt.
+ */
+export const GALLERY_HOME_DEFAULT: Record<string, number> = {
+  GRID: 8,
+  MASONRY: 9,
+  FILMSTRIP: 12,
+  MOSAIC: 5,
+  POLAROID: 6,
+};
+
+/** How many photos the homepage gallery shows, for a layout and a school's choice. */
+export function galleryHomeCount(variants: SectionVariants | null | undefined, layout: string): number {
+  return variants?.gallery?.homeCount ?? GALLERY_HOME_DEFAULT[layout] ?? 8;
+}
+
 export function sectionHidden(variants: SectionVariants | null | undefined, key: string): boolean {
   return (SECTION_KEYS as string[]).includes(key) && variants?.[key as SectionKey]?.hidden === true;
 }
@@ -303,6 +338,8 @@ export function normalizeSectionVariants(raw: unknown): SectionVariants {
     // Only `true` is stored: `hidden: false` and shown are the same state, and
     // one way to say a thing is what keeps the default page byte-identical.
     if ((v as Record<string, unknown>).hidden === true) entry.hidden = true;
+    const count = (v as Record<string, unknown>).homeCount;
+    if (typeof count === 'number' && (HOME_COUNTS as readonly number[]).includes(count)) entry.homeCount = count;
     if (Object.keys(entry).length) out[key] = entry;
   }
   return out;
