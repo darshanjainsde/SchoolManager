@@ -319,7 +319,7 @@ export default function SchoolDetailPage() {
       </Card>
 
       {/* Admin access ────────────────────────────────────────────────────── */}
-      <AdminAccessCard schoolId={school.id} />
+      <AdminAccessCard school={school} />
 
       {/* Domains — add, verify against real DNS, promote ────────────────── */}
       <DomainsCard schoolId={school.id} />
