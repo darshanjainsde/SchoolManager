@@ -479,6 +479,30 @@ export const AUTHZ_REVIEWED: string[] = [
   "GET /internal/cron/school-backups",
   "POST /internal/cron/school-backups",
   "GET /internal/cron/school-backups/weekly",
+  // Backup buckets and the sample-pack library — same suite, same four ways.
+  // Each of these can empty or replace a school's management data, or hand out
+  // a copy of it, so none is a read-only convenience.
+  "GET /owner/schools/:id/buckets",
+  "POST /owner/schools/:id/buckets/save",
+  "GET /owner/schools/:id/buckets/:bucket/versions",
+  "POST /owner/schools/:id/buckets/preflight",
+  "POST /owner/schools/:id/buckets/restore",
+  "POST /owner/schools/:id/buckets/reset",
+  "GET /owner/schools/:id/bucket-restores",
+  "GET /owner/bucket-restores/:id",
+  "POST /owner/bucket-restores/:id/step",
+  "GET /owner/sample-packs",
+  "GET /owner/sample-packs/excluded",
+  "POST /owner/sample-packs",
+  "POST /owner/sample-packs/upload-url",
+  "POST /owner/sample-packs/uploaded",
+  "GET /owner/sample-packs/:id",
+  "POST /owner/sample-packs/:id/step",
+  "PATCH /owner/sample-packs/:id",
+  "GET /owner/sample-packs/:id/download",
+  "DELETE /owner/sample-packs/:id",
+  "GET /internal/cron/school-backups/snapshots",
+  "POST /internal/cron/school-backups/snapshots",
 ];
 
 /**

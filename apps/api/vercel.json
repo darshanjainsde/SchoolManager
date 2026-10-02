@@ -45,6 +45,10 @@
     {
       "path": "/internal/cron/school-backups/weekly",
       "schedule": "30 21 * * 6"
+    },
+    {
+      "path": "/internal/cron/school-backups/snapshots",
+      "schedule": "45 21 * * *"
     }
   ]
 }

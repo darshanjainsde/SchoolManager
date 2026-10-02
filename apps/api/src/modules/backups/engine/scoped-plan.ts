@@ -108,9 +108,22 @@ export function keptPointers(plan: SchemaPlan, buckets: readonly Bucket[]): Kept
  * Narrows a plan to a scope, expanding the scope first. Order is preserved, so
  * inserts still run parents-first and deletes children-first within the scope.
  */
-export function scopePlan(plan: SchemaPlan, requested: readonly Bucket[]): ScopedPlan {
+export function scopePlan(
+  plan: SchemaPlan,
+  requested: readonly Bucket[],
+  opts: {
+    /**
+     * Models to leave out even though their bucket is in scope. Used by sample
+     * packs, where a few tables would reach outside the demo (a push token
+     * would ring a real phone). Left out of the export AND of the load, so an
+     * uploaded pack made elsewhere cannot smuggle one in.
+     */
+    exclude?: readonly string[];
+  } = {},
+): ScopedPlan {
   const buckets = expandScope(plan, requested);
-  const keep = (t: TablePlan) => inScope(t.model, buckets);
+  const excluded = new Set(opts.exclude ?? []);
+  const keep = (t: TablePlan) => inScope(t.model, buckets) && !excluded.has(t.model);
   const insertOrder = plan.insertOrder.filter(keep);
   const tables = new Set(insertOrder.map((t) => t.table));
   const byModel = new Map([...plan.byModel].filter(([, t]) => keep(t)));

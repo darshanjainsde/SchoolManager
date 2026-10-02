@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import { PlatformJwtGuard } from '../../common/auth/platform-jwt.guard';
@@ -7,7 +7,12 @@ import { CronSecretGuard } from '../../common/auth/cron-secret.guard';
 import { Public } from '../../common/auth/public.decorator';
 import type { PlatformJwtPayload } from '../../common/auth/jwt-payload';
 import { BackupsService } from './backups.service';
-import { RegisterUploadDto, StartRestoreDto } from './backups.dto';
+import { BucketRestoresService } from './bucket-restores.service';
+import { SamplePacksService } from './sample-packs.service';
+import {
+  BucketRestoreDto, CreatePackDto, RegisterPackUploadDto, RegisterUploadDto, RenamePackDto, SnapshotDto, StartRestoreDto,
+} from './backups.dto';
+import { BUCKETS, Bucket } from './engine/buckets';
 import { continueInBackground } from './continue';
 
 /**
@@ -17,7 +22,11 @@ import { continueInBackground } from './continue';
 @Controller('owner')
 @UseGuards(OwnerHostGuard, PlatformJwtGuard)
 export class BackupsController {
-  constructor(private readonly backups: BackupsService) {}
+  constructor(
+    private readonly backups: BackupsService,
+    private readonly bucketRestores: BucketRestoresService,
+    private readonly packs: SamplePacksService,
+  ) {}
 
   @Get('schools/:id/backups')
   list(@Param('id', ParseUUIDPipe) id: string) {
@@ -70,6 +79,135 @@ export class BackupsController {
     return this.backups.deletedSchools();
   }
 
+  /* ── buckets ──────────────────────────────────────────────────────────── */
+
+  /** One row per bucket: what it holds, when it was last saved, how far back it goes. */
+  @Get('schools/:id/buckets')
+  buckets(@Param('id', ParseUUIDPipe) id: string) {
+    return this.backups.buckets(id);
+  }
+
+  /** Save some buckets now. An unchanged bucket is recognised and not kept twice. */
+  @Post('schools/:id/buckets/save')
+  async saveBuckets(
+    @Param('id', ParseUUIDPipe) id: string, @Body() dto: SnapshotDto,
+    @CurrentUser() op: PlatformJwtPayload, @Req() req: Request,
+  ) {
+    const wanted: Bucket[] = dto.buckets?.length ? dto.buckets : [...BUCKETS];
+    const started = [];
+    const skipped: { bucket: Bucket; why: string }[] = [];
+    for (const bucket of wanted) {
+      try {
+        started.push(await this.backups.start(id, 'SNAPSHOT', op?.sub ?? null, { scope: [bucket] }));
+      } catch (e) {
+        skipped.push({ bucket, why: (e as Error).message });
+      }
+    }
+    continueInBackground(req);
+    return { started, skipped };
+  }
+
+  /** The versions of one bucket, newest first. */
+  @Get('schools/:id/buckets/:bucket/versions')
+  versions(@Param('id', ParseUUIDPipe) id: string, @Param('bucket') bucket: string) {
+    return this.backups.bucketVersions(id, bucket);
+  }
+
+  /** What putting a snapshot, a pack, or a reset through would change. Read-only. */
+  @Post('schools/:id/buckets/preflight')
+  preflight(@Param('id', ParseUUIDPipe) id: string, @Body() dto: BucketRestoreDto) {
+    return this.bucketRestores.preflight({ ...dto, schoolId: id });
+  }
+
+  @Post('schools/:id/buckets/restore')
+  async restoreBuckets(
+    @Param('id', ParseUUIDPipe) id: string, @Body() dto: BucketRestoreDto,
+    @CurrentUser() op: PlatformJwtPayload, @Req() req: Request,
+  ) {
+    const r = await this.bucketRestores.start({ ...dto, schoolId: id }, op?.sub ?? null);
+    if (dto.packId) await this.packs.noteLoaded(dto.packId);
+    continueInBackground(req);
+    return r;
+  }
+
+  /** "Reset management data" — empty `setup` and `day`, keep the website. */
+  @Post('schools/:id/buckets/reset')
+  async reset(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() op: PlatformJwtPayload, @Req() req: Request) {
+    const r = await this.bucketRestores.resetManagementData(id, op?.sub ?? null);
+    continueInBackground(req);
+    return r;
+  }
+
+  @Get('schools/:id/bucket-restores')
+  bucketRestoreList(@Param('id', ParseUUIDPipe) id: string) {
+    return this.bucketRestores.list(id);
+  }
+
+  @Get('bucket-restores/:id')
+  bucketRestore(@Param('id', ParseUUIDPipe) id: string) {
+    return this.bucketRestores.get(id);
+  }
+
+  @Post('bucket-restores/:id/step')
+  stepBucketRestore(@Param('id', ParseUUIDPipe) id: string) {
+    return this.bucketRestores.step(id);
+  }
+
+  /* ── the sample-pack library ──────────────────────────────────────────── */
+
+  @Get('sample-packs')
+  listPacks() {
+    return this.packs.list();
+  }
+
+  @Get('sample-packs/excluded')
+  packExclusions() {
+    return this.packs.excluded();
+  }
+
+  @Post('sample-packs')
+  async createPack(@Body() dto: CreatePackDto, @CurrentUser() op: PlatformJwtPayload, @Req() req: Request) {
+    const p = await this.packs.createFromSchool(dto, op?.sub ?? null);
+    continueInBackground(req);
+    return p;
+  }
+
+  @Post('sample-packs/upload-url')
+  packUploadUrl() {
+    return this.packs.uploadUrl();
+  }
+
+  @Post('sample-packs/uploaded')
+  registerPackUpload(@Body() dto: RegisterPackUploadDto, @CurrentUser() op: PlatformJwtPayload) {
+    return this.packs.registerUpload(dto, op?.sub ?? null);
+  }
+
+  @Get('sample-packs/:id')
+  getPack(@Param('id', ParseUUIDPipe) id: string) {
+    return this.packs.get(id);
+  }
+
+  /** Polled while a pack is being built; each call advances it one step. */
+  @Post('sample-packs/:id/step')
+  stepPack(@Param('id', ParseUUIDPipe) id: string) {
+    return this.packs.advance(id);
+  }
+
+  @Patch('sample-packs/:id')
+  renamePack(@Param('id', ParseUUIDPipe) id: string, @Body() dto: RenamePackDto) {
+    return this.packs.rename(id, dto);
+  }
+
+  @Get('sample-packs/:id/download')
+  downloadPack(@Param('id', ParseUUIDPipe) id: string) {
+    return this.packs.downloadUrl(id);
+  }
+
+  @Delete('sample-packs/:id')
+  deletePack(@Param('id', ParseUUIDPipe) id: string) {
+    return this.packs.remove(id);
+  }
+
   @Post('restores')
   async restore(@Body() dto: StartRestoreDto, @CurrentUser() op: PlatformJwtPayload, @Req() req: Request) {
     const r = await this.backups.startRestore(dto, op?.sub ?? null);
@@ -97,12 +235,18 @@ export class BackupsController {
 @Public()
 @UseGuards(CronSecretGuard)
 export class BackupsCronController {
-  constructor(private readonly backups: BackupsService) {}
+  constructor(
+    private readonly backups: BackupsService,
+    private readonly bucketRestores: BucketRestoresService,
+    private readonly packs: SamplePacksService,
+  ) {}
 
   private async drive(req: Request) {
+    const scoped = await this.bucketRestores.drive(Date.now() + 20_000);
+    const settled = await this.packs.settlePending().catch(() => 0);
     const r = await this.backups.drive(Date.now() + 52_000);
-    if (r.moreWork) continueInBackground(req);
-    return r;
+    if (r.moreWork || scoped > 0) continueInBackground(req);
+    return { ...r, scoped, settled };
   }
 
   @Get()
@@ -114,6 +258,21 @@ export class BackupsCronController {
   @Get('weekly')
   async weeklyGet(@Req() req: Request) {
     const started = await this.backups.startWeekly();
+    continueInBackground(req);
+    return started;
+  }
+
+  /** Nightly: one snapshot per bucket per school in use. Unchanged ones are dropped. */
+  @Get('snapshots')
+  async snapshotsGet(@Req() req: Request) {
+    const started = await this.backups.startSnapshots();
+    continueInBackground(req);
+    return started;
+  }
+
+  @Post('snapshots')
+  async snapshotsPost(@Req() req: Request) {
+    const started = await this.backups.startSnapshots();
     continueInBackground(req);
     return started;
   }

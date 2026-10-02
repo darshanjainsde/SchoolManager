@@ -11,11 +11,15 @@ import { FeatureResolverService } from '../features';
 import { ArchiveReader } from './engine/archive';
 import { ArchiveError } from './engine/container';
 import { rawDbFromPrisma } from './engine/db';
+import { Bucket, BUCKETS, DATA_BUCKETS, KEPT_BUCKETS } from './engine/buckets';
 import { ExportState, Manifest, beginExport, runExport } from './engine/export';
 import { FinalStatus, ImportFailed, ImportRefused, ImportState, preflightImport, rollbackImport, runImport } from './engine/import';
 import { machineFromEnv } from './engine/machine';
+import { PACK_EXCLUDED_MODELS } from './engine/rehome';
 import { purgeSchoolFiles, purgeSchoolRows } from './engine/purge';
-import { buildSchemaPlan } from './engine/schema-plan';
+import { SchemaPlan, buildSchemaPlan } from './engine/schema-plan';
+import { ScopedPlan, scopePlan } from './engine/scoped-plan';
+import { BucketStanding, bucketStandings, noteUnchanged, parseScope, scopeKey, settleSnapshot } from './bucket-retention';
 import { MultipartState, S3MultipartSink, S3ObjectStore, S3Source, s3Client } from './engine/store';
 
 /** A step must finish well inside the 60 s function limit, checkpoint included. */
@@ -23,7 +27,13 @@ const STEP_MS = 40_000;
 const LEASE_MS = 75_000;
 const DAY = 86_400_000;
 /** How long each kind of backup is kept (decided 2026-10-01). WEEKLY also keeps only the last 4. */
-const KEEP: Record<string, number> = { MANUAL: 90 * DAY, WEEKLY: 35 * DAY, BEFORE_DELETE: 365 * DAY, BEFORE_REPLACE: 90 * DAY, UPLOADED: 90 * DAY };
+const KEEP: Record<string, number> = {
+  MANUAL: 90 * DAY, WEEKLY: 35 * DAY, BEFORE_DELETE: 365 * DAY, BEFORE_REPLACE: 90 * DAY, UPLOADED: 90 * DAY,
+  // A bucket snapshot is kept by COUNT, not by age (see bucket-retention.ts);
+  // this is only the outer limit, so a school nobody touches for a year still
+  // stops accumulating.
+  SNAPSHOT: 400 * DAY, BEFORE_RESET: 90 * DAY,
+};
 const WEEKLY_KEPT = 4;
 /** A step that is cut off this many times in a row stops the job instead of retrying forever. */
 const MAX_ATTEMPTS = 5;
@@ -35,7 +45,7 @@ const MAX_ATTEMPTS = 5;
  */
 const SETTLE_MS = 70_000;
 
-type BackupReason = 'MANUAL' | 'BEFORE_DELETE' | 'BEFORE_REPLACE' | 'WEEKLY' | 'UPLOADED';
+type BackupReason = 'MANUAL' | 'BEFORE_DELETE' | 'BEFORE_REPLACE' | 'WEEKLY' | 'UPLOADED' | 'SNAPSHOT' | 'BEFORE_RESET' | 'PACK';
 interface BackupJobState { export: ExportState; sink: MultipartState | null; progress: number; attempts?: number; waiting?: boolean }
 interface RestoreJobState {
   phase: 'awaiting-backup' | 'import';
@@ -49,6 +59,11 @@ interface RestoreJobState {
 export interface BackupView {
   id: string; schoolId: string; schoolSlug: string; schoolName: string;
   reason: string; status: string; progress: number;
+  /** The buckets this archive holds, or null for a whole school. */
+  scope: Bucket[] | null;
+  version: number | null;
+  /** When this version was last confirmed as still current. */
+  checkedAt: Date | null;
   sizeBytes: number | null; rowCount: number | null; fileCount: number | null;
   warnings: string[]; error: string | null; deleteSchoolAfter: boolean;
   /** READY, but the school it was taken to delete is not gone yet (retried by the cron). */
@@ -102,8 +117,61 @@ export class BackupsService {
     return pw;
   }
 
-  private deps() {
-    return { db: rawDbFromPrisma(getPlatformPrisma()), files: this.files, machine: machineFromEnv(this.env), plan: this.plan };
+  private deps(plan: SchemaPlan | ScopedPlan = this.plan) {
+    return { db: rawDbFromPrisma(getPlatformPrisma()), files: this.files, machine: machineFromEnv(this.env), plan };
+  }
+
+  /**
+   * The plan a job runs under: narrowed when it is a bucket snapshot, and
+   * narrowed FURTHER for a sample pack, which must not carry the handful of
+   * tables that would reach outside the demo.
+   */
+  private planFor(b: { scope: string | null; reason: string }): SchemaPlan | ScopedPlan {
+    const buckets = parseScope(b.scope);
+    if (!buckets) return this.plan;
+    return scopePlan(this.plan, buckets, b.reason === 'PACK' ? { exclude: Object.keys(PACK_EXCLUDED_MODELS) } : {});
+  }
+
+  /**
+   * The pieces a scoped restore, a reset and the sample-pack library need too:
+   * the same storage keys, the same backup password, the same lease. Exposed
+   * rather than duplicated, so there is one place that decides where a backup
+   * object lives and how a job is claimed.
+   */
+  runtime() {
+    return {
+      env: this.env,
+      plan: this.plan,
+      s3: this.s3,
+      files: this.files,
+      bucket: this.bucket,
+      password: () => this.password(),
+      deps: (plan?: SchemaPlan | ScopedPlan) => this.deps(plan),
+      reader: (key: string) => this.reader(key),
+      lease: (table: 'schoolBackup' | 'schoolRestore', id: string) => this.lease(table, id),
+      forgetSchool: (schoolId: string) => this.forgetSchool(schoolId),
+      presignedGet: (key: string, seconds: number) => this.storage.presignedGet(key, seconds),
+      start: (schoolId: string, reason: BackupReason, actor: string | null, opts?: { scope?: Bucket[] }) =>
+        this.start(schoolId, reason, actor, opts),
+      step: (id: string) => this.step(id),
+    };
+  }
+
+  /** What the console's Buckets list shows: one row per bucket. */
+  buckets(schoolId: string): Promise<BucketStanding[]> {
+    return bucketStandings(schoolId, KEPT_BUCKETS, BUCKETS);
+  }
+
+  /** The kept versions of ONE bucket, newest first — what "History" opens. */
+  async bucketVersions(schoolId: string, bucket: string): Promise<BackupView[]> {
+    if (!(BUCKETS as readonly string[]).includes(bucket)) {
+      throw new ApiError('VALIDATION', `"${bucket}" is not a bucket. The four are ${BUCKETS.join(', ')}.`, 400);
+    }
+    const rows = await getPlatformPrisma().schoolBackup.findMany({
+      where: { sourceSchoolId: schoolId, scope: bucket, status: { in: ['READY', 'RUNNING'] } },
+      orderBy: { createdAt: 'desc' }, take: 60,
+    });
+    return rows.map((r) => this.view(r));
   }
 
   /* ── reading the register ─────────────────────────────────────────────── */
@@ -115,6 +183,9 @@ export class BackupsService {
       id: b.id, schoolId: b.sourceSchoolId, schoolSlug: b.schoolSlug, schoolName: b.schoolName,
       reason: b.reason, status: b.status,
       progress: b.status === 'READY' ? 1 : (st?.progress ?? 0),
+      scope: parseScope(b.scope),
+      version: b.version,
+      checkedAt: b.lastCheckedAt,
       sizeBytes: b.sizeBytes == null ? null : Number(b.sizeBytes),
       rowCount: b.rowCount, fileCount: b.fileCount,
       warnings: m?.warnings ?? [], error: b.error, deleteSchoolAfter: b.deleteSchoolAfter,
@@ -149,7 +220,10 @@ export class BackupsService {
 
   /* ── taking a backup ──────────────────────────────────────────────────── */
 
-  async start(schoolId: string, reason: BackupReason, actor: string | null, opts: { deleteSchoolAfter?: boolean } = {}): Promise<BackupView> {
+  async start(
+    schoolId: string, reason: BackupReason, actor: string | null,
+    opts: { deleteSchoolAfter?: boolean; scope?: Bucket[]; storageKey?: string; packId?: string } = {},
+  ): Promise<BackupView> {
     this.password(); // refuse up front when backups are not configured
     const db = getPlatformPrisma();
     const school = await db.school.findUnique({ where: { id: schoolId }, select: { id: true, slug: true, name: true, status: true } });
@@ -159,23 +233,36 @@ export class BackupsService {
     }
     const id = randomUUID();
     const stamp = new Date().toISOString().slice(0, 10);
+    const scope = opts.scope?.length ? scopeKey(opts.scope) : null;
     const exportState = await beginExport(this.deps(), schoolId);
+    const part = scope ? `${scope.replace(/,/g, '+')}-` : '';
     try {
       const b = await db.schoolBackup.create({
         data: {
-          id, sourceSchoolId: schoolId, schoolSlug: school.slug, schoolName: school.name, reason,
-          storageKey: `backups/schools/${schoolId}/${school.slug}-${stamp}-${id.slice(0, 8)}.sckools`,
-          deleteSchoolAfter: !!opts.deleteSchoolAfter, createdBy: actor,
+          id, sourceSchoolId: schoolId, schoolSlug: school.slug, schoolName: school.name, reason, scope,
+          storageKey: opts.storageKey ?? `backups/schools/${schoolId}/${school.slug}-${part}${stamp}-${id.slice(0, 8)}.sckools`,
+          deleteSchoolAfter: !!opts.deleteSchoolAfter, packId: opts.packId ?? null, createdBy: actor,
           state: { export: exportState, sink: null, progress: 0 } as unknown as Prisma.InputJsonValue,
         },
       });
       return this.view(b);
     } catch (e) {
       if ((e as { code?: string }).code === 'P2002') {
-        throw new ApiError('BACKUP_RUNNING', 'A backup of this school is already running. Wait for it to finish.', 409);
+        throw new ApiError('BACKUP_RUNNING', scope
+          ? `A ${scope} snapshot of this school is already running. Wait for it to finish.`
+          : 'A backup of this school is already running. Wait for it to finish.', 409);
       }
       throw e;
     }
+  }
+
+  /**
+   * Builds a sample pack: the same export job, writing straight to the pack's
+   * own object in the library, so there is no copy step that could leave half
+   * a pack behind. `SamplePacksService` owns the pack row either side of it.
+   */
+  startPackBuild(schoolId: string, packId: string, storageKey: string, actor: string | null): Promise<BackupView> {
+    return this.start(schoolId, 'PACK', actor, { scope: [...DATA_BUCKETS], storageKey, packId });
   }
 
   /** Claims the job for one step. False when another request holds it. */
@@ -220,10 +307,11 @@ export class BackupsService {
     try {
       const password = this.password();
       sink = st.sink ? await S3MultipartSink.resume(this.s3, st.sink) : await S3MultipartSink.start(this.s3, this.bucket, b.storageKey);
-      const r = await runExport({ ...this.deps(), appVersion: process.env.VERCEL_GIT_COMMIT_SHA ?? null }, st.export, sink, password, { deadline: Date.now() + STEP_MS });
+      const plan = this.planFor(b);
+      const r = await runExport({ ...this.deps(plan), appVersion: process.env.VERCEL_GIT_COMMIT_SHA ?? null }, st.export, sink, password, { deadline: Date.now() + STEP_MS });
       if (!r.done) {
         const s2 = r.state;
-        const tables = this.plan.insertOrder.length;
+        const tables = plan.insertOrder.length;
         const progress = s2.phase === 'rows' ? 0.9 * (s2.table / tables) : 0.9 + 0.1 * (s2.files?.length ? s2.file / s2.files.length : 0);
         await db.schoolBackup.update({ where: { id }, data: { state: { export: s2, sink: sink.state, progress, attempts: 0 } as unknown as Prisma.InputJsonValue, lockedUntil: null } });
         return this.get(id);
@@ -237,8 +325,9 @@ export class BackupsService {
         data: {
           status: 'READY', state: Prisma.DbNull, lockedUntil: null, finishedAt: new Date(),
           sizeBytes: BigInt(r.bytes ?? reader.bytes), rowCount: r.manifest!.rowCount, fileCount: r.manifest!.fileCount,
+          contentHash: r.manifest!.contentHash,
           manifest: r.manifest as unknown as Prisma.InputJsonValue,
-          expiresAt: new Date(Date.now() + (KEEP[b.reason] ?? 90 * DAY)),
+          expiresAt: b.packId ? null : new Date(Date.now() + (KEEP[b.reason] ?? 90 * DAY)),
         },
       });
     } catch (e) {
@@ -249,6 +338,15 @@ export class BackupsService {
     // From here the backup is READY and stays READY, whatever happens next.
     if (b.deleteSchoolAfter) await this.finishPendingDelete(id);
     if (b.reason === 'WEEKLY') await this.pruneWeekly(b.sourceSchoolId).catch((e) => this.logger.warn(`weekly prune: ${(e as Error).message}`));
+    if (b.reason === 'SNAPSHOT' && b.scope) {
+      // A snapshot that holds nothing new is dropped here rather than kept as
+      // a version — the whole reason settling is a step of its own.
+      const settled = await settleSnapshot(id, (bid, key) => this.expire(bid, key)).catch((e) => {
+        this.logger.warn(`settling snapshot ${id}: ${(e as Error).message}`);
+        return null;
+      });
+      if (settled?.unchanged) await noteUnchanged(id).catch(() => undefined);
+    }
     return this.get(id);
   }
 
@@ -588,6 +686,41 @@ export class BackupsService {
       try { await this.start(s.id, 'WEEKLY', 'cron'); started += 1; } catch { skipped += 1; }
     }
     return { started, skipped };
+  }
+
+  /**
+   * Nightly: one snapshot per bucket, per school that is in use.
+   *
+   * Schools are taken LEAST RECENTLY SNAPSHOTTED FIRST, so if a night's work
+   * does not fit in the cron's budget the schools that missed out are the ones
+   * served first tomorrow — rather than the same prefix of the list winning
+   * every night.
+   *
+   * Three of the four buckets usually hold nothing new, and those copies are
+   * dropped when they settle (see bucket-retention.ts). That is cheaper than
+   * watching every write, and it cannot break a request.
+   */
+  async startSnapshots(limit = 100): Promise<{ schools: number; started: number; skipped: number }> {
+    if (!(process.env.SCHOOL_BACKUP_PASSWORD || this.env.SCHOOL_BACKUP_PASSWORD)) return { schools: 0, started: 0, skipped: 0 };
+    const due = await getPlatformPrisma().$queryRaw<{ id: string }[]>`
+      SELECT s.id
+        FROM "School" s
+        LEFT JOIN (
+          SELECT "sourceSchoolId", max("createdAt") AS last
+            FROM "SchoolBackup"
+           WHERE reason = 'SNAPSHOT'
+           GROUP BY "sourceSchoolId"
+        ) b ON b."sourceSchoolId" = s.id
+       WHERE s.status IN ('LIVE', 'SETUP')
+       ORDER BY b.last ASC NULLS FIRST, s."createdAt" ASC
+       LIMIT ${limit}`;
+    let started = 0; let skipped = 0;
+    for (const s of due) {
+      for (const bucket of BUCKETS) {
+        try { await this.start(s.id, 'SNAPSHOT', 'cron', { scope: [bucket] }); started += 1; } catch { skipped += 1; }
+      }
+    }
+    return { schools: due.length, started, skipped };
   }
 
   private async pruneWeekly(schoolId: string): Promise<void> {

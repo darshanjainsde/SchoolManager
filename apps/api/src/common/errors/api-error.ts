@@ -332,6 +332,10 @@ export type ErrorCode =
   | 'RESTORE_REFUSED'
   /** One restore into a school at a time — pair with 409. */
   | 'RESTORE_RUNNING'
+  /** A sample pack already has that name — pair with 409. */
+  | 'PACK_NAME_TAKEN'
+  /** The pack's export job has not finished, so it cannot be used or removed — 409. */
+  | 'PACK_BUILDING'
   | 'INTERNAL';
 
 export interface ApiErrorBody {

@@ -5278,6 +5278,13 @@ enum SchoolBackupReason {
   BEFORE_REPLACE
   WEEKLY
   UPLOADED
+  /// A scheduled snapshot of ONE bucket (school / website / setup / day).
+  SNAPSHOT
+  /// Taken of exactly what a reset or a sample-pack load is about to replace.
+  BEFORE_RESET
+  /// Building a sample pack: the same export, written straight to the pack's
+  /// own object in the library.
+  PACK
 }
 
 enum SchoolRestoreStatus {
@@ -5293,6 +5300,18 @@ model SchoolBackup {
   schoolName        String
   reason            SchoolBackupReason
   status            SchoolBackupStatus @default(RUNNING)
+  /// Which buckets this archive holds, comma-joined in restore order
+  /// ("website", "setup,day"). NULL is a whole school — every archive taken
+  /// before buckets existed, and every full backup since.
+  scope             String?
+  /// Fingerprint of the archive's uncompressed content. Two snapshots of an
+  /// unchanged bucket share it, which is how a scheduled snapshot that found
+  /// no change is recognised and thrown away instead of kept as a version.
+  version           Int?
+  contentHash       String?
+  /// When this version was last confirmed as still current — bumped instead of
+  /// keeping an identical snapshot.
+  lastCheckedAt     DateTime?
   /// The .sckools object in the private bucket (or the public one when none is configured).
   storageKey        String             @unique
   sizeBytes         BigInt?
@@ -5305,6 +5324,9 @@ model SchoolBackup {
   error             String?
   /// Set by "Delete school": the job deletes the school once this backup is verified.
   deleteSchoolAfter Boolean            @default(false)
+  /// Set when this job is building a sample pack: it writes straight to that
+  /// pack's object, so the file must never be expired from under it.
+  packId            String?            @db.Uuid
   createdBy         String?
   /// Lease: a step holds the job until this time, so two requests never write one archive.
   lockedUntil       DateTime?
@@ -5314,6 +5336,7 @@ model SchoolBackup {
   restores          SchoolRestore[]
 
   @@index([sourceSchoolId, createdAt])
+  @@index([sourceSchoolId, scope, createdAt])
   @@index([status])
 }
 
@@ -5323,8 +5346,13 @@ model SchoolRestore {
   backup         SchoolBackup?       @relation(fields: [backupId], references: [id], onDelete: SetNull)
   sourceSchoolId String              @db.Uuid
   targetSlug     String
-  /// RESTORE (school absent here) or REPLACE (current copy backed up, then removed).
+  /// RESTORE / REPLACE for a whole school; BUCKET_REPLACE / BUCKET_MERGE for
+  /// one or more buckets of a school that is already here.
   mode           String
+  /// The buckets being put back, comma-joined. NULL for a whole school.
+  scope          String?
+  /// Set when the rows come from a sample pack rather than this school's past.
+  packId         String?             @db.Uuid
   finalStatus    String
   status         SchoolRestoreStatus @default(RUNNING)
   state          Json?
@@ -5338,4 +5366,38 @@ model SchoolRestore {
 
   @@index([backupId])
   @@index([sourceSchoolId])
+}
+
+/// A named set of management data (`setup` + `day`) kept at PLATFORM level, so
+/// deleting a school can never take a pack with it. Loading one re-homes its
+/// rows onto the target school; the website and the school's own settings are
+/// never touched.
+model SamplePack {
+  id               String    @id @default(uuid()) @db.Uuid
+  name             String    @unique
+  notes            String?
+  /// Which buckets the pack holds, comma-joined. Always "setup,day" today.
+  scope            String
+  storageKey       String    @unique
+  sizeBytes        BigInt?
+  rowCount         Int?
+  fileCount        Int?
+  /// Bumped each time the pack is rebuilt under the same name.
+  version          Int       @default(1)
+  /// BUILDING while its export job runs, then READY or FAILED.
+  status           String    @default("BUILDING")
+  error            String?
+  /// The archive's manifest: tables and counts, the source school, takenAt.
+  manifest         Json?
+  /// Where it was cut from. The school may be long gone; the name is kept so
+  /// the library can still say what the pack is.
+  sourceSchoolId   String?   @db.Uuid
+  sourceSchoolName String?
+  loadCount        Int       @default(0)
+  lastLoadedAt     DateTime?
+  createdBy        String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([createdAt])
 }

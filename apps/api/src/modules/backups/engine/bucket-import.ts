@@ -9,7 +9,7 @@ import { faceOf, Machine, MachineFace, makeRewriter, OpenedSecret, resealSecret,
 import { purgeBucketRows } from './purge';
 import { orderSelfReferencing, q } from './schema-plan';
 import { RehomeOptions, rehomeRow, weeksBetween } from './rehome';
-import { andFilter, KeptPointer, keptPointers, ScopedPlan } from './scoped-plan';
+import { andFilter, keptPointers, ScopedPlan } from './scoped-plan';
 import { BucketKind, ObjectStore } from './store';
 
 /**

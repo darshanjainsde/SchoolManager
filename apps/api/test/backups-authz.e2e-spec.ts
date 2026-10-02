@@ -19,7 +19,7 @@ import { seedMinimalSchool, signPlatformToken, signSchoolToken, type MinimalScho
 
 const UUID = '00000000-0000-0000-0000-000000000001';
 
-const OWNER_ROUTES: [method: 'get' | 'post', path: string][] = [
+const OWNER_ROUTES: [method: 'get' | 'post' | 'patch' | 'delete', path: string][] = [
   ['get', `/owner/schools/${UUID}/backups`],
   ['post', `/owner/schools/${UUID}/backups`],
   ['post', `/owner/schools/${UUID}/delete`],
@@ -32,6 +32,27 @@ const OWNER_ROUTES: [method: 'get' | 'post', path: string][] = [
   ['post', '/owner/restores'],
   ['get', `/owner/restores/${UUID}`],
   ['post', `/owner/restores/${UUID}/step`],
+  // Buckets: each of these empties, replaces or copies a school's data.
+  ['get', `/owner/schools/${UUID}/buckets`],
+  ['post', `/owner/schools/${UUID}/buckets/save`],
+  ['get', `/owner/schools/${UUID}/buckets/day/versions`],
+  ['post', `/owner/schools/${UUID}/buckets/preflight`],
+  ['post', `/owner/schools/${UUID}/buckets/restore`],
+  ['post', `/owner/schools/${UUID}/buckets/reset`],
+  ['get', `/owner/schools/${UUID}/bucket-restores`],
+  ['get', `/owner/bucket-restores/${UUID}`],
+  ['post', `/owner/bucket-restores/${UUID}/step`],
+  // The sample-pack library: a pack is one school's data, handed to another.
+  ['get', '/owner/sample-packs'],
+  ['get', '/owner/sample-packs/excluded'],
+  ['post', '/owner/sample-packs'],
+  ['post', '/owner/sample-packs/upload-url'],
+  ['post', '/owner/sample-packs/uploaded'],
+  ['get', `/owner/sample-packs/${UUID}`],
+  ['post', `/owner/sample-packs/${UUID}/step`],
+  ['patch', `/owner/sample-packs/${UUID}`],
+  ['get', `/owner/sample-packs/${UUID}/download`],
+  ['delete', `/owner/sample-packs/${UUID}`],
 ];
 
 describe('school backups — authorization and the delete gate', () => {
@@ -40,7 +61,7 @@ describe('school backups — authorization and the delete gate', () => {
   let adminToken: string;
   const ownerHost = loadEnv().PLATFORM_OWNER_HOST;
   const asOperator = () => ({ Authorization: `Bearer ${signPlatformToken()}`, 'X-Skoolos-Host': ownerHost });
-  const call = (method: 'get' | 'post', path: string) => request(app.getHttpServer())[method](path);
+  const call = (method: 'get' | 'post' | 'patch' | 'delete', path: string) => request(app.getHttpServer())[method](path);
 
   beforeAll(async () => {
     const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
