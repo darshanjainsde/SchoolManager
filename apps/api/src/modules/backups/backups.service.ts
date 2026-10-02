@@ -297,10 +297,18 @@ export class BackupsService {
       return fail(`Stopped after ${MAX_ATTEMPTS} tries in a row that were cut off before finishing. Nothing was deleted. Try again, or use the command line (pnpm school export) for a school this large.`, st.sink);
     }
 
-    if ((b.reason === 'BEFORE_DELETE' || b.reason === 'BEFORE_REPLACE') && st.export.table === 0 && !st.export.writer) {
+    // A copy of exactly what is about to be replaced waits as well — a write
+    // that lands after its table was copied would be missing from the one copy
+    // that can undo the operation.
+    if ((b.reason === 'BEFORE_DELETE' || b.reason === 'BEFORE_REPLACE' || b.reason === 'BEFORE_RESET') && st.export.table === 0 && !st.export.writer) {
       const school = await db.school.findUnique({ where: { id: b.sourceSchoolId }, select: { statusChangedAt: true } });
       if (school?.statusChangedAt && Date.now() - school.statusChangedAt.getTime() < SETTLE_MS) {
-        await db.schoolBackup.update({ where: { id }, data: { lockedUntil: null, state: { ...st, waiting: true } as unknown as Prisma.InputJsonValue } });
+        // The job records WHEN it can go on, in the lease column. Every worker —
+        // this one polling, another instance, the cron — then skips it until
+        // that moment instead of picking it up again and finding it still
+        // waiting, which at any real volume is a loop of pointless queries.
+        const readyAt = new Date(school.statusChangedAt.getTime() + SETTLE_MS);
+        await db.schoolBackup.update({ where: { id }, data: { lockedUntil: readyAt, state: { ...st, waiting: true } as unknown as Prisma.InputJsonValue } });
         return this.get(id);
       }
     }
@@ -651,7 +659,11 @@ export class BackupsService {
   /* ── the cron ─────────────────────────────────────────────────────────── */
 
   /** Expires old backups, then advances every running job until `deadline`. Returns whether work is left. */
-  async drive(deadline: number): Promise<{ moreWork: boolean; expired: number; stepped: number }> {
+  async drive(
+    deadline: number,
+    /** Steps one job of a kind this service does not own; true when it did. */
+    extra?: () => Promise<boolean>,
+  ): Promise<{ moreWork: boolean; expired: number; stepped: number }> {
     const db = getPlatformPrisma();
     let expired = 0;
     for (const b of await db.schoolBackup.findMany({ where: { status: 'READY', expiresAt: { lt: new Date() } }, take: 100 })) {
@@ -668,16 +680,42 @@ export class BackupsService {
       if (Date.now() + STEP_MS > deadline) break;
       const now = new Date();
       const nextBackup = await db.schoolBackup.findFirst({ where: { status: 'RUNNING', OR: [{ lockedUntil: null }, { lockedUntil: { lt: now } }] }, orderBy: { createdAt: 'asc' }, select: { id: true } });
-      const nextRestore = await db.schoolRestore.findFirst({ where: { status: 'RUNNING', OR: [{ lockedUntil: null }, { lockedUntil: { lt: now } }] }, orderBy: { createdAt: 'asc' }, select: { id: true } });
-      if (!nextBackup && !nextRestore) break;
-      if (nextRestore) await this.stepRestore(nextRestore.id);
-      else if (nextBackup) await this.step(nextBackup.id);
+      // `scope: null` — a scoped restore has a different state shape, and handing
+      // it to the whole-school stepper would fail it (and roll back what it did).
+      const nextRestore = await db.schoolRestore.findFirst({ where: { status: 'RUNNING', scope: null, OR: [{ lockedUntil: null }, { lockedUntil: { lt: now } }] }, orderBy: { createdAt: 'asc' }, select: { id: true } });
+      if (nextRestore) { await this.stepRestore(nextRestore.id); stepped += 1; continue; }
+      if (extra && (await extra())) { stepped += 1; continue; }
+      if (!nextBackup) {
+        // Nothing can run this instant. If a job is only WAITING (a settle
+        // period, a back-off), its wake-up time is in the database: sleep until
+        // then if the budget allows, instead of returning and being called
+        // again straight away.
+        const wake = await this.nextWake();
+        if (wake && wake.getTime() + STEP_MS < deadline) {
+          await new Promise((res) => setTimeout(res, Math.max(50, wake.getTime() - Date.now())));
+          continue;
+        }
+        break;
+      }
+      await this.step(nextBackup.id);
       stepped += 1;
     }
     const left = (await db.schoolBackup.count({ where: { status: 'RUNNING' } }))
       + (await db.schoolRestore.count({ where: { status: 'RUNNING' } }))
       + (await db.schoolBackup.count({ where: { status: 'READY', deleteSchoolAfter: true, error: null } }));
     return { moreWork: left > 0, expired, stepped };
+  }
+
+  /** The earliest moment a currently-held job (of any kind) becomes runnable again. */
+  private async nextWake(): Promise<Date | null> {
+    const db = getPlatformPrisma();
+    const now = new Date();
+    const [a, b] = await Promise.all([
+      db.schoolBackup.findFirst({ where: { status: 'RUNNING', lockedUntil: { gt: now } }, orderBy: { lockedUntil: 'asc' }, select: { lockedUntil: true } }),
+      db.schoolRestore.findFirst({ where: { status: 'RUNNING', lockedUntil: { gt: now } }, orderBy: { lockedUntil: 'asc' }, select: { lockedUntil: true } }),
+    ]);
+    const times = [a?.lockedUntil, b?.lockedUntil].filter((x): x is Date => !!x);
+    return times.length ? new Date(Math.min(...times.map((t) => t.getTime()))) : null;
   }
 
   /** Sunday 03:00 IST: one WEEKLY backup per live school. */

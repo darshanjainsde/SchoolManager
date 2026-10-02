@@ -16,9 +16,11 @@ import { ScopedPlan, expandScope, keptPointers, scopePlan } from './engine/scope
 
 const STEP_MS = 40_000;
 const MAX_ATTEMPTS = 5;
+/** How long a restore waits for another backup of the same buckets to release the running-job slot. */
+const WAIT_FOR_SLOT_MS = 30 * 60_000;
 
 /** What a job is doing. A reset stops at `purge`; a restore carries on. */
-type Phase = 'awaiting-backup' | 'purge' | 'import' | 'rollback' | 'done';
+type Phase = 'starting' | 'awaiting-backup' | 'purge' | 'import' | 'rollback' | 'done';
 
 type Mode = 'BUCKET_REPLACE' | 'BUCKET_MERGE' | 'RESET';
 
@@ -219,26 +221,18 @@ export class BucketRestoresService {
     await this.preflight(req);
 
     const dbMode: Mode = req.reset ? 'RESET' : (mode === 'replace' ? 'BUCKET_REPLACE' : 'BUCKET_MERGE');
-    const previousStatus = school.status;
-    await db.school.update({ where: { id: req.schoolId }, data: { status: 'SUSPENDED', statusChangedAt: new Date() } });
-    await this.rt().forgetSchool(req.schoolId);
 
-    let pre: { id: string };
-    try {
-      pre = await this.rt().start(req.schoolId, 'BEFORE_RESET', actor, { scope: plan.buckets });
-    } catch (e) {
-      // Nothing has been touched — put the school back exactly as it was.
-      await db.school.update({ where: { id: req.schoolId }, data: { status: previousStatus, statusChangedAt: new Date() } });
-      await this.rt().forgetSchool(req.schoolId);
-      throw e;
-    }
-
+    // THE INTENT IS WRITTEN FIRST, and nothing else happens here. Suspending the
+    // school and taking the safety copy are the job's first STEP, so a request
+    // that dies right after this line leaves a row any instance can pick up and
+    // carry on — rather than a school suspended by a request nobody remembers.
+    // The unique index (one running restore per school) is also what stops two
+    // clicks racing: the second fails here, before it has touched anything.
     const state: JobState = {
-      phase: 'awaiting-backup',
+      phase: 'starting',
       buckets: plan.buckets,
       mode,
-      preBackupId: pre.id,
-      previousStatus,
+      previousStatus: school.status,
       packId: req.packId ?? null,
       shiftDates: req.shiftDates !== false,
       import: null,
@@ -253,7 +247,7 @@ export class BucketRestoresService {
           scope: scopeKey(plan.buckets),
           targetSlug: school.slug,
           mode: dbMode,
-          finalStatus: previousStatus,
+          finalStatus: school.status,
           createdBy: actor,
           state: state as unknown as Prisma.InputJsonValue,
         },
@@ -261,8 +255,6 @@ export class BucketRestoresService {
       return this.view(r);
     } catch (e) {
       if ((e as { code?: string }).code === 'P2002') {
-        await db.school.update({ where: { id: req.schoolId }, data: { status: previousStatus, statusChangedAt: new Date() } });
-        await this.rt().forgetSchool(req.schoolId);
         throw new ApiError('RESTORE_RUNNING', 'Something is already being put back into this school. Wait for it to finish.', 409);
       }
       throw e;
@@ -281,11 +273,14 @@ export class BucketRestoresService {
     const save = async (next: JobState) =>
       db.schoolRestore.update({ where: { id }, data: { state: next as unknown as Prisma.InputJsonValue, lockedUntil: null } });
     const finish = async (report: unknown) => {
+      // The school is opened BEFORE the job is marked done. Marking done first
+      // would leave a window where an instance dying right after it leaves the
+      // school suspended behind a job that says it is finished.
+      await this.restoreStatus(r.sourceSchoolId, st.previousStatus);
       await db.schoolRestore.update({
         where: { id },
         data: { status: 'DONE', report: report as Prisma.InputJsonValue, state: Prisma.DbNull, lockedUntil: null, finishedAt: new Date() },
       });
-      await this.restoreStatus(r.sourceSchoolId, st.previousStatus);
       return this.get(id);
     };
     const fail = async (msg: string, leaveSuspended: boolean) => {
@@ -303,10 +298,47 @@ export class BucketRestoresService {
     }
 
     try {
+      if (st.phase === 'starting') {
+        // Freeze the school, then take the copy of exactly what is about to
+        // change. Both are idempotent, so a retry after a cut-off step is safe.
+        await db.school.update({ where: { id: r.sourceSchoolId }, data: { status: 'SUSPENDED', statusChangedAt: new Date() } });
+        await this.rt().forgetSchool(r.sourceSchoolId);
+        const scope = scopeKey(st.buckets);
+        let pre: { id: string } | null = await db.schoolBackup.findFirst({
+          where: { sourceSchoolId: r.sourceSchoolId, reason: 'BEFORE_RESET', scope, createdAt: { gte: r.createdAt } },
+          orderBy: { createdAt: 'desc' }, select: { id: true },
+        });
+        if (!pre) {
+          try {
+            pre = await this.rt().start(r.sourceSchoolId, 'BEFORE_RESET', r.createdBy, { scope: st.buckets });
+          } catch (e) {
+            // A nightly snapshot of the same buckets holds the one running-job
+            // slot. That is the ordinary case at 3 AM, not an error: wait for it.
+            if (e instanceof ApiError && (e.getResponse() as { code?: string }).code === 'BACKUP_RUNNING' && Date.now() - r.createdAt.getTime() < WAIT_FOR_SLOT_MS) {
+              await save({ ...st, attempts: 0 });
+              return this.get(id);
+            }
+            throw e;
+          }
+        }
+        await save({ ...st, phase: 'awaiting-backup', preBackupId: pre.id, attempts: 0 });
+        return this.get(id);
+      }
+
       if (st.phase === 'awaiting-backup') {
         const pre = await this.rt().step(st.preBackupId!);
         if (pre.status === 'RUNNING') {
-          await save({ ...st, attempts, progress: 0.3 * pre.progress });
+          // Waiting on the copy is progress, not a cut-off step: resetting the
+          // counter is what lets a big school's copy take as many steps as it needs.
+          // Back off for two seconds, recorded in the lease column so that no
+          // worker re-checks a copy that is still being written.
+          await db.schoolRestore.update({
+            where: { id },
+            data: {
+              state: { ...st, attempts: 0, progress: 0.3 * pre.progress } as unknown as Prisma.InputJsonValue,
+              lockedUntil: new Date(Date.now() + 2_000),
+            },
+          });
           return this.get(id);
         }
         if (pre.status !== 'READY') {
@@ -347,9 +379,15 @@ export class BucketRestoresService {
     } catch (e) {
       const msg = e instanceof ApiError || e instanceof ImportRefused || e instanceof ImportFailed ? e.message : (e as Error).message;
       this.logger.error(`bucket restore ${id} failed in ${st.phase}: ${msg}`);
+      // How far the import got is read from the state the FAILURE carries. The
+      // saved copy predates this step, and the emptying happens inside the very
+      // step that fails: judging by the saved copy would call a half-replaced
+      // school "unchanged".
+      const reached = e instanceof ImportFailed ? (e.state as unknown as BucketImportState) : st.import;
+      const emptied = !!reached?.purged;
       // Half-replaced is the one state nobody can work with, so the job puts
       // the safety snapshot back itself rather than reporting and walking away.
-      if (st.phase === 'import' && st.preBackupId && st.import?.purged) {
+      if (st.phase === 'import' && st.preBackupId && emptied) {
         try {
           await db.schoolRestore.update({ where: { id }, data: { error: msg.slice(0, 1500) } });
           const back = await this.beginRollback(deps, r, st);
@@ -361,9 +399,9 @@ export class BucketRestoresService {
           return fail(`${msg} — and the data could not be put back automatically. The school is suspended; put snapshot ${st.preBackupId} back from its Backups tab.`, true);
         }
       }
-      return fail(st.import?.purged
+      return fail(emptied
         ? `${msg} — the school is suspended; put snapshot ${st.preBackupId} back from its Backups tab.`
-        : `${msg} — nothing was changed.`, !!st.import?.purged);
+        : `${msg} — nothing was changed.`, emptied);
     }
   }
 
@@ -414,22 +452,22 @@ export class BucketRestoresService {
     await this.rt().forgetSchool(schoolId);
   }
 
-  /** Advances every scoped job that is not already held. Called by the cron. */
-  async drive(deadline: number): Promise<number> {
+  /**
+   * Steps ONE scoped restore that no instance is holding, if there is one.
+   * Returns whether it did anything. The cron's single loop calls this beside
+   * the backup and whole-school-restore steppers, so all three kinds of job
+   * share one time budget instead of each assuming it owns the invocation.
+   */
+  async stepNext(): Promise<boolean> {
     const db = getPlatformPrisma();
-    let stepped = 0;
-    for (;;) {
-      if (Date.now() + STEP_MS > deadline) break;
-      const now = new Date();
-      const next = await db.schoolRestore.findFirst({
-        where: { status: 'RUNNING', scope: { not: null }, OR: [{ lockedUntil: null }, { lockedUntil: { lt: now } }] },
-        orderBy: { createdAt: 'asc' }, select: { id: true },
-      });
-      if (!next) break;
-      await this.step(next.id);
-      stepped += 1;
-    }
-    return stepped;
+    const now = new Date();
+    const next = await db.schoolRestore.findFirst({
+      where: { status: 'RUNNING', scope: { not: null }, OR: [{ lockedUntil: null }, { lockedUntil: { lt: now } }] },
+      orderBy: { createdAt: 'asc' }, select: { id: true },
+    });
+    if (!next) return false;
+    await this.step(next.id);
+    return true;
   }
 
   /** "Reset management data" — empty `setup` and `day`, keep the website. */

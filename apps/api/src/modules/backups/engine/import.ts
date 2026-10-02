@@ -304,22 +304,23 @@ export async function rollbackImport(deps: ImportDeps, st: ImportState): Promise
 
 /* ── one batch of rows ──────────────────────────────────────────────────── */
 
-const typeCache = new WeakMap<RawDb, Map<string, string>>();
-/** The Postgres type name of one column (uuid, text, …), for typed comparisons. */
+/**
+ * The Postgres type name of one column (uuid, text, …), for typed comparisons.
+ *
+ * Read from the catalog every time, on purpose. It used to be remembered in a
+ * module-level cache, which is process memory that outlives a request and goes
+ * stale the moment a migration changes a column — state a stateless service
+ * should not own. One catalog lookup is a fraction of a millisecond, against
+ * the thousand-row insert it sits beside.
+ */
 export async function columnType(db: RawDb, table: string, column: string): Promise<string> {
-  let m = typeCache.get(db);
-  if (!m) { m = new Map(); typeCache.set(db, m); }
-  const k = `${table}.${column}`;
-  if (!m.has(k)) {
-    const [r] = await db.query<{ t: string }>(
-      `SELECT format_type(a.atttypid, a.atttypmod) AS t FROM pg_attribute a
-        WHERE a.attrelid = to_regclass($1) AND a.attname = $2 AND NOT a.attisdropped`,
-      `"${table.replace(/"/g, '""')}"`, column,
-    );
-    if (!r) throw new Error(`${table}.${column} does not exist on this machine`);
-    m.set(k, r.t.replace(/\(.*\)$/, ''));
-  }
-  return m.get(k)!;
+  const [r] = await db.query<{ t: string }>(
+    `SELECT format_type(a.atttypid, a.atttypmod) AS t FROM pg_attribute a
+      WHERE a.attrelid = to_regclass($1) AND a.attname = $2 AND NOT a.attisdropped`,
+    `"${table.replace(/"/g, '""')}"`, column,
+  );
+  if (!r) throw new Error(`${table}.${column} does not exist on this machine`);
+  return r.t.replace(/\(.*\)$/, '');
 }
 
 export function decodeRows(entry: Buffer): Record<string, unknown>[] {

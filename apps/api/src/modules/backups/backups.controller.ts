@@ -242,11 +242,12 @@ export class BackupsCronController {
   ) {}
 
   private async drive(req: Request) {
-    const scoped = await this.bucketRestores.drive(Date.now() + 20_000);
     const settled = await this.packs.settlePending().catch(() => 0);
-    const r = await this.backups.drive(Date.now() + 52_000);
-    if (r.moreWork || scoped > 0) continueInBackground(req);
-    return { ...r, scoped, settled };
+    // ONE budget, ONE loop: backups, whole-school restores and scoped restores
+    // all draw from the same 52 s, so none can run the invocation past its limit.
+    const r = await this.backups.drive(Date.now() + 52_000, () => this.bucketRestores.stepNext());
+    if (r.moreWork) continueInBackground(req);
+    return { ...r, settled };
   }
 
   @Get()
