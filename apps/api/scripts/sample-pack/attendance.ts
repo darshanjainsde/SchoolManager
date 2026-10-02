@@ -2,6 +2,17 @@ import type { Prisma } from '@skoolos/db';
 import { Ctx, many } from './ctx';
 import { D, addDays, clamp, iso } from './rng';
 
+/**
+ * A valid UUID that SORTS in generation order. A backup reads each table in
+ * primary-key order, so with random ids a child's rows are scattered through the
+ * file and gzip (a 32 KB window) cannot see that studentId, classSectionId and
+ * markedById repeat 100 times in a row. With ids that run student → day, the
+ * export comes out grouped by child, and the same data takes about a third of the
+ * space. Fixed-width hex, so text order and numeric order agree.
+ */
+export const orderedId = (tag: number, n: number): string =>
+  `${tag.toString(16).padStart(2, '0')}000000-0000-4000-8000-${n.toString(16).padStart(12, '0')}`;
+
 /** Mon–Sat working days that are not holidays, between two ISO dates (inclusive). */
 export function workingDays(c: Ctx, from: string, to: string): string[] {
   const out: string[] = [];
@@ -47,7 +58,8 @@ export async function studentAttendance(c: Ctx): Promise<void> {
     batch = [];
   };
 
-  for (const d of days) {
+  const studentIndex = new Map(c.students.map((s, i) => [s.id, i]));
+  for (const [dayIdx, d] of days.entries()) {
     const f = dayFactor.get(d)!;
     for (const s of c.students) {
       const small = s.gradeIdx <= 2 ? 1.2 : 1;
@@ -62,6 +74,7 @@ export async function studentAttendance(c: Ctx): Promise<void> {
       if (status === 'PRESENT' && r.chance(0.025)) status = 'LATE';
       if (status !== 'ABSENT') away.delete(s.id);
       batch.push({
+        id: orderedId(0xa1, studentIndex.get(s.id)! * days.length + dayIdx),
         schoolId, studentId: s.id, classSectionId: s.sectionId, date: D(d), status,
         markedById: sectionTeacher.get(s.sectionId)!, createdAt: new Date(`${d}T04:15:00.000Z`),
       });
