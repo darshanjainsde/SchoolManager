@@ -24,8 +24,19 @@ NOTES="1,138 students across 15 grades x 3 sections, 20 teachers, four months of
 SIZE=$(wc -c < "$FILE" | tr -d ' ')
 echo "Pack: $FILE ($((SIZE / 1024 / 1024)) MB) as \"$NAME\" on $API"
 
+# The sign-in prompts need a real keyboard. Piped, or run from a tool that cannot
+# pass typed input, they read nothing and the server answers with a confusing
+# "password must be longer than 1 character". Say so plainly instead.
+if [ ! -t 0 ]; then
+  echo "This asks for your password, so it must be run in a normal Terminal window"
+  echo "(not from a tool that cannot pass typed input). Open Terminal and run:"
+  echo "    bash $0"
+  exit 1
+fi
+
 read -r -p "Owner email (blank = gate password): " EMAIL
 read -r -s -p "Password: " PASS; echo
+[ -n "$PASS" ] || { echo "No password entered."; exit 1; }
 TOTP=""
 if [ -n "$EMAIL" ]; then read -r -p "6-digit code (blank if you have no MFA): " TOTP; fi
 
