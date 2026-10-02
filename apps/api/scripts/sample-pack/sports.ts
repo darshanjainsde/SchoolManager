@@ -4,6 +4,7 @@ import { SportsRecordsService } from '../../src/modules/sports/internal/sports-r
 import { SportsResultsService } from '../../src/modules/sports/internal/sports-results.service';
 import { SportsSettingsService } from '../../src/modules/sports/internal/sports-settings.service';
 import { SportsTournamentsService } from '../../src/modules/sports/internal/sports-tournaments.service';
+import { findClashes, sideOfEntry, type Booking } from '@skoolos/types';
 import { Ctx, StudentInfo, many } from './ctx';
 import { FIRST_F, FIRST_M, SURNAMES } from './data';
 import { clamp } from './rng';
@@ -83,7 +84,14 @@ export async function sports(c: Ctx): Promise<void> {
     const key = `${band}|${cat}`;
     byBand.set(key, [...(byBand.get(key) ?? []), s]);
   }
-  const take = (band: Band, cat: Cat, n: number) => r.shuffle(byBand.get(`${band}|${cat}`) ?? []).slice(0, n).map((s) => s.id);
+  // A child is entered in ONE event: the meet planner (rightly) reports a child booked in two places at once,
+  // and a finished Sports Day that says "8 clashes" is not a sample worth showing.
+  const used = new Set<string>();
+  const take = (band: Band, cat: Cat, n: number) => {
+    const pick = r.shuffle((byBand.get(`${band}|${cat}`) ?? []).filter((s) => !used.has(s.id))).slice(0, n).map((s) => s.id);
+    for (const id of pick) used.add(id);
+    return pick;
+  };
 
   const events: {
     sportKey: string; groupKey: Band; category: Cat; structure: 'CLASS' | 'DRAW'; venueIdx: number[]; studentIds: string[];
@@ -97,7 +105,7 @@ export async function sports(c: Ctx): Promise<void> {
   }
   // Kho-kho: the whole of classes 7 and 8, sections against sections.
   for (const cat of CATS) {
-    const all = (byBand.get(`jun|${cat}`) ?? []).map((s) => s.id);
+    const all = (byBand.get(`jun|${cat}`) ?? []).filter((s) => !used.has(s.id)).map((s) => s.id);
     if (all.length >= 8) events.push({ sportKey: 'kho-kho', groupKey: 'jun', category: cat, structure: 'DRAW', venueIdx: [2], studentIds: all, teamBasis: 'SECTIONS' });
   }
 
@@ -146,6 +154,21 @@ export async function sports(c: Ctx): Promise<void> {
     }
   }
   await tournaments.finish(schoolId, made.id);
+
+  /* ── the planner's own test: nobody in two places, no venue double-booked ── */
+  const full = await p.sportsEvent.findMany({ where: { schoolId, tournamentId: made.id }, include: { entries: true, heats: { include: { marks: true } }, matches: true } });
+  const bookings: Booking[] = [];
+  for (const ev of full) {
+    for (const h of ev.heats) bookings.push({ id: `heat:${h.id}`, people: h.marks.map((m) => m.studentId), venueId: h.venueId, atMin: h.atMin, slotMin: ev.slotMin });
+    for (const m of ev.matches) {
+      if (m.bye) continue;
+      const sides = [m.aSide, m.bSide];
+      const people = ev.entries.filter((e) => sides.includes(sideOfEntry({ studentId: e.studentId, std: e.std, section: e.section, houseId: null }, true, ev.teamBasis as never))).map((e) => e.studentId);
+      bookings.push({ id: `match:${m.id}`, people, venueId: m.venueId, atMin: m.atMin, slotMin: ev.slotMin });
+    }
+  }
+  const clashes = findClashes(bookings);
+  if (clashes.length) throw new Error(`Sports Day has ${clashes.length} clashes (${clashes.slice(0, 3).map((x) => `${x.kind} ${x.first} / ${x.second}`).join('; ')}) — a sample meet must run clean`);
 
   /* ── a pack must not be able to reach a real phone ── */
   await p.notificationOutbox.deleteMany({ where: { schoolId } });

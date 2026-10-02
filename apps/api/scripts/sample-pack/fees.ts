@@ -153,6 +153,11 @@ export async function fees(c: Ctx): Promise<void> {
     return d > AS_OF ? addDays(AS_OF, -r.int(1, 3)) : d;
   };
 
+  const recent = (due: Date) => {
+    const d = addDays(AS_OF, -r.int(1, 25));
+    return d <= due ? addDays(due, 1) : d;
+  };
+
   for (const [invoiceId, m] of meta) {
     if (m.rte) continue; // billed, never chased
     const isFirst = m.term === 'Term 1';
@@ -175,10 +180,12 @@ export async function fees(c: Ctx): Promise<void> {
         pays.push(mk({ paidOn: day(m.due, 20, 60), amount: part, covers: part, note: 'Balance to be paid next month' }));
       }
     } else if (u < 0.5) pays.push(full(day(m.due, -16, 0)));
-    else if (u < 0.68) pays.push(full(day(m.due, 1, 30)));
+    // Families who pay after the due date keep arriving up to the day the sample is cut, so the front desk
+    // has money coming in this week — not a collection that stopped two weeks ago.
+    else if (u < 0.68) pays.push(full(recent(m.due)));
     else if (u < 0.76) {
       const part = Math.round((m.total * r.int(50, 75)) / 100 / 100) * 100;
-      pays.push(mk({ paidOn: day(m.due, 5, 40), amount: part, covers: part, note: 'Will pay the rest soon' }));
+      pays.push(mk({ paidOn: recent(m.due), amount: part, covers: part, note: 'Will pay the rest soon' }));
     } else if (u < 0.8) {
       pays.push(mk({ paidOn: addDays(AS_OF, -r.int(1, 3)), status: 'SUBMITTED', note: 'Paid from father’s account' }));
     } else if (u < 0.81) {

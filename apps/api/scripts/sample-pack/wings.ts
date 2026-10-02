@@ -90,11 +90,16 @@ export async function concerns(c: Ctx): Promise<void> {
     const tpl = r.pick(CONCERNS[category]!);
     const sec = secOf.get(stu.sectionId)!;
     const toTeacher = ['TEACHING', 'OTHER'].includes(category) ? true : r.chance(0.2);
-    const status = ((x) => (x < 0.28 ? 'OPEN' : x < 0.55 ? 'IN_PROGRESS' : 'RESOLVED'))(r.next()) as 'OPEN' | 'IN_PROGRESS' | 'RESOLVED';
-    const created = addDays(AS_OF, -r.int(1, 70));
+    // The desk's "this month" counters read the calendar month, and the sample is cut in the first days of one —
+    // so a few concerns arrived and were settled in the last two days, or the cards would all read zero.
+    const fresh = i < 7;
+    const status = fresh
+      ? (i < 3 ? 'RESOLVED' : i < 5 ? 'IN_PROGRESS' : 'OPEN')
+      : (((x) => (x < 0.28 ? 'OPEN' : x < 0.55 ? 'IN_PROGRESS' : 'RESOLVED'))(r.next()) as 'OPEN' | 'IN_PROGRESS' | 'RESOLVED');
+    const created = fresh ? addDays(AS_OF, -r.int(0, 1)) : addDays(AS_OF, -r.int(3, 70));
     const handler = toTeacher ? sec.classTeacher.userId : c.officeUserId;
     const id = randomUUID();
-    const touched = status === 'OPEN' ? created : addDays(created, r.int(1, 6));
+    const touched = status === 'OPEN' ? created : fresh ? created : addDays(created, r.int(1, 6));
     rows.push({
       id, schoolId, studentId: stu.id, raisedById: stu.userId, raisedByRole: 'STUDENT', audience: toTeacher ? 'CLASS_TEACHER' : 'OFFICE',
       assignedTeacherId: toTeacher ? sec.classTeacher.id : null, category, title: tpl.title, body: tpl.body, status,
