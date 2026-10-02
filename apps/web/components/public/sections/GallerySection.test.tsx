@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import GallerySection from './GallerySection';
-import { galleryHomeCount, GALLERY_HOME_DEFAULT } from '../site-variants';
+import { galleryGrid, galleryHomeCount, GALLERY_HOME_DEFAULT } from '../site-variants';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 /**
  * THE HOMEPAGE IS A TASTE; /gallery IS THE ALBUM.
@@ -76,3 +78,69 @@ describe('how many a layout shows', () => {
     expect(galleryHomeCount(null, 'NOT_A_LAYOUT')).toBe(8);
   });
 });
+
+/**
+ * THE LAST ROW IS FULL, OR THE BAND LOOKS UNFINISHED.
+ *
+ * Seen on a school's live homepage, 2026-10-02: the band was set to six
+ * photos and the grid is four columns wide, so it painted four across and two
+ * underneath with half the row empty — the same hole in Grid, Mosaic and
+ * Polaroid (whose own default IS six). The count a school picks is from a
+ * small set, so the band can always choose a column count that divides it.
+ */
+describe('the column count that leaves no ragged row', () => {
+  it('divides the chosen count exactly — four when it can, three when four cannot', () => {
+    expect(galleryGrid(4, 'GRID')).toEqual({ columns: 4, feature: true });
+    expect(galleryGrid(6, 'GRID')).toEqual({ columns: 3, feature: true });
+    expect(galleryGrid(8, 'GRID')).toEqual({ columns: 4, feature: true });
+    expect(galleryGrid(12, 'GRID')).toEqual({ columns: 4, feature: true });
+    // Polaroid's own default is the one that used to break.
+    expect(galleryGrid(6, 'POLAROID').columns).toBe(3);
+  });
+
+  it('counts the mosaic’s lead photo as the four cells it really occupies', () => {
+    // 5 + its 3 extra cells = 8 = two rows of four. This is today's look and it stays.
+    expect(galleryGrid(5, 'MOSAIC')).toEqual({ columns: 4, feature: true });
+    // 6 + 3 = 9 = three rows of three.
+    expect(galleryGrid(6, 'MOSAIC')).toEqual({ columns: 3, feature: true });
+    expect(galleryGrid(12, 'MOSAIC')).toEqual({ columns: 3, feature: true });
+  });
+
+  it('drops the mosaic’s feature tile when no column count can tile around it', () => {
+    // 4 and 8 leave a hole beside a 2×2 lead whichever width is used, so the
+    // band shows an even grid instead. A smaller feature beats a gap.
+    expect(galleryGrid(4, 'MOSAIC')).toEqual({ columns: 4, feature: false });
+    expect(galleryGrid(8, 'MOSAIC')).toEqual({ columns: 4, feature: false });
+  });
+
+  it('the band carries its column count, and the album page does not', () => {
+    const band = renderToStaticMarkup(
+      <GallerySection gallery={photos(40)} schoolName="Raffles" limit={6} layout="GRID" />,
+    );
+    expect(band).toContain('--ps-gal-cols:3');
+    // /gallery shows an album of any length; no count can tile it, so it keeps the four-wide grid.
+    const album = renderToStaticMarkup(<GallerySection gallery={photos(10)} schoolName="Raffles" onOwnPage />);
+    expect(album).not.toContain('--ps-gal-cols');
+  });
+
+  it('tells the stylesheet when the mosaic lead may span', () => {
+    const spans = renderToStaticMarkup(
+      <GallerySection gallery={photos(40)} schoolName="Raffles" limit={6} layout="MOSAIC" />,
+    );
+    expect(spans).toContain('data-feature="true"');
+    const flat = renderToStaticMarkup(
+      <GallerySection gallery={photos(40)} schoolName="Raffles" limit={8} layout="MOSAIC" />,
+    );
+    expect(flat).toContain('data-feature="false"');
+  });
+});
+
+describe('the stylesheet reads the band’s column count', () => {
+  it('the desktop grid is the variable, not a fixed four', () => {
+    const css = readFileSync(resolve(process.cwd(), 'components/public/ps-css.css'), 'utf8');
+    expect(css).toMatch(/\.ps-gallery-grid \{[^}]*grid-template-columns: repeat\(var\(--ps-gal-cols, 4\)/);
+    // The mosaic's lead only spans when the band said it tiles.
+    expect(css).toMatch(/\.ps-v-gallery-mosaic \.ps-gallery-grid\[data-feature="true"\] > button:first-child \{ grid-column: span 2/);
+  });
+});
+

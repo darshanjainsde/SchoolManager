@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { ArrowRight, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import type { PublicSiteData } from '@/lib/public-api';
+import { galleryGrid } from '../site-variants';
 import { optimised } from '@/lib/img';
 
 /**
@@ -24,6 +25,7 @@ export default function GallerySection({
   schoolName,
   onOwnPage,
   limit,
+  layout,
 }: {
   gallery: PublicSiteData['gallery'];
   schoolName: string;
@@ -34,12 +36,18 @@ export default function GallerySection({
    * On the homepage this is the whole point: see site-variants.ts.
    */
   limit?: number;
+  /** The arrangement this band is set to — it decides the column count. */
+  layout?: string;
 }) {
   // What this section actually paints — and what the lightbox steps through,
   // so "3 / 8" on the homepage counts the eight a visitor can see rather than
   // the three hundred they cannot.
   const shown = useMemo(() => (limit === undefined ? gallery : gallery.slice(0, limit)), [gallery, limit]);
   const hiddenCount = gallery.length - shown.length;
+  // Only the homepage band gets a chosen width: its count comes from a short
+  // list, so a width that divides it always exists. /gallery is an album of
+  // any length — no width tiles 37 photos — so it keeps the four-wide grid.
+  const grid = limit === undefined ? null : galleryGrid(shown.length, layout ?? 'GRID');
   // Lightbox: index of the open image, with a short closing phase so the
   // exit animation can play before unmount.
   const [lb, setLb] = useState<number | null>(null);
@@ -107,7 +115,11 @@ export default function GallerySection({
           </p>
         </div>
       ) : (
-        <div className="ps-gallery-grid mt-10 grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div
+          className="ps-gallery-grid mt-10 grid grid-cols-2 gap-4"
+          data-feature={grid ? String(grid.feature) : undefined}
+          style={grid ? ({ '--ps-gal-cols': grid.columns } as CSSProperties) : undefined}
+        >
           {shown.map((img, i) => (
             <button
               key={i}

@@ -278,6 +278,39 @@ export function galleryHomeCount(variants: SectionVariants | null | undefined, l
   return variants?.gallery?.homeCount ?? GALLERY_HOME_DEFAULT[layout] ?? 8;
 }
 
+/** The shape of the homepage band's grid: how many columns, and whether the
+ *  mosaic's lead photo may take its 2×2 block. */
+export interface GalleryGrid {
+  columns: number;
+  feature: boolean;
+}
+
+/** Four when four divides the count, else three. Nothing else tiles the counts on offer. */
+const evenColumns = (count: number): number => (count % 4 === 0 ? 4 : count % 3 === 0 ? 3 : 4);
+
+/**
+ * THE LAST ROW IS FULL, OR THE BAND LOOKS UNFINISHED.
+ *
+ * The grid was four columns wide whatever the count, so a band set to six
+ * photos painted four across and two underneath with half a row of nothing
+ * beside them — in Grid, in Mosaic, and in Polaroid, whose own default IS
+ * six. A school picks from a short list of counts, so the band can always
+ * pick a width that divides the one it was given.
+ *
+ * The mosaic's lead photo occupies FOUR cells, not one, so it is counted that
+ * way; when no width tiles around it (four photos, eight photos) the lead
+ * gives up its span rather than leave a hole — a smaller feature reads better
+ * than a gap. Masonry and the film strip have no rows to ruin and ignore all
+ * of this from the stylesheet.
+ */
+export function galleryGrid(count: number, layout: string): GalleryGrid {
+  if (layout === 'MOSAIC') {
+    for (const columns of [4, 3]) if ((count + 3) % columns === 0) return { columns, feature: true };
+    return { columns: evenColumns(count), feature: false };
+  }
+  return { columns: evenColumns(count), feature: true };
+}
+
 export function sectionHidden(variants: SectionVariants | null | undefined, key: string): boolean {
   return (SECTION_KEYS as string[]).includes(key) && variants?.[key as SectionKey]?.hidden === true;
 }

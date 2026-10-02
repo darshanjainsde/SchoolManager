@@ -305,6 +305,7 @@ export default function PublicSite({ data, view = 'home', page, birthdays = null
           gallery={data.gallery}
           schoolName={schoolName}
           limit={galleryHomeCount(variants, sectionLayoutOf(variants, 'gallery'))}
+          layout={sectionLayoutOf(variants, 'gallery')}
         />
       </div>
     ),
