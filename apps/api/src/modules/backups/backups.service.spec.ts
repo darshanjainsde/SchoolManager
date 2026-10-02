@@ -124,11 +124,35 @@ describe('a running backup', () => {
 
   it('a final backup waits for a just-suspended school to go quiet before reading a row', async () => {
     running();
-    schools.set(SCHOOL, { id: SCHOOL, slug: 'snsps', status: 'SUSPENDED', statusChangedAt: new Date(Date.now() - 10_000), domains: [] });
+    const suspendedAt = new Date(Date.now() - 10_000);
+    schools.set(SCHOOL, { id: SCHOOL, slug: 'snsps', status: 'SUSPENDED', statusChangedAt: suspendedAt, domains: [] });
     const v = await svc.step('b-1');
     expect(v).toMatchObject({ status: 'RUNNING', waiting: true });
-    expect(backups.get('b-1')!.lockedUntil).toBeNull(); // lease released for the next poll
+    // The job records WHEN it can go on — the end of the 70 s settle period — in
+    // the lease column, so no worker re-polls it before then. (It used to release
+    // the lease, which let every poll and every cron tick pick it up to find it
+    // still waiting.)
+    expect(backups.get('b-1')!.lockedUntil.getTime()).toBe(suspendedAt.getTime() + 70_000);
     expect(s3.send).not.toHaveBeenCalled(); // nothing written yet
+  });
+
+  it('a copy of what a reset is about to replace waits the same way', async () => {
+    backup({
+      reason: 'BEFORE_RESET', status: 'RUNNING', scope: 'day',
+      state: { export: { table: 0, writer: null, phase: 'rows' }, sink: null, progress: 0 },
+    });
+    schools.set(SCHOOL, { id: SCHOOL, slug: 'snsps', status: 'SUSPENDED', statusChangedAt: new Date(Date.now() - 10_000), domains: [] });
+    expect(await svc.step('b-1')).toMatchObject({ status: 'RUNNING', waiting: true });
+    expect(s3.send).not.toHaveBeenCalled();
+  });
+
+  it('is not leasable again until its wake-up time, so a second worker does nothing', async () => {
+    running();
+    schools.set(SCHOOL, { id: SCHOOL, slug: 'snsps', status: 'SUSPENDED', statusChangedAt: new Date(Date.now() - 10_000), domains: [] });
+    await svc.step('b-1'); // waits, and records when
+    const updates = (db.schoolBackup.update as jest.Mock).mock.calls.length;
+    await svc.step('b-1'); // a second poll: the lease is held until then
+    expect((db.schoolBackup.update as jest.Mock).mock.calls.length).toBe(updates);
   });
 
   it('stops after five steps in a row that were cut off, instead of retrying forever', async () => {
