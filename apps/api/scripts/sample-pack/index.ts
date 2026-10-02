@@ -29,6 +29,7 @@ import { buildSchemaPlan, q } from '../../src/modules/backups/engine/schema-plan
 import { scopePlan } from '../../src/modules/backups/engine/scoped-plan';
 import { MemoryObjectStore } from '../../src/modules/backups/engine/store';
 import { buildSchool } from './phases';
+import { planStaffing } from './staffing';
 import { Ctx } from './ctx';
 import { SCHOOL } from './data';
 import { makeRng } from './rng';
@@ -79,7 +80,7 @@ async function main() {
 
   const c: Ctx = {
     p, r: makeRng(20261002), schoolId: school.id, yearId: '', pwHash,
-    subjectId: new Map(), subjectName: new Map(), gradeId: [], houseIds: [], teachers: [], staff: [], sections: [], students: [],
+    subjectId: new Map(), subjectName: new Map(), gradeId: [], houseIds: [], staffing: planStaffing(), teachers: [], staff: [], sections: [], students: [],
     officeUserId: '', accountsUserId: '', librarianUserId: '', holidays: new Set(), schoolDays: [], leaveDays: new Map(),
     teacherFor: new Map(), halfYearly: new Map(), counts: {},
   };

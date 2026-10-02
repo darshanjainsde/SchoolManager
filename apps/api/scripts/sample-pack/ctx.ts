@@ -1,4 +1,5 @@
 import { getPlatformPrisma } from '@skoolos/db';
+import type { Staffing } from './staffing';
 import type { Rng } from './rng';
 
 export type Db = ReturnType<typeof getPlatformPrisma>;
@@ -33,6 +34,8 @@ export interface Ctx {
   subjectName: Map<string, string>;
   gradeId: string[];
   houseIds: string[];
+  /** Who teaches what and when, worked out before anyone is written (see staffing.ts). */
+  staffing: Staffing;
   teachers: TeacherInfo[];
   staff: StaffInfo[];
   sections: SectionInfo[];

@@ -71,6 +71,23 @@ export function subjectsFor(g: number, section: string): string[] {
   return ['ENG', 'ACC', 'BST', 'ECO', 'MATH'];
 }
 
+/**
+ * Lessons per week for each subject, by grade (and section for XI–XII). Every
+ * section has 7 teaching periods × 6 days = 42, and every plan below sums to
+ * exactly 42 — `staffing.ts` asserts it, because a section with 41 lessons has an
+ * empty period and one with 43 cannot be timetabled at all.
+ */
+export function weekly(g: number, letter: string): Record<string, number> {
+  if (g <= 2) return { ENG: 8, MATH: 8, EVS: 8, ART: 9, PE: 9 };
+  if (g <= 4) return { ENG: 8, HIN: 7, MATH: 8, EVS: 6, CS: 3, ART: 4, PE: 6 };
+  if (g <= 7) return { ENG: 7, HIN: 6, MATH: 8, SCI: 6, SST: 5, CS: 3, ART: 3, PE: 4 };
+  if (g <= 10) return { ENG: 7, HIN: 5, MATH: 7, SCI: 7, SST: 7, SKT: 4, CS: 3, PE: 2 };
+  if (g <= 12) return { ENG: 7, HIN: 6, MATH: 8, SCI: 8, SST: 7, CS: 3, PE: 3 };
+  if (letter === 'A') return { ENG: 7, PHY: 9, CHEM: 9, MATH: 10, CS: 7 };
+  if (letter === 'B') return { ENG: 7, PHY: 10, CHEM: 10, BIO: 10, PE: 5 };
+  return { ENG: 7, ACC: 9, BST: 9, ECO: 9, MATH: 8 };
+}
+
 export const PERIODS: readonly (readonly [string, string, string, 'CLASS' | 'BREAK'])[] = [
   ['I', '08:00', '08:45', 'CLASS'], ['II', '08:45', '09:30', 'CLASS'], ['III', '09:30', '10:15', 'CLASS'],
   ['Break', '10:15', '10:35', 'BREAK'], ['IV', '10:35', '11:20', 'CLASS'], ['V', '11:20', '12:05', 'CLASS'],
@@ -91,7 +108,7 @@ export const TEACHERS: TeacherDef[] = [
   { first: 'Kavita', last: 'Mishra', gender: 'F', subjects: ['HIN', 'SKT'], designation: 'TGT Hindi & Sanskrit', qualification: 'M.A. Sanskrit, B.Ed', years: 9, grossRupees: 46000, joined: '2019-04-01' },
   { first: 'Rajesh', last: 'Kulkarni', gender: 'M', subjects: ['MATH'], designation: 'PGT Mathematics', qualification: 'M.Sc. Mathematics, B.Ed', years: 19, grossRupees: 74000, joined: '2013-04-01' },
   { first: 'Neha', last: 'Agarwal', gender: 'F', subjects: ['MATH'], designation: 'TGT Mathematics', qualification: 'M.Sc. Mathematics, B.Ed', years: 8, grossRupees: 48000, joined: '2018-07-02' },
-  { first: 'Imran', last: 'Khan', gender: 'M', subjects: ['MATH'], designation: 'PRT Mathematics', qualification: 'B.Sc., B.Ed', years: 5, grossRupees: 34000, joined: '2026-06-01' },
+  { first: 'Imran', last: 'Khan', gender: 'M', subjects: ['MATH'], designation: 'PRT Mathematics', qualification: 'B.Sc., B.Ed', years: 5, grossRupees: 34000, joined: '2025-06-02' },
   { first: 'Sunita', last: 'Rao', gender: 'F', subjects: ['SCI', 'EVS'], designation: 'TGT Science', qualification: 'M.Sc. Zoology, B.Ed', years: 10, grossRupees: 49000, joined: '2016-04-01' },
   { first: 'Arvind', last: 'Menon', gender: 'M', subjects: ['SCI', 'BIO'], designation: 'TGT Science', qualification: 'M.Sc. Botany, B.Ed', years: 12, grossRupees: 51000, joined: '2014-07-01' },
   { first: 'Vikram', last: 'Joshi', gender: 'M', subjects: ['PHY'], designation: 'PGT Physics', qualification: 'M.Sc. Physics, B.Ed', years: 17, grossRupees: 72000, joined: '2011-04-01' },

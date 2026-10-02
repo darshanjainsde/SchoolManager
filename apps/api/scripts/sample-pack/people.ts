@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto';
 import type { Prisma } from '@skoolos/db';
 import { Ctx, SectionInfo, StaffInfo, StudentInfo, TeacherInfo, many } from './ctx';
 import {
-  AREAS, CITY, FIRST_F, FIRST_M, GRADES, HOLIDAYS, HOUSES, MOTHER_FIRST, PERIODS, ROOMS, SCHOOL, SECTIONS, STAFF,
-  SUBJECTS, SURNAMES, TEACHERS, subjectsFor,
+  AREAS, CITY, FIRST_F, FIRST_M, GRADES, HOLIDAYS, HOUSES, MOTHER_FIRST, PERIODS, ROOMS, SCHOOL, STAFF,
+  SUBJECTS, SURNAMES, weekly,
 } from './data';
 import { D, addDays, clamp, hashOf, iso, mobile } from './rng';
 
@@ -57,6 +57,7 @@ export async function structure(c: Ctx): Promise<void> {
 
 const emailOf = (first: string, last: string) =>
   `${first.toLowerCase()}.${last.toLowerCase()}@${SCHOOL.emailDomain}`;
+const emailsTaken = new Set<string>();
 
 /** 20 teachers and 9 other staff, every one with a login whose password is "password". */
 export async function staffAndTeachers(c: Ctx): Promise<void> {
@@ -65,17 +66,19 @@ export async function staffAndTeachers(c: Ctx): Promise<void> {
   const teachers: Prisma.TeacherCreateManyInput[] = [];
   const links: Prisma.TeacherSubjectCreateManyInput[] = [];
 
-  TEACHERS.forEach((t, i) => {
+  c.staffing.teachers.forEach((t, i) => {
     const id = randomUUID();
     const userId = randomUUID();
-    const email = emailOf(t.first, t.last);
+    let email = emailOf(t.first, t.last);
+    for (let n = 2; emailsTaken.has(email); n += 1) email = `${t.first.toLowerCase()}.${t.last.toLowerCase()}${n}@${SCHOOL.emailDomain}`;
+    emailsTaken.add(email);
     const name = `${t.first} ${t.last}`;
     const phone = mobile(r);
     users.push({ id: userId, schoolId, email, passwordHash: c.pwHash, role: 'TEACHER', name, phone, phoneVerifiedAt: D('2026-04-01') });
     teachers.push({
       id, schoolId, userId, firstName: t.first, lastName: t.last, email, phone, phoneE164: phone,
       gender: t.gender, dob: D(`${2026 - 25 - Math.min(t.years, 28)}-0${r.int(1, 9)}-${10 + r.int(0, 17)}`),
-      employeeCode: `${SCHOOL.codePrefix}-T${String(i + 1).padStart(2, '0')}`,
+      employeeCode: `${SCHOOL.codePrefix}-T${String(i + 1).padStart(3, '0')}`,
       designation: t.designation, department: t.subjects[0] === 'PE' ? 'Sports' : t.subjects[0] === 'ART' ? 'Arts' : 'Academics',
       employmentType: 'Permanent', joinedOn: D(t.joined), highestQualification: t.qualification,
       experienceYears: t.years, primarySubjectId: c.subjectId.get(t.subjects[0]!)!,
@@ -93,7 +96,9 @@ export async function staffAndTeachers(c: Ctx): Promise<void> {
   STAFF.forEach((s) => {
     const id = randomUUID();
     const userId = randomUUID();
-    const email = emailOf(s.first, s.last);
+    let email = emailOf(s.first, s.last);
+    for (let n = 2; emailsTaken.has(email); n += 1) email = `${s.first.toLowerCase()}.${s.last.toLowerCase()}${n}@${SCHOOL.emailDomain}`;
+    emailsTaken.add(email);
     const phone = mobile(r);
     users.push({ id: userId, schoolId, email, passwordHash: c.pwHash, role: 'STAFF', name: `${s.first} ${s.last}`, phone });
     staff.push({ id, schoolId, firstName: s.first, lastName: s.last, role: s.role, email, phone, phoneE164: phone, userId, status: 'ACTIVE', isActive: true });
@@ -109,37 +114,47 @@ export async function staffAndTeachers(c: Ctx): Promise<void> {
   await many(c, 'Staff', staff, (b) => p.staff.createMany({ data: b }));
 }
 
-/** 45 sections, a class teacher for each, and the subject teachers for every (section, subject). */
+/**
+ * 45 sections; a class teacher for each; the subject teacher of every (section,
+ * subject); and the whole week's timetable — 1,890 lessons, laid out by
+ * staffing.ts so that no teacher is ever in two rooms at once.
+ */
 export async function sections(c: Ctx): Promise<void> {
   const { p, schoolId } = c;
-  // Nobody joins mid-year AND runs a class from April, so the June joiner is not a class teacher.
-  const ctPool = c.teachers.filter((t) => t.joined <= SCHOOL.yearStart);
+  const plan = c.staffing;
+
+  // A class teacher is someone who actually teaches that class a lot, and runs only one class.
+  const ctOf: number[] = [];
+  const isClassTeacher = new Set<number>();
+  plan.sections.forEach((_, i) => {
+    const mine = plan.lessons.filter((l) => l.section === i).sort((a, b) => b.count - a.count);
+    const pick = mine.find((l) => !isClassTeacher.has(l.teacher) && !['PE', 'ART'].includes(l.subject))
+      ?? mine.find((l) => !isClassTeacher.has(l.teacher)) ?? mine[0]!;
+    isClassTeacher.add(pick.teacher);
+    ctOf.push(pick.teacher);
+  });
+
   const rows: Prisma.ClassSectionCreateManyInput[] = [];
   const assigns: Prisma.ClassTeacherAssignmentCreateManyInput[] = [];
-  let n = 0;
-  GRADES.forEach((grade, g) => {
-    SECTIONS.forEach((letter) => {
-      const ct = ctPool[n % ctPool.length]!;
-      n += 1;
-      const id = randomUUID();
-      rows.push({ id, schoolId, gradeId: c.gradeId[g]!, name: letter, classTeacherId: ct.id, academicYearId: c.yearId });
-      assigns.push({ schoolId, classSectionId: id, teacherId: ct.id, fromAt: D(SCHOOL.yearStart) });
-      c.sections.push({ id, gradeIdx: g, grade, letter, label: `${grade}-${letter}`, classTeacher: ct, subjects: subjectsFor(g, letter) });
-    });
+  plan.sections.forEach((sec, i) => {
+    const id = randomUUID();
+    const ct = c.teachers[ctOf[i]!]!;
+    rows.push({ id, schoolId, gradeId: c.gradeId[sec.g]!, name: sec.letter, classTeacherId: ct.id, academicYearId: c.yearId });
+    assigns.push({ schoolId, classSectionId: id, teacherId: ct.id, fromAt: D(SCHOOL.yearStart) });
+    c.sections.push({ id, gradeIdx: sec.g, grade: GRADES[sec.g]!, letter: sec.letter, label: sec.label, classTeacher: ct, subjects: Object.keys(weekly(sec.g, sec.letter)) });
   });
   await many(c, 'ClassSection', rows, (b) => p.classSection.createMany({ data: b }));
   await many(c, 'ClassTeacherAssignment', assigns, (b) => p.classTeacherAssignment.createMany({ data: b }));
 
-  // Subject teachers: the one with the lightest load among those who teach it.
-  const load = new Map<string, number>();
-  for (const s of c.sections) {
-    for (const code of s.subjects) {
-      const able = c.teachers.filter((t) => t.subjects.includes(code));
-      const pick = able.reduce((a, b) => ((load.get(a.id) ?? 0) <= (load.get(b.id) ?? 0) ? a : b));
-      load.set(pick.id, (load.get(pick.id) ?? 0) + 1);
-      c.teacherFor.set(`${s.id}|${code}`, pick);
-    }
-  }
+  for (const l of plan.lessons) c.teacherFor.set(`${c.sections[l.section]!.id}|${l.subject}`, c.teachers[l.teacher]!);
+
+  const periods = (await p.period.findMany({ where: { schoolId, kind: 'CLASS' }, orderBy: { order: 'asc' } })).map((x) => x.id);
+  const slots: Prisma.TimetableSlotCreateManyInput[] = plan.slots.map((s) => ({
+    schoolId, classSectionId: c.sections[s.section]!.id, dayOfWeek: s.day, periodId: periods[s.period]!,
+    subjectId: c.subjectId.get(s.subject)!, teacherId: c.teachers[s.teacher]!.id, academicYearId: c.yearId,
+    effectiveFrom: D(SCHOOL.yearStart),
+  }));
+  await many(c, 'TimetableSlot', slots, (b) => p.timetableSlot.createMany({ data: b }));
 }
 
 /** A section's size comes from its OWN label, never from the draw order. */
