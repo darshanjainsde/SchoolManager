@@ -20,10 +20,50 @@ import { Manifest } from './engine/export';
  * nothing, so ten of them cost nothing. `day` is taken every night, and a month
  * is as far back as anyone has ever asked to go.
  */
-export const KEEP_VERSIONS: Record<Bucket, number> = {
+/**
+ * WHAT IS ACTUALLY SAVED, and how many of each is kept.
+ *
+ * These are the four units a person can put back, and each is a scope that is
+ * safe to put back on its own:
+ *
+ *   school     the school as our customer — merged back by key, never emptied
+ *   website    the public face — nothing anywhere depends on it
+ *   setup,day  the management half TOGETHER, because emptying the roster
+ *              deletes every mark and invoice hanging off it, so a roster
+ *              archive with no register in it could only put one back over an
+ *              empty register
+ *   day        the register alone — the cheap nightly rollback
+ *
+ * `day` is therefore saved twice over: once on its own every night, and once
+ * inside the management half. That is deliberate — the daily copy is small and
+ * is the one anybody actually reaches for.
+ */
+export const SNAPSHOT_SCOPES: readonly (readonly Bucket[])[] = [
+  ['school'],
+  ['website'],
+  ['setup', 'day'],
+  ['day'],
+];
+
+export const SNAPSHOT_LABEL: Record<string, string> = {
+  school: 'School settings',
+  website: 'Website',
+  'setup,day': 'Setup & data',
+  day: 'Today’s data',
+};
+
+export const SNAPSHOT_HOLDS: Record<string, string> = {
+  school: 'Identity, plan, domain, integrations and the admin logins',
+  website: 'Theme, pages, sections, media, Hall of Fame and the blog',
+  'setup,day': 'The whole management half — roster, fee heads, catalogue, and everything that happened',
+  day: 'Attendance, marks, invoices, payments, diary, messages — one day’s worth of change',
+};
+
+/** How many versions of each scope are kept. */
+export const KEEP_VERSIONS: Record<string, number> = {
   school: 10,
   website: 10,
-  setup: 10,
+  'setup,day': 10,
   day: 30,
 };
 
@@ -32,8 +72,8 @@ export const scopeKey = (buckets: readonly Bucket[]): string => buckets.join(','
 export const parseScope = (scope: string | null | undefined): Bucket[] | null =>
   (scope ? (scope.split(',').filter(Boolean) as Bucket[]) : null);
 
-/** The bucket a snapshot's retention is counted by — the last, widest one. */
-export const retentionBucket = (buckets: readonly Bucket[]): Bucket => buckets[buckets.length - 1];
+/** How many versions this scope keeps. Unknown scopes fall back to ten. */
+export const keepsFor = (scope: string): number => KEEP_VERSIONS[scope] ?? 10;
 
 export interface SettleResult {
   /** True when the snapshot held nothing new and was dropped. */
@@ -86,8 +126,7 @@ export async function settleSnapshot(
     data: { version, contentHash: hash, lastCheckedAt: new Date() },
   });
 
-  const buckets = parseScope(b.scope)!;
-  const keep = KEEP_VERSIONS[retentionBucket(buckets)] ?? 10;
+  const keep = keepsFor(b.scope);
   const old = await db.schoolBackup.findMany({
     where: { sourceSchoolId: b.sourceSchoolId, scope: b.scope, reason: 'SNAPSHOT', status: 'READY' },
     orderBy: { createdAt: 'desc' },
@@ -97,10 +136,12 @@ export async function settleSnapshot(
   return { unchanged: false, version, pruned: old.length, currentId: b.id };
 }
 
-/** One bucket's standing, as the console shows it. */
+/** One saved scope's standing, as the console shows it. */
 export interface BucketStanding {
-  bucket: Bucket;
+  buckets: Bucket[];
   scope: string;
+  label: string;
+  holds: string;
   kept: boolean;
   /** The current version, if this bucket has ever been saved. */
   currentId: string | null;
@@ -118,7 +159,7 @@ export interface BucketStanding {
   runningProgress: number;
 }
 
-export async function bucketStandings(schoolId: string, kept: readonly Bucket[], all: readonly Bucket[]): Promise<BucketStanding[]> {
+export async function bucketStandings(schoolId: string, kept: readonly Bucket[]): Promise<BucketStanding[]> {
   const db = getPlatformPrisma();
   const rows = await db.schoolBackup.findMany({
     where: { sourceSchoolId: schoolId, reason: 'SNAPSHOT', scope: { not: null } },
@@ -127,16 +168,18 @@ export async function bucketStandings(schoolId: string, kept: readonly Bucket[],
   const running = await db.schoolBackup.findMany({
     where: { sourceSchoolId: schoolId, status: 'RUNNING', scope: { not: null } },
   });
-  return all.map((bucket) => {
-    const scope = scopeKey([bucket]);
+  return SNAPSHOT_SCOPES.map((buckets) => {
+    const scope = scopeKey(buckets);
     const mine = rows.filter((r) => r.scope === scope && r.status === 'READY');
     const current = mine[0] ?? null;
     const job = running.find((r) => r.scope === scope) ?? null;
     const state = job?.state as { progress?: number } | null;
     return {
-      bucket,
+      buckets: [...buckets],
       scope,
-      kept: kept.includes(bucket),
+      label: SNAPSHOT_LABEL[scope] ?? scope,
+      holds: SNAPSHOT_HOLDS[scope] ?? '',
+      kept: buckets.every((b) => kept.includes(b)),
       currentId: current?.id ?? null,
       version: current?.version ?? null,
       savedAt: current?.createdAt ?? null,
@@ -145,7 +188,7 @@ export async function bucketStandings(schoolId: string, kept: readonly Bucket[],
       fileCount: current?.fileCount ?? null,
       sizeBytes: current?.sizeBytes == null ? null : Number(current.sizeBytes),
       versions: mine.length,
-      keeps: KEEP_VERSIONS[bucket],
+      keeps: keepsFor(scope),
       runningId: job?.id ?? null,
       runningProgress: state?.progress ?? 0,
     };

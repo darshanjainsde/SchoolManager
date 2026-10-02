@@ -51,13 +51,19 @@ export async function appliedMigrations(db: RawDb): Promise<string[]> {
   return rows.map((r) => r.name);
 }
 
-export interface ColumnInfo { name: string; nullable: boolean; hasDefault: boolean }
+export interface ColumnInfo {
+  name: string;
+  nullable: boolean;
+  hasDefault: boolean;
+  /** Postgres' own type name: `uuid`, `text`, `_uuid` for a uuid array, … */
+  udt: string;
+}
 
 /** The target table's real columns. Empty when the table does not exist here. */
 export async function tableColumns(db: RawDb, table: string): Promise<ColumnInfo[]> {
-  const rows = await db.query<{ name: string; nullable: string; def: string | null; gen: string; ident: string }>(
+  const rows = await db.query<{ name: string; nullable: string; def: string | null; gen: string; ident: string; udt: string }>(
     `SELECT column_name AS name, is_nullable AS nullable, column_default AS def,
-            is_generated AS gen, is_identity AS ident
+            is_generated AS gen, is_identity AS ident, udt_name AS udt
        FROM information_schema.columns
       WHERE table_schema = current_schema() AND table_name = $1
       ORDER BY ordinal_position`,
@@ -65,5 +71,5 @@ export async function tableColumns(db: RawDb, table: string): Promise<ColumnInfo
   );
   return rows
     .filter((r) => r.gen !== 'ALWAYS')
-    .map((r) => ({ name: r.name, nullable: r.nullable === 'YES', hasDefault: r.def != null || r.ident === 'YES' }));
+    .map((r) => ({ name: r.name, nullable: r.nullable === 'YES', hasDefault: r.def != null || r.ident === 'YES', udt: r.udt }));
 }

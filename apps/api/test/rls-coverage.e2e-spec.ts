@@ -178,6 +178,11 @@ describe('RLS coverage across every tenant table', () => {
       'MarketingLead',
       'MetricRollup',
       'PasswordResetToken',
+      // The sample-pack library (20261002_010000). Platform level on purpose:
+      // a pack belongs to the platform, not to the school it was cut from, so
+      // deleting that school can never take the pack with it. Guarded by the
+      // platform_only policy, which the test above asserts.
+      'SamplePack',
       'School',
       // Platform registers of school backups (20261001_000000). Deliberately
       // NOT tenant tables: they must outlive the school they describe, and a

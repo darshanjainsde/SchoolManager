@@ -41,7 +41,7 @@ describe('pointers on kept rows that aim into a replaced bucket', () => {
 describe('a narrowed plan carries only its own tables', () => {
   const day = scopePlan(plan, ['day']);
   const web = scopePlan(plan, ['website']);
-  const data = scopePlan(plan, ['setup']);
+  const data = scopePlan(plan, ['setup', 'day']);
 
   it('keeps the tables of the bucket and none of the others', () => {
     expect(day.insertOrder.some((t) => t.model === 'Attendance')).toBe(true);
@@ -63,7 +63,7 @@ describe('a narrowed plan carries only its own tables', () => {
   it('selects a whole table, a split half, or nothing at all', () => {
     expect(day.where('Attendance')).toBe('');
     expect(day.where('Student')).toBeNull();
-    expect(data.where('User')).toBe(`NOT ("role" IN ('OWNER', 'SCHOOL_ADMIN'))`);
+    expect(scopePlan(plan, ['setup']).where('User')).toBe(`NOT ("role" IN ('OWNER', 'SCHOOL_ADMIN'))`);
     expect(scopePlan(plan, ['school']).where('User')).toBe(`"role" IN ('OWNER', 'SCHOOL_ADMIN')`);
   });
 
@@ -81,8 +81,12 @@ describe('a narrowed plan carries only its own tables', () => {
     expect(web.inboundRestricts.has('FeeTerm')).toBe(false);
   });
 
-  it('reports what was asked for next to what it had to widen to', () => {
-    expect(data.requested).toEqual(['setup']);
-    expect(data.buckets).toEqual(['setup', 'day']);
+  it('takes exactly the buckets it is given, and says whether they are safe to empty', () => {
+    expect(scopePlan(plan, ['setup']).buckets).toEqual(['setup']);
+    expect(scopePlan(plan, ['setup']).closed).toBe(false);
+    expect(scopePlan(plan, ['setup', 'day']).closed).toBe(true);
+    expect(scopePlan(plan, ['day']).closed).toBe(true);
+    expect(scopePlan(plan, ['website']).closed).toBe(true);
+    expect(scopePlan(plan, ['school']).closed).toBe(false);
   });
 });

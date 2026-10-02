@@ -12,7 +12,7 @@ import { Bucket, DATA_BUCKETS } from './engine/buckets';
 import { Manifest } from './engine/export';
 import { ImportFailed, ImportRefused } from './engine/import';
 import { purgeBucketRows } from './engine/purge';
-import { ScopedPlan, expandScope, scopePlan } from './engine/scoped-plan';
+import { ScopedPlan, expandScope, keptPointers, scopePlan } from './engine/scoped-plan';
 
 const STEP_MS = 40_000;
 const MAX_ATTEMPTS = 5;
@@ -92,10 +92,16 @@ export class BucketRestoresService {
 
   private rt() { return this.backups.runtime(); }
 
-  /** The plan for a request, with the scope already widened to a closed one. */
-  private planFor(buckets: Bucket[]): ScopedPlan {
+  /**
+   * The plan for a request. A REPLACE is widened to a scope that is safe to
+   * empty — asking for `setup` takes `day` with it, because 42 required links
+   * hang off the roster — and the answer says what it was widened to. A MERGE
+   * empties nothing, so it is taken exactly as asked.
+   */
+  private planFor(buckets: Bucket[], mode: BucketImportMode): ScopedPlan {
     if (buckets.length === 0) throw new ApiError('VALIDATION', 'Name at least one bucket.', 400);
-    return scopePlan(this.rt().plan, buckets);
+    const wanted = mode === 'replace' ? expandScope(this.rt().plan, buckets) : buckets;
+    return scopePlan(this.rt().plan, wanted);
   }
 
   /**
@@ -106,8 +112,7 @@ export class BucketRestoresService {
    * there, and nothing is deleted.
    */
   private modeFor(buckets: Bucket[]): BucketImportMode {
-    const closed = expandScope(this.rt().plan, buckets);
-    return closed.length === buckets.length ? 'replace' : 'merge';
+    return buckets.length === 1 && buckets[0] === 'school' ? 'merge' : 'replace';
   }
 
   private view(r: {
@@ -162,9 +167,10 @@ export class BucketRestoresService {
   /* ── preflight ────────────────────────────────────────────────────────── */
 
   /** Read-only: exactly what would change, before anything is touched. */
-  async preflight(req: BucketRestoreRequest): Promise<BucketPreflight & { label: string }> {
-    const plan = this.planFor(req.buckets);
+  async preflight(req: BucketRestoreRequest): Promise<BucketPreflight & { label: string; widenedTo: Bucket[] }> {
     const mode = this.modeFor(req.buckets);
+    const plan = this.planFor(req.buckets, mode);
+    const widenedTo = plan.buckets.filter((b) => !req.buckets.includes(b));
     const src = await this.source(req);
     const deps = { ...this.rt().deps(plan), plan };
     if (!src) {
@@ -181,11 +187,11 @@ export class BucketRestoresService {
         if (n) tables.push({ table: t.table, snapshot: 0, current: n });
       }
       return {
-        buckets: plan.buckets,
-        widenedTo: plan.buckets.filter((b) => !plan.requested.includes(b)),
+        buckets: plan.buckets, widenedTo,
         mode, takenAt: new Date().toISOString(),
         snapshotRows: 0, currentRows, tables,
-        pointers: 0, fromAnotherSchool: false, shiftWeeks: 0, filesInArchive: 0,
+        pointers: keptPointers(plan.full, plan.buckets).length,
+        fromAnotherSchool: false, shiftWeeks: 0, filesInArchive: 0,
         warnings: [], label: 'nothing — the buckets are emptied',
       };
     }
@@ -194,7 +200,7 @@ export class BucketRestoresService {
         schoolId: req.schoolId, mode,
         rehome: req.packId ? { shiftDates: req.shiftDates !== false } : undefined,
       });
-      return { ...pre, label: src.label };
+      return { ...pre, label: src.label, widenedTo };
     } catch (e) {
       if (e instanceof ImportRefused) throw new ApiError('RESTORE_REFUSED', e.message, 409);
       throw e;
@@ -205,8 +211,8 @@ export class BucketRestoresService {
 
   async start(req: BucketRestoreRequest, actor: string | null): Promise<BucketRestoreView> {
     const db = getPlatformPrisma();
-    const plan = this.planFor(req.buckets);
     const mode = this.modeFor(req.buckets);
+    const plan = this.planFor(req.buckets, mode);
     const school = await db.school.findUnique({ where: { id: req.schoolId }, select: { status: true, slug: true } });
     if (!school) throw new ApiError('NOT_FOUND', 'No such school.', 404);
     // Decided before anything moves: a refusal here leaves the school alone.

@@ -21,10 +21,20 @@ import { SchemaPlan, TablePlan } from './schema-plan';
  *     that selects it.
  */
 export interface ScopedPlan extends SchemaPlan {
-  /** The buckets actually covered, after expansion. Always in restore order. */
+  /**
+   * The plan this was narrowed FROM. Anything whose job is to look outside the
+   * scope — which rows elsewhere point into it, what emptying it would reach —
+   * has to read this one, because the narrowed `insertOrder` cannot see them.
+   */
+  full: SchemaPlan;
+  /** The buckets covered, exactly as asked for. Always in restore order. */
   buckets: Bucket[];
-  /** Exactly what was asked for, before expansion — for the message to the user. */
-  requested: Bucket[];
+  /**
+   * False when emptying these buckets would delete rows outside them — which
+   * makes the scope unsafe to REPLACE (though still fine to save, and fine to
+   * put back by key). `expandScope` says what it would have to include.
+   */
+  closed: boolean;
   /**
    * SQL that selects this table's rows for this scope: `null` when the table
    * has no rows here, `''` for all of the school's rows, else a predicate over
@@ -105,12 +115,20 @@ export function keptPointers(plan: SchemaPlan, buckets: readonly Bucket[]): Kept
 }
 
 /**
- * Narrows a plan to a scope, expanding the scope first. Order is preserved, so
- * inserts still run parents-first and deletes children-first within the scope.
+ * Narrows a plan to EXACTLY these buckets. Nothing is added: a snapshot of the
+ * website is the website, and a caller that needs a scope safe to empty asks
+ * `expandScope` first and passes the answer in.
+ *
+ * That separation is the whole difference between saving and replacing. Saving
+ * `setup` alone is harmless. REPLACING it is not — emptying the roster deletes
+ * every mark and invoice that hangs off it — so a `setup` archive with no `day`
+ * rows in it could only ever put the roster back over an empty register. The
+ * console therefore only ever offers closed scopes for a restore, and
+ * `closed` here is what says which those are.
  */
 export function scopePlan(
   plan: SchemaPlan,
-  requested: readonly Bucket[],
+  wanted: readonly Bucket[],
   opts: {
     /**
      * Models to leave out even though their bucket is in scope. Used by sample
@@ -121,7 +139,7 @@ export function scopePlan(
     exclude?: readonly string[];
   } = {},
 ): ScopedPlan {
-  const buckets = expandScope(plan, requested);
+  const buckets = BUCKETS.filter((b) => wanted.includes(b));
   const excluded = new Set(opts.exclude ?? []);
   const keep = (t: TablePlan) => inScope(t.model, buckets) && !excluded.has(t.model);
   const insertOrder = plan.insertOrder.filter(keep);
@@ -133,6 +151,7 @@ export function scopePlan(
   const inboundRestricts = new Map([...plan.inboundRestricts].filter(([table]) => tables.has(table)));
   return {
     ...plan,
+    full: plan,
     insertOrder,
     deleteOrder: [...insertOrder].reverse(),
     inboundRestricts,
@@ -141,7 +160,7 @@ export function scopePlan(
     // scoped one must not reach them (no bucket claims them).
     excludedTables: [],
     buckets,
-    requested: BUCKETS.filter((b) => requested.includes(b)),
+    closed: sameBuckets(expandScope(plan, buckets), buckets),
     where: (model: string) => {
       for (const b of buckets) {
         const f = rowFilter(model, b);
@@ -156,6 +175,9 @@ export function scopePlan(
     },
   };
 }
+
+const sameBuckets = (a: readonly Bucket[], b: readonly Bucket[]) =>
+  a.length === b.length && a.every((x, i) => x === b[i]);
 
 /** Appends a scope's row filter to a WHERE clause. Returns '' when the table is whole. */
 export const andFilter = (filter: string | null): string => (filter ? ` AND (${filter})` : '');

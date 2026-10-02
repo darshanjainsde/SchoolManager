@@ -92,8 +92,6 @@ export interface BucketImportDeps {
 /** What a restore is about to do, read before anything is written. */
 export interface BucketPreflight {
   buckets: Bucket[];
-  /** Buckets the request had to widen to, because emptying it would strand them. */
-  widenedTo: Bucket[];
   mode: BucketImportMode;
   takenAt: string;
   /** Rows in the archive, per table, and in the school right now. */
@@ -129,8 +127,11 @@ export async function preflightBucketImport(
     throw new ImportRefused('NOT_A_SCHOOL_BACKUP', 'This file is not a Sckools backup.');
   }
   const scope = m.scope ?? null;
-  if (scope && !SAME(deps.plan.requested, scope)) {
-    throw new ImportRefused('WRONG_SCOPE', `This file holds the ${scope.join(' and ')} of a school; you asked to put back the ${deps.plan.requested.join(' and ')}.`);
+  if (scope && !SAME(deps.plan.buckets, scope)) {
+    throw new ImportRefused('WRONG_SCOPE', `This file holds the ${scope.join(' and ')} of a school; you asked to put back the ${deps.plan.buckets.join(' and ')}.`);
+  }
+  if (options.mode === 'replace' && !deps.plan.closed) {
+    throw new ImportRefused('WRONG_SCOPE', `Emptying the ${deps.plan.buckets.join(' and ')} of a school would delete rows outside it, so it cannot be replaced on its own.`);
   }
   const here = new Set(await appliedMigrations(deps.db));
   const missing = (m.migrations ?? []).filter((x) => !here.has(x));
@@ -166,13 +167,12 @@ export async function preflightBucketImport(
 
   return {
     buckets: deps.plan.buckets,
-    widenedTo: deps.plan.buckets.filter((b) => !deps.plan.requested.includes(b)),
     mode: options.mode,
     takenAt: m.takenAt,
     snapshotRows: tables.reduce((a, t) => a + t.snapshot, 0),
     currentRows,
     tables,
-    pointers: keptPointers(deps.plan, deps.plan.buckets).length,
+    pointers: keptPointers(deps.plan.full, deps.plan.buckets).length,
     fromAnotherSchool,
     shiftWeeks: options.rehome?.shiftDates ? weeksBetween(new Date(m.takenAt), new Date()) : 0,
     filesInArchive: reader.entries('files/').length,
@@ -194,6 +194,10 @@ export function beginBucketImport(
         targetSchoolId: options.schoolId,
         shiftWeeks: pre.shiftWeeks,
         codePrefix: { from: m.source.codePrefix ?? null, to: null },
+        // Only when the rows are going onto a DIFFERENT school: the school they
+        // came from may be in this same database, where every original id is
+        // still taken. A school's own archive keeps its ids.
+        remapIds: pre.fromAnotherSchool,
       }
       : null,
     phase: 'pointers',
@@ -278,7 +282,7 @@ async function steps(
       st.table += 1; st.entry = 0; continue;
     }
     const prepare = (rows: Record<string, unknown>[]) =>
-      (st.rehome ? rows.map((r) => rehomeRow(r, t, st.rehome!)) : rows);
+      (st.rehome ? rows.map((r) => rehomeRow(r, t, target, st.rehome!)) : rows);
     if (t.selfFks.length > 0) {
       const all: Record<string, unknown>[] = [];
       for (const e of entries) all.push(...decodeRows(await reader.read(e)));
@@ -389,7 +393,9 @@ async function steps(
  */
 async function readPointers(deps: BucketImportDeps, st: BucketImportState): Promise<BucketImportState['pointers']> {
   const out: BucketImportState['pointers'] = [];
-  for (const p of keptPointers(deps.plan, deps.plan.buckets)) {
+  // The FULL plan: these columns live on rows OUTSIDE the scope, so the
+  // narrowed insertOrder cannot see a single one of them.
+  for (const p of keptPointers(deps.plan.full, deps.plan.buckets)) {
     const keyCols = p.pk.map(q).join(', ');
     const rows = await deps.db.query<Record<string, unknown>>(
       `SELECT ${keyCols}, ${q(p.column)}::text AS "__v" FROM ${q(p.table)} WHERE "schoolId" = $1::uuid AND ${q(p.column)} IS NOT NULL`,

@@ -68,12 +68,19 @@ the other, over a NOT NULL column, so no row lands in both or in neither.
   a single-bucket restore possible at all, and it is a guard test
   (`buckets.spec.ts`), not an observation.
 
-### Restore semantics follow from that
+### What is saved, and how it goes back
+
+Saving and replacing are different questions, so `scopePlan` takes a scope
+EXACTLY as given and reports whether it is `closed` — whether emptying it would
+delete rows outside it. Only a closed scope can be replaced. The four units
+actually saved are therefore `school`, `website`, `setup,day` and `day`:
+a `setup`-only archive could only ever put a roster back over an empty
+register, so the management half moves as one.
 
 | Scope | Mode | Why |
 |---|---|---|
 | `day` | empty the bucket, insert the snapshot | nothing outside `day` depends on it |
-| `setup` | **expands to `setup` + `day`** | 42 required links cascade off the roster |
+| `setup` + `day` | emptied and inserted together | 42 required links cascade off the roster, so a request for `setup` is widened to both |
 | `website` | empty the bucket, insert the snapshot | nothing depends on a page or a picture |
 | `school` | **merge by primary key, never empty** | emptying it would delete admin logins, and their complaints and notifications cascade with them (`expandScope(['school']) === ['school','day']`) |
 | full | unchanged from `4e6e3f4` | moves a school to another machine; gates delete |
@@ -117,7 +124,8 @@ school's management data, or upload a pack file. Loading re-homes it:
 
 | Carried | Rewritten on load |
 |---|---|
-| every row's `schoolId` | to the target school; primary keys are UUIDs and stay as they are, so nothing collides |
+| every row's `schoolId` | to the target school |
+| every id | mapped to a new one, derived from `(old id, target school)`. **Not optional**: a uuid key stops a collision with a *different* row, not with the same row re-inserted — and the school a pack was cut from usually lives in the same database. Deriving rather than allocating keeps it one pass, since a child's pointer maps to whatever its parent's key maps to. Every uuid column is mapped, not just the declared foreign keys, because a soft reference left alone would go on pointing at the source school's row |
 | logins | nothing to rewrite: `User` is `@@unique([schoolId, email])`, so the same pack loads into many schools at once. Password hashes travel, so the pack's documented demo password keeps working |
 | dates | optionally shifted by the gap between the pack's reference date and today, respecting the school calendar |
 | student and staff codes | re-issued under the target school's `codePrefix` |

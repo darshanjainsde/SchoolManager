@@ -19,7 +19,9 @@ import { PACK_EXCLUDED_MODELS } from './engine/rehome';
 import { purgeSchoolFiles, purgeSchoolRows } from './engine/purge';
 import { SchemaPlan, buildSchemaPlan } from './engine/schema-plan';
 import { ScopedPlan, scopePlan } from './engine/scoped-plan';
-import { BucketStanding, bucketStandings, noteUnchanged, parseScope, scopeKey, settleSnapshot } from './bucket-retention';
+import {
+  BucketStanding, SNAPSHOT_SCOPES, bucketStandings, noteUnchanged, parseScope, scopeKey, settleSnapshot,
+} from './bucket-retention';
 import { MultipartState, S3MultipartSink, S3ObjectStore, S3Source, s3Client } from './engine/store';
 
 /** A step must finish well inside the 60 s function limit, checkpoint included. */
@@ -157,18 +159,19 @@ export class BackupsService {
     };
   }
 
-  /** What the console's Buckets list shows: one row per bucket. */
+  /** What the console's Buckets list shows: one row per saved scope. */
   buckets(schoolId: string): Promise<BucketStanding[]> {
-    return bucketStandings(schoolId, KEPT_BUCKETS, BUCKETS);
+    return bucketStandings(schoolId, KEPT_BUCKETS);
   }
 
-  /** The kept versions of ONE bucket, newest first — what "History" opens. */
-  async bucketVersions(schoolId: string, bucket: string): Promise<BackupView[]> {
-    if (!(BUCKETS as readonly string[]).includes(bucket)) {
-      throw new ApiError('VALIDATION', `"${bucket}" is not a bucket. The four are ${BUCKETS.join(', ')}.`, 400);
+  /** The kept versions of ONE saved scope, newest first — what "History" opens. */
+  async bucketVersions(schoolId: string, scope: string): Promise<BackupView[]> {
+    const known = SNAPSHOT_SCOPES.map((b) => scopeKey(b));
+    if (!known.includes(scope)) {
+      throw new ApiError('VALIDATION', `"${scope}" is not something that gets saved. The four are ${known.join(' / ')}.`, 400);
     }
     const rows = await getPlatformPrisma().schoolBackup.findMany({
-      where: { sourceSchoolId: schoolId, scope: bucket, status: { in: ['READY', 'RUNNING'] } },
+      where: { sourceSchoolId: schoolId, scope, status: { in: ['READY', 'RUNNING'] } },
       orderBy: { createdAt: 'desc' }, take: 60,
     });
     return rows.map((r) => this.view(r));
@@ -716,8 +719,8 @@ export class BackupsService {
        LIMIT ${limit}`;
     let started = 0; let skipped = 0;
     for (const s of due) {
-      for (const bucket of BUCKETS) {
-        try { await this.start(s.id, 'SNAPSHOT', 'cron', { scope: [bucket] }); started += 1; } catch { skipped += 1; }
+      for (const scope of SNAPSHOT_SCOPES) {
+        try { await this.start(s.id, 'SNAPSHOT', 'cron', { scope: [...scope] }); started += 1; } catch { skipped += 1; }
       }
     }
     return { schools: due.length, started, skipped };
