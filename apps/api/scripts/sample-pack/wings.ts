@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Prisma } from '@skoolos/db';
+import { assertNotificationKind } from '@skoolos/types';
 import { Ctx, StudentInfo, many } from './ctx';
 import { AREAS, CITY, FIRST_F, FIRST_M, SCHOOL, SURNAMES } from './data';
 import { D, addDays, iso, mobile } from './rng';
@@ -177,10 +178,11 @@ export async function notifications(c: Ctx): Promise<void> {
   const students = r.shuffle(c.students);
 
   for (const stu of students.slice(0, 260)) {
+    rows.push({ schoolId, userId: stu.userId, kind: 'RESULT', title: 'Half-Yearly results are out', body: 'Your Half-Yearly marks and remarks are now in the report card.', readAt: r.chance(0.75) ? day(r.int(1, 6)) : null, createdAt: day(9) });
     rows.push({ schoolId, userId: stu.userId, kind: 'ANNOUNCEMENT', title: 'Half-Yearly results and PTM', body: 'The Parent–Teacher Meeting is on 26 September. Please carry the diary.', readAt: r.chance(0.7) ? day(r.int(1, 5)) : null, createdAt: day(8) });
   }
   for (const stu of students.slice(0, 170)) {
-    rows.push({ schoolId, userId: stu.userId, kind: 'REMARK', title: 'A new remark in the diary', body: 'Your class teacher has written a remark. Please read and sign it.', readAt: r.chance(0.6) ? day(r.int(0, 4)) : null, createdAt: day(r.int(1, 18)) });
+    rows.push({ schoolId, userId: stu.userId, kind: 'DIARY', title: 'A new remark in the diary', body: 'Your class teacher has written a remark. Please read and sign it.', readAt: r.chance(0.6) ? day(r.int(0, 4)) : null, createdAt: day(r.int(1, 18)) });
   }
   const paid = await p.feePayment.findMany({ where: { schoolId, status: 'VERIFIED' }, orderBy: { paidOn: 'desc' }, take: 300, select: { studentId: true, amountMinor: true, paidOn: true } });
   const userOf = new Map(c.students.map((s) => [s.id, s.userId]));
@@ -197,6 +199,8 @@ export async function notifications(c: Ctx): Promise<void> {
   for (const t of c.teachers.slice(0, 30)) {
     rows.push({ schoolId, userId: t.userId, kind: 'ANNOUNCEMENT', title: 'Half-Yearly results are published', body: 'Marks of every class have been published. Please check the remarks for your class.', readAt: r.chance(0.8) ? day(7) : null, createdAt: day(8) });
   }
+  // The bell refuses a kind it does not know (and so does its list), so a wrong one here would break a login's bell, not just look odd.
+  for (const n of rows) assertNotificationKind(n.kind);
   await many(c, 'Notification', rows, (b) => p.notification.createMany({ data: b }), 3000);
 }
 
