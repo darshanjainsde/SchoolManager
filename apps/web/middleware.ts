@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { connectSrc } from '@/lib/csp-connect';
 import { IS_LOCAL, OWNER_HOST, PLATFORM_HOST, isPlatformHost } from '@/lib/hosts';
 
 /**
@@ -205,7 +206,9 @@ export function middleware(req: NextRequest) {
     // School logos, staff photos and gallery images are operator-supplied
     // URLs on hosts we do not control.
     `img-src 'self' data: blob: https:${dev ? ' http:' : ''}`,
-    `connect-src 'self' https://api.sckools.com https://api.test.sckools.com http://127.0.0.1:3001 http://localhost:3001${dev ? ' http://127.0.0.1:* http://localhost:*' : ''}`,
+    // The owner console also needs object storage (browser-direct file uploads);
+    // nothing else does. See lib/csp-connect.ts.
+    `connect-src ${connectSrc(pathname, dev)}`,
     // Contact pages embed a Google Maps iframe; the Website Studio embeds the
     // same-origin /preview canvas (frame-src does NOT fall back to default-src,
     // so 'self' has to be listed explicitly or the studio frame is refused).
