@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { useApi } from '@/lib/use-api';
 import { DomainsCard } from './domains-card';
 import { BackupsCard } from './backups-card';
+import { BucketsCard } from './buckets-card';
 import { BackupRow, useJob } from '../../_lib/backups';
 import { OWNER_HOST } from '@/lib/hosts';
 import { useAuthStore } from '@/lib/auth-store';
@@ -324,6 +325,7 @@ export default function SchoolDetailPage() {
       {/* Domains — add, verify against real DNS, promote ────────────────── */}
       <DomainsCard schoolId={school.id} />
 
+      <BucketsCard school={school} />
       <BackupsCard school={school} />
 
       {/* Danger zone ─────────────────────────────────────────────────────── */}
