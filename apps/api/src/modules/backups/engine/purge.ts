@@ -1,5 +1,6 @@
 import type { RawDb } from './db';
 import { SchemaPlan, q } from './schema-plan';
+import { andFilter, ScopedPlan } from './scoped-plan';
 import { ObjectStore, schoolPrefixes } from './store';
 
 /**
@@ -50,6 +51,50 @@ export async function purgeSchoolRows(db: RawDb, plan: SchemaPlan, schoolId: str
     statements.push({ sql: `DELETE FROM ${q(t.table)} WHERE "schoolId" = $1::uuid`, params: [schoolId] });
   }
   statements.push({ sql: `DELETE FROM "School" WHERE id = $1::uuid`, params: [schoolId] });
+  await db.transaction(statements);
+}
+
+/**
+ * EMPTIES SOME BUCKETS OF ONE SCHOOL, leaving the rest of it standing.
+ *
+ * This is what "reset management data" and a point-in-time restore are built
+ * on. It differs from a whole-school purge in four ways, each of which is the
+ * reason a bucket can be replaced without the school noticing elsewhere:
+ *
+ *  - it walks only the scope's own tables, so no argument can make it reach a
+ *    table in a bucket that was not asked for;
+ *  - a split table is narrowed to its own half (`plan.where`), so a reset
+ *    cannot delete the school's admin logins;
+ *  - the School row is never deleted, and neither are the excluded credential
+ *    tables (no bucket claims them);
+ *  - it NEVER touches a file. A file whose row is gone costs storage and
+ *    nothing else, and roll forward again and the row finds it where it was.
+ *
+ * The school must be SUSPENDED: the fee-ledger and certificate-register
+ * triggers refuse a delete otherwise, and a live school writing rows into a
+ * table that is being emptied would leave the result half-and-half.
+ */
+export async function purgeBucketRows(db: RawDb, plan: ScopedPlan, schoolId: string): Promise<void> {
+  const [school] = await db.query<{ status: string }>(`SELECT status::text AS status FROM "School" WHERE id = $1::uuid`, schoolId);
+  if (!school) throw new Error(`school ${schoolId} does not exist`);
+  if (school.status !== 'SUSPENDED') {
+    throw new Error(`refusing to empty ${plan.buckets.join(' + ')} on a school that is ${school.status} — suspend it first`);
+  }
+  const statements: { sql: string; params?: unknown[] }[] = [
+    { sql: `SELECT set_config('sckools.purge_school', $1, true)`, params: [schoolId] },
+  ];
+  for (const t of plan.deleteOrder) {
+    const mine = andFilter(plan.where(t.model));
+    for (const r of plan.inboundRestricts.get(t.table) ?? []) {
+      const childCols = r.childColumns.map(q).join(', ');
+      const parentCols = r.parentColumns.map(q).join(', ');
+      statements.push({
+        sql: `DELETE FROM ${q(r.childTable)} WHERE (${childCols}) IN (SELECT ${parentCols} FROM ${q(t.table)} WHERE "schoolId" = $1::uuid${mine})`,
+        params: [schoolId],
+      });
+    }
+    statements.push({ sql: `DELETE FROM ${q(t.table)} WHERE "schoolId" = $1::uuid${mine}`, params: [schoolId] });
+  }
   await db.transaction(statements);
 }
 

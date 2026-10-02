@@ -56,6 +56,8 @@ export interface TablePlan {
   schoolIdNullable: boolean;
   /** Field name → column name, for every scalar column. */
   columns: Record<string, string>;
+  /** Columns holding a date or timestamp — what a sample pack shifts in time. */
+  dateColumns: string[];
 }
 
 export interface InboundRestrict {
@@ -131,6 +133,7 @@ export function buildSchemaPlan(models: readonly DmmfModel[] = Prisma.dmmf.datam
       model: m.name, table: tableOf(m), pk, fks, selfFks,
       schoolIdNullable: !m.fields.find((f) => f.name === 'schoolId')!.isRequired,
       columns,
+      dateColumns: m.fields.filter((f) => f.kind === 'scalar' && f.type === 'DateTime').map((f) => colOf(m, f.name)),
     });
   }
 

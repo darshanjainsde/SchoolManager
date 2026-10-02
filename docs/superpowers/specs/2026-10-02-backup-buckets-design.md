@@ -39,10 +39,13 @@ holds what belongs to one occasion.** A fee head persists, an invoice is one
 month's. A subject persists, an exam is one term's. The consequence is
 deliberate — an exam rolls back together with its marks.
 
-### Why `User` is split
+### Why two tables are split by row
 
-`User` is the only table whose **rows** go to different buckets:
-`OWNER`/`SCHOOL_ADMIN` → `school`, everyone else → `setup`.
+`User` and `MediaAsset` are the only tables whose **rows** go to different
+buckets. `User`: `OWNER`/`SCHOOL_ADMIN` → `school`, everyone else → `setup`.
+`MediaAsset`: `kind = AVATAR` (a person's own profile photo) → `setup`, every
+other kind (logo, hero, gallery, festive) → `website`. The MediaAsset split also
+drives the FILE list, since a bucket's files are exactly its own MediaAsset rows.
 
 - All in `setup` → a sample load or a reset deletes the school's own admin
   account, locking them out of the product they are being shown.
@@ -81,7 +84,9 @@ that widens it fails a test instead of silently losing rows.
 ### Pointers on kept rows
 
 Emptying `setup` sets `FeaturedStaff.teacherId` and `HallOfFameEntry.studentId`
-to NULL — two website rows losing a pointer. The restore saves those values
+to NULL — two website rows losing a pointer. (`SchoolProfile.logoAssetId`,
+`Domain.logoAssetId` and `Course.imageAssetId` look like a third case but are
+plain columns with no foreign key, so Postgres never touches them.) The restore saves those values
 first and writes back the ones whose target exists again, so restoring a
 school's own `setup` keeps its cards linked while a sample pack (different
 teacher rows) correctly leaves them empty. Derived from the schema, not listed
@@ -113,7 +118,7 @@ school's management data, or upload a pack file. Loading re-homes it:
 | Carried | Rewritten on load |
 |---|---|
 | every row's `schoolId` | to the target school; primary keys are UUIDs and stay as they are, so nothing collides |
-| logins | email and username re-keyed per school so one pack can serve many schools at once; password hashes travel |
+| logins | nothing to rewrite: `User` is `@@unique([schoolId, email])`, so the same pack loads into many schools at once. Password hashes travel, so the pack's documented demo password keeps working |
 | dates | optionally shifted by the gap between the pack's reference date and today, respecting the school calendar |
 | student and staff codes | re-issued under the target school's `codePrefix` |
 | files the pack needs | re-uploaded under the target prefix, links rewritten (the existing machine-fitting step) |

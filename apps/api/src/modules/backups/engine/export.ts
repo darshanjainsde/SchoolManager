@@ -1,8 +1,11 @@
+import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 import { ArchiveWriter, Sink, WriterState } from './archive';
+import { Bucket } from './buckets';
 import { appliedMigrations, RawDb } from './db';
 import { Machine, MachineFace, OpenedSecret, SEALED_COLUMNS, faceOf, openRowSecrets } from './machine';
 import { SchemaPlan, q } from './schema-plan';
+import { andFilter, filterOf, ScopedPlan, scopeOf } from './scoped-plan';
 import { BucketKind, ObjectStore, schoolPrefixes } from './store';
 
 export const BACKUP_KIND = 'sckools.school';
@@ -15,7 +18,20 @@ export interface Manifest {
   format: 1;
   takenAt: string;
   appVersion: string | null;
-  source: { schoolId: string; slug: string; name: string; status: string; machine: MachineFace };
+  /**
+   * The buckets this archive holds, or null for a whole school. A scoped
+   * archive is applied to a school that is already here; a null one can also
+   * create it.
+   */
+  scope: Bucket[] | null;
+  /**
+   * Fingerprint of the archive's CONTENT — the uncompressed rows and file
+   * bytes, in order. Two archives of the same data have the same hash whatever
+   * the compression did, which is what lets a scheduled snapshot of an
+   * unchanged bucket be thrown away instead of kept as a new version.
+   */
+  contentHash: string;
+  source: { schoolId: string; slug: string; name: string; status: string; codePrefix: string | null; machine: MachineFace };
   migrations: string[];
   tables: Record<string, { model: string; rows: number }>;
   rowCount: number;
@@ -39,13 +55,20 @@ export interface ExportState {
   fileBytes: number;
   source: { school: Record<string, unknown>; migrations: string[]; takenAt: string; machine: MachineFace };
   writer: WriterState | null;
+  /**
+   * Running fingerprint of every entry's UNCOMPRESSED content, chained in the
+   * order entries are written. A chain rather than a map so the saved job state
+   * stays small on a school with thousands of pages.
+   */
+  hashChain: string;
 }
 
 export interface ExportDeps {
   db: RawDb;
   files: ObjectStore;
   machine: Machine;
-  plan: SchemaPlan;
+  /** A whole-school plan, or one narrowed to some buckets by `scopePlan`. */
+  plan: SchemaPlan | ScopedPlan;
   appVersion?: string | null;
   pageRows?: number;
 }
@@ -59,8 +82,18 @@ export async function beginExport(deps: ExportDeps, schoolId: string): Promise<E
     counts: {}, warnings: [], fileCount: 0, fileBytes: 0,
     source: { school: JSON.parse(row.j), migrations: await appliedMigrations(deps.db), takenAt: new Date().toISOString(), machine: faceOf(deps.machine) },
     writer: null,
+    hashChain: '',
   };
 }
+
+/** Folds one entry's uncompressed content into the running fingerprint. */
+const chain = (st: ExportState, name: string, content: Buffer): void => {
+  st.hashChain = createHash('sha256')
+    .update(st.hashChain)
+    .update(name)
+    .update(createHash('sha256').update(content).digest())
+    .digest('hex');
+};
 
 export interface ExportStepResult { state: ExportState; done: boolean; bytes?: number; manifest?: Manifest }
 
@@ -78,7 +111,15 @@ export async function runExport(
   const writer = st.writer
     ? ArchiveWriter.resume(sink, password, st.writer)
     : await ArchiveWriter.create(sink, password, opts.kdf);
-  if (!writer.has('school.json')) await writer.add('school.json', Buffer.from(JSON.stringify(st.source.school)));
+  // Always written, in every scope: it names the school this archive came
+  // from, which is what a scoped restore checks itself against and what a
+  // sample pack's re-homing reads the source code prefix from. Only a
+  // whole-school import ever INSERTS it.
+  if (!writer.has('school.json')) {
+    const body = Buffer.from(JSON.stringify(st.source.school));
+    await writer.add('school.json', body);
+    chain(st, 'school.json', body);
+  }
   // At least one unit of work per call, whatever the clock says — otherwise a
   // step handed an already-passed deadline returns unchanged, and a driver
   // calling it in a loop spins forever.
@@ -92,15 +133,17 @@ export async function runExport(
     const t = deps.plan.insertOrder[st.table];
     const single = t.pk.length === 1;
     const order = t.pk.map((c) => `t.${q(c)}`).join(', ');
+    // A split table contributes only its own half to this scope.
+    const mine = andFilter(filterOf(deps.plan, t.model));
     const rows = single
       ? await deps.db.query<{ j: string; k: string }>(
           `SELECT row_to_json(t)::text AS j, t.${q(t.pk[0])}::text AS k FROM ${q(t.table)} t
-            WHERE t."schoolId" = $1::uuid AND ($2::text IS NULL OR t.${q(t.pk[0])}::text COLLATE "C" > $2::text COLLATE "C")
+            WHERE t."schoolId" = $1::uuid${mine} AND ($2::text IS NULL OR t.${q(t.pk[0])}::text COLLATE "C" > $2::text COLLATE "C")
             ORDER BY t.${q(t.pk[0])}::text COLLATE "C" LIMIT ${pageRows}`,
           st.schoolId, st.after,
         )
       : await deps.db.query<{ j: string; k: string }>(
-          `SELECT row_to_json(t)::text AS j, '' AS k FROM ${q(t.table)} t WHERE t."schoolId" = $1::uuid ORDER BY ${order} LIMIT ${WHOLE_TABLE_LIMIT + 1}`,
+          `SELECT row_to_json(t)::text AS j, '' AS k FROM ${q(t.table)} t WHERE t."schoolId" = $1::uuid${mine} ORDER BY ${order} LIMIT ${WHOLE_TABLE_LIMIT + 1}`,
           st.schoolId,
         );
     if (!single && rows.length > WHOLE_TABLE_LIMIT) {
@@ -108,7 +151,9 @@ export async function runExport(
     }
     if (rows.length > 0) {
       const ndjson = Buffer.from(rows.map((r) => r.j).join('\n'), 'utf8');
-      await writer.add(`rows/${t.table}/${String(st.seq).padStart(6, '0')}`, gzipSync(ndjson), { rows: rows.length });
+      const name = `rows/${t.table}/${String(st.seq).padStart(6, '0')}`;
+      await writer.add(name, gzipSync(ndjson), { rows: rows.length });
+      chain(st, name, ndjson);
       st.counts[t.table] = (st.counts[t.table] ?? 0) + rows.length;
       st.seq += 1;
     }
@@ -130,7 +175,9 @@ export async function runExport(
       if (!got) {
         st.warnings.push(`file ${f.key} is listed by the school but missing from storage — not in this backup`);
       } else {
-        await writer.add(`files/${f.bucket}/${f.key}`, got.body, { bucket: f.bucket, key: f.key, contentType: got.contentType ?? null });
+        const name = `files/${f.bucket}/${f.key}`;
+        await writer.add(name, got.body, { bucket: f.bucket, key: f.key, contentType: got.contentType ?? null });
+        chain(st, name, got.body);
         st.fileCount += 1;
         st.fileBytes += got.body.length;
       }
@@ -144,8 +191,13 @@ export async function runExport(
   // Sealed secrets are opened HERE, at the last moment, and go straight into
   // the locked file. They are never part of the saved job state, which lives
   // in the database between steps — plaintext there would undo the sealing.
+  const scope = scopeOf(deps.plan);
+  const holds = (model: string) => deps.plan.byModel.has(model);
   const secrets: OpenedSecret[] = [];
   for (const sealed of SEALED_COLUMNS) {
+    // A scope that does not carry the table has nothing to unseal — and must
+    // not read a machine key it has no use for.
+    if (!holds(sealed.model)) continue;
     const rows = await deps.db.query<{ j: string }>(`SELECT row_to_json(t)::text AS j FROM ${q(sealed.table)} t WHERE t."schoolId" = $1::uuid`, st.schoolId);
     for (const r of rows) {
       const { secret, warnings } = openRowSecrets(sealed, JSON.parse(r.j), st.schoolId, deps.machine);
@@ -155,14 +207,23 @@ export async function runExport(
   }
   // Invitations this school sent to OTHER schools for its network events are
   // those schools' rows, not this one's; say so rather than lose them quietly.
-  const [{ n: invites }] = await deps.db.query<{ n: number }>(
-    `SELECT count(*)::int AS n FROM "EventAudienceSchool" a JOIN "Event" e ON e.id = a."eventId" WHERE e."schoolId" = $1::uuid AND a."schoolId" <> $1::uuid`, st.schoolId);
-  if (invites > 0) st.warnings.push(`${invites} invitation(s) to other schools for this school's network events are not in this backup — re-invite them after a restore`);
-  await writer.add('secrets.json', Buffer.from(JSON.stringify(secrets)));
-  const school = st.source.school as { id: string; slug: string; name: string; status: string };
+  if (holds('EventAudienceSchool')) {
+    const [{ n: invites }] = await deps.db.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM "EventAudienceSchool" a JOIN "Event" e ON e.id = a."eventId" WHERE e."schoolId" = $1::uuid AND a."schoolId" <> $1::uuid`, st.schoolId);
+    if (invites > 0) st.warnings.push(`${invites} invitation(s) to other schools for this school's network events are not in this backup — re-invite them after a restore`);
+  }
+  const secretsBody = Buffer.from(JSON.stringify(secrets));
+  await writer.add('secrets.json', secretsBody);
+  chain(st, 'secrets.json', secretsBody);
+  const school = st.source.school as { id: string; slug: string; name: string; status: string; codePrefix?: string | null };
   const manifest: Manifest = {
     kind: BACKUP_KIND, format: 1, takenAt: st.source.takenAt, appVersion: deps.appVersion ?? null,
-    source: { schoolId: school.id, slug: school.slug, name: school.name, status: school.status, machine: st.source.machine },
+    scope,
+    contentHash: st.hashChain,
+    source: {
+      schoolId: school.id, slug: school.slug, name: school.name, status: school.status,
+      codePrefix: school.codePrefix ?? null, machine: st.source.machine,
+    },
     migrations: st.source.migrations,
     tables: Object.fromEntries(deps.plan.insertOrder.filter((t) => st.counts[t.table]).map((t) => [t.table, { model: t.model, rows: st.counts[t.table] }])),
     rowCount: Object.values(st.counts).reduce((a, b) => a + b, 0),
@@ -181,8 +242,17 @@ async function pause(st: ExportState, writer: ArchiveWriter): Promise<ExportStep
 }
 
 /**
- * Every object in the school's folders, plus any MediaAsset whose key sits
- * outside them (written before the folder convention). De-duplicated.
+ * The files this archive carries.
+ *
+ * A WHOLE-school backup takes every object in the school's folders, plus any
+ * MediaAsset whose key sits outside them (written before the folder
+ * convention) — it has to be able to rebuild storage from nothing.
+ *
+ * A SCOPED archive takes only the files its own rows name, which is exactly
+ * its `MediaAsset` rows: the website's pictures for `website`, the roster's
+ * profile photos for `setup`. `day` names no files at all, which is what keeps
+ * a daily snapshot flat as fee PDFs and payment screenshots pile up — and a
+ * scoped restore never deletes a file, so nothing is lost by leaving them out.
  */
 async function listSchoolFiles(deps: ExportDeps, schoolId: string): Promise<{ bucket: BucketKind; key: string }[]> {
   const seen = new Set<string>();
@@ -191,12 +261,21 @@ async function listSchoolFiles(deps: ExportDeps, schoolId: string): Promise<{ bu
     const id = `${bucket}:${key}`;
     if (!seen.has(id)) { seen.add(id); out.push({ bucket, key }); }
   };
-  for (const prefix of schoolPrefixes(schoolId)) {
-    for (const o of await deps.files.list(prefix)) add(o.bucket, o.key);
+  const scope = scopeOf(deps.plan);
+  const mediaFilter = filterOf(deps.plan, 'MediaAsset');
+  if (scope === null) {
+    for (const prefix of schoolPrefixes(schoolId)) {
+      for (const o of await deps.files.list(prefix)) add(o.bucket, o.key);
+    }
   }
-  const media = await deps.db.query<{ k: string }>(`SELECT "storageKey" AS k FROM "MediaAsset" WHERE "schoolId" = $1::uuid`, schoolId);
-  for (const m of media) {
-    if (m.k && !schoolPrefixes(schoolId).some((p) => m.k.startsWith(p))) add('public', m.k);
+  if (scope === null || mediaFilter !== null) {
+    const media = await deps.db.query<{ k: string }>(
+      `SELECT "storageKey" AS k FROM "MediaAsset" t WHERE t."schoolId" = $1::uuid${andFilter(mediaFilter)}`, schoolId);
+    for (const m of media) {
+      if (!m.k) continue;
+      if (scope === null && schoolPrefixes(schoolId).some((p) => m.k.startsWith(p))) continue; // already listed
+      add('public', m.k);
+    }
   }
   return out.sort((a, b) => (a.bucket + a.key).localeCompare(b.bucket + b.key));
 }

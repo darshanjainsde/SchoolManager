@@ -23,9 +23,18 @@ export interface ImportOptions {
   finalStatus: FinalStatus;
 }
 
+export type ImportRefusedCode =
+  | 'NOT_A_SCHOOL_BACKUP' | 'NEWER_SCHEMA' | 'ALREADY_HERE' | 'SLUG_TAKEN' | 'BAD_SLUG'
+  /** A scoped archive was offered where a whole school was needed, or the reverse. */
+  | 'WRONG_SCOPE'
+  /** A scoped restore needs the school to be here already. */
+  | 'NOT_HERE'
+  /** This archive is of a different school and re-homing was not asked for. */
+  | 'ANOTHER_SCHOOL';
+
 /** Refused BEFORE anything was written. The message is for the person importing. */
 export class ImportRefused extends Error {
-  constructor(public readonly code: 'NOT_A_SCHOOL_BACKUP' | 'NEWER_SCHEMA' | 'ALREADY_HERE' | 'SLUG_TAKEN' | 'BAD_SLUG', message: string) {
+  constructor(public readonly code: ImportRefusedCode, message: string) {
     super(message);
     this.name = 'ImportRefused';
   }
@@ -36,14 +45,30 @@ export class ImportRefused extends Error {
  * be further than the caller's saved copy (the School row may exist already).
  * Roll back with `failed.state`, never with the state you passed in.
  */
-export class ImportFailed extends Error {
-  constructor(readonly cause: unknown, readonly state: ImportState) {
+export class ImportFailed<S = ImportState> extends Error {
+  constructor(readonly cause: unknown, readonly state: S) {
     super((cause as Error)?.message ?? String(cause));
     this.name = 'ImportFailed';
   }
 }
 
-export interface ImportState {
+/**
+ * What `applyRows` needs to write a batch and account for it. `ImportState`
+ * and the scoped importer's state both satisfy it, so one insert path serves
+ * a whole-school restore, a single-bucket rollback and a sample-pack load.
+ */
+export interface RowSink {
+  schoolId: string;
+  src: MachineFace & { slug: string };
+  inserted: Record<string, number>;
+  /** "table|reason" → rows. Every row not imported is accounted for here. */
+  dropped: Record<string, number>;
+  /** "table|column" → rows whose OPTIONAL link was cleared. */
+  cleared: Record<string, number>;
+  warnings: string[];
+}
+
+export interface ImportState extends RowSink {
   schoolId: string;
   slug: string;
   options: ImportOptions;
@@ -54,12 +79,6 @@ export interface ImportState {
   file: number;
   /** Once the School row exists here, a failure must purge what was written. */
   started: boolean;
-  inserted: Record<string, number>;
-  /** "table|reason" → rows. Every row not imported is accounted for here. */
-  dropped: Record<string, number>;
-  /** "table|column" → rows whose OPTIONAL link was cleared because its target is not here. */
-  cleared: Record<string, number>;
-  warnings: string[];
   files: number;
 }
 
@@ -85,6 +104,11 @@ export async function preflightImport(deps: ImportDeps, reader: ArchiveReader<Ma
   const m = reader.manifest;
   if (m?.kind !== BACKUP_KIND || !reader.entry('school.json')) {
     throw new ImportRefused('NOT_A_SCHOOL_BACKUP', 'This file is a Sckools backup, but not of a school.');
+  }
+  // An archive made before buckets existed has no `scope` at all, and is a
+  // whole school — which is why this reads falsy rather than comparing to null.
+  if (m.scope) {
+    throw new ImportRefused('WRONG_SCOPE', `This file holds only the ${m.scope.join(' and ')} of a school, not the whole school. Put it back from the school's own Backups tab instead.`);
   }
   const here = new Set(await appliedMigrations(deps.db));
   const missing = (m.migrations ?? []).filter((x) => !here.has(x));
@@ -282,7 +306,7 @@ export async function rollbackImport(deps: ImportDeps, st: ImportState): Promise
 
 const typeCache = new WeakMap<RawDb, Map<string, string>>();
 /** The Postgres type name of one column (uuid, text, …), for typed comparisons. */
-async function columnType(db: RawDb, table: string, column: string): Promise<string> {
+export async function columnType(db: RawDb, table: string, column: string): Promise<string> {
   let m = typeCache.get(db);
   if (!m) { m = new Map(); typeCache.set(db, m); }
   const k = `${table}.${column}`;
@@ -298,18 +322,18 @@ async function columnType(db: RawDb, table: string, column: string): Promise<str
   return m.get(k)!;
 }
 
-function decodeRows(entry: Buffer): Record<string, unknown>[] {
+export function decodeRows(entry: Buffer): Record<string, unknown>[] {
   const text = gunzipSync(entry).toString('utf8');
   return text ? text.split('\n').map((l) => JSON.parse(l) as Record<string, unknown>) : [];
 }
 
-const bump = (st: ImportState, table: string, reason: string, n = 1) => {
+export const bump = (st: RowSink, table: string, reason: string, n = 1) => {
   const k = `${table}|${reason}`;
   st.dropped[k] = (st.dropped[k] ?? 0) + n;
 };
 
-async function applyRows(
-  deps: ImportDeps, st: ImportState, t: TablePlan, target: ColumnInfo[],
+export async function applyRows(
+  deps: ImportDeps, st: RowSink, t: TablePlan, target: ColumnInfo[],
   input: Record<string, unknown>[], rewrite: <T>(v: T) => T, dst: MachineFace & { slug: string },
 ): Promise<void> {
   if (input.length === 0) return;

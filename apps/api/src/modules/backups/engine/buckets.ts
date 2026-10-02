@@ -244,6 +244,19 @@ export interface SplitRule {
 }
 
 export const SPLITS: Readonly<Record<string, SplitRule>> = {
+  // A person's own profile photo is part of the roster, not of the website.
+  // `MediaKind.AVATAR` is written by POST /me/photo; every other kind is CMS
+  // imagery. Splitting the table is what lets a sample pack carry its
+  // students' faces while leaving the school's logo and hero alone — and it
+  // drives the FILE list too, since a bucket's files are exactly its own
+  // MediaAsset rows.
+  MediaAsset: {
+    when: `"kind" = 'AVATAR'`,
+    then: 'setup',
+    otherwise: 'website',
+    because:
+      'a profile photo belongs to the person on the roster, while every other picture belongs to the website',
+  },
   User: {
     when: `"role" IN ('OWNER', 'SCHOOL_ADMIN')`,
     then: 'school',

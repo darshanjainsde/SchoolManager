@@ -146,3 +146,14 @@ export function scopePlan(plan: SchemaPlan, requested: readonly Bucket[]): Scope
 
 /** Appends a scope's row filter to a WHERE clause. Returns '' when the table is whole. */
 export const andFilter = (filter: string | null): string => (filter ? ` AND (${filter})` : '');
+
+export const isScoped = (plan: SchemaPlan | ScopedPlan): plan is ScopedPlan =>
+  Array.isArray((plan as ScopedPlan).buckets);
+
+/** The buckets a plan covers, or null for a whole school. */
+export const scopeOf = (plan: SchemaPlan | ScopedPlan): Bucket[] | null =>
+  (isScoped(plan) ? plan.buckets : null);
+
+/** The row filter for one model under a plan; a whole-school plan filters nothing. */
+export const filterOf = (plan: SchemaPlan | ScopedPlan, model: string): string | null =>
+  (isScoped(plan) ? plan.where(model) : '');
