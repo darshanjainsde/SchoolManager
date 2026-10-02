@@ -30,12 +30,21 @@ export class AnnouncementsService {
     private readonly attendance: AttendanceService,
   ) {}
 
+  /**
+   * The admin's list, newest first.
+   *
+   * The class's GRADE is included, not only the section's own name: a section
+   * is called "B" and fifteen grades have one, so the admin console's audience
+   * cell read "B" and said nothing about which class had been told. `mine()`
+   * below has always resolved "IX-B" for the teacher's copy; this is the same
+   * answer for the admin's.
+   */
   async list(schoolId: string) {
     return withTenant(schoolId, (tx) =>
       tx.announcement.findMany({ take: LIST_CEILING.ACTIVITY,
         where: { schoolId },
         orderBy: { createdAt: 'desc' },
-        include: { classSection: { select: { name: true } } },
+        include: { classSection: { select: { name: true, grade: { select: { name: true } } } } },
       }),
     );
   }
