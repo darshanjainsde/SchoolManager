@@ -7,6 +7,7 @@ import { leave } from './leave';
 import { events, library } from './life';
 import { payroll } from './payroll';
 import { roll, sections, staffAndTeachers, structure } from './people';
+import { sports } from './sports';
 import { alumni, attendanceNotices, concerns, enquiryNotes, hiring, libraryHall, messages, notifications, substitutions, taxDeclarations } from './wings';
 
 /** Every phase, in the order the data depends on itself. */
@@ -26,6 +27,7 @@ export async function buildSchool(c: Ctx, log: (m: string) => void): Promise<voi
     ['salary: six months through the real pay engine', () => payroll(c)],
     ['library catalogue and loans', () => library(c)],
     ['events, registrations and house points', () => events(c)],
+    ['sports day: records, heats, finals, a knockout, house points', () => sports(c)],
     ['substitutions for teachers on leave', () => substitutions(c)],
     ['complaint box and parent-teacher messages', async () => { await concerns(c); await messages(c); }],
     ['attendance letters and enquiry notes', async () => { await attendanceNotices(c); await enquiryNotes(c); }],
