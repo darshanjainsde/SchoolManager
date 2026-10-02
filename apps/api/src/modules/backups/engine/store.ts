@@ -44,6 +44,15 @@ export function s3Client(c: S3Config): S3Client {
   return new S3Client({
     region: c.region, endpoint: c.endpoint, forcePathStyle: c.forcePathStyle,
     credentials: { accessKeyId: c.accessKeyId, secretAccessKey: c.secretAccessKey },
+    // Checksums only where S3 REQUIRES one. Since SDK 3.729 the default is to add
+    // one to every request, and on a PRESIGNED PUT that is the checksum of an
+    // EMPTY body (`x-amz-checksum-crc32=AAAAAA==`) baked into the URL: the
+    // browser then uploads the real file, storage compares it with the empty
+    // body's checksum and refuses it — and the request dies in the browser, so
+    // our API never hears of the upload at all. Third-party S3 implementations
+    // (Supabase Storage, MinIO) are also less forgiving of the extra headers.
+    requestChecksumCalculation: 'WHEN_REQUIRED',
+    responseChecksumValidation: 'WHEN_REQUIRED',
   });
 }
 

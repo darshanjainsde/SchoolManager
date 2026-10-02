@@ -6,6 +6,7 @@ import { Prisma, getPlatformPrisma } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
 import { BackupsService } from './backups.service';
 import { scopeKey } from './bucket-retention';
+import { ArchiveReader } from './engine/archive';
 import { ArchiveError } from './engine/container';
 import { BACKUP_KIND, Manifest } from './engine/export';
 import { DATA_BUCKETS } from './engine/buckets';
@@ -246,7 +247,7 @@ export class SamplePacksService {
     };
     let reader;
     try {
-      reader = await (await import('./engine/archive')).ArchiveReader.open<Manifest>(
+      reader = await ArchiveReader.open<Manifest>(
         new S3Source(this.rt().s3, this.rt().bucket, input.key), this.rt().password(),
       );
     } catch (e) {
