@@ -32,7 +32,9 @@ export function useSchoolMark(url: string | null | undefined): void {
     // relative `/icon.svg` is read back as `https://host/icon.svg` and
     // restoring it would rewrite the document's own markup into absolute
     // URLs against whatever host happened to be current.
-    const previous = links.map((l) => ({ el: l, href: l.getAttribute('href') }));
+    // `type` and `sizes` describe the OLD file. Next emits type="image/svg+xml" sizes="any" for the Tassel-S, and
+    // leaving them on a PNG crest makes the browser try to draw a PNG as an SVG, fail, and keep our mark in the tab.
+    const previous = links.map((l) => ({ el: l, href: l.getAttribute('href'), type: l.getAttribute('type'), sizes: l.getAttribute('sizes') }));
     if (links.length === 0) {
       const made = document.createElement('link');
       made.rel = 'icon';
@@ -40,13 +42,19 @@ export function useSchoolMark(url: string | null | undefined): void {
       document.head.appendChild(made);
       return () => made.remove();
     }
-    for (const l of links) l.setAttribute('href', url);
+    for (const l of links) {
+      l.setAttribute('href', url);
+      l.removeAttribute('type');
+      l.removeAttribute('sizes');
+    }
     // Put the platform's mark back when the shell unmounts, so signing out of
     // a school does not leave its crest on the platform's own pages.
     return () => {
       for (const p of previous) {
         if (p.href === null) p.el.removeAttribute('href');
         else p.el.setAttribute('href', p.href);
+        if (p.type !== null) p.el.setAttribute('type', p.type);
+        if (p.sizes !== null) p.el.setAttribute('sizes', p.sizes);
       }
     };
   }, [url]);

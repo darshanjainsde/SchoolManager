@@ -51,4 +51,26 @@ describe('useSchoolMark', () => {
     unmount();
     expect(icons()).toEqual([]);
   });
+
+  it('drops the platform link\'s declared type and size, which describe the OLD file', () => {
+    // Next emits <link rel="icon" href="/icon.svg" type="image/svg+xml" sizes="any">. Swapping only the href left
+    // type="image/svg+xml" on a PNG logo, and the browser — told it was an SVG — failed to draw it and kept the
+    // Tassel-S in the tab (seen on a school's admin console, 2026-10-02).
+    document.head.innerHTML = '<link rel="icon" href="/icon.svg" type="image/svg+xml" sizes="any">';
+    renderHook(() => useSchoolMark('https://cdn/school.png'));
+    const link = document.querySelector<HTMLLinkElement>('link[rel~="icon"]')!;
+    expect(link.getAttribute('href')).toBe('https://cdn/school.png');
+    expect(link.hasAttribute('type')).toBe(false);
+    expect(link.hasAttribute('sizes')).toBe(false);
+  });
+
+  it('puts the declared type and size back with the platform mark on unmount', () => {
+    document.head.innerHTML = '<link rel="icon" href="/icon.svg" type="image/svg+xml" sizes="any">';
+    const { unmount } = renderHook(() => useSchoolMark('https://cdn/school.png'));
+    unmount();
+    const link = document.querySelector<HTMLLinkElement>('link[rel~="icon"]')!;
+    expect(link.getAttribute('href')).toBe('/icon.svg');
+    expect(link.getAttribute('type')).toBe('image/svg+xml');
+    expect(link.getAttribute('sizes')).toBe('any');
+  });
 });
