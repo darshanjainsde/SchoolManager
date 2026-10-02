@@ -357,7 +357,7 @@ export async function alumni(c: Ctx): Promise<void> {
   }
   await many(c, 'Alumni', rows, (b) => p.alumni.createMany({ data: b }));
   const claims: Prisma.AlumniClaimCreateManyInput[] = [
-    { schoolId, firstName: 'Sunita', lastName: 'Rao', batchYear: 2020, claimedClass: 'XII-B', email: 'sunita.rao.work@example.com', phone: mobile(r), proof: 'I was in the 2020 batch, Class XII-B. Our class teacher was Mrs. Sinha.', status: 'PENDING', createdAt: addDays(AS_OF, -6) },
+    { schoolId, firstName: 'Sunita', lastName: 'Verma', batchYear: 2020, claimedClass: 'XII-B', email: 'sunita.verma.work@example.com', phone: mobile(r), proof: 'I was in the 2020 batch, Class XII-B. Our class teacher was Mrs. Sinha.', status: 'PENDING', createdAt: addDays(AS_OF, -6) },
     { schoolId, firstName: 'Rohit', lastName: 'Chauhan', batchYear: 2022, claimedClass: 'XII-A', email: 'rohit.c.2022@example.com', phone: mobile(r), proof: 'Science stream, 2022 batch. I was the sports captain.', status: 'PENDING', createdAt: addDays(AS_OF, -2) },
     { schoolId, firstName: 'Neha', lastName: 'Kapoor', batchYear: 2021, claimedClass: 'XII-C', email: 'neha.kapoor21@example.com', proof: 'Commerce, 2021. Can be vouched for by my classmates.', status: 'DECLINED', declineReason: 'We could not match the name and year with the register. Please write with your admission number.', reviewedAt: addDays(AS_OF, -12), createdAt: addDays(AS_OF, -15) },
   ];

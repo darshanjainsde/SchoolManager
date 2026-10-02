@@ -1,7 +1,7 @@
 /**
  * pnpm --filter @skoolos/api exec tsx scripts/sample-pack/index.ts [--out file] [--password-file file]
  *
- * Builds a complete sample school — Nursery to XII, three sections each, 20
+ * Builds a complete sample school — Nursery to XII, three sections each, 78
  * teachers, fees, salary, four months of attendance, exams, diary, library,
  * events, leave — in a SCRATCH database, cuts its management data (setup + day)
  * into a locked `.sckools` sample pack, and then proves the pack by loading it
