@@ -21,9 +21,9 @@ import { OwnerSchoolsService } from './owner-schools.service';
 function make() {
   const passwords = { hash: jest.fn().mockResolvedValue('hash') };
   const featureResolver = { invalidate: jest.fn() };
-  const storage = { delete: jest.fn() };
-  // Constructor order read from the service: (featureResolver, passwords, storage).
-  return new (OwnerSchoolsService as unknown as new (...a: unknown[]) => OwnerSchoolsService)(featureResolver, passwords, storage);
+  const backups = { deleteSchoolNow: jest.fn(), forgetSchool: jest.fn() };
+  // Constructor order read from the service: (featureResolver, passwords, backups).
+  return new (OwnerSchoolsService as unknown as new (...a: unknown[]) => OwnerSchoolsService)(featureResolver, passwords, backups);
 }
 
 const dto = { name: 'Maple Leaf Academy', slug: 'maple-leaf', tier: 'STANDARD' as const, domainHostname: 'maple.test', adminEmail: 'Admin@Maple.test' };

@@ -153,7 +153,7 @@ describe('RLS coverage across every tenant table', () => {
    * every assertion in this file, and would ship with no policy at all while
    * this suite stayed green.
    *
-   * So the set of tables with no "schoolId" is pinned. Today it is six and
+   * So the set of tables with no "schoolId" is pinned. Today it is eight and
    * every one of them is deliberate: School matches on its own id, and the
    * rest are platform-only. Adding a seventh is a decision, and it should
    * cost a conversation rather than nothing.
@@ -178,7 +178,17 @@ describe('RLS coverage across every tenant table', () => {
       'MarketingLead',
       'MetricRollup',
       'PasswordResetToken',
+      // The sample-pack library (20261002_010000). Platform level on purpose:
+      // a pack belongs to the platform, not to the school it was cut from, so
+      // deleting that school can never take the pack with it. Guarded by the
+      // platform_only policy, which the test above asserts.
+      'SamplePack',
       'School',
+      // Platform registers of school backups (20261001_000000). Deliberately
+      // NOT tenant tables: they must outlive the school they describe, and a
+      // "schoolId" column would make the backup engine back up backups.
+      'SchoolBackup',
+      'SchoolRestore',
     ]);
   });
 });

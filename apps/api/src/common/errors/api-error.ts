@@ -318,6 +318,24 @@ export type ErrorCode =
   | 'NEED_VENUE'
   /** No active staff row with the SPORTS job by that id. 404. */
   | 'COACH_NOT_FOUND'
+  // ─── School backups (owner console) ────────────────────────────────────────
+  /** SCHOOL_BACKUP_PASSWORD is not set on this server — pair with 503. */
+  | 'BACKUPS_NOT_CONFIGURED'
+  /** One backup per school at a time — pair with 409. */
+  | 'BACKUP_RUNNING'
+  /** Deleting (or a final backup for deleting) needs a SUSPENDED school — 409. */
+  | 'SCHOOL_NOT_SUSPENDED'
+  /** No READY backup taken after the suspension, so no delete — 409. */
+  | 'BACKUP_REQUIRED'
+  /** The backup cannot go onto this server as asked (address taken, school
+   *  already here, newer schema). The message says which — pair with 409. */
+  | 'RESTORE_REFUSED'
+  /** One restore into a school at a time — pair with 409. */
+  | 'RESTORE_RUNNING'
+  /** A sample pack already has that name — pair with 409. */
+  | 'PACK_NAME_TAKEN'
+  /** The pack's export job has not finished, so it cannot be used or removed — 409. */
+  | 'PACK_BUILDING'
   | 'INTERNAL';
 
 export interface ApiErrorBody {

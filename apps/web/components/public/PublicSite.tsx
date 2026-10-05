@@ -29,6 +29,7 @@ import { FestiveDress, FestiveRibbon, FestiveSymbols } from './sections/FestiveL
 import PageBlocks from './sections/PageBlocks';
 import {
   buildCustomCss,
+  galleryHomeCount,
   homeSectionsOf,
   normalizeFestiveTheme,
   normalizeSectionVariants,
@@ -300,7 +301,12 @@ export default function PublicSite({ data, view = 'home', page, birthdays = null
 
     gallery: hasGallery && show.gallery && (
       <div data-sec="gallery" className={secCls('gallery') || undefined}>
-        <GallerySection gallery={data.gallery} schoolName={schoolName} />
+        <GallerySection
+          gallery={data.gallery}
+          schoolName={schoolName}
+          limit={galleryHomeCount(variants, sectionLayoutOf(variants, 'gallery'))}
+          layout={sectionLayoutOf(variants, 'gallery')}
+        />
       </div>
     ),
 

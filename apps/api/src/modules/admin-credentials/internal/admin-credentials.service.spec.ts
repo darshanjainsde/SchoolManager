@@ -45,6 +45,32 @@ describe('AdminCredentialsService', () => {
     expect(mockDb.$transaction).toHaveBeenCalledTimes(1);
   });
 
+  it('resetPassword sets the password the owner chose, and says it was not generated', async () => {
+    mockDb.user.findFirst.mockResolvedValue({ id: 'user-1' });
+    const res = await svc.resetPassword('school-1', 'user-1', 'Chosen-pass-2026');
+    expect(res).toEqual({ password: 'Chosen-pass-2026', generated: false });
+    expect(passwords.hash).toHaveBeenCalledWith('Chosen-pass-2026');
+    // Same consequences as a generated reset: old sessions end, lockout lifts.
+    expect(mockDb.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: { passwordHash: 'HASH', failedLoginAttempts: 0, lockedUntil: null },
+    });
+    expect(mockDb.refreshToken.updateMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('resetPassword generates one when none is given, and says so', async () => {
+    mockDb.user.findFirst.mockResolvedValue({ id: 'user-1' });
+    const res = await svc.resetPassword('school-1', 'user-1');
+    expect(res.generated).toBe(true);
+  });
+
+  it('a chosen password still cannot reach an admin of another school', async () => {
+    mockDb.user.findFirst.mockResolvedValue(null);
+    await expect(svc.resetPassword('school-1', 'user-x', 'Chosen-pass-2026')).rejects.toThrow(/not found/i);
+    expect(passwords.hash).not.toHaveBeenCalled();
+    expect(mockDb.user.update).not.toHaveBeenCalled();
+  });
+
   it('listAdmins scopes to SCHOOL_ADMIN of the school and maps rows', async () => {
     mockDb.user.findMany.mockResolvedValue([
       { id: 'u1', email: 'a@x.test', isActive: true, lastLoginAt: null, lockedUntil: null },

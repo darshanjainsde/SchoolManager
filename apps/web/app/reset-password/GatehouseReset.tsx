@@ -2,7 +2,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useApi } from '@/lib/use-api';
-import { Crest } from '../login/GatehouseLogin';
+import { GatehouseStage } from '../login/GatehouseStage';
 import type { LoginTheme } from '../login/gatehouse-theme';
 
 /**
@@ -58,119 +58,73 @@ function ResetForm({ theme }: { theme: LoginTheme }) {
   }
 
   return (
-    <div
-      className="gh-stage"
-      style={{ '--gh-p': theme.primary, '--gh-s': theme.secondary, '--gh-font': theme.fontStack } as React.CSSProperties}
+    <GatehouseStage
+      theme={theme}
+      plate="New password"
+      foot={<>You&rsquo;re setting the password for the school&rsquo;s own system · {theme.hostname}</>}
+      shaking={shaking}
+      gate={{ open: status === 'done', title: 'Password set', sub: `Taking you to sign in · ${theme.schoolName}` }}
     >
-      <span className="gh-blob gh-b1" aria-hidden="true" />
-      <span className="gh-blob gh-b2" aria-hidden="true" />
-      <span className="gh-ring gh-r1" aria-hidden="true" />
-      <span className="gh-ring gh-r2" aria-hidden="true" />
-      <span className="gh-mote" style={{ left: '10%', top: '72%', animationDuration: '9s' }} aria-hidden="true" />
-      <span className="gh-mote gh-mote-s" style={{ left: '22%', top: '88%', animationDuration: '12s', animationDelay: '2.5s' }} aria-hidden="true" />
-      <span className="gh-mote" style={{ left: '48%', top: '94%', animationDuration: '10s', animationDelay: '5s' }} aria-hidden="true" />
-      <span className="gh-mote gh-mote-s" style={{ left: '71%', top: '85%', animationDuration: '13s', animationDelay: '1.2s' }} aria-hidden="true" />
-      <span className="gh-mote" style={{ left: '86%', top: '70%', animationDuration: '11s', animationDelay: '3.8s' }} aria-hidden="true" />
-
-      <div className={`gh-shell${shaking ? ' gh-shake' : ''}`}>
-        {/* ── Identity panel: the school half, same as sign-in ── */}
-        <div className="gh-left">
-          <div className="gh-left-top">
-            <span className="gh-crest">
-              <Crest theme={theme} />
-            </span>
-            <h1 className="gh-name" style={{ fontFamily: 'var(--gh-font)' }}>
-              {theme.schoolName}
-            </h1>
-            <p className="gh-tagline">{theme.tagline}</p>
-            <div className="gh-plate">
-              <span className="gh-plate-text">New password</span>
-            </div>
-          </div>
-          <span className="gh-watermark" aria-hidden="true">
-            <Crest theme={theme} size={150} />
-          </span>
-          <p className="gh-foot">
-            You&rsquo;re setting the password for the school&rsquo;s own system · {theme.hostname}
+      {!token ? (
+        <div className="gh-form">
+          <p className="gh-label gh-signin-as">Set a new password</p>
+          <p className="gh-hint" style={{ marginBottom: 14 }}>
+            This page needs the link from your email — open it again, or request a fresh one.
           </p>
+          <a href="/forgot-password" className="gh-forgot">
+            Request a reset link →
+          </a>
         </div>
-
-        {/* ── Form panel ── */}
-        <div className="gh-right">
-          {!token ? (
-            <div className="gh-form">
-              <p className="gh-label gh-signin-as">Set a new password</p>
-              <p className="gh-hint" style={{ marginBottom: 14 }}>
-                This page needs the link from your email — open it again, or request a fresh one.
-              </p>
-              <a href="/forgot-password" className="gh-forgot">
-                Request a reset link →
-              </a>
+      ) : (
+        <form className="gh-form" onSubmit={onSubmit}>
+          <p className="gh-label gh-signin-as">Set a new password</p>
+          <div className="gh-swap">
+            <div>
+              <label className="gh-label" htmlFor="password">
+                New password
+              </label>
+              <input
+                id="password"
+                className="gh-input"
+                type="password"
+                autoComplete="new-password"
+                minLength={8}
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <p className="gh-hint">At least 8 characters.</p>
             </div>
-          ) : (
-            <form className="gh-form" onSubmit={onSubmit}>
-              <p className="gh-label gh-signin-as">Set a new password</p>
-              <div className="gh-swap">
-                <div>
-                  <label className="gh-label" htmlFor="password">
-                    New password
-                  </label>
-                  <input
-                    id="password"
-                    className="gh-input"
-                    type="password"
-                    autoComplete="new-password"
-                    minLength={8}
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                  />
-                  <p className="gh-hint">At least 8 characters.</p>
-                </div>
-                <div>
-                  <label className="gh-label" htmlFor="confirm">
-                    Confirm password
-                  </label>
-                  <input
-                    id="confirm"
-                    className="gh-input"
-                    type="password"
-                    autoComplete="new-password"
-                    required
-                    value={confirm}
-                    onChange={(e) => setConfirm(e.target.value)}
-                  />
-                  {error && <p className="gh-error">{error}</p>}
-                </div>
-                <button type="submit" className={`gh-btn${status === 'saving' ? ' gh-busy' : ''}`} disabled={status !== 'idle'}>
-                  {status === 'saving' ? 'Saving…' : 'Save new password'}
-                </button>
-              </div>
-              <a href="/login" className="gh-forgot">
-                Back to sign in
-              </a>
-              {theme.branded && (
-                <p className="gh-powered">
-                  Powered by <b>Sckools</b>
-                </p>
-              )}
-            </form>
-          )}
-        </div>
-
-        {/* ── Gate-open moment on success ── */}
-        <div className={`gh-gate${status === 'done' ? ' gh-gate-on' : ''}`} aria-hidden={status !== 'done'}>
-          <div className="gh-gate-inner">
-            <span className="gh-gate-pulse" aria-hidden="true" />
-            <Crest theme={theme} size={46} />
-            <p className="gh-gate-title" style={{ fontFamily: 'var(--gh-font)' }}>
-              Password set
-            </p>
-            <p className="gh-gate-sub">Taking you to sign in · {theme.schoolName}</p>
+            <div>
+              <label className="gh-label" htmlFor="confirm">
+                Confirm password
+              </label>
+              <input
+                id="confirm"
+                className="gh-input"
+                type="password"
+                autoComplete="new-password"
+                required
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+              />
+              {error && <p className="gh-error">{error}</p>}
+            </div>
+            <button type="submit" className={`gh-btn${status === 'saving' ? ' gh-busy' : ''}`} disabled={status !== 'idle'}>
+              {status === 'saving' ? 'Saving…' : 'Save new password'}
+            </button>
           </div>
-        </div>
-      </div>
-    </div>
+          <a href="/login" className="gh-forgot">
+            Back to sign in
+          </a>
+          {theme.branded && (
+            <p className="gh-powered">
+              Powered by <b>Sckools</b>
+            </p>
+          )}
+        </form>
+      )}
+    </GatehouseStage>
   );
 }
 

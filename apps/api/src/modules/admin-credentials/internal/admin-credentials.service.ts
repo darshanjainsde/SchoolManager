@@ -38,7 +38,18 @@ export class AdminCredentialsService {
     }));
   }
 
-  async resetPassword(schoolId: string, userId: string): Promise<{ password: string }> {
+  /**
+   * Sets a new password for one of THIS school's admins: the one the owner
+   * typed, or a generated one when they left it blank. Either way the old
+   * password stops working at once, any lockout is lifted, and every session
+   * the admin has open is signed out. The password is returned once, for the
+   * owner to hand over; it is never stored or logged in the clear.
+   */
+  async resetPassword(
+    schoolId: string,
+    userId: string,
+    chosen?: string,
+  ): Promise<{ password: string; generated: boolean }> {
     const db = getPlatformPrisma();
     const user = await db.user.findFirst({
       where: { id: userId, schoolId, role: 'SCHOOL_ADMIN' },
@@ -46,7 +57,8 @@ export class AdminCredentialsService {
     });
     if (!user) throw new NotFoundException('Admin not found for this school');
 
-    const password = randomBytes(12).toString('base64url');
+    const generated = !chosen;
+    const password = chosen ?? randomBytes(12).toString('base64url');
     const passwordHash = await this.passwords.hash(password);
 
     await db.$transaction([
@@ -60,7 +72,7 @@ export class AdminCredentialsService {
       }),
     ]);
 
-    this.logger.log({ actor: 'owner', schoolId, targetUserId: user.id, action: 'admin.password.reset' });
-    return { password };
+    this.logger.log({ actor: 'owner', schoolId, targetUserId: user.id, action: 'admin.password.reset', generated });
+    return { password, generated };
   }
 }

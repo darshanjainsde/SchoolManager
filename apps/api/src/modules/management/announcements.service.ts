@@ -5,6 +5,7 @@ import { ApiError } from '../../common/errors/api-error';
 import { NotificationService } from '../../common/notifications/notification.service';
 import { resolveSchoolRecipients, resolveSectionRecipients } from '../../common/notifications/recipients';
 import { runInBackground } from '../../common/notifications/run-in-background';
+import { readableIstDate } from '../../common/dates/timetable-date';
 import { isP2002, isP2025 } from '../../common/errors/prisma-errors';
 import { AttendanceService } from './attendance.service';
 import type { CreateAnnouncementDto, UpdateAnnouncementDto } from './management.dto';
@@ -29,12 +30,21 @@ export class AnnouncementsService {
     private readonly attendance: AttendanceService,
   ) {}
 
+  /**
+   * The admin's list, newest first.
+   *
+   * The class's GRADE is included, not only the section's own name: a section
+   * is called "B" and fifteen grades have one, so the admin console's audience
+   * cell read "B" and said nothing about which class had been told. `mine()`
+   * below has always resolved "IX-B" for the teacher's copy; this is the same
+   * answer for the admin's.
+   */
   async list(schoolId: string) {
     return withTenant(schoolId, (tx) =>
       tx.announcement.findMany({ take: LIST_CEILING.ACTIVITY,
         where: { schoolId },
         orderBy: { createdAt: 'desc' },
-        include: { classSection: { select: { name: true } } },
+        include: { classSection: { select: { name: true, grade: { select: { name: true } } } } },
       }),
     );
   }
@@ -176,6 +186,9 @@ export class AnnouncementsService {
     const targetSectionIds = targetIds; // captured for the closure below (string[] | null)
     runInBackground(
       async () => {
+        // ONE day for the whole fan-out: a notice posted at 23:59 must not
+        // reach half the school dated today and half tomorrow.
+        const postedOn = readableIstDate();
         const { recipients } = await withTenant(schoolId, async (tx) => {
           const school = await tx.school.findFirst({ where: { id: schoolId }, select: { name: true } });
           const schoolName = school?.name ?? FALLBACK_SCHOOL_NAME;
@@ -188,7 +201,7 @@ export class AnnouncementsService {
                 return emails.map((email) => ({
                   email,
                   schoolId,
-                  payload: { schoolName, title: dto.title, body: dto.body, className },
+                  payload: { schoolName, title: dto.title, body: dto.body, className, postedOn },
                 }));
               }),
             );
@@ -202,7 +215,7 @@ export class AnnouncementsService {
             recipients: emails.map((email) => ({
               email,
               schoolId,
-              payload: { schoolName, title: dto.title, body: dto.body, className: null },
+              payload: { schoolName, title: dto.title, body: dto.body, className: null, postedOn },
             })),
           };
         });

@@ -1,17 +1,39 @@
 'use client';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, Trash2, X, Megaphone } from 'lucide-react';
+import { Megaphone, Plus } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Select } from '@/components/ui/select';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, THead, TBody, Tr, Th, Td } from '@/components/ui/table';
+import { Cell, Field, Figure, Figures, Note, Overlay, Row, RowList, RowTitle, ScrollBox, ShowMore } from '@/components/ui/kit';
+import {
+  audienceOf, groupNotices, postedAtLabel, whenLabel,
+  type AnnouncementRow, type Notice,
+} from './notices';
+
+/**
+ * THE ANNOUNCEMENTS DESK.
+ *
+ * Answering the three questions before the markup (see the ui-mistake-ledger):
+ *
+ * 1. HOW BIG DOES THIS GET? A school posts two to five notices a week, so a
+ *    year is a couple of hundred — and because the API writes ONE ROW PER
+ *    TARGETED CLASS, a single notice to fifteen classes is fifteen rows. The
+ *    sample school already shows 22 rows for 12 notices. So: group the rows
+ *    into notices (notices.ts), and show twelve with a "show more".
+ * 2. WHAT IS THE ADMIN LOOKING FOR? "The notice I sent about the PTM" — and
+ *    then "who got it". The noun is the NOTICE; the audience is its detail.
+ * 3. WHAT IS THE LONGEST VALUE? A title that is a whole sentence, a message of
+ *    several paragraphs, and an audience of thirty class names. So the title
+ *    column is the flexible one, the message is clamped to two lines, and the
+ *    audience names three classes and counts the rest.
+ *
+ * What it replaces: a Tailwind table with the message cut to one line of 12px
+ * grey, an audience pill reading "B" (which of the fifteen Bs?), a compose
+ * card in flow that pushed the list below the fold, no way to fix a typo, and
+ * a red Delete on every row with no confirmation — a wall of red down a page
+ * whose rows are things already sent to families.
+ */
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -19,106 +41,203 @@ interface SchoolClass {
   id: string;
   name: string;
   grade: { name: string };
-}
-
-interface Announcement {
-  id: string;
-  title: string;
-  body: string;
-  classSectionId: string | null;
-  classSection: { name: string } | null;
-  createdAt: string;
+  /** The API includes the year so last year's sections are not offered. */
+  academicYear?: { isCurrent: boolean } | null;
+  _count: { students: number };
 }
 
 interface CreateAnnouncementBody {
   title: string;
   body: string;
-  classSectionId?: string;
+  classSectionIds?: string[];
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+/** The drawer is one layer with four jobs — never a dialog on top of a drawer. */
+type Panel =
+  | { kind: 'new' }
+  | { kind: 'read'; notice: Notice }
+  | { kind: 'edit'; notice: Notice }
+  | { kind: 'delete'; notice: Notice }
+  | null;
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { dateStyle: 'medium' });
-}
+const PAGE = 12;
 
-// ── Create form ───────────────────────────────────────────────────────────────
+// ── The audience picker ──────────────────────────────────────────────────────
 
-interface AnnouncementFormProps {
-  classes: SchoolClass[];
-  onSave: (data: CreateAnnouncementBody) => void;
-  isSaving: boolean;
-  onCancel: () => void;
-}
+interface GradeGroup { grade: string; sections: SchoolClass[] }
 
-function AnnouncementForm({ classes, onSave, isSaving, onCancel }: AnnouncementFormProps) {
-  const [title, setTitle] = useState('');
-  const [body, setBody] = useState('');
-  const [classSectionId, setClassSectionId] = useState('');
-
-  const canSave = title.trim() && body.trim();
-
-  function handleSubmit() {
-    const data: CreateAnnouncementBody = {
-      title: title.trim(),
-      body: body.trim(),
-    };
-    if (classSectionId) data.classSectionId = classSectionId;
-    onSave(data);
+/** Classes come back ordered by grade then section, so grouping keeps that order. */
+function byGrade(classes: SchoolClass[]): GradeGroup[] {
+  const out: GradeGroup[] = [];
+  for (const c of classes) {
+    const open = out[out.length - 1];
+    if (open && open.grade === c.grade.name) open.sections.push(c);
+    else out.push({ grade: c.grade.name, sections: [c] });
   }
+  return out;
+}
+
+/**
+ * Forty-five sections is far past the handful a flat row of chips can hold —
+ * the ledger's rule is chips below about seven, something else above it. The
+ * something else here is the school's own hierarchy: a row per grade, its
+ * sections beside it, and the grade's own chip takes or drops all three at
+ * once. That is how an admin says it out loud: "all of class nine".
+ */
+function AudiencePicker({
+  classes, selected, onChange, disabled,
+}: {
+  classes: SchoolClass[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+  disabled?: boolean;
+}) {
+  const grades = useMemo(() => byGrade(classes), [classes]);
+  const chosen = new Set(selected);
+
+  const toggleOne = (id: string) =>
+    onChange(chosen.has(id) ? selected.filter((x) => x !== id) : [...selected, id]);
+
+  const toggleGrade = (g: GradeGroup) => {
+    const ids = g.sections.map((s) => s.id);
+    const all = ids.every((id) => chosen.has(id));
+    onChange(all ? selected.filter((x) => !ids.includes(x)) : [...new Set([...selected, ...ids])]);
+  };
+
+  if (classes.length === 0) return <p className="sk-state">This school has no classes yet.</p>;
 
   return (
-    <Card className="max-w-lg">
-      <CardHeader>
-        <CardTitle>New announcement</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="ann-title">Title *</Label>
-          <Input
-            id="ann-title"
+    <ScrollBox label="Classes to announce to" max={300}>
+      <div className="sk-annpick">
+        {grades.map((g) => {
+          const ids = g.sections.map((s) => s.id);
+          const all = ids.every((id) => chosen.has(id));
+          return (
+            <div className="g" key={g.grade}>
+              <button
+                type="button"
+                className="sk-chip sk-anngrade"
+                aria-pressed={all}
+                disabled={disabled}
+                onClick={() => toggleGrade(g)}
+              >
+                {g.grade}
+              </button>
+              <div className="s">
+                {g.sections.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className="sk-chip"
+                    aria-pressed={chosen.has(s.id)}
+                    disabled={disabled}
+                    onClick={() => toggleOne(s.id)}
+                  >
+                    {s.name}
+                    <span className="n">{s._count.students}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </ScrollBox>
+  );
+}
+
+// ── The composer ─────────────────────────────────────────────────────────────
+
+function Composer({
+  classes, saving, initial, onSubmit,
+}: {
+  classes: SchoolClass[];
+  saving: boolean;
+  /** Set when editing: the words are prefilled and the audience is fixed. */
+  initial?: Notice;
+  onSubmit: (data: { title: string; body: string; classSectionIds: string[]; whole: boolean }) => void;
+}) {
+  const editing = !!initial;
+  const [title, setTitle] = useState(initial?.title ?? '');
+  const [body, setBody] = useState(initial?.body ?? '');
+  const [whole, setWhole] = useState(initial ? initial.audience === 'SCHOOL' : true);
+  const [picked, setPicked] = useState<string[]>([]);
+
+  const reach = classes.filter((c) => picked.includes(c.id)).reduce((n, c) => n + c._count.students, 0);
+  const ready = title.trim() && body.trim() && (whole || picked.length > 0);
+
+  return (
+    <form
+      id="ann-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!ready || saving) return;
+        onSubmit({ title: title.trim(), body: body.trim(), classSectionIds: picked, whole });
+      }}
+      className="flex flex-col gap-4"
+    >
+      <Field id="ann-title" label="Title">
+        {(p) => (
+          <input
+            {...p}
+            className="sk-input"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="End-of-term assembly"
+            placeholder="Parent–Teacher Meeting on Saturday"
+            maxLength={160}
+            autoFocus
           />
-        </div>
+        )}
+      </Field>
 
-        <div className="space-y-2">
-          <Label htmlFor="ann-body">Message *</Label>
-          <Textarea
-            id="ann-body"
+      <Field
+        id="ann-body"
+        label="Message"
+        hint="Families read this in the app and in their email, exactly as written."
+      >
+        {(p) => (
+          <textarea
+            {...p}
+            className="sk-input"
+            rows={6}
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            placeholder="Write the announcement here…"
-            rows={4}
+            placeholder="Write it the way you would say it to a parent."
           />
-        </div>
+        )}
+      </Field>
 
-        <div className="space-y-2">
-          <Label htmlFor="ann-class">Target audience</Label>
-          <Select
-            id="ann-class"
-            value={classSectionId}
-            onChange={(e) => setClassSectionId(e.target.value)}
-          >
-            <option value="">Whole school</option>
-            {classes.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.grade.name} — {c.name}
-              </option>
-            ))}
-          </Select>
+      {editing ? (
+        // Retargeting is not an edit: the rows ARE the audience, and PATCH can
+        // neither add a class nor drop one. Say so rather than offer a control
+        // that would quietly do nothing.
+        <Note>
+          This goes to <strong>{audienceOf(initial).summary.toLowerCase()}</strong> and that cannot be changed here.
+          To send it elsewhere, delete it and post again.
+        </Note>
+      ) : (
+        <div className="sk-field">
+          <span className="sk-lab">Who gets it</span>
+          <div className="sk-seg" role="group" aria-label="Who gets it">
+            <button type="button" aria-pressed={whole} onClick={() => setWhole(true)}>Whole school</button>
+            <button type="button" aria-pressed={!whole} onClick={() => setWhole(false)}>Chosen classes</button>
+          </div>
+          {!whole && (
+            <div className="mt-2 flex flex-col gap-2">
+              <AudiencePicker classes={classes} selected={picked} onChange={setPicked} disabled={saving} />
+              {picked.length === 0 ? (
+                <Note>Pick at least one class, or send it to the whole school.</Note>
+              ) : (
+                <p className="sk-muted">
+                  {picked.length} {picked.length === 1 ? 'class' : 'classes'} · {reach}{' '}
+                  {reach === 1 ? 'student' : 'students'}
+                </p>
+              )}
+            </div>
+          )}
         </div>
-      </CardContent>
-      <CardFooter className="gap-2">
-        <Button onClick={handleSubmit} disabled={isSaving || !canSave}>
-          {isSaving ? 'Posting…' : 'Post announcement'}
-        </Button>
-        <Button variant="outline" onClick={onCancel}>
-          Cancel
-        </Button>
-      </CardFooter>
-    </Card>
+      )}
+    </form>
   );
 }
 
@@ -127,14 +246,14 @@ function AnnouncementForm({ classes, onSave, isSaving, onCancel }: AnnouncementF
 export default function AnnouncementsPage() {
   const host = useHost();
   const api = useApi({ audience: 'school', hostHeader: host });
-  const queryClient = useQueryClient();
+  const qc = useQueryClient();
 
-  const [showAdd, setShowAdd] = useState(false);
+  const [panel, setPanel] = useState<Panel>(null);
+  const [shown, setShown] = useState(PAGE);
 
-  // ── Queries ──────────────────────────────────────────────────────────────
-  const announcementsQuery = useQuery({
+  const list = useQuery({
     queryKey: ['announcements'],
-    queryFn: () => api.get<Announcement[]>('/manage/announcements'),
+    queryFn: () => api.get<AnnouncementRow[]>('/manage/announcements'),
     enabled: !!host,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
@@ -148,134 +267,273 @@ export default function AnnouncementsPage() {
     refetchOnWindowFocus: false,
   });
 
-  // ── Mutations ─────────────────────────────────────────────────────────────
-  const createMutation = useMutation({
-    // The API now creates one Announcement row per targeted class section
-    // (a school-wide post is still a single-element array) — the mutation's
-    // result is unused below, but the generic should describe what the
-    // endpoint actually returns.
-    mutationFn: (data: CreateAnnouncementBody) =>
-      api.post<Announcement[]>('/manage/announcements', data),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['announcements'] });
-      setShowAdd(false);
-      toast.success('Announcement posted.');
-    },
-    onError: (err: Error) => toast.error(`Failed to post announcement: ${err.message}`),
+  // `/manage/classes` carries every year's sections unless asked for one, and
+  // last June's classes are not somewhere to send today's notice.
+  const classes = (classesQuery.data ?? []).filter((c) => c.academicYear?.isCurrent !== false);
+
+  const notices = useMemo(() => groupNotices(list.data ?? []), [list.data]);
+  const toSchool = notices.filter((n) => n.audience === 'SCHOOL').length;
+
+  const close = () => setPanel(null);
+  const refresh = () => qc.invalidateQueries({ queryKey: ['announcements'] });
+
+  const create = useMutation({
+    mutationFn: (data: CreateAnnouncementBody) => api.post<unknown>('/manage/announcements', data),
+    onSuccess: () => { void refresh(); close(); toast.success('Announcement posted.'); },
+    onError: (e: Error) => toast.error(e.message),
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.del<{ ok: boolean }>(`/manage/announcements/${id}`),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['announcements'] });
-      toast.success('Announcement deleted.');
+  /**
+   * A notice is several rows, so editing and deleting are several calls. They
+   * run together and the result is reported HONESTLY — a half-applied change
+   * on an outward-facing thing is exactly what an admin needs to be told
+   * about, not something to hide behind a cheerful toast.
+   */
+  const applyToRows = async (rows: AnnouncementRow[], fn: (id: string) => Promise<unknown>) => {
+    const done = await Promise.allSettled(rows.map((r) => fn(r.id)));
+    const failed = done.filter((d) => d.status === 'rejected').length;
+    return { ok: done.length - failed, failed };
+  };
+
+  const edit = useMutation({
+    mutationFn: async (v: { notice: Notice; title: string; body: string }) =>
+      applyToRows(v.notice.rows, (id) => api.patch<unknown>(`/manage/announcements/${id}`, { title: v.title, body: v.body })),
+    onSuccess: (r) => {
+      void refresh();
+      close();
+      if (r.failed === 0) toast.success('Announcement updated.');
+      else toast.error(`Updated ${r.ok} of ${r.ok + r.failed} copies — reopen it and try the rest.`);
     },
-    onError: (err: Error) => toast.error(`Failed to delete announcement: ${err.message}`),
+    onError: (e: Error) => toast.error(e.message),
   });
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  const remove = useMutation({
+    mutationFn: async (notice: Notice) =>
+      applyToRows(notice.rows, (id) => api.del<unknown>(`/manage/announcements/${id}`)),
+    onSuccess: (r) => {
+      void refresh();
+      close();
+      if (r.failed === 0) toast.success('Announcement deleted.');
+      else toast.error(`Deleted ${r.ok} of ${r.ok + r.failed} copies — reopen it and try the rest.`);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const busy = create.isPending || edit.isPending || remove.isPending;
+
   return (
-    <div className="flex flex-col gap-6">
-      {/* Page header */}
-      {/* `sk-pagehead` supplies the portal's serif heading — see /app/events. */}
-      <header className="sk-pagehead flex items-center justify-between" style={{ marginBottom: 0 }}>
+    <>
+      <header className="sk-pagehead">
         <div>
           <h1>Announcements</h1>
-          <p>Post announcements to the whole school or a specific class.</p>
+          <p>What the school has told families, and who it went to.</p>
         </div>
-        <Button className="sk-press" onClick={() => setShowAdd((v) => !v)} variant="outline">
-          {showAdd ? (
-            <>
-              <X className="h-4 w-4 mr-1" /> Cancel
-            </>
-          ) : (
-            <>
-              <Plus className="h-4 w-4 mr-1" /> New announcement
-            </>
-          )}
-        </Button>
+        <button type="button" className="sk-btn sk-press" data-variant="primary" onClick={() => setPanel({ kind: 'new' })}>
+          <Plus className="h-4 w-4" aria-hidden="true" /> New announcement
+        </button>
       </header>
 
-      {/* Create form */}
-      {showAdd && (
-        <AnnouncementForm
-          classes={classesQuery.data ?? []}
-          onSave={(data) => createMutation.mutate(data)}
-          isSaving={createMutation.isPending}
-          onCancel={() => setShowAdd(false)}
-        />
+      {notices.length > 0 && (
+        <Figures count={3}>
+          <Figure value={notices.length} label="Notices" />
+          <Figure value={toSchool} label="To the whole school" />
+          <Figure value={notices.length - toSchool} label="To chosen classes" />
+        </Figures>
       )}
 
-      {/* Loading / error states */}
-      {announcementsQuery.isLoading && (
-        <p className="text-sm" style={{ color: 'var(--sk-ink-3)' }}>Loading announcements…</p>
-      )}
-      {announcementsQuery.error && (
-        <p className="text-sm" style={{ color: 'var(--sk-bad)' }}>
-          {(announcementsQuery.error as Error).message}
-        </p>
-      )}
-
-      {/* Empty state */}
-      {!announcementsQuery.isLoading && (announcementsQuery.data?.length ?? 0) === 0 && (
-        <div className="flex flex-col items-center gap-3 py-16 text-center">
-          <Megaphone className="h-10 w-10" style={{ color: 'var(--sk-ink-3)' }} />
-          <p className="text-sm" style={{ color: 'var(--sk-ink-3)' }}>No announcements yet. Post one above.</p>
+      <div className="sk-card">
+        <div className="sk-card-h">
+          <h3>Posted</h3>
+          <p className="sk-muted" style={{ marginTop: 4 }}>
+            {list.isLoading ? 'Loading…' : `${notices.length} ${notices.length === 1 ? 'notice' : 'notices'}, newest first`}
+          </p>
         </div>
+        <div className="sk-card-b">
+          {/* A failed load keeps whatever is on screen and offers the retry —
+              blanking to the empty state would tell the admin nothing was ever
+              posted, which is a different and much worse sentence. */}
+          {list.error && (
+            <Note tone="bad">
+              {(list.error as Error).message}
+              <button type="button" className="sk-btn" data-size="sm" style={{ marginLeft: 10 }} onClick={() => void list.refetch()}>
+                Try again
+              </button>
+            </Note>
+          )}
+
+          {list.isLoading && <p className="sk-state">Loading announcements…</p>}
+
+          {!list.isLoading && !list.error && notices.length === 0 && (
+            <div className="sk-annempty">
+              <Megaphone className="h-9 w-9" aria-hidden="true" />
+              <h4>Nothing posted yet</h4>
+              <p>
+                Holidays, exam dates, a change of timing — whatever the whole school or one class needs to
+                know. It reaches families in the app and by email.
+              </p>
+              <button type="button" className="sk-btn sk-press" data-variant="primary" onClick={() => setPanel({ kind: 'new' })}>
+                Write the first one
+              </button>
+            </div>
+          )}
+
+          {notices.length > 0 && (
+            <>
+              <RowList columns="minmax(0, 1fr) auto auto" label="Announcements">
+                {notices.slice(0, shown).map((n) => {
+                  const a = audienceOf(n);
+                  return (
+                    <Row key={n.key} onClick={() => setPanel({ kind: 'read', notice: n })}>
+                      <Cell>
+                        <RowTitle title={n.title} sub={<span className="sk-annbody">{n.body}</span>} />
+                      </Cell>
+                      <Cell>
+                        <span className="sk-pill" data-tone={n.audience === 'SCHOOL' ? 'info' : 'neutral'}>
+                          {a.summary}
+                        </span>
+                        {a.shown.length > 0 && (
+                          <span className="sk-annwho">
+                            {a.shown.join(', ')}{a.more > 0 ? ` +${a.more}` : ''}
+                          </span>
+                        )}
+                      </Cell>
+                      <Cell align="end">
+                        <span className="sk-annwhen">{whenLabel(n.postedAt)}</span>
+                      </Cell>
+                    </Row>
+                  );
+                })}
+              </RowList>
+              <ShowMore
+                hidden={notices.length - shown}
+                expanded={shown > PAGE}
+                onShow={() => setShown((s) => s + 40)}
+                onLess={() => setShown(PAGE)}
+              />
+            </>
+          )}
+        </div>
+      </div>
+
+      {panel?.kind === 'new' && (
+        <Overlay
+          title="New announcement"
+          subtitle="It reaches families in the app and by email."
+          onClose={close}
+          footer={
+            <>
+              <button type="button" className="sk-btn" onClick={close} disabled={busy}>Cancel</button>
+              <button type="submit" form="ann-form" className="sk-btn sk-press" data-variant="primary" disabled={busy}>
+                {create.isPending ? 'Posting…' : 'Post announcement'}
+              </button>
+            </>
+          }
+        >
+          <Composer
+            classes={classes}
+            saving={busy}
+            onSubmit={(v) =>
+              create.mutate({
+                title: v.title,
+                body: v.body,
+                ...(v.whole ? {} : { classSectionIds: v.classSectionIds }),
+              })
+            }
+          />
+        </Overlay>
       )}
 
-      {/* Announcements table */}
-      {(announcementsQuery.data?.length ?? 0) > 0 && (
-        <Table>
-          <THead>
-            <Tr>
-              <Th>Title</Th>
-              <Th>Target</Th>
-              <Th>Date</Th>
-              <Th />
-            </Tr>
-          </THead>
-          <TBody>
-            {announcementsQuery.data!.map((ann) => (
-              <Tr key={ann.id}>
-                <Td className="font-medium max-w-xs" style={{ color: 'var(--sk-ink)' }}>
-                  <div className="truncate">{ann.title}</div>
-                  {ann.body && (
-                    <div className="text-xs truncate mt-0.5" style={{ color: 'var(--sk-ink-3)' }}>{ann.body}</div>
-                  )}
-                </Td>
-                <Td>
-                  {ann.classSection ? (
-                    <span className="sk-pill" data-tone="info">
-                      {ann.classSection.name}
-                    </span>
-                  ) : (
-                    <span className="sk-pill" data-tone="neutral">
-                      Whole school
-                    </span>
-                  )}
-                </Td>
-                <Td className="text-sm whitespace-nowrap" style={{ color: 'var(--sk-ink-3)' }}>
-                  {formatDate(ann.createdAt)}
-                </Td>
-                <Td>
-                  <Button
-                    className="sk-press"
-                    variant="ghost"
-                    size="sm"
-                    disabled={deleteMutation.isPending}
-                    onClick={() => deleteMutation.mutate(ann.id)}
-                    style={{ color: 'var(--sk-bad)' }}
-                  >
-                    <Trash2 className="h-3.5 w-3.5 mr-1" />
-                    Delete
-                  </Button>
-                </Td>
-              </Tr>
-            ))}
-          </TBody>
-        </Table>
+      {panel?.kind === 'read' && (
+        <Overlay
+          title={panel.notice.title}
+          subtitle={postedAtLabel(panel.notice.postedAt)}
+          onClose={close}
+          footer={
+            <>
+              <button type="button" className="sk-btn" data-tone="bad" onClick={() => setPanel({ kind: 'delete', notice: panel.notice })}>
+                Delete
+              </button>
+              <span style={{ flex: 1 }} />
+              <button type="button" className="sk-btn sk-press" data-variant="primary" onClick={() => setPanel({ kind: 'edit', notice: panel.notice })}>
+                Edit wording
+              </button>
+            </>
+          }
+        >
+          <div className="flex flex-col gap-4">
+            <p className="sk-annread">{panel.notice.body}</p>
+            <div className="sk-field">
+              <span className="sk-lab">Who got it</span>
+              {panel.notice.audience === 'SCHOOL' ? (
+                <p className="sk-muted">Every family in the school.</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {panel.notice.classNames.map((c) => (
+                    <span key={c} className="sk-pill" data-tone="neutral">{c}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </Overlay>
       )}
-    </div>
+
+      {panel?.kind === 'edit' && (
+        <Overlay
+          title="Edit announcement"
+          subtitle={`Posted ${postedAtLabel(panel.notice.postedAt)}`}
+          onClose={close}
+          footer={
+            <>
+              <button type="button" className="sk-btn" onClick={() => setPanel({ kind: 'read', notice: panel.notice })} disabled={busy}>
+                Back
+              </button>
+              <button type="submit" form="ann-form" className="sk-btn sk-press" data-variant="primary" disabled={busy}>
+                {edit.isPending ? 'Saving…' : 'Save wording'}
+              </button>
+            </>
+          }
+        >
+          <Composer
+            classes={classes}
+            saving={busy}
+            initial={panel.notice}
+            onSubmit={(v) => edit.mutate({ notice: panel.notice, title: v.title, body: v.body })}
+          />
+        </Overlay>
+      )}
+
+      {panel?.kind === 'delete' && (
+        <Overlay
+          title="Delete this announcement?"
+          side="center"
+          onClose={close}
+          footer={
+            <>
+              <button type="button" className="sk-btn" onClick={() => setPanel({ kind: 'read', notice: panel.notice })} disabled={busy}>
+                Keep it
+              </button>
+              <span style={{ flex: 1 }} />
+              <button type="button" className="sk-btn sk-press" data-tone="bad" disabled={busy} onClick={() => remove.mutate(panel.notice)}>
+                {remove.isPending ? 'Deleting…' : 'Delete'}
+              </button>
+            </>
+          }
+        >
+          <div className="flex flex-col gap-3">
+            <p className="sk-annread" style={{ fontWeight: 600 }}>{panel.notice.title}</p>
+            <p className="sk-muted">
+              Sent to {audienceOf(panel.notice).summary.toLowerCase()} on {postedAtLabel(panel.notice.postedAt)}.
+            </p>
+            {/* The honest consequence: the row goes, the message that already
+                landed on a parent's phone does not come back. */}
+            <Note>
+              It disappears from the families’ app. The message already sent to their phones and email cannot be
+              taken back.
+            </Note>
+          </div>
+        </Overlay>
+      )}
+    </>
   );
 }

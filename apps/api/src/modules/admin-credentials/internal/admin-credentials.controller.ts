@@ -1,8 +1,9 @@
-import { Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { OwnerHostGuard } from '../../../common/auth/owner-host.guard';
 import { PlatformJwtGuard } from '../../../common/auth/platform-jwt.guard';
 import { AdminCredentialsService } from './admin-credentials.service';
+import { ResetAdminPasswordDto } from './dto';
 
 @ApiTags('owner')
 @Controller('owner')
@@ -19,7 +20,8 @@ export class AdminCredentialsController {
   resetPassword(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('userId', ParseUUIDPipe) userId: string,
+    @Body() dto: ResetAdminPasswordDto,
   ) {
-    return this.svc.resetPassword(id, userId);
+    return this.svc.resetPassword(id, userId, dto?.password);
   }
 }

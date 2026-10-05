@@ -4361,6 +4361,19 @@ html[data-theme='light'] .skosx { color-scheme: light; }
   .sk-paycheck { width: 24px; height: 24px; margin: -4px; }
 }
 
+/* THE CONSOLE'S CHECKBOX, wherever one appears. Same rule as `.sk-paycheck`
+   above, under a name that is not one module's — that one should fold into
+   this when Pay is next touched.
+   The size is on the BOX and not on padding: a checkbox renders with
+   `appearance: auto`, and the UA ignores padding on it entirely, so the usual
+   padding-plus-negative-margin trick measures exactly 14px and changes
+   nothing. The negative margin gives the 8px back to the layout, so a row
+   holding one does not grow on a phone. */
+.sk-check { width: 16px; height: 16px; flex: none; cursor: pointer; }
+@media (pointer: coarse), (max-width: 640px) {
+  .sk-check { width: 24px; height: 24px; margin: -4px; }
+}
+
 /* ---- the editor ----
    A drawer, not a section under the table. Rendering it after a
    long roster put it below the fold, so pressing "Set pay" looked
@@ -4516,6 +4529,12 @@ html[data-theme='light'] .skosx { color-scheme: light; }
    min-width:0 one long name widens the track and the page scrolls sideways. */
 .sk-rowcell { min-width: 0; display: grid; gap: 2px; align-content: center; }
 .sk-rowcell[data-align="end"] { justify-items: end; text-align: right; }
+/* A CELL IS A GRID, SO ANYTHING IN IT STRETCHES.
+   A pill is a label around its own words; stretched to the track it becomes a
+   180px bar with the text at one end, which reads as a progress bar rather
+   than a tag. End-aligned cells already pull their contents over, so only the
+   ordinary ones need this. */
+.sk-rowcell:not([data-align="end"]) > .sk-pill { justify-self: start; }
 .sk-rowtitle { display: block; font-size: 13.5px; font-weight: 650; color: var(--sk-ink); overflow-wrap: anywhere; }
 .sk-rowsub { display: block; font-size: 11.5px; color: var(--sk-ink-3); overflow-wrap: anywhere; }
 .sk-rowsub[data-tone="warn"] { color: var(--sk-amber-ink); }
@@ -4737,3 +4756,45 @@ button.sk-hubdoor:hover { transform: translateY(-2px); border-color: var(--sk-br
    the Tailwind `sr-only` utility is not guaranteed to be in the built bundle
    for a class the app only uses once. */
 .sk-sronly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
+
+/* ── The announcements desk ──
+   A notice is a thing a school SAID, so the list has to show the words. The
+   table it replaces cut the message to one line of 12px grey and gave the
+   audience a pill reading "B" — which of the fifteen Bs? Two lines of message
+   is enough to recognise a notice without turning the list into a page of
+   paragraphs, and the clamp needs an explicit display because the span it
+   sits in is inline. */
+.sk-annbody { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* Under the audience pill: the first few class names, so a two-class notice
+   reads as its classes rather than as the number two. */
+.sk-annwho { display: block; margin-top: 3px; font-size: 11.5px; color: var(--sk-ink-3); }
+.sk-annwhen { font-size: 12.5px; color: var(--sk-ink-3); white-space: nowrap; }
+/* The message as it was written — a notice typed with blank lines between its
+   points must not arrive as one paragraph. */
+.sk-annread { white-space: pre-wrap; font-size: 14px; line-height: 1.6; color: var(--sk-ink); }
+
+/* Forty-five sections cannot be a flat row of chips, so the picker is the
+   school's own hierarchy: a grade, then its sections. The grade's chip takes
+   or drops all of them — "all of class nine" is how an admin says it. */
+.sk-annpick { display: flex; flex-direction: column; gap: 8px; }
+.sk-annpick .g { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* The grade chip takes all of its sections, so it is a CONTROL, not a chosen
+   class — and it must not wear the chosen look. `data-strong` was tried and
+   is the same indigo as `aria-pressed`, which left an admin unable to tell
+   which grades they had actually picked. Weight and width instead; colour
+   stays the business of the pressed state alone. */
+.sk-annpick .g > .sk-chip { min-width: 4.8em; justify-content: center; font-weight: 800; }
+.sk-annpick .s { display: flex; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.sk-annpick .s .sk-chip { min-width: 3.4em; justify-content: center; }
+/* The roll inside a chip: the admin is choosing how many families to write to. */
+.sk-annpick .sk-chip .n { margin-left: 5px; font-size: 10.5px; font-weight: 600; color: var(--sk-ink-3); }
+.sk-annpick .sk-chip[aria-pressed="true"] .n { color: inherit; opacity: .75; }
+
+/* An empty desk still has to say what it is for and offer the way in — a bare
+   icon and a grey line is a dead end on the one screen whose whole job is to
+   start something. */
+.sk-annempty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 30px 16px 26px; text-align: center; }
+.sk-annempty > svg { color: var(--sk-ink-3); opacity: .65; }
+.sk-annempty h4 { font-family: var(--sk-serif); font-size: 16px; font-weight: 650; color: var(--sk-ink); }
+.sk-annempty p { max-width: 42ch; font-size: 13px; line-height: 1.55; color: var(--sk-ink-3); }
+.sk-annempty > .sk-btn { margin-top: 6px; }

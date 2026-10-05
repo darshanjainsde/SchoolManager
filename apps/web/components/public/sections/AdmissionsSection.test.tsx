@@ -69,3 +69,47 @@ describe('where the fee table is allowed to appear', () => {
     expect(screen.getByText(/fee structure/i)).toBeInTheDocument();
   });
 });
+
+/**
+ * A STEP IS A HEADING AND ITS DETAILS, WRITTEN THE WAY THE SCHOOL TYPED THEM.
+ *
+ * The body used to be one `<p>`: a school that typed the documents to bring
+ * on separate lines got them run together into one sentence. It now goes
+ * through the same page-text grammar as the page builder, on both layouts.
+ */
+describe('a step body keeps its lines and lists', () => {
+  const steps = [
+    {
+      title: 'Submit the form',
+      description: 'Bring these on the day:\n- Birth certificate\n- Two passport photos\n\n1. Fill the form\n2. Pay the fee',
+    },
+  ];
+
+  for (const variant of ['journey', 'rail'] as const) {
+    it(`renders bullets and numbers as real lists (${variant})`, () => {
+      const { container } = render(
+        <AdmissionsSection admissions={admissions({ steps } as never)} courses={[]} variant={variant} />,
+      );
+      expect(screen.getByRole('heading', { name: 'Submit the form' })).toBeInTheDocument();
+      expect(screen.getByText('Bring these on the day:')).toBeInTheDocument();
+      const ul = container.querySelector('.ps-step-body ul');
+      const ol = container.querySelector('.ps-step-body ol');
+      expect([...ul!.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
+        'Birth certificate',
+        'Two passport photos',
+      ]);
+      expect([...ol!.querySelectorAll('li')].map((li) => li.textContent)).toEqual(['Fill the form', 'Pay the fee']);
+    });
+  }
+
+  it('never interprets the body as HTML', () => {
+    const { container } = render(
+      <AdmissionsSection
+        admissions={admissions({ steps: [{ title: 'Visit', description: '<img src=x onerror=alert(1)>' }] } as never)}
+        courses={[]}
+      />,
+    );
+    expect(container.querySelector('.ps-step-body img')).toBeNull();
+    expect(screen.getByText('<img src=x onerror=alert(1)>')).toBeInTheDocument();
+  });
+});

@@ -178,9 +178,17 @@ export class UpsertCourseFeeDto {
   @IsOptional() @IsString() @Length(0, 200) includes?: string;
 }
 
+export const ADMISSION_STEP_BODY_MAX = 1500;
+
 export class AdmissionStepDto {
   @IsString() @Length(1, 120) title!: string;
-  @IsOptional() @IsString() @Length(0, 400) description?: string;
+  /**
+   * The step's body: plain text in the page-text grammar (lines, `- ` bullets,
+   * `1. ` numbers, **bold**). 400 fit the old one-liner; a step with a short
+   * list of documents to bring needs room for the list. The column is TEXT,
+   * so this is a validation limit only, with no migration behind it.
+   */
+  @IsOptional() @IsString() @Length(0, ADMISSION_STEP_BODY_MAX) description?: string;
   @IsInt() @Min(0) order!: number;
 }
 export class SetAdmissionStepsDto {

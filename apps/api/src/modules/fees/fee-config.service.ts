@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:crypto';
 import { withTenant } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
+import { openFeeSecret, sealFeeSecret } from '../../common/crypto/machine-secrets';
 import { StorageService } from '../../common/storage/storage.service';
 import { PaymentProviderRegistry } from './providers/payment-provider.registry';
 import type { SaveBankDetailDto, SaveProviderConfigDto } from './fees.dto';
@@ -14,8 +14,6 @@ import type { SaveBankDetailDto, SaveProviderConfigDto } from './fees.dto';
  * keys are PRESENT, never their values — so the admin screen can show
  * "•••• saved" without the API ever being a way to read a credential back out.
  */
-
-const ALGO = 'aes-256-gcm';
 
 @Injectable()
 export class FeeConfigService {
@@ -32,7 +30,7 @@ export class FeeConfigService {
    * a full KMS is the right answer at scale and this is the shape that swaps
    * into one, because only these two methods know how a secret is stored.
    */
-  private key(schoolId: string): Buffer {
+  private master(): string {
     const master = process.env.FEES_SECRET_KEY;
     if (!master) {
       throw new ApiError(
@@ -41,22 +39,16 @@ export class FeeConfigService {
         503,
       );
     }
-    return scryptSync(master, `fees:${schoolId}`, 32);
+    return master;
   }
 
   private encrypt(schoolId: string, plain: string): string {
-    const iv = randomBytes(12);
-    const cipher = createCipheriv(ALGO, this.key(schoolId), iv);
-    const enc = Buffer.concat([cipher.update(plain, 'utf8'), cipher.final()]);
-    return [iv.toString('base64'), cipher.getAuthTag().toString('base64'), enc.toString('base64')].join('.');
+    return sealFeeSecret(this.master(), schoolId, plain);
   }
 
   /** Unused by any read path today — gateway `start()` will call it. */
   decrypt(schoolId: string, blob: string): string {
-    const [iv, tag, data] = blob.split('.');
-    const decipher = createDecipheriv(ALGO, this.key(schoolId), Buffer.from(iv, 'base64'));
-    decipher.setAuthTag(Buffer.from(tag, 'base64'));
-    return Buffer.concat([decipher.update(Buffer.from(data, 'base64')), decipher.final()]).toString('utf8');
+    return openFeeSecret(this.master(), schoolId, blob);
   }
 
   /**

@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { AuthModule } from '../../auth';
 import { FeaturesModule } from '../../features';
 import { MarketingModule } from '../../marketing';
+import { BackupsModule } from '../../backups';
 import { OwnerAuthService } from './owner-auth.service';
 import { OwnerAuthController } from './owner-auth.controller';
 import { ImpersonationService } from './impersonation.service';
@@ -19,7 +20,7 @@ import { SpeedService } from './speed.service';
 import { OwnerController } from './owner.controller';
 
 @Module({
-  imports: [JwtModule.register({}), AuthModule, FeaturesModule, MarketingModule, HiringModule],
+  imports: [JwtModule.register({}), AuthModule, FeaturesModule, MarketingModule, HiringModule, BackupsModule],
   controllers: [OwnerAuthController, OwnerController],
   providers: [OpsService, OwnerAuthService, OwnerHostGuard, OwnerSchoolsService, OwnerDomainsService, HostingProviderService, OwnerCacheInterceptor, SpeedService, OwnerEventsService, ImpersonationService, OwnerOverviewService],
 })

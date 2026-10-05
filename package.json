@@ -24,7 +24,8 @@
     "dash": "node tools/test-dashboard/server.mjs",
     "dispatch:log": "node scripts/dispatch-metrics.mjs log",
     "dispatch:report": "node scripts/dispatch-metrics.mjs report",
-    "dispatch:ui": "node scripts/dispatch-ui.mjs"
+    "dispatch:ui": "node scripts/dispatch-ui.mjs",
+    "school": "pnpm --filter @skoolos/api exec tsx scripts/school.ts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

@@ -459,6 +459,50 @@ export const AUTHZ_REVIEWED: string[] = [
   "GET /owner/print-orders/counts",
   "GET /site/enquiries/:id",
   "POST /site/enquiries/:id/notes",
+  // School backups — backups-authz.e2e-spec.ts: every owner route proven four
+  // ways (anonymous, school token on owner host, platform token on school
+  // host, operator); the engine room refuses any caller without the cron
+  // secret. The delete gate (suspended + a backup taken after suspension) is
+  // asserted there too; the engine is proven in school-backup.e2e-spec.ts.
+  "GET /owner/schools/:id/backups",
+  "POST /owner/schools/:id/backups",
+  "POST /owner/schools/:id/delete",
+  "GET /owner/backups/:id",
+  "POST /owner/backups/:id/step",
+  "GET /owner/backups/:id/download",
+  "POST /owner/backups/upload-url",
+  "POST /owner/backups/uploaded",
+  "GET /owner/deleted-schools",
+  "POST /owner/restores",
+  "GET /owner/restores/:id",
+  "POST /owner/restores/:id/step",
+  "GET /internal/cron/school-backups",
+  "POST /internal/cron/school-backups",
+  "GET /internal/cron/school-backups/weekly",
+  // Backup buckets and the sample-pack library — same suite, same four ways.
+  // Each of these can empty or replace a school's management data, or hand out
+  // a copy of it, so none is a read-only convenience.
+  "GET /owner/schools/:id/buckets",
+  "POST /owner/schools/:id/buckets/save",
+  "GET /owner/schools/:id/buckets/:bucket/versions",
+  "POST /owner/schools/:id/buckets/preflight",
+  "POST /owner/schools/:id/buckets/restore",
+  "POST /owner/schools/:id/buckets/reset",
+  "GET /owner/schools/:id/bucket-restores",
+  "GET /owner/bucket-restores/:id",
+  "POST /owner/bucket-restores/:id/step",
+  "GET /owner/sample-packs",
+  "GET /owner/sample-packs/excluded",
+  "POST /owner/sample-packs",
+  "POST /owner/sample-packs/upload-url",
+  "POST /owner/sample-packs/uploaded",
+  "GET /owner/sample-packs/:id",
+  "POST /owner/sample-packs/:id/step",
+  "PATCH /owner/sample-packs/:id",
+  "GET /owner/sample-packs/:id/download",
+  "DELETE /owner/sample-packs/:id",
+  "GET /internal/cron/school-backups/snapshots",
+  "POST /internal/cron/school-backups/snapshots",
 ];
 
 /**

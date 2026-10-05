@@ -172,6 +172,9 @@ describe('NotificationOutboxService', () => {
           title: 'Worksheet 3',
           body: 'Mathematics — due Wed, 5 Aug 2026',
           className: '8-C',
+          // The day the row is drained, written for a reader ("5 August").
+          // Pinned by SHAPE, not value: the drain runs on a real clock.
+          postedOn: expect.stringMatching(/^\d{1,2} [A-Z][a-z]+$/),
         },
       },
       SCHOOL,

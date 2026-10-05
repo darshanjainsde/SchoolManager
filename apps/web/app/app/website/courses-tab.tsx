@@ -280,7 +280,7 @@ export default function CoursesTab() {
                 type="checkbox"
                 checked={form.featured}
                 onChange={(e) => set('featured', e.target.checked)}
-                className="mt-0.5 h-4 w-4 accent-emerald-700"
+                className="sk-check mt-0.5 accent-emerald-700"
               />
               <span>
                 <span className="block text-sm font-medium text-slate-800">Show on homepage</span>

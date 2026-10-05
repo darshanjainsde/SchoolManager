@@ -262,3 +262,48 @@ node scripts/whatsapp-templates.mjs           # lists what is there
 - [Template pausing](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-pausing/)
 - [Template categorization](https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-categorization)
 - [WhatsApp Business Messaging Policy](https://whatsappbusiness.com/hi/policy/)
+
+---
+
+## 2026-10-01 — Meta moved both catch-alls, and the real rule turned out to be different
+
+`sckools_school_notice` and `sckools_announcement` went **UTILITY → MARKETING**
+(appeal window to 22 Nov 2026). The other eleven kept UTILITY.
+
+**The explanation in §3 above was half right.** It said a free-text variable
+forces Marketing. It does not — `sckools_diary_remark` quotes a teacher's own
+words in `It says: "{{6}}"` and is **still UTILITY**. What actually decides it
+is whether the FIXED words name a concrete, non-promotional event:
+
+| template | fixed words say | category |
+|---|---|---|
+| `diary_remark` | a remark, from a named teacher, on a date, to read and sign | UTILITY |
+| `results_published` | marks for a named test are ready | UTILITY |
+| `announcement` | *"An announcement… The subject is {{3}}. {{4}}"* — any message at all | **MARKETING** |
+
+So the rule is: **anchor the sentence to an event and an action; the variable
+part may then be free text.** A template that describes "a message" describes a
+promotion just as well, and Meta categorises accordingly.
+
+**Proved by experiment the same day**, on this account, minutes apart:
+
+- `sckools_notice_posted` — *"A school notice from {{1}}: "{{2}}", posted on
+  {{3}} for {{4}}. Open the Sckools app to read it in full…"* → accepted
+  **UTILITY**. Keeps the title, sends no body.
+- A pointer with no title at all was refused for an unrelated reason —
+  **"Variables can't be at the start or end of the template."**
+- Four narrow ones (`holiday_notice`, `ptm_notice`, `timing_change`,
+  `fee_due`) → all accepted **UTILITY**.
+
+**Also measured:** a body too short for its variable count is refused with
+**2388293** *"too many variables for its length"*. Every `{{n}}` needs a
+sentence of real words around it.
+
+**Shipped:** `TEMPLATE_NAMES.ANNOUNCEMENT` now points at `sckools_notice_posted`
+and the body is no longer a parameter — the words stay in the app, which is
+both the Utility rate and the privacy answer §3 already wanted for diary
+remarks. `AnnouncementPayload` gained `postedOn`.
+
+**Still owed:** route a holiday / PTM / timing / fees notice to its own narrow
+template instead of the generic pointer, so those read specifically. The four
+are approved and waiting.

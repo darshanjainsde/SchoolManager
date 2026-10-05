@@ -20,6 +20,7 @@ import { AuthModule } from './modules/auth';
 import { TenancyModule } from './modules/tenancy';
 import { FeaturesModule } from './modules/features';
 import { OwnerModule } from './modules/owner';
+import { BackupsModule } from './modules/backups';
 import { CmsModule } from './modules/cms';
 import { ManagementModule } from './modules/management';
 import { ConcernsModule } from './modules/concerns';
@@ -89,6 +90,7 @@ import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storag
     AuthModule,
     FeaturesModule,
     OwnerModule,
+    BackupsModule,
     AdminCredentialsModule,
     CmsModule,
     ManagementModule,

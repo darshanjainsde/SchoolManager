@@ -37,7 +37,16 @@
      was laid out in plain sans-serif at unadjusted metrics and then jumped
      when the font swapped in. The headings never had this — they go through
      FONT_STACK, which already uses the variables. */
-  .ps-root { font-family: var(--f-inter), sans-serif; background: var(--paper); color: #43514a; overflow-x: hidden; min-height: 100vh; color-scheme: light; }
+  /* overflow-x: CLIP, not hidden. `hidden` on one axis forces the other to
+     `auto`, which makes .ps-root a scroll container — and a sticky header
+     sticks to its nearest scroll container, not the window. .ps-root never
+     scrolls (the window does), so every sticky bar (CLASSIC, STRIP, CENTER,
+     the off-photo PILL) scrolled away with the page. Only the fixed bars
+     (photo-homepage PILL, GHOST) survived, which is why it looked like a
+     PILL-only feature. `clip` trims the horizontal spill the same way without
+     creating a scroll container; `hidden` stays first as the fallback for a
+     browser that predates `clip` (Safari < 16). */
+  .ps-root { font-family: var(--f-inter), sans-serif; background: var(--paper); color: #43514a; overflow-x: hidden; overflow-x: clip; min-height: 100vh; color-scheme: light; }
   .ps-head { font-family: var(--font-head); color: var(--ink); letter-spacing: -.01em; }
   /* This stylesheet loads after Tailwind, so .ps-head's ink color silently beat
      Tailwind's .text-white on dark sections (invisible headings/names on the
@@ -1099,6 +1108,18 @@
   .ps-v-admissions-blocks .ps-journey .grid > div:nth-child(even) .ps-jbody {
     background: linear-gradient(315deg, var(--ps1), color-mix(in srgb, var(--ps1) 55%, var(--ps2))); }
 
+  /* ── Gallery ──
+     The band chooses its own width so the last row is never half empty: six
+     photos in a four-wide grid painted 4 + 2 with a hole beside them, which
+     is what a visitor saw on a live homepage. `--ps-gal-cols` comes from the
+     component (galleryGrid in site-variants.ts); the album page at /gallery
+     sets nothing and keeps the four. Mobile stays two wide — every count on
+     offer is even. Masonry and the film strip replace `display` below, so
+     the width is inert for them. */
+  @media (min-width: 768px) {
+    .ps-gallery-grid { grid-template-columns: repeat(var(--ps-gal-cols, 4), minmax(0, 1fr)); }
+  }
+
   /* ── Gallery variants ── */
   .ps-v-gallery-masonry .ps-gallery-grid { display: block; columns: 2; column-gap: 1rem; }
   @media (min-width: 768px) { .ps-v-gallery-masonry .ps-gallery-grid { columns: 3; } }
@@ -1110,10 +1131,13 @@
     scroll-snap-type: x proximity; padding-bottom: .75rem; -webkit-overflow-scrolling: touch; }
   .ps-v-gallery-filmstrip .ps-gallery-grid > button { flex: 0 0 16rem; scroll-snap-align: start; }
   /* MOSAIC: the first photo is the feature — a two-cell span both ways; the rest
-     keep the even grid and dense flow backfills any hole. */
+     keep the even grid and dense flow backfills any hole. The span is gated on
+     `data-feature`: with four or eight photos no width tiles around a 2×2 lead,
+     so the band says so and the lead takes an ordinary cell instead of leaving
+     a gap. */
   .ps-v-gallery-mosaic .ps-gallery-grid { grid-auto-flow: dense; }
-  .ps-v-gallery-mosaic .ps-gallery-grid > button:first-child { grid-column: span 2; grid-row: span 2; }
-  .ps-v-gallery-mosaic .ps-gallery-grid > button:first-child img { height: 25rem; }
+  .ps-v-gallery-mosaic .ps-gallery-grid[data-feature="true"] > button:first-child { grid-column: span 2; grid-row: span 2; }
+  .ps-v-gallery-mosaic .ps-gallery-grid[data-feature="true"] > button:first-child img { height: 25rem; }
   /* POLAROID: white print borders with a deep chin, pinned at alternating tilts;
      hover straightens the print. Respect reduced motion by keeping tilts static. */
   .ps-v-gallery-polaroid .ps-gallery-grid { gap: 1.5rem; }
@@ -1220,6 +1244,21 @@
     font-weight: 700; transition: opacity .2s; }
   .ps-foot-social a:hover { opacity: 1; }
 
+  /* ── The homepage gallery's way to the rest ──────────────────────────────
+     The band shows a taste; /gallery holds the album. The link has to look
+     like a destination rather than a caption, and clear 44px for a thumb. */
+  .ps-gal-more { display: inline-flex; align-items: center; gap: .45rem;
+    min-height: 2.75rem; padding: 0 1.15rem; border-radius: 999px;
+    font-size: .88rem; font-weight: 700; color: var(--ps1);
+    border: 1.5px solid color-mix(in srgb, var(--ps1) 35%, transparent);
+    background: color-mix(in srgb, var(--ps1) 6%, transparent);
+    transition: background .2s, border-color .2s, transform .2s; }
+  .ps-gal-more:hover { background: color-mix(in srgb, var(--ps1) 12%, transparent);
+    border-color: color-mix(in srgb, var(--ps1) 55%, transparent);
+    transform: translateY(calc(-1px * var(--motion))); }
+  .ps-gal-more svg { transition: transform .2s; }
+  .ps-gal-more:hover svg { transform: translateX(calc(2px * var(--motion))); }
+
   /* ── Footer, shared by every layout ─────────────────────────────────────
      A contact line is an icon and a tappable value, not an emoji and a string
      of text nobody can press (the 2026-09-27 report). The icon is flex:none so
@@ -1295,10 +1334,136 @@
   .ps-hero-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 
   /* ── Custom-page blocks ── */
-  .ps-pgblocks { display: grid; gap: 1.4rem; max-width: 48rem; }
+  /* The TRACK IS DECLARED, and the column is centred. Both are load-bearing,
+     and a `display: grid` with neither is what broke three blocks at once.
+     An auto-sized track takes its width from its widest item's contribution,
+     and `.ps-pg-img-full` contributes `100vw` PLUS a percentage margin that
+     resolves against the very track being sized — so Chrome settled on a
+     592px track inside a 342px column on a phone. The full-bleed picture
+     landed 125px from the left, a centred picture shrank to 166px, and the
+     fee table grew to 563px and was CLIPPED by `.ps-root`'s overflow-x
+     instead of scrolling, which hid the damage from the page-level check.
+     `minmax(0, 1fr)` makes the track exactly the column, so percentages
+     resolve against a real number and the table can scroll inside itself.
+     `margin-inline: auto` centres the column in the page, which is what lets
+     `calc(50% - 50vw)` reach the viewport's own edges — without it the
+     breakout is off by however far the column sits from centre. */
+  .ps-pgblocks { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.4rem;
+    max-width: 48rem; margin-inline: auto; }
   .ps-pgblock-imgtext { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
     gap: 1.25rem; align-items: center; padding: var(--ps-card-pad); }
   @media (max-width: 640px) { .ps-pgblock-imgtext { grid-template-columns: 1fr; } }
+  /* Picture on the right instead. The ORDER is swapped, not the direction, so
+     it still stacks picture-first on a phone like its sibling. */
+  @media (min-width: 641px) { .ps-pgblock-flip > :first-child { order: 2; } }
+
+  /* ── A page block's own options (2026-10) ───────────────────────────────
+     Alignment, picture width and the five arrangements a school asked for.
+     Everything here is additive: a block with no option set matches what the
+     page rendered before any of this existed. */
+  .ps-pg-center { text-align: center; }
+  .ps-pg-right { text-align: right; }
+  /* A centred button has to centre the BOX, which text-align alone cannot do
+     for an inline-flex child. */
+  .ps-pg-center > .ps-cta, .ps-pg-center > .ps-pg-file { margin-inline: auto; }
+  .ps-pg-right > .ps-cta, .ps-pg-right > .ps-pg-file { margin-inline-start: auto; }
+  .ps-pg-center .ps-pg-list, .ps-pg-right .ps-pg-list { display: inline-block; text-align: left; }
+
+  /* Typed marks. A link inside a sentence must look like a link without
+     shouting — the accent plus an underline that thickens on hover. */
+  .ps-pg-link { color: var(--ps1); font-weight: 600;
+    text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px;
+    transition: text-decoration-thickness .15s; }
+  .ps-pg-link:hover { text-decoration-thickness: 2px; }
+  /* A thumb-sized hit area for a link sitting inside a sentence. Vertical
+     padding on an INLINE box grows what a finger can hit without touching the
+     line box, so the paragraph's rhythm is unchanged: 19px of ink becomes
+     27px of target. */
+  .ps-pg-link { padding-block: .25rem; }
+  .ps-pg-text > * + * { margin-top: .85rem; }
+  .ps-pg-list { margin: 0; padding-left: 1.3rem; display: grid; gap: .3rem; }
+  .ps-pg-list { list-style: disc; }
+  .ps-pg-list-num { list-style: decimal; }
+  .ps-pg-list li::marker { color: var(--ps1); }
+  /* An admission step's body is the same grammar inside a narrow card at
+     13px: the page's .85rem paragraph gap and 1.3rem indent read as holes
+     there, so the card gets its own, tighter rhythm. */
+  .ps-step-body > * + * { margin-top: .45rem; }
+  .ps-step-body .ps-pg-list { padding-left: 1.1rem; gap: .2rem; }
+
+  /* Picture width. COLUMN sits inside the reading measure; WIDE is the column
+     itself (the old behaviour); FULL breaks out to the page edges. */
+  .ps-pg-img { margin: 0; }
+  /* `width: 100%` and not `width: auto`: a grid item with auto margins and no
+     declared width stops stretching and shrink-wraps to its content, which is
+     how a centred COLUMN picture measured 166px instead of its 416px cap. */
+  .ps-pg-img-column { width: 100%; max-width: 26rem; }
+  .ps-pg-img-column.ps-pg-center { margin-inline: auto; }
+  .ps-pg-img-column.ps-pg-right { margin-inline-start: auto; }
+  /* Out of the 48rem column to the full page width, without a horizontal
+     scrollbar: the margin is exactly the gutter the column sits in. */
+  .ps-pg-img-full { width: 100vw; max-width: 100vw;
+    margin-inline: calc(50% - 50vw); border-radius: 0; }
+  .ps-pg-img-full img { border-radius: 0; }
+  /* The whole picture, never a cropped band. A tall poster is capped by
+     height so it cannot push the rest of the page off the screen. */
+  .ps-pg-img-contain { object-fit: contain; max-height: 34rem; background: color-mix(in srgb, var(--ink) 4%, transparent); }
+
+  .ps-pg-div { border: 0; }
+  .ps-pg-div-rule { height: 1px; background: color-mix(in srgb, var(--ink) 14%, transparent); }
+  .ps-pg-div-space { height: 1.6rem; }
+  .ps-pg-div-dots { height: 1.4rem; display: grid; place-items: center;
+    background-image: radial-gradient(circle, color-mix(in srgb, var(--ink) 28%, transparent) 1.5px, transparent 1.6px);
+    background-size: 1.1rem 100%; background-position: center; background-repeat: repeat-x;
+    width: 5rem; margin-inline: auto; }
+
+  .ps-pg-quote { margin: 0; padding: .2rem 0 .2rem 1.15rem;
+    border-left: 3px solid color-mix(in srgb, var(--ps1) 55%, transparent); }
+  .ps-pg-quote blockquote { margin: 0; font-family: var(--font-head); font-size: 1.22rem;
+    line-height: 1.5; color: var(--ink); }
+  .ps-pg-quote figcaption { margin-top: .5rem; font-size: .82rem; color: color-mix(in srgb, var(--ink) 55%, transparent); }
+  .ps-pg-quote figcaption::before { content: '— '; }
+
+  .ps-pg-callout { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .7rem;
+    padding: .95rem 1.1rem; border-radius: var(--ps-radius, 14px);
+    border: 1px solid color-mix(in srgb, var(--ps1) 28%, transparent);
+    background: color-mix(in srgb, var(--ps1) 7%, transparent); }
+  .ps-pg-callout .ps-pg-text { font-size: .93rem; color: var(--ink); }
+  .ps-pg-callout-mark { color: var(--ps1); margin-top: .1rem; }
+  .ps-pg-callout-warn { border-color: color-mix(in srgb, #b4821f 45%, transparent);
+    background: color-mix(in srgb, #b4821f 10%, transparent); }
+  .ps-pg-callout-warn .ps-pg-callout-mark { color: #8a6314; }
+  .ps-pg-callout-good { border-color: color-mix(in srgb, #2f6b4f 45%, transparent);
+    background: color-mix(in srgb, #2f6b4f 10%, transparent); }
+  .ps-pg-callout-good .ps-pg-callout-mark { color: #2f6b4f; }
+
+  /* A circular to take away. 44px tall so a thumb can hit it. */
+  .ps-pg-file { display: inline-flex; align-items: center; gap: .6rem; min-height: 2.9rem;
+    padding: 0 1.05rem; border-radius: var(--ps-radius, 14px);
+    border: 1px solid color-mix(in srgb, var(--ink) 15%, transparent);
+    background: var(--paper); color: var(--ink); font-size: .9rem; max-width: 100%;
+    transition: border-color .2s, transform .2s; }
+  .ps-pg-file:hover { border-color: color-mix(in srgb, var(--ps1) 50%, transparent);
+    transform: translateY(calc(-1px * var(--motion))); }
+  .ps-pg-file svg { color: var(--ps1); flex: none; }
+  .ps-pg-file-name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ps-pg-file-note { color: color-mix(in srgb, var(--ink) 55%, transparent); font-size: .8rem; flex: none; }
+
+  /* The table scrolls ITSELF. The page never scrolls sideways — the rule the
+     whole site is held to, and a fee table is the likeliest thing to break it. */
+  .ps-pg-tablewrap { overflow-x: auto; -webkit-overflow-scrolling: touch; min-width: 0;
+    border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+    border-radius: var(--ps-radius, 14px); }
+  .ps-pg-table { border-collapse: collapse; width: 100%; min-width: 22rem; font-size: .9rem; }
+  .ps-pg-table th, .ps-pg-table td { text-align: left; padding: .6rem .85rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--ink) 10%, transparent); }
+  .ps-pg-table tbody tr:last-child td { border-bottom: 0; }
+  .ps-pg-table th { font-family: var(--font-head); font-weight: 600; color: var(--ink);
+    background: color-mix(in srgb, var(--ink) 5%, transparent); white-space: nowrap; }
+  .ps-pg-table td { color: color-mix(in srgb, var(--ink) 78%, transparent); }
+
+  .ps-cta-ghost { background: transparent; border: 1.5px solid var(--ps1); color: var(--ps1); box-shadow: none; }
+  .ps-cta-ghost:hover { background: color-mix(in srgb, var(--ps1) 10%, transparent); box-shadow: none; }
 
   /* ── Festive overlay ──
      The ribbon above the nav, then the drawing kit's motion and the scene

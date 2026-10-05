@@ -3,7 +3,14 @@ import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithProviders, type ApiStub } from '@/test/render';
 import { useApi } from '@/lib/use-api';
-import ForgotPasswordPage from './page';
+import GatehouseForgot from './GatehouseForgot';
+import { resolveLoginTheme } from '../login/gatehouse-theme';
+
+// The page is a server component that resolves the school's theme from the
+// host; the flows live in the client gatehouse, rendered here with the
+// platform fallback theme.
+const THEME = resolveLoginTheme(null, 'raffles.test.sckools.com');
+const ForgotPasswordPage = () => <GatehouseForgot theme={THEME} />;
 
 vi.mock('@/lib/use-api', () => ({ useApi: vi.fn() }));
 
@@ -87,5 +94,17 @@ describe('ForgotPasswordPage — a login with a phone gets a code too (design §
     await user.click(screen.getByRole('button', { name: 'Set new password' }));
     expect(post).toHaveBeenCalledWith('/auth/reset-with-otp', { email: 'priya@school.test', challengeId: '11111111-1111-1111-1111-111111111111', code: '482911', newPassword: 'long-enough-1' });
     expect(await screen.findByTestId('otp-done')).toBeInTheDocument();
+  });
+});
+
+describe('ForgotPasswordPage — wears the same gatehouse as /login', () => {
+  it('renders inside the school-branded stage, not a bare card', () => {
+    vi.mocked(useApi).mockReturnValue(stub() as never);
+    const { container } = renderWithProviders(<ForgotPasswordPage />);
+    // The bare grey card here was the one password page that still looked
+    // like nobody's product, one click from the branded sign-in.
+    expect(container.querySelector('.gh-stage .gh-shell .gh-left')).not.toBeNull();
+    expect(container.querySelector('.gh-right form.gh-form')).not.toBeNull();
+    expect(screen.getByRole('radiogroup', { name: 'Reset using' })).toHaveClass('gh-modes');
   });
 });

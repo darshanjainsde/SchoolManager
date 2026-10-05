@@ -116,6 +116,12 @@ export interface SectionVariantChoice {
    * and the JSON stays small.
    */
   hidden?: boolean;
+  /**
+   * How many items the HOMEPAGE band shows. Only the gallery reads it today.
+   * Absent = the layout's own default, which is the right number for that
+   * arrangement rather than one number for all five.
+   */
+  homeCount?: number;
 }
 export type SectionVariants = Partial<Record<SectionKey, SectionVariantChoice>>;
 
@@ -243,6 +249,68 @@ const SECTION_DEFAULT_LAYOUT: Record<SectionKey, string> = {
  * (`x:<id>`) and `events` as well, and only the nine real section keys can be
  * hidden this way — anything else is never hidden by this switch.
  */
+/* ── How many a homepage band shows ──────────────────────────────────────
+   A gallery is the one band whose content a school keeps adding to. Left
+   uncapped the homepage rendered EVERY photo — 300 of them for a school that
+   has been uploading for a year — which buries every band below it, downloads
+   the lot as you scroll past, and (because each tile's reveal is delayed by
+   0.05s) takes fifteen seconds to finish animating. The page for all of them
+   already exists at /gallery; the homepage is a taste. */
+
+/** The counts a school may choose. No "all": that is what /gallery is for. */
+export const HOME_COUNTS = [4, 6, 8, 12] as const;
+
+/**
+ * The right number for each arrangement, not one number for all five: a film
+ * strip is a swipeable row and can hold more, a mosaic is one lead photo and
+ * four around it, polaroids need room to tilt.
+ */
+export const GALLERY_HOME_DEFAULT: Record<string, number> = {
+  GRID: 8,
+  MASONRY: 9,
+  FILMSTRIP: 12,
+  MOSAIC: 5,
+  POLAROID: 6,
+};
+
+/** How many photos the homepage gallery shows, for a layout and a school's choice. */
+export function galleryHomeCount(variants: SectionVariants | null | undefined, layout: string): number {
+  return variants?.gallery?.homeCount ?? GALLERY_HOME_DEFAULT[layout] ?? 8;
+}
+
+/** The shape of the homepage band's grid: how many columns, and whether the
+ *  mosaic's lead photo may take its 2×2 block. */
+export interface GalleryGrid {
+  columns: number;
+  feature: boolean;
+}
+
+/** Four when four divides the count, else three. Nothing else tiles the counts on offer. */
+const evenColumns = (count: number): number => (count % 4 === 0 ? 4 : count % 3 === 0 ? 3 : 4);
+
+/**
+ * THE LAST ROW IS FULL, OR THE BAND LOOKS UNFINISHED.
+ *
+ * The grid was four columns wide whatever the count, so a band set to six
+ * photos painted four across and two underneath with half a row of nothing
+ * beside them — in Grid, in Mosaic, and in Polaroid, whose own default IS
+ * six. A school picks from a short list of counts, so the band can always
+ * pick a width that divides the one it was given.
+ *
+ * The mosaic's lead photo occupies FOUR cells, not one, so it is counted that
+ * way; when no width tiles around it (four photos, eight photos) the lead
+ * gives up its span rather than leave a hole — a smaller feature reads better
+ * than a gap. Masonry and the film strip have no rows to ruin and ignore all
+ * of this from the stylesheet.
+ */
+export function galleryGrid(count: number, layout: string): GalleryGrid {
+  if (layout === 'MOSAIC') {
+    for (const columns of [4, 3]) if ((count + 3) % columns === 0) return { columns, feature: true };
+    return { columns: evenColumns(count), feature: false };
+  }
+  return { columns: evenColumns(count), feature: true };
+}
+
 export function sectionHidden(variants: SectionVariants | null | undefined, key: string): boolean {
   return (SECTION_KEYS as string[]).includes(key) && variants?.[key as SectionKey]?.hidden === true;
 }
@@ -303,6 +371,8 @@ export function normalizeSectionVariants(raw: unknown): SectionVariants {
     // Only `true` is stored: `hidden: false` and shown are the same state, and
     // one way to say a thing is what keeps the default page byte-identical.
     if ((v as Record<string, unknown>).hidden === true) entry.hidden = true;
+    const count = (v as Record<string, unknown>).homeCount;
+    if (typeof count === 'number' && (HOME_COUNTS as readonly number[]).includes(count)) entry.homeCount = count;
     if (Object.keys(entry).length) out[key] = entry;
   }
   return out;
@@ -1010,15 +1080,48 @@ export function buildCustomCss(map: unknown): string {
   return out;
 }
 
-/* ── Custom pages: typed blocks, never raw HTML ─────────────────────────── */
+/* ── Custom pages: typed blocks, never raw HTML ───────────────────────────
+   The set stays CLOSED. What each block gained in 2026-10 is OPTIONS — a
+   handful of named values the school's own theme defines — because the
+   complaint was never "I want a blank canvas", it was "I cannot centre a
+   heading, make a list, or show a poster without it being cropped".
+
+   Every option is OPTIONAL and every default is what the block did before,
+   so a page written last year renders identically. */
+
+/** Where a block sits. Absent = left, which is what every block did before. */
+export type BlockAlign = 'LEFT' | 'CENTER' | 'RIGHT';
+export const BLOCK_ALIGNS: BlockAlign[] = ['LEFT', 'CENTER', 'RIGHT'];
+
+/** How wide a picture runs. Absent = WIDE, the column it always filled. */
+export type ImageWidth = 'COLUMN' | 'WIDE' | 'FULL';
+export const IMAGE_WIDTHS: ImageWidth[] = ['COLUMN', 'WIDE', 'FULL'];
+
+/** CONTAIN shows the whole picture; COVER is the cropped band it always was. */
+export type ImageFit = 'COVER' | 'CONTAIN';
+
+export type CalloutTone = 'NOTE' | 'WARN' | 'GOOD';
+export const CALLOUT_TONES: CalloutTone[] = ['NOTE', 'WARN', 'GOOD'];
+
+export type DividerStyle = 'RULE' | 'SPACE' | 'DOTS';
+export const DIVIDER_STYLES: DividerStyle[] = ['RULE', 'SPACE', 'DOTS'];
+
 export type PageBlock =
-  | { t: 'h'; text: string }
-  | { t: 'p'; text: string }
-  | { t: 'img'; url: string; caption: string | null }
-  | { t: 'imgtext'; url: string | null; text: string }
-  | { t: 'cta'; label: string; href: string | null };
+  | { t: 'h'; text: string; level?: 3; align?: BlockAlign }
+  | { t: 'p'; text: string; align?: BlockAlign }
+  | { t: 'img'; url: string; caption: string | null; fit?: ImageFit; width?: ImageWidth; align?: BlockAlign }
+  | { t: 'imgtext'; url: string | null; text: string; flip?: true }
+  | { t: 'cta'; label: string; href: string | null; style?: 'GHOST'; align?: BlockAlign }
+  | { t: 'divider'; style?: DividerStyle }
+  | { t: 'quote'; text: string; by: string | null }
+  | { t: 'callout'; text: string; tone?: CalloutTone }
+  | { t: 'file'; url: string; label: string; note: string | null }
+  | { t: 'table'; rows: string[][]; header?: true };
 
 export const PAGE_BLOCK_MAX = 40;
+/** A table a phone can still scroll. Beyond this it is a spreadsheet, not a page. */
+export const TABLE_MAX_ROWS = 30;
+export const TABLE_MAX_COLS = 6;
 
 export function normalizePageBlocks(raw: unknown): PageBlock[] {
   if (!Array.isArray(raw)) return [];
@@ -1027,16 +1130,32 @@ export function normalizePageBlocks(raw: unknown): PageBlock[] {
     if (!b || typeof b !== 'object') continue;
     const r = b as Record<string, unknown>;
     const text = typeof r.text === 'string' ? r.text.slice(0, 4000) : '';
+    // Every option is read the same way: a known value, or absent. An unknown
+    // one is dropped rather than carried, so a page can never store a value
+    // the renderer has no branch for.
+    const pick = <T extends string>(v: unknown, allowed: readonly T[]): T | undefined =>
+      typeof v === 'string' && (allowed as readonly string[]).includes(v) ? (v as T) : undefined;
+    const align = pick(r.align, BLOCK_ALIGNS);
+    // LEFT is the absence of a choice, so the common page stores nothing.
+    const alignPart = align && align !== 'LEFT' ? { align } : {};
     switch (r.t) {
       case 'h':
-        if (text.trim()) out.push({ t: 'h', text: text.slice(0, 200) });
+        if (text.trim())
+          out.push({ t: 'h', text: text.slice(0, 200), ...(r.level === 3 ? { level: 3 as const } : {}), ...alignPart });
         break;
       case 'p':
-        if (text.trim()) out.push({ t: 'p', text });
+        if (text.trim()) out.push({ t: 'p', text, ...alignPart });
         break;
       case 'img':
         if (typeof r.url === 'string' && safeUrl(r.url))
-          out.push({ t: 'img', url: r.url, caption: typeof r.caption === 'string' ? r.caption.slice(0, 200) : null });
+          out.push({
+            t: 'img',
+            url: r.url,
+            caption: typeof r.caption === 'string' ? r.caption.slice(0, 200) : null,
+            ...(r.fit === 'CONTAIN' ? { fit: 'CONTAIN' as const } : {}),
+            ...(pick(r.width, IMAGE_WIDTHS) && r.width !== 'WIDE' ? { width: r.width as ImageWidth } : {}),
+            ...alignPart,
+          });
         break;
       case 'imgtext':
         if (text.trim())
@@ -1044,6 +1163,7 @@ export function normalizePageBlocks(raw: unknown): PageBlock[] {
             t: 'imgtext',
             url: typeof r.url === 'string' && safeUrl(r.url) ? r.url : null,
             text,
+            ...(r.flip === true ? { flip: true as const } : {}),
           });
         break;
       case 'cta':
@@ -1052,8 +1172,47 @@ export function normalizePageBlocks(raw: unknown): PageBlock[] {
             t: 'cta',
             label: r.label.slice(0, 80),
             href: typeof r.href === 'string' && safeHref(r.href) ? r.href : null,
+            ...(r.style === 'GHOST' ? { style: 'GHOST' as const } : {}),
+            ...alignPart,
           });
         break;
+      case 'divider': {
+        const style = pick(r.style, DIVIDER_STYLES);
+        out.push({ t: 'divider', ...(style && style !== 'RULE' ? { style } : {}) });
+        break;
+      }
+      case 'quote':
+        if (text.trim())
+          out.push({ t: 'quote', text: text.slice(0, 600), by: typeof r.by === 'string' && r.by.trim() ? r.by.slice(0, 120) : null });
+        break;
+      case 'callout': {
+        if (!text.trim()) break;
+        const tone = pick(r.tone, CALLOUT_TONES);
+        out.push({ t: 'callout', text: text.slice(0, 1000), ...(tone && tone !== 'NOTE' ? { tone } : {}) });
+        break;
+      }
+      case 'file':
+        // A file with no address is not a file; a label is what a reader taps.
+        if (typeof r.url === 'string' && safeUrl(r.url) && typeof r.label === 'string' && r.label.trim())
+          out.push({
+            t: 'file',
+            url: r.url,
+            label: r.label.slice(0, 120),
+            note: typeof r.note === 'string' && r.note.trim() ? r.note.slice(0, 60) : null,
+          });
+        break;
+      case 'table': {
+        if (!Array.isArray(r.rows)) break;
+        const rows = r.rows
+          .slice(0, TABLE_MAX_ROWS)
+          .filter((row): row is unknown[] => Array.isArray(row))
+          .map((row) => row.slice(0, TABLE_MAX_COLS).map((c) => (typeof c === 'string' ? c.slice(0, 200) : '')));
+        // A table of empty strings is a table of nothing.
+        if (rows.length && rows.some((row) => row.some((c) => c.trim()))) {
+          out.push({ t: 'table', rows, ...(r.header === true ? { header: true as const } : {}) });
+        }
+        break;
+      }
     }
   }
   return out;

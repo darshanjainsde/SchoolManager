@@ -10,8 +10,8 @@ import { useSessionProbe } from '@/lib/use-session-probe';
 import { OWNER_HOST } from '@/lib/hosts';
 import {
   LayoutDashboard, TrendingUp, School, FileText, PlusCircle,
-  Printer, Briefcase, Link2, Compass, Activity, Gauge, LogOut, Menu, X, Users, Settings,
-} from 'lucide-react';
+  Printer, Briefcase, Link2, Compass, Activity, Gauge, LogOut, Menu, X, Users, Settings, Archive,
+  PackageOpen } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import '../sk-theme.css';
 import { cn } from '@/lib/cn';
@@ -36,6 +36,8 @@ const NAV_ITEMS: { href: string; label: string; icon: LucideIcon; badge?: 'newLe
   { href: '/platform/leads', label: 'Leads', icon: Users, badge: 'newLeads' },
   { href: '/platform/scale', label: 'Scale', icon: TrendingUp },
   { href: '/platform/schools', label: 'Schools', icon: School },
+  { href: '/platform/backups', label: 'Backups', icon: Archive },
+  { href: '/platform/sample-packs', label: 'Sample packs', icon: PackageOpen },
   { href: '/platform/blog', label: 'Blog Queue', icon: FileText },
   { href: '/platform/onboard', label: 'Add School', icon: PlusCircle },
   { href: '/platform/orders', label: 'Print Orders', icon: Printer },

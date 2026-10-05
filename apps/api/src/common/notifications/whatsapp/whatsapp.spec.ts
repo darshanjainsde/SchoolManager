@@ -34,7 +34,7 @@ const MESSAGES: { [K in NotificationKind]: NotificationMessage & { kind: K } } =
   TEST_REMINDER: { kind: 'TEST_REMINDER', payload: { schoolName: 'Raffles', subjectName: 'Maths', examTitle: 'UT 2', scheduledAt: 'Mon 6 Oct', daysUntil: 1 } },
   RESULTS_PUBLISHED: { kind: 'RESULTS_PUBLISHED', payload: { schoolName: 'Raffles', subjectName: 'Maths', examTitle: 'UT 2' } },
   ABSENCE_NOTICE: { kind: 'ABSENCE_NOTICE', payload: { schoolName: 'Raffles', studentName: 'Ravi', date: 'Thu 18 Sep' } },
-  ANNOUNCEMENT: { kind: 'ANNOUNCEMENT', payload: { schoolName: 'Raffles', title: 'PTM', body: 'Saturday\n10 am', className: null } },
+  ANNOUNCEMENT: { kind: 'ANNOUNCEMENT', payload: { schoolName: 'Raffles', title: 'PTM', body: 'Saturday\n10 am', className: null, postedOn: '2 November' } },
   DIARY_REMARK: { kind: 'DIARY_REMARK', payload: { schoolName: 'Raffles', studentName: 'Ravi', teacherName: 'Priya', className: '5-B', date: 'Thu', remark: 'Homework not done.' } },
   LOW_ATTENDANCE: { kind: 'LOW_ATTENDANCE', payload: { schoolName: 'Raffles', studentName: 'Ravi', className: '5-B', percent: 68, threshold: 75, period: 'Jul–Sep' } },
   LEAVE_APPLIED: { kind: 'LEAVE_APPLIED', payload: { schoolName: 'Raffles', leaveId: 'l1', teacherName: 'Priya Nair', dates: 'Mon 22 – Tue 23 Sep 2026', days: 2, reason: null, periodsAffected: 5, approvePayload: 'lv:a:l1:sig', rejectPayload: 'lv:r:l1:sig' } },
@@ -76,8 +76,10 @@ describe('templateFor ↔ SUBMISSIONS', () => {
 
   it('an optional field becomes a real word, never an empty parameter', () => {
     expect(templateFor(MESSAGES.TEST_SCHEDULED).params[1]).toBe('your child');
-    expect(templateFor(MESSAGES.ANNOUNCEMENT).params[1]).toBe('the whole school');
-    expect(templateFor(MESSAGES.ANNOUNCEMENT).params[3]).toBe('Saturday 10 am');
+    // The audience moved to the LAST slot when the announcement template
+    // became `notice_posted` (school, title, day, audience) — and the body is
+    // no longer a parameter at all.
+    expect(templateFor(MESSAGES.ANNOUNCEMENT).params[3]).toBe('the whole school');
     expect(templateFor(MESSAGES.TEST_REMINDER).params[5]).toBe('tomorrow');
   });
 
@@ -90,10 +92,10 @@ describe('templateFor ↔ SUBMISSIONS', () => {
     });
     it('a class announcement names the child in that class; a school-wide one keeps the same words for every child, so the phone gets one copy', () => {
       const forClass = { ...MESSAGES.ANNOUNCEMENT, payload: { ...MESSAGES.ANNOUNCEMENT.payload, className: '5-B' } } as typeof MESSAGES.ANNOUNCEMENT;
-      expect(templateFor(forClass, ravi).params[1]).toBe('Ravi Sharma (5-B)');
-      expect(templateFor(forClass).params[1]).toBe('5-B');
-      expect(templateFor(MESSAGES.ANNOUNCEMENT, ravi).params[1]).toBe('the whole school');
-      expect(templateFor(MESSAGES.ANNOUNCEMENT, { child: { name: 'Meera Sharma', className: '8-A' } }).params[1]).toBe('the whole school');
+      expect(templateFor(forClass, ravi).params[3]).toBe('Ravi Sharma (5-B)');
+      expect(templateFor(forClass).params[3]).toBe('5-B');
+      expect(templateFor(MESSAGES.ANNOUNCEMENT, ravi).params[3]).toBe('the whole school');
+      expect(templateFor(MESSAGES.ANNOUNCEMENT, { child: { name: 'Meera Sharma', className: '8-A' } }).params[3]).toBe('the whole school');
     });
     it('a child with no section yet is named without a class; a teacher recipient gets the plain fallback', () => {
       expect(templateFor(MESSAGES.RESULTS_PUBLISHED, { child: { name: 'Ravi Sharma', className: null } }).params[3]).toBe('Ravi Sharma');
@@ -195,3 +197,40 @@ describe('the test send has a template that works on a real number', () => {
   });
 });
 
+
+/**
+ * THE ANNOUNCEMENT TEMPLATE CARRIES A POINTER, NOT THE NOTICE.
+ *
+ * Meta moved `sckools_announcement` from UTILITY to MARKETING on 2026-10-01,
+ * at 7.5× the price, and a school's general notices are exactly what goes to
+ * everybody. The cause was not "it has a free-text variable" — `diary_remark`
+ * quotes a teacher's own words and is still UTILITY. It was that the FIXED
+ * words described any message at all and `{{4}}` WAS the message, so Meta
+ * could not tell what the template was for.
+ *
+ * `sckools_notice_posted` names a concrete event instead — a notice, with a
+ * title, posted on a day, for a class — and sends no body. Submitted the same
+ * day and accepted as UTILITY, which is the experiment that proved the
+ * diagnosis. The words themselves stay in the app, which also keeps a
+ * school's notice off a lock screen.
+ */
+describe('the announcement template', () => {
+  it('sends the title and the day, and never the body', async () => {
+    const { templateFor, TEMPLATE_NAMES } = await import('./templates');
+    const t = templateFor(MESSAGES.ANNOUNCEMENT, { child: null });
+    expect(t.name).toBe(TEMPLATE_NAMES.ANNOUNCEMENT);
+    expect(t.name).toContain('notice_posted');
+    expect(t.params).toEqual(['Raffles', 'PTM', '2 November', 'the whole school']);
+    // The one assertion that matters for the bill AND for privacy.
+    expect(t.params.join(' ')).not.toContain('10 am');
+  });
+
+  it('names the child’s class when the notice is for one class', async () => {
+    const { templateFor } = await import('./templates');
+    const t = templateFor(
+      { kind: 'ANNOUNCEMENT', payload: { ...MESSAGES.ANNOUNCEMENT.payload, className: '9-A' } },
+      { child: { name: 'Ravi', className: '9-A' } },
+    );
+    expect(t.params[3]).toContain('9-A');
+  });
+});
