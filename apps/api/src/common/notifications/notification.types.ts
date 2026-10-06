@@ -372,3 +372,25 @@ export interface NotifySummary {
   sent: number;
   failed: number;
 }
+
+/**
+ * Why a delivery ended without sending. The spine records it on the
+ * NotificationDelivery row so "why did this parent not get it" has an answer.
+ */
+export type SkipReason = 'no-address' | 'channel-off' | 'duplicate' | 'template-pending';
+
+/**
+ * What one attempt on one channel came to. RETRY is for failures worth trying
+ * again (network, 5xx, Meta 130429, SMTP 4xx); FAILED is final.
+ */
+export type DeliveryOutcome =
+  | { status: 'SENT'; providerId?: string | null }
+  | { status: 'SKIPPED'; reason: SkipReason }
+  | { status: 'SUPPRESSED'; reason: string }
+  | { status: 'RETRY'; error: string }
+  | { status: 'FAILED'; error: string };
+
+/** A channel the outbox drain can deliver through, one person at a time. */
+export interface DeliveryChannel extends NotificationChannel {
+  attempt(to: string, message: NotificationMessage, schoolId: string): Promise<DeliveryOutcome>;
+}

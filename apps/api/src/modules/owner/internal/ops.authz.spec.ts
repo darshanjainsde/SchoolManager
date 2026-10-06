@@ -38,8 +38,10 @@ describe('GET /owner/ops authorization', () => {
     const src = readFileSync(join(__dirname, 'ops.service.ts'), 'utf8');
     const models = [...src.matchAll(/\bdb\.(\w+)\.|getPlatformPrisma\(\)\.(\w+)\./g)]
       .map((m) => m[1] ?? m[2]);
-    expect(new Set(models)).toEqual(new Set(['notificationOutbox', 'metricRollup']));
-    // and it still only ever counts the outbox, never reads its payloads
+    expect(new Set(models)).toEqual(new Set(['notificationOutbox', 'notificationDelivery', 'metricRollup']));
+    // and it still only ever counts the queue, never reads its payloads
     expect(src).toMatch(/notificationOutbox\.count\(/);
+    expect(src).toMatch(/notificationDelivery\.count\(/);
+    for (const m of src.matchAll(/select: \{([^}]*)\}/g)) expect(m[1]).not.toMatch(/payload|userId|error/);
   });
 });

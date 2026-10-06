@@ -7,6 +7,7 @@ import { CalendarClock } from 'lucide-react';
 import type { LeavePendingContext } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
+import { OWN_LEAVE_HINT, isDecidedElsewhere, isOwnLeave, refreshLeaveDesk } from '@/lib/leave-desk';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -18,6 +19,8 @@ interface LeaveApplication {
   id: string;
   teacherId: string;
   teacherName: string;
+  /** The applicant's own login (Teacher.userId / Staff.userId) — null when they have none. */
+  personUserId?: string | null;
   type: LeaveType;
   startDate: string;
   endDate: string;
@@ -166,6 +169,15 @@ export default function AdminLeavePage() {
     queryFn: () => api.get<LeaveApplication[]>('/manage/leave?status=PENDING'),
   });
 
+  // Who is looking — the layout's own cache entry, so this costs no request.
+  const me = useQuery({
+    queryKey: ['me', host],
+    enabled: !!host,
+    staleTime: 5 * 60_000,
+    queryFn: () => api.get<{ userId?: string }>('/auth/me'),
+  });
+  const viewerUserId = me.data?.userId ?? null;
+
   const approved = useQuery({
     queryKey: ['a-leave-approved'],
     enabled: !!host,
@@ -225,7 +237,11 @@ export default function AdminLeavePage() {
       setRange({ from: toDateStr(app.startDate), to: toDateStr(app.endDate) });
       void qc.invalidateQueries({ queryKey: ['a-leave-coverage'] });
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => {
+      toast.error(e.message);
+      // 409: another desk decided it first — refetch so the row leaves Pending.
+      if (isDecidedElsewhere(e)) refreshLeaveDesk(qc);
+    },
   });
 
   const reject = useMutation({
@@ -235,7 +251,10 @@ export default function AdminLeavePage() {
       toast.success('Application rejected.');
       void qc.invalidateQueries({ queryKey: ['a-leave-pending'] });
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error) => {
+      toast.error(e.message);
+      if (isDecidedElsewhere(e)) refreshLeaveDesk(qc);
+    },
   });
 
   const cancel = useMutation({
@@ -339,6 +358,7 @@ export default function AdminLeavePage() {
             )}
             {pendingApps.map((a, i) => {
               const outcome = decided[a.id];
+              const own = isOwnLeave(viewerUserId, a.personUserId);
               return (
                 <div
                   className="sk-row sk-reqcard"
@@ -380,12 +400,14 @@ export default function AdminLeavePage() {
                   >
                     {outcome === 'approved' ? 'APPROVED' : outcome === 'rejected' ? 'REJECTED' : 'PENDING'}
                   </span>
-                  <div className="sk-wrap-sm" style={{ flexBasis: '100%', display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+                  <div className="sk-wrap-sm" style={{ flexBasis: '100%', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
+                    {own && <span className="meta">{OWN_LEAVE_HINT}</span>}
                     <button
                       type="button"
                       className="sk-btn sk-press"
                       data-variant="primary"
-                      disabled={approve.isPending}
+                      disabled={approve.isPending || own}
+                      title={own ? OWN_LEAVE_HINT : undefined}
                       onClick={() => {
                         // Warn, never block — the admin may knowingly approve
                         // into the negative (e.g. treat the excess as unpaid).
@@ -412,7 +434,8 @@ export default function AdminLeavePage() {
                     <button
                       type="button"
                       className="sk-btn sk-press"
-                      disabled={reject.isPending}
+                      disabled={reject.isPending || own}
+                      title={own ? OWN_LEAVE_HINT : undefined}
                       onClick={() => reject.mutate(a.id)}
                     >
                       Reject

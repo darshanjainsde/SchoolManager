@@ -3,8 +3,10 @@ import { Module } from '@nestjs/common';
 import { FeaturesModule } from '../features';
 import { TenancyModule } from '../tenancy';
 import { ManagementModule } from '../management';
+import { AuthModule } from '../auth';
 import { PhoneVerifyController } from './phone-verify.controller';
 import { PhoneVerifyService } from './phone-verify.service';
+import { InboundIdentityService } from './inbound-identity.service';
 import { WhatsAppActionsService } from './whatsapp-actions.service';
 import { WhatsAppSettingsController } from './whatsapp-settings.controller';
 import { WhatsAppSettingsService } from './whatsapp-settings.service';
@@ -23,8 +25,11 @@ import { WhatsAppWebhookService } from './whatsapp-webhook.service';
   // route 500s. module-wiring.spec.ts now checks this for every module.
   // ManagementModule for LeaveService: a tap on WhatsApp runs the SAME
   // approve / reject / assign the console runs.
-  imports: [FeaturesModule, TenancyModule, ManagementModule, OtpModule],
+  // AuthModule for PhoneProfilesService: a tap is attributed by the SAME
+  // phone → profiles answer login reads (InboundIdentityService). No cycle:
+  // AuthModule imports only FeaturesModule and OtpModule.
+  imports: [FeaturesModule, TenancyModule, ManagementModule, OtpModule, AuthModule],
   controllers: [WhatsAppWebhookController, WhatsAppSettingsController, PhoneVerifyController],
-  providers: [WhatsAppWebhookService, WhatsAppSettingsService, WhatsAppActionsService, PhoneVerifyService],
+  providers: [WhatsAppWebhookService, WhatsAppSettingsService, WhatsAppActionsService, PhoneVerifyService, InboundIdentityService],
 })
 export class WhatsAppModule {}

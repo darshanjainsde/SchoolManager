@@ -22,6 +22,11 @@ export interface WhatsAppTemplate {
   params: string[];
   /** Button parameters, by the button's position in the approved template. */
   buttons?: TemplateButton[];
+  /**
+   * The approved template to send instead while THIS one waits for Meta's
+   * review (see template-approval.ts). Same parameters, fewer buttons.
+   */
+  fallback?: WhatsAppTemplate;
 }
 export type TemplateButton =
   | { type: 'quick_reply'; index: number; payload: string }
@@ -65,6 +70,22 @@ export const COVER_PENDING = `${TEMPLATE_PREFIX}cover_pending`;
 export function coverPendingTemplate(schoolName: string, gaps: number): WhatsAppTemplate {
   return { name: COVER_PENDING, language: TEMPLATE_LANGUAGE, params: [param(schoolName), String(gaps)] };
 }
+
+/**
+ * Tier 1 (2026-10-06). A button cannot be added to an approved template in
+ * place, so "Got it · Can't" is a new name. Submitted at the start of the
+ * tier; the code sends it only once Meta's list says APPROVED.
+ */
+export const COVER_ASSIGNED_V2 = `${TEMPLATE_PREFIX}cover_assigned_v2`;
+/** A cover (or a whole leave) called off — to the substitute and to the desk. */
+export const COVER_CANCELLED = `${TEMPLATE_PREFIX}cover_cancelled`;
+
+/**
+ * Names that are sent only after Meta's live list says APPROVED. Everything
+ * else in this file was approved before the code that sends it shipped.
+ * Remove a name once it is approved on production.
+ */
+export const GATED_TEMPLATES: ReadonlySet<string> = new Set([COVER_ASSIGNED_V2, COVER_CANCELLED]);
 
 /** Meta's sample template on every new number — the pipeline smoke test. */
 export const HELLO_WORLD: WhatsAppTemplate = { name: 'hello_world', language: 'en_US', params: [] };
@@ -284,6 +305,17 @@ export const EXTRA_SUBMISSIONS: Record<string, { category: 'AUTHENTICATION' | 'U
     body: 'A message from {{1}}. {{2}} periods still need cover after the leave you approved. Open the console to assign teachers.',
     samples: ['Raffles Public School', '3'],
   },
+  [COVER_ASSIGNED_V2]: {
+    category: 'UTILITY',
+    body: "A cover duty at {{1}}. On {{2}} you are covering class {{3}} for {{4}}, in place of {{5}}. Tap Got it if you will take it, or Can't so the office can find someone else.",
+    samples: ['Raffles Public School', 'Mon 22 Sep, period 3 (10:15–11:00)', '9-A', 'Mathematics', 'Priya Nair'],
+    buttons: ['Got it', "Can't"],
+  },
+  [COVER_CANCELLED]: {
+    category: 'UTILITY',
+    body: 'A change at {{1}}: {{2}} on {{3}} is called off, because {{4}}. Open the Sckools app to see the day as it now stands.',
+    samples: ['Raffles Public School', 'your cover of 9-A, period 3', 'Mon 22 Sep 2026', 'the leave it was for was cancelled'],
+  },
   [NOTICE_TEMPLATES.HOLIDAY]: {
     category: 'UTILITY',
     body: 'Holiday at {{1}}: the school will be closed on {{2}} for {{3}}. Classes resume as usual on {{4}}. Nothing else changes.',
@@ -308,3 +340,37 @@ export const EXTRA_SUBMISSIONS: Record<string, { category: 'AUTHENTICATION' | 'U
 
 /** How many `{{n}}` placeholders a body carries. */
 export const placeholderCount = (body: string) => new Set(body.match(/\{\{\d+\}\}/g) ?? []).size;
+
+export interface TemplateSubmission {
+  name: string;
+  category: 'AUTHENTICATION' | 'UTILITY';
+  body: string;
+  samples: string[];
+  buttons: string[];
+}
+
+/**
+ * Every template, by the NAME the code sends — what `scripts/whatsapp-templates.mjs`
+ * submits. Built from TEMPLATE_NAMES rather than from the kind's spelling, so a
+ * kind that rides another kind's template (a v2, a shared "called off" card)
+ * submits that template once. Two different bodies under one name is a bug and
+ * throws.
+ */
+export function templateSubmissions(): TemplateSubmission[] {
+  const out = new Map<string, TemplateSubmission>();
+  const put = (s: TemplateSubmission) => {
+    const had = out.get(s.name);
+    if (had && (had.body !== s.body || JSON.stringify(had.buttons) !== JSON.stringify(s.buttons) || JSON.stringify(had.samples) !== JSON.stringify(s.samples))) {
+      throw new Error(`Two different definitions (body, samples or buttons) are registered for ${s.name}`);
+    }
+    if (!had) out.set(s.name, s);
+  };
+  for (const kind of Object.keys(SUBMISSIONS) as NotificationKind[]) {
+    const s = SUBMISSIONS[kind];
+    put({ name: TEMPLATE_NAMES[kind], category: 'UTILITY', body: s.body, samples: s.samples, buttons: s.buttons ?? [] });
+  }
+  for (const [name, s] of Object.entries(EXTRA_SUBMISSIONS)) {
+    put({ name, category: s.category, body: s.body, samples: s.samples, buttons: s.buttons ?? [] });
+  }
+  return [...out.values()];
+}

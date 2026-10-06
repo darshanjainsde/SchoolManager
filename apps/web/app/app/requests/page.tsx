@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import type { RegisterChangeRow } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
+import { OWN_LEAVE_HINT, isDecidedElsewhere, isOwnLeave } from '@/lib/leave-desk';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -19,6 +20,8 @@ interface PendingLeave {
   id: string;
   teacherId: string;
   teacherName: string;
+  /** The applicant's own login (Teacher.userId / Staff.userId) — null when they have none. */
+  personUserId?: string | null;
   type: LeaveType;
   startDate: string;
   endDate: string;
@@ -48,6 +51,8 @@ interface DeskItem {
   detail: string;
   reason: string | null;
   createdAt: string;
+  /** Leave only: the applicant's login, to keep the viewer off their own leave. */
+  personUserId?: string | null;
 }
 
 // UTC-anchored, matching the API's `@db.Date` columns — never shifts with the
@@ -69,6 +74,7 @@ function toLeaveItem(a: PendingLeave): DeskItem {
     detail: `${LEAVE_TYPE_LABEL[a.type] ?? a.type} · ${formatDate(a.startDate)} – ${formatDate(a.endDate)}`,
     reason: a.reason,
     createdAt: a.createdAt,
+    personUserId: a.personUserId ?? null,
   };
 }
 
@@ -111,6 +117,15 @@ export default function AdminRequestsPage() {
     queryFn: () => api.get<PendingLeave[]>('/manage/leave?status=PENDING'),
   });
 
+  // Who is looking — the layout's own cache entry, so this costs no request.
+  const me = useQuery({
+    queryKey: ['me', host],
+    enabled: !!host,
+    staleTime: 5 * 60_000,
+    queryFn: () => api.get<{ userId?: string }>('/auth/me'),
+  });
+  const viewerUserId = me.data?.userId ?? null;
+
   const registerQuery = useQuery({
     queryKey: ['a-register-pending'],
     enabled: !!host,
@@ -149,7 +164,11 @@ export default function AdminRequestsPage() {
       }
       invalidateFor(item.kind);
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: (e: Error, item) => {
+      toast.error(e.message);
+      // 409: another desk decided it first — refetch so the row leaves the desk.
+      if (isDecidedElsewhere(e)) invalidateFor(item.kind);
+    },
   });
 
   const reject = useMutation({
@@ -165,9 +184,10 @@ export default function AdminRequestsPage() {
       setConfirmRejectKey(null);
       invalidateFor(item.kind);
     },
-    onError: (e: Error) => {
+    onError: (e: Error, item) => {
       toast.error(e.message);
       setConfirmRejectKey(null);
+      if (isDecidedElsewhere(e)) invalidateFor(item.kind);
     },
   });
 
@@ -219,6 +239,7 @@ export default function AdminRequestsPage() {
               const key = `${item.kind}-${item.id}`;
               const confirming = confirmRejectKey === key;
               const outcome = decided[key];
+              const own = item.kind === 'leave' && isOwnLeave(viewerUserId, item.personUserId);
               return (
                 <div
                   className="sk-row sk-reqcard"
@@ -292,12 +313,14 @@ export default function AdminRequestsPage() {
                       </button>
                     </div>
                   ) : (
-                    <div className="sk-wrap-sm" style={{ flexBasis: '100%', display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+                    <div className="sk-wrap-sm" style={{ flexBasis: '100%', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
+                      {own && <span className="meta">{OWN_LEAVE_HINT}</span>}
                       <button
                         type="button"
                         className="sk-btn sk-press"
                         data-variant="primary"
-                        disabled={busy}
+                        disabled={busy || own}
+                        title={own ? OWN_LEAVE_HINT : undefined}
                         onClick={() => approve.mutate(item)}
                       >
                         Approve
@@ -305,7 +328,8 @@ export default function AdminRequestsPage() {
                       <button
                         type="button"
                         className="sk-btn sk-press"
-                        disabled={busy}
+                        disabled={busy || own}
+                        title={own ? OWN_LEAVE_HINT : undefined}
                         onClick={() => setConfirmRejectKey(key)}
                       >
                         Reject

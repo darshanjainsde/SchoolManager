@@ -41,23 +41,6 @@ async function emailsByUserId(
   return byId;
 }
 
-/**
- * The single linked-user email for one userId, as a 0-or-1-element array so the
- * drain can treat it uniformly with `resolveSectionRecipients`. Used for
- * private messages (MESSAGE_RECEIVED), which target one recipient — the message
- * addressee — not a whole section. Returns `[]` when the user has no email
- * (e.g. no login yet), in which case there is simply nothing to push.
- */
-export async function resolveUserRecipients(
-  db: TenantTx,
-  schoolId: string,
-  userId: string,
-): Promise<string[]> {
-  const byId = await emailsByUserId(db, schoolId, [userId]);
-  const email = byId.get(userId);
-  return email ? [email] : [];
-}
-
 /** Every linked-user email for the students currently in a class section. */
 export async function resolveSectionRecipients(
   db: TenantTx,
@@ -136,4 +119,65 @@ export async function resolveAdminRecipients(db: TenantTx, schoolId: string): Pr
     select: { id: true, email: true },
   });
   return admins.filter((a) => a.email).map((a) => ({ userId: a.id, email: a.email }));
+}
+
+/** The accounts officers of a school — the staff half of the leave desk. */
+export function leaveDeskStaffWhere(schoolId: string) {
+  return { schoolId, role: 'ACCOUNTS' as const, isActive: true as const };
+}
+
+/**
+ * Everyone who runs the leave desk: every active admin, plus every active
+ * accounts officer with a login — the same set LeaveDeskGuard admits. Until
+ * 2026-10-06 a leave request went to admins only, so the officer who decides
+ * most of them heard nothing.
+ *
+ * Each person once, by userId. `exceptUserId` leaves out the applicant: an
+ * officer who applies for her own leave must not be asked to approve it.
+ */
+export async function resolveLeaveDeskRecipients(
+  db: TenantTx,
+  schoolId: string,
+  opts: { exceptUserId?: string } = {},
+): Promise<{ userId: string; email: string }[]> {
+  const [allAdmins, officers] = await Promise.all([
+    resolveAdminRecipients(db, schoolId),
+    db.staff.findMany({ where: { ...leaveDeskStaffWhere(schoolId), userId: { not: null } }, select: { userId: true } }),
+  ]);
+  const admins = allAdmins.filter((a) => a.userId !== opts.exceptUserId);
+  // Ids seen among ALL admins (even the excluded applicant) are never re-added as officers.
+  const adminIds = new Set(allAdmins.map((a) => a.userId));
+  const officerIds = [
+    ...new Set(officers.map((o) => o.userId).filter((id): id is string => !!id && !adminIds.has(id) && id !== opts.exceptUserId)),
+  ];
+  if (officerIds.length === 0) return admins;
+  const users = await db.user.findMany({ where: { schoolId, id: { in: officerIds }, isActive: true }, select: { id: true, email: true } });
+  return [...admins, ...users.filter((u) => u.email).map((u) => ({ userId: u.id, email: u.email }))];
+}
+
+/**
+ * The logins an outbox row is for, by id — what a NotificationDelivery row is
+ * keyed on. A login with no email is left out: every channel addresses a
+ * person by their login email within the school.
+ */
+export async function resolveRecipientUsers(
+  db: TenantTx,
+  schoolId: string,
+  target: { targetUserId: string | null; classSectionId: string | null },
+): Promise<string[]> {
+  let ids: string[];
+  if (target.targetUserId) {
+    ids = [target.targetUserId];
+  } else if (target.classSectionId) {
+    const students = await db.student.findMany({
+      where: activeStudentsWhere(schoolId, { classSectionId: target.classSectionId, userId: { not: null } }),
+      select: { userId: true },
+    });
+    ids = students.map((s) => s.userId).filter((id): id is string => Boolean(id));
+  } else {
+    return [];
+  }
+  const unique = [...new Set(ids)];
+  const byId = await emailsByUserId(db, schoolId, unique);
+  return unique.filter((id) => byId.has(id));
 }

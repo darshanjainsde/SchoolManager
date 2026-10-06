@@ -1,6 +1,7 @@
 import { DEDUP_REDIS_TIMEOUT_MS, WhatsAppChannel } from './whatsapp.channel';
 import type { NotificationMessage } from './notification.types';
 import { WhatsAppApiError } from './whatsapp/graph.client';
+import { leavePayload } from './whatsapp/actions';
 
 const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const CFG = { token: 't', phoneNumberId: '1357286177463978', wabaId: null, graphVersion: 'v21.0' };
@@ -188,6 +189,44 @@ describe('WhatsAppChannel', () => {
       expect(f).toHaveBeenCalledTimes(2);
     });
 
+    describe('cards with buttons', () => {
+      // Same teacher, same dates, same words — only the leave the buttons act on differs.
+      const KEYS = { sign: 'test-action-secret' };
+      const leaveCard = (leaveId: string, now = Date.parse('2026-10-06T09:00:00Z')) =>
+        ({
+          kind: 'LEAVE_APPLIED',
+          payload: {
+            schoolName: 'Raffles', leaveId, teacherName: 'Priya Nair', dates: 'Mon 13 Oct', days: 1, reason: 'Fever', periodsAffected: 4,
+            approvePayload: leavePayload('approve', leaveId, KEYS, now),
+            rejectPayload: leavePayload('reject', leaveId, KEYS, now),
+          },
+        }) as unknown as NotificationMessage;
+      const desk = (f: jest.Mock, redis: () => never | null) =>
+        new WhatsAppChannel(db() as never, () => CFG, f, redis as never, { isApproved: async () => true });
+      const sentBody = (f: jest.Mock, call: number): string => f.mock.calls[call][1].body;
+
+      it.each([
+        ['memory', () => null],
+        ['Redis', () => fakeRedis() as never],
+      ])('a re-application within the minute gets its own Approve card (%s)', async (_path, makeRedis) => {
+        const redis = makeRedis();
+        const f = okFetch();
+        const c = desk(f, () => redis as never);
+        expect(await c.attempt('desk@x', leaveCard('leave-withdrawn'), SCHOOL)).toEqual(expect.objectContaining({ status: 'SENT' }));
+        expect(await c.attempt('desk@x', leaveCard('leave-new'), SCHOOL)).toEqual(expect.objectContaining({ status: 'SENT' }));
+        expect(f).toHaveBeenCalledTimes(2);
+        expect(sentBody(f, 1)).toContain('lv:a:leave-new');
+      });
+
+      it('the same card rendered a minute apart (new expiry, new signature) is still one card', async () => {
+        const f = okFetch();
+        const c = desk(f, () => null);
+        await c.attempt('desk@x', leaveCard('leave-1', Date.parse('2026-10-06T09:00:00Z')), SCHOOL);
+        expect(await c.attempt('desk@x', leaveCard('leave-1', Date.parse('2026-10-06T09:01:00Z')), SCHOOL)).toEqual({ status: 'SKIPPED', reason: 'duplicate' });
+        expect(f).toHaveBeenCalledTimes(1);
+      });
+    });
+
     const fakeRedis = () => {
       const store = new Set<string>();
       return {
@@ -336,4 +375,57 @@ describe('WhatsAppChannel', () => {
       expect(d.whatsAppDelivery.create.mock.calls[0][0].data).toMatchObject({ status: 'FAILED', error: 'Re-engagement message (code 131047)' });
     });
   });
+  describe('attempt — what the delivery row records', () => {
+    const graphError = (status: number, code: number) => jest.fn().mockResolvedValue({ ok: false, status, json: async () => ({ error: { message: 'x', code } }) });
+
+    it('SENT carries Meta\'s message id', async () => {
+      expect(await new WhatsAppChannel(db() as never, () => CFG, okFetch(), () => null).attempt('p@x', MSG, SCHOOL)).toEqual({ status: 'SENT', providerId: 'wamid.1' });
+    });
+
+    it('a school with WhatsApp off is SKIPPED channel-off', async () => {
+      const d = db({ whatsAppSettings: { findUnique: jest.fn().mockResolvedValue({ enabled: false, phoneNumberId: null }) } });
+      expect(await new WhatsAppChannel(d as never, () => CFG, okFetch(), () => null).attempt('p@x', MSG, SCHOOL)).toEqual({ status: 'SKIPPED', reason: 'channel-off' });
+    });
+
+    it('no usable phone is SKIPPED no-address', async () => {
+      const d = db({ student: { findFirst: jest.fn().mockResolvedValue({ guardianPhone: 'office' }) } });
+      expect(await new WhatsAppChannel(d as never, () => CFG, okFetch(), () => null).attempt('p@x', MSG, SCHOOL)).toEqual({ status: 'SKIPPED', reason: 'no-address' });
+    });
+
+    it('Meta 130429 (rate limited) is a RETRY, and the dedup claim is given back', async () => {
+      const store = new Set<string>();
+      const redis = { status: 'ready', set: jest.fn(async (k: string) => (store.has(k) ? null : (store.add(k), 'OK'))), del: jest.fn(async (k: string) => (store.delete(k) ? 1 : 0)) };
+      const o = await new WhatsAppChannel(db() as never, () => CFG, graphError(400, 130429), () => redis as never).attempt('p@x', MSG, SCHOOL);
+      expect(o.status).toBe('RETRY');
+      expect(store.size).toBe(0);
+    });
+
+    it('Meta 131026 (not on WhatsApp) is FAILED — retrying cannot help', async () => {
+      expect((await new WhatsAppChannel(db() as never, () => CFG, graphError(400, 131026), () => null).attempt('p@x', MSG, SCHOOL)).status).toBe('FAILED');
+    });
+
+    it('a 5xx from Meta or a dropped connection is a RETRY', async () => {
+      expect((await new WhatsAppChannel(db() as never, () => CFG, graphError(503, 2), () => null).attempt('p@x', MSG, SCHOOL)).status).toBe('RETRY');
+      expect((await new WhatsAppChannel(db() as never, () => CFG, jest.fn().mockRejectedValue(new Error('ECONNRESET')), () => null).attempt('p@x', MSG, SCHOOL)).status).toBe('RETRY');
+    });
+
+    it('a ledger write that fails after Meta accepted is still SENT with the waMessageId, and the claim is kept', async () => {
+      const store = new Set<string>();
+      const redis = { status: 'ready', set: jest.fn(async (k: string) => (store.has(k) ? null : (store.add(k), 'OK'))), del: jest.fn(async (k: string) => (store.delete(k) ? 1 : 0)) };
+      const d = db({ whatsAppDelivery: { create: jest.fn().mockRejectedValue(new Error('pool timeout')) } });
+      const c = new WhatsAppChannel(d as never, () => CFG, okFetch(), () => redis as never);
+      jest.spyOn((c as unknown as { logger: { error: (m: string) => void } }).logger, 'error').mockImplementation(() => undefined);
+      expect(await c.attempt('p@x', MSG, SCHOOL)).toEqual({ status: 'SENT', providerId: 'wamid.1' });
+      expect(store.size).toBe(1);
+      expect(redis.del).not.toHaveBeenCalled();
+    });
+
+    it('the same words to the same phone within a minute are SKIPPED duplicate; send() still calls that true', async () => {
+      const c = new WhatsAppChannel(db() as never, () => CFG, okFetch(), () => null);
+      await c.attempt('p@x', MSG, SCHOOL);
+      expect(await c.attempt('p@x', MSG, SCHOOL)).toEqual({ status: 'SKIPPED', reason: 'duplicate' });
+      expect(await c.send('p@x', MSG, SCHOOL)).toBe(true);
+    });
+  });
 });
+

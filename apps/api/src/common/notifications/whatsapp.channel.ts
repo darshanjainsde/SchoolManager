@@ -2,9 +2,12 @@ import { createHash } from 'node:crypto';
 import { Logger } from '@nestjs/common';
 import type { PrismaClient } from '@skoolos/db';
 import { ensureConnected, sharedRedis, type SharedRedis } from '../redis/redis.client';
-import type { NotificationChannel, NotificationMessage } from './notification.types';
+import type { DeliveryChannel, DeliveryOutcome, NotificationMessage } from './notification.types';
+import { actionIdentity } from './whatsapp/actions';
+import { isTransientWhatsAppFailure } from './whatsapp/failure';
 import { toE164 } from './whatsapp/phone';
 import { WhatsAppApiError, sendTemplate, senderDisplayNumber, type SendResult, type WhatsAppConfig, whatsAppConfig, whatsAppConfigProblem } from './whatsapp/graph.client';
+import { TemplateApproval, chooseTemplate } from './whatsapp/template-approval';
 import { templateFor, type WhatsAppTemplate } from './whatsapp/templates';
 
 /**
@@ -53,7 +56,7 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   return Promise.race([p, timeout]).finally(() => clearTimeout(timer));
 }
 
-export class WhatsAppChannel implements NotificationChannel {
+export class WhatsAppChannel implements DeliveryChannel {
   readonly name = 'whatsapp';
   private readonly logger = new Logger(WhatsAppChannel.name);
   private readonly settingsCache = new Map<string, { at: number; value: SchoolSettings }>();
@@ -65,6 +68,7 @@ export class WhatsAppChannel implements NotificationChannel {
     private readonly config: () => WhatsAppConfig | null = () => whatsAppConfig(),
     private readonly fetchImpl: typeof fetch = fetch,
     private readonly redis: () => SharedRedis = () => sharedRedis(),
+    private readonly approval: Pick<TemplateApproval, 'isApproved'> = new TemplateApproval(config, fetchImpl),
   ) {}
 
   /** The platform credentials, or null when the environment has none. */
@@ -82,7 +86,12 @@ export class WhatsAppChannel implements NotificationChannel {
    * The same words to the same phone within a minute are one message. A
    * family with three children at the school gets ONE "PTM on Saturday",
    * not three; the per-child kinds (absence, remark) differ in their
-   * parameters and pass. Keyed on phone + template + parameters.
+   * parameters and pass. Keyed on phone + template + parameters + what each
+   * button does: a teacher who withdraws and re-applies for the same dates
+   * within the minute gets the same words, but the new Approve card acts on
+   * the NEW leave and must not be dropped as a copy of the withdrawn one.
+   * (A button is keyed on its action, not its expiry or signature, so the
+   * same card rendered a minute apart is still one card.)
    *
    * One copy per phone across every serverless instance, through Redis
    * (SET NX with a 60 s expiry); memory decides only when Redis is
@@ -102,7 +111,8 @@ export class WhatsAppChannel implements NotificationChannel {
    * a retry or an identical sibling send is not counted as sent.
    */
   private async claim(phone: string, template: WhatsAppTemplate): Promise<null | (() => Promise<void>)> {
-    const raw = `${phone}|${template.name}|${template.params.join('\u0001')}`;
+    const buttons = (template.buttons ?? []).map((b) => `${b.index}:${b.type === 'quick_reply' ? actionIdentity(b.payload) : b.text}`);
+    const raw = `${phone}|${template.name}|${template.params.join('\u0001')}|${buttons.join('\u0001')}`;
     try {
       const r = this.redis();
       if (r) {
@@ -151,6 +161,16 @@ export class WhatsAppChannel implements NotificationChannel {
   }
 
   async send(to: string, message: NotificationMessage, schoolId: string): Promise<boolean> {
+    const o = await this.attempt(to, message, schoolId);
+    // A duplicate means a sibling login on this phone already has it.
+    return o.status === 'SENT' || (o.status === 'SKIPPED' && o.reason === 'duplicate');
+  }
+
+  /**
+   * One attempt, and what it came to — the outbox drain records this on the
+   * delivery row and retries only a RETRY. Never throws for a delivery failure.
+   */
+  async attempt(to: string, message: NotificationMessage, schoolId: string): Promise<DeliveryOutcome> {
     const cfg = this.config();
     if (!cfg) {
       if (!this.warnedUnconfigured) {
@@ -160,21 +180,34 @@ export class WhatsAppChannel implements NotificationChannel {
         // pasted in where the number id goes.
         this.logger.warn(`WhatsApp is idle — ${whatsAppConfigProblem() ?? 'WHATSAPP_TOKEN / WHATSAPP_PHONE_NUMBER_ID are not set.'}`);
       }
-      return false;
+      return { status: 'SKIPPED', reason: 'channel-off' };
     }
     const settings = await this.settingsFor(schoolId);
-    if (!settings.enabled) return false;
+    if (!settings.enabled) return { status: 'SKIPPED', reason: 'channel-off' };
 
     const address = await this.addressFor(schoolId, to);
-    if (!address) return false;
+    if (!address) return { status: 'SKIPPED', reason: 'no-address' };
     const { phone } = address;
 
-    const template = templateFor(message, { child: address.child });
-    const release = await this.claim(phone, template);
-    if (!release) return true;
-    const ok = await this.deliver(cfg, schoolId, phone, message.kind, template, settings.phoneNumberId);
-    if (!ok) await release();
-    return ok;
+    // The dedup claim is on the template REQUESTED, not the one chosen: two
+    // instances whose approval caches disagree could otherwise send v1 and v2 of
+    // the same card to one phone within the minute. The ledger records the name
+    // actually sent.
+    const requested = templateFor(message, { child: address.child });
+    const release = await this.claim(phone, requested);
+    if (!release) return { status: 'SKIPPED', reason: 'duplicate' };
+    // A new template waiting for Meta's review goes as its approved v1, or not
+    // at all — and "not at all" is a SKIP, never a failure: retrying cannot
+    // help until Meta approves it.
+    const template = await chooseTemplate(requested, this.approval);
+    if (!template) {
+      await release();
+      return { status: 'SKIPPED', reason: 'template-pending' };
+    }
+    const r = await this.sendOnce(cfg, schoolId, phone, message.kind, template, settings.phoneNumberId);
+    if (r.ok) return { status: 'SENT', providerId: r.messageId };
+    await release();
+    return isTransientWhatsAppFailure(r.code, r.httpStatus) ? { status: 'RETRY', error: r.reason } : { status: 'FAILED', error: r.reason };
   }
 
   /** The platform credentials for callers that compose their own sends (actions, verification). */
@@ -230,16 +263,30 @@ export class WhatsAppChannel implements NotificationChannel {
     template: WhatsAppTemplate,
     phoneNumberId: string | null,
   ): Promise<boolean> {
-    // Only the provider call decides success. The ledger write has its own try:
-    // if Meta accepted the message but the ledger threw, returning false would
-    // make send() release the dedup claim and a sibling login on this phone
-    // would send a second copy.
+    return (await this.sendOnce(cfg, schoolId, phone, kind, template, phoneNumberId)).ok;
+  }
+
+  /**
+   * Send a template and write the ledger row. Only the provider call decides
+   * success; the ledger write has its own try — a message Meta accepted is
+   * never reported as failed because bookkeeping threw (that would release
+   * the sibling dedup claim and send a second copy). A refusal keeps Meta's
+   * code and HTTP status so the caller can tell "try again" from "never".
+   */
+  private async sendOnce(
+    cfg: WhatsAppConfig,
+    schoolId: string,
+    phone: string,
+    kind: string,
+    template: WhatsAppTemplate,
+    phoneNumberId: string | null,
+  ): Promise<{ ok: true; messageId: string } | { ok: false; code: number | null; httpStatus: number | null; reason: string }> {
     let messageId: string;
     try {
       ({ messageId } = await sendTemplate(cfg, phone, template, { phoneNumberId, fetchImpl: this.fetchImpl }));
     } catch (e) {
-      const err = e as Error;
-      const reason = e instanceof WhatsAppApiError ? `${err.message} (code ${e.code ?? '?'})` : err.message;
+      const api = e instanceof WhatsAppApiError ? e : null;
+      const reason = api ? `${api.message} (code ${api.code ?? '?'})` : (e as Error).message;
       this.logger.warn(`WhatsApp send to ${phone} (${kind}) failed: ${reason}`);
       try {
         await this.prisma.whatsAppDelivery.create({
@@ -248,7 +295,7 @@ export class WhatsAppChannel implements NotificationChannel {
       } catch (ledgerErr) {
         this.logger.error(`Could not record WhatsApp failure: ${(ledgerErr as Error).message}`);
       }
-      return false;
+      return { ok: false, code: api?.code ?? null, httpStatus: api?.httpStatus ?? null, reason: reason.slice(0, 500) };
     }
     try {
       await this.prisma.whatsAppDelivery.create({
@@ -260,7 +307,7 @@ export class WhatsAppChannel implements NotificationChannel {
       // the waMessageId so the row can be reconciled.
       this.logger.error(`WhatsApp ${kind} to ${phone} was sent (${messageId}) but could not be recorded: ${(ledgerErr as Error).message}`);
     }
-    return true;
+    return { ok: true, messageId };
   }
 
   async settingsFor(schoolId: string): Promise<SchoolSettings> {

@@ -11,3 +11,4 @@ export { istTodayISO, startOfIstDay, resolveAsOfDate } from './internal/timetabl
 // Approve tapped in a chat runs the very same code path as the console.
 export { LeaveService } from './leave.service';
 export { isoWeekdayOf, toDateStr } from './internal/leave-dates';
+export { isLeaveDesk } from './internal/leave-desk.guard';

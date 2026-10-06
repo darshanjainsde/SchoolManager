@@ -58,6 +58,7 @@ export class FeePaymentService {
         targetUserId: student.userId,
         payload: { schoolName: school?.name ?? 'Your school', title: n.title, body: n.body } satisfies FeeDecisionOutboxPayload as unknown as Prisma.InputJsonValue,
       },
+      select: { id: true },
     });
   }
 

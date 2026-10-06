@@ -46,6 +46,14 @@ describe('evaluateLadder', () => {
     expect(get({ outboxDepth: 5, outboxOldestMinutes: 60 }, 'outbox').severity).toBe('act');
   });
 
+  it('keeps its thresholds, and says the depth is work due now — a delivery backing off is not counted', () => {
+    expect(get({ outboxDepth: 200, outboxOldestMinutes: 15 }, 'outbox').severity).toBe('ok');
+    expect(get({ outboxDepth: 201 }, 'outbox').severity).toBe('watch');
+    expect(get({ outboxDepth: 0, outboxOldestMinutes: 16 }, 'outbox').severity).toBe('act');
+    expect(get({ outboxDepth: 12, outboxOldestMinutes: 3 }, 'outbox').detail).toContain('12 due now');
+    expect(get({ outboxDepth: 0, outboxOldestMinutes: null }, 'outbox').detail).toMatch(/backing off.*not counted/);
+  });
+
   it('reports no-traffic as ok rather than inventing a zero', () => {
     expect(get({ p95Ms: null, dbHoldP95Ms: null }, 'p95').severity).toBe('ok');
     expect(get({ p95Ms: null }, 'p95').detail).toContain('No traffic');

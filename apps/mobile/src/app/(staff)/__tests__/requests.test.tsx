@@ -300,6 +300,49 @@ it('a failed cancel shows the server message verbatim and does not remove the ro
   alertSpy.mockRestore();
 });
 
+it('a 409 on cancel refetches, so the row shows what was decided elsewhere', async () => {
+  mockApi({
+    leaveSequence: [[leaveRow({ status: 'PENDING' })], [leaveRow({ status: 'REJECTED' })]],
+    register: [],
+    cancelResult: new ApiError(409, 'Mr Sharma already rejected this on 6 Oct, 10:42.'),
+  });
+  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  const { findByTestId, findByText, queryByTestId } = render(<Requests />);
+
+  fireEvent.press(await findByTestId('cancel-lv-1'));
+  act(() => {
+    alertSpy.mock.calls[0][2]?.find((b) => b.text === 'Yes, cancel leave')?.onPress?.();
+  });
+
+  expect(await findByText('Mr Sharma already rejected this on 6 Oct, 10:42.')).toBeTruthy();
+  expect(await findByText('Rejected')).toBeTruthy();
+  // A rejected leave has nothing to cancel, so the button is gone.
+  expect(queryByTestId('cancel-lv-1')).toBeNull();
+  expect((api.request as jest.Mock).mock.calls.filter(([p]) => p === '/manage/leave/mine').length).toBe(2);
+
+  alertSpy.mockRestore();
+});
+
+it('any other cancel failure does not refetch', async () => {
+  mockApi({
+    leave: [leaveRow({ status: 'PENDING' })],
+    register: [],
+    cancelResult: new ApiError(500, 'Something went wrong.'),
+  });
+  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  const { findByTestId } = render(<Requests />);
+
+  fireEvent.press(await findByTestId('cancel-lv-1'));
+  act(() => {
+    alertSpy.mock.calls[0][2]?.find((b) => b.text === 'Yes, cancel leave')?.onPress?.();
+  });
+
+  expect(await findByTestId('cancel-error')).toBeTruthy();
+  expect((api.request as jest.Mock).mock.calls.filter(([p]) => p === '/manage/leave/mine').length).toBe(1);
+
+  alertSpy.mockRestore();
+});
+
 // ── Partial failure (proved by deletion — see task report) ────────────────
 
 it('one source failing still shows the other source\'s data, alongside the error', async () => {

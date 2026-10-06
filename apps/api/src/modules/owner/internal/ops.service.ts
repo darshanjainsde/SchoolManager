@@ -4,9 +4,24 @@ import { REDIS_CLIENT, ensureConnected, sharedRedis, type SharedRedis } from '..
 import { BUCKETS_MS, mergeBuckets, percentileFromBuckets } from '../../../common/metrics/histogram';
 import { bucketKey } from '../../../common/metrics/metrics.service';
 import { evaluateLadder, overallSeverity, type Severity, type Trigger } from '../../../common/metrics/ladder';
+import { isDeliverySchemaMissing } from '../../../common/errors/prisma-errors';
 
 /** How many minute buckets the dashboard summarises. */
 const WINDOW_MINUTES = 60;
+
+/** The drain's MAX_ATTEMPTS: an outbox row whose expansion failed this often is parked. */
+const OUTBOX_MAX_ATTEMPTS = 5;
+
+const DAY_MS = 24 * 3_600_000;
+
+export interface OutboxHealth {
+  /** Work due now: unexpanded outbox rows + QUEUED deliveries whose nextAttemptAt has come. */
+  pending: number;
+  /** Minutes the longest-waiting piece of due work has been due. */
+  oldestMinutes: number | null;
+  /** Deliveries that failed for good in the last 24 h. */
+  failed24h: number;
+}
 
 export interface RouteRow {
   route: string;
@@ -41,7 +56,7 @@ export interface OpsResponse {
     loginsPerSec: number;
   };
   routes: RouteRow[];
-  outbox: { pending: number; oldestMinutes: number | null; exhausted: number };
+  outbox: OutboxHealth;
   metricsAvailable: boolean;
   /** Hourly history, oldest first. Empty until the first promotion has run. */
   history: HistoryPoint[];
@@ -215,23 +230,67 @@ export class OpsService {
     }
   }
 
-  private async readOutbox(): Promise<{ pending: number; oldestMinutes: number | null; exhausted: number }> {
+  /**
+   * What the drain has to do NOW — not what is merely unsent.
+   *
+   * Since Tier 1 an outbox row keeps `sentAt` NULL until every one of its
+   * deliveries has ended, and a delivery that failed backs off for up to
+   * ~14.6 h (DELIVERY_BACKOFF_MS). Counting unsent outbox rows therefore read a
+   * single parent's flaky phone as a stuck queue and raised 'act'. Due work is:
+   *   - outbox rows not yet expanded (and not parked at the expansion cap), due
+   *     since they were written;
+   *   - QUEUED deliveries whose nextAttemptAt has come, due since then.
+   * A delivery backing off is not late, so it is in neither number.
+   *
+   * Typed client throughout: Prisma binds a Date as UTC for these
+   * `timestamp` columns, the same comparison the drain makes with
+   * `::timestamptz AT TIME ZONE 'UTC'` in its raw claim.
+   */
+  private async readOutbox(): Promise<OutboxHealth> {
     const db = getPlatformPrisma();
-    const [pending, oldest, exhausted] = await Promise.all([
-      db.notificationOutbox.count({ where: { sentAt: null, attempts: { lt: 5 } } }),
-      db.notificationOutbox.findFirst({
-        where: { sentAt: null, attempts: { lt: 5 } },
-        orderBy: { createdAt: 'asc' },
-        select: { createdAt: true },
-      }),
-      // attempts at the cap is the dead-letter queue: nothing will retry these.
-      db.notificationOutbox.count({ where: { sentAt: null, attempts: { gte: 5 } } }),
-    ]);
-    return {
-      pending,
-      oldestMinutes: oldest ? Math.floor((Date.now() - oldest.createdAt.getTime()) / 60_000) : null,
-      exhausted,
-    };
+    const now = new Date(Date.now());
+    try {
+      const [rows, oldestRow, due, oldestDue, failed24h] = await Promise.all([
+        db.notificationOutbox.count({ where: { sentAt: null, expandedAt: null, attempts: { lt: OUTBOX_MAX_ATTEMPTS } } }),
+        db.notificationOutbox.findFirst({
+          where: { sentAt: null, expandedAt: null, attempts: { lt: OUTBOX_MAX_ATTEMPTS } },
+          orderBy: { createdAt: 'asc' },
+          select: { createdAt: true },
+        }),
+        db.notificationDelivery.count({ where: { status: 'QUEUED', nextAttemptAt: { lte: now } } }),
+        db.notificationDelivery.findFirst({
+          where: { status: 'QUEUED', nextAttemptAt: { lte: now } },
+          orderBy: { nextAttemptAt: 'asc' },
+          select: { nextAttemptAt: true },
+        }),
+        // A delivery that failed for good. A RETRY that ran out keeps the
+        // nextAttemptAt of its last try and a first-try FAILED keeps its
+        // creation time, so nextAttemptAt is when it failed (to a drain's lag).
+        db.notificationDelivery.count({ where: { status: 'FAILED', nextAttemptAt: { gte: new Date(now.getTime() - DAY_MS) } } }),
+      ]);
+      const since = [oldestRow?.createdAt, oldestDue?.nextAttemptAt].filter((d): d is Date => !!d);
+      const oldest = since.length ? Math.min(...since.map((d) => d.getTime())) : null;
+      return {
+        pending: rows + due,
+        oldestMinutes: oldest === null ? null : Math.max(0, Math.floor((now.getTime() - oldest) / 60_000)),
+        failed24h,
+      };
+    } catch (e) {
+      if (!isDeliverySchemaMissing(e)) throw e;
+      // Deployed before the migration: no NotificationDelivery table and no
+      // expandedAt column. Every unsent row is then still Tier-0 work, read the
+      // way it was before.
+      const where = { sentAt: null, attempts: { lt: OUTBOX_MAX_ATTEMPTS } };
+      const [pending, oldest] = await Promise.all([
+        db.notificationOutbox.count({ where }),
+        db.notificationOutbox.findFirst({ where, orderBy: { createdAt: 'asc' }, select: { createdAt: true } }),
+      ]);
+      return {
+        pending,
+        oldestMinutes: oldest ? Math.floor((now.getTime() - oldest.createdAt.getTime()) / 60_000) : null,
+        failed24h: 0,
+      };
+    }
   }
 }
 

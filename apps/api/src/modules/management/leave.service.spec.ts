@@ -6,7 +6,7 @@ const txMock = {
   // to a Teacher OR a Staff row, so the mock has to answer for both.
   staff: { findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
   leaveTypeDef: { findFirst: jest.fn() },
-  leaveApplication: { create: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
+  leaveApplication: { create: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
   timetableSlot: { findMany: jest.fn(), findFirst: jest.fn(), groupBy: jest.fn().mockResolvedValue([]) },
   substitution: {
     findFirst: jest.fn(),
@@ -27,7 +27,7 @@ const txMock = {
   // no slots → every notice is a no-op in the tests above, and the two tests
   // at the bottom prove the writes themselves.
   school: { findFirst: jest.fn().mockResolvedValue({ name: 'Raffles' }) },
-  user: { findMany: jest.fn().mockResolvedValue([]) },
+  user: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null) },
   notification: { create: jest.fn() },
   notificationOutbox: { create: jest.fn() },
 };
@@ -65,6 +65,7 @@ describe('LeaveService', () => {
     // `apply()` resolves the school's LeaveTypeDef for the picked type;
     // null = the school never opened its leave policy (pre-policy behaviour).
     txMock.leaveTypeDef.findFirst.mockResolvedValue(null);
+    txMock.leaveApplication.updateMany.mockResolvedValue({ count: 1 });
   });
 
   describe('apply', () => {
@@ -180,9 +181,9 @@ describe('LeaveService', () => {
 
       const result = await svc.approve(SCHOOL, LEAVE_ID, ADMIN_USER);
 
-      expect(txMock.leaveApplication.update).toHaveBeenCalledWith({
-        where: { id: LEAVE_ID },
-        data: expect.objectContaining({ status: 'APPROVED', reviewedById: ADMIN_USER }),
+      expect(txMock.leaveApplication.updateMany).toHaveBeenCalledWith({
+        where: { id: LEAVE_ID, schoolId: SCHOOL, status: 'PENDING' },
+        data: { status: 'APPROVED', reviewedById: ADMIN_USER, reviewedAt: expect.any(Date) },
       });
       expect(txMock.substitution.create).toHaveBeenCalledTimes(2);
       expect(txMock.substitution.create).toHaveBeenCalledWith({
@@ -222,7 +223,63 @@ describe('LeaveService', () => {
       await expect(svc.approve(SCHOOL, LEAVE_ID, ADMIN_USER)).rejects.toMatchObject({
         response: { code: 'LEAVE_NOT_PENDING' },
       });
-      expect(txMock.leaveApplication.update).not.toHaveBeenCalled();
+      expect(txMock.leaveApplication.updateMany).not.toHaveBeenCalled();
+    });
+
+    describe('two desks at once', () => {
+      // "Now" is 9:42 am IST's own day, so the loser hears just the clock time.
+      beforeEach(() => jest.useFakeTimers().setSystemTime(new Date('2026-07-20T06:00:00Z')));
+      afterEach(() => jest.useRealTimers());
+
+      it('two desks approve at once: the one whose update finds no PENDING row is told who won, and when', async () => {
+        mockPendingLeave();
+        txMock.leaveApplication.updateMany.mockResolvedValue({ count: 0 });
+        txMock.leaveApplication.findFirst
+          .mockResolvedValueOnce({ id: LEAVE_ID, schoolId: SCHOOL, teacherId: TEACHER, status: 'PENDING', startDate: new Date('2026-07-20'), endDate: new Date('2026-07-20') })
+          .mockResolvedValueOnce({ status: 'APPROVED', reviewedById: 'u-head', reviewedAt: new Date('2026-07-20T04:12:00Z') });
+        txMock.user.findFirst.mockResolvedValue({ name: 'Darshan Jain', email: 'head@x' });
+        await expect(svc.approve(SCHOOL, LEAVE_ID, 'u-accounts')).rejects.toMatchObject({
+          response: { code: 'LEAVE_NOT_PENDING', message: expect.stringMatching(/^Already approved by Darshan Jain at 9:42\s?am\. Nothing changed\.$/i) },
+          status: 409,
+        });
+        // The loser writes NOTHING: no gap, no attendance mark, no bell, no outbox row.
+        expect(txMock.substitution.create).not.toHaveBeenCalled();
+        expect(txMock.timetableSlot.findMany).not.toHaveBeenCalled();
+        expect(txMock.staffAttendance.create).not.toHaveBeenCalled();
+        expect(txMock.staffAttendance.update).not.toHaveBeenCalled();
+        expect(txMock.notification.create).not.toHaveBeenCalled();
+        expect(txMock.notificationOutbox.create).not.toHaveBeenCalled();
+        expect(txMock.user.findFirst).toHaveBeenCalledWith({ where: { id: 'u-head', schoolId: SCHOOL }, select: { name: true, email: true } });
+      });
+
+      it('a reject that loses the race is told the same way', async () => {
+        mockPendingLeave();
+        txMock.leaveApplication.updateMany.mockResolvedValue({ count: 0 });
+        txMock.leaveApplication.findFirst
+          .mockResolvedValueOnce({ id: LEAVE_ID, schoolId: SCHOOL, teacherId: TEACHER, status: 'PENDING', startDate: new Date('2026-07-20'), endDate: new Date('2026-07-20') })
+          .mockResolvedValueOnce({ status: 'APPROVED', reviewedById: 'u-head', reviewedAt: new Date('2026-07-20T04:12:00Z') });
+        txMock.user.findFirst.mockResolvedValue({ name: null, email: 'head@x' });
+        await expect(svc.reject(SCHOOL, LEAVE_ID, 'u-accounts')).rejects.toMatchObject({
+          response: { code: 'LEAVE_NOT_PENDING', message: 'Already approved by head at 9:42 am. Nothing changed.' },
+        });
+        expect(txMock.notificationOutbox.create).not.toHaveBeenCalled();
+      });
+    });
+
+    it('nobody decides their own leave — not the accounts officer, not an admin who teaches', async () => {
+      txMock.leaveApplication.findFirst.mockResolvedValue({ id: LEAVE_ID, schoolId: SCHOOL, teacherId: null, staffId: 'staff-acc', status: 'PENDING', startDate: new Date('2026-07-20'), endDate: new Date('2026-07-20') });
+      txMock.staff.findFirst.mockResolvedValue({ userId: 'u-accounts' });
+      await expect(svc.approve(SCHOOL, LEAVE_ID, 'u-accounts')).rejects.toMatchObject({ response: { code: 'LEAVE_OWN_DECISION' }, status: 403 });
+      await expect(svc.reject(SCHOOL, LEAVE_ID, 'u-accounts')).rejects.toMatchObject({ response: { code: 'LEAVE_OWN_DECISION' } });
+      expect(txMock.leaveApplication.updateMany).not.toHaveBeenCalled();
+      // …and the admin who also teaches, on their own teacher leave.
+      txMock.leaveApplication.findFirst.mockResolvedValue({ id: LEAVE_ID, schoolId: SCHOOL, teacherId: TEACHER, staffId: null, status: 'PENDING', startDate: new Date('2026-07-20'), endDate: new Date('2026-07-20') });
+      txMock.teacher.findFirst.mockResolvedValue({ userId: ADMIN_USER });
+      await expect(svc.approve(SCHOOL, LEAVE_ID, ADMIN_USER)).rejects.toMatchObject({ response: { code: 'LEAVE_OWN_DECISION' } });
+      expect(txMock.teacher.findFirst).toHaveBeenCalledWith({ where: { id: TEACHER, schoolId: SCHOOL }, select: { userId: true } });
+      expect(txMock.leaveApplication.updateMany).not.toHaveBeenCalled();
+      txMock.staff.findFirst.mockResolvedValue(null);
+      txMock.teacher.findFirst.mockResolvedValue(null);
     });
 
     describe('auto-marks ON_LEAVE in StaffAttendance', () => {
@@ -316,7 +373,7 @@ describe('LeaveService', () => {
       await expect(svc.cancel(SCHOOL, LEAVE_ID, 'stranger-user', 'TEACHER')).rejects.toMatchObject({
         response: { code: 'LEAVE_CANCEL_FORBIDDEN' },
       });
-      expect(txMock.leaveApplication.update).not.toHaveBeenCalled();
+      expect(txMock.leaveApplication.updateMany).not.toHaveBeenCalled();
     });
 
     it('throws LEAVE_NOT_CANCELLABLE for a REJECTED application', async () => {
@@ -330,7 +387,7 @@ describe('LeaveService', () => {
       await expect(svc.cancel(SCHOOL, LEAVE_ID, ADMIN_USER, 'SCHOOL_ADMIN')).rejects.toMatchObject({
         response: { code: 'LEAVE_NOT_CANCELLABLE' },
       });
-      expect(txMock.leaveApplication.update).not.toHaveBeenCalled();
+      expect(txMock.leaveApplication.updateMany).not.toHaveBeenCalled();
     });
 
     it('throws LEAVE_NOT_CANCELLABLE for an already-CANCELLED application', async () => {
@@ -355,12 +412,11 @@ describe('LeaveService', () => {
         startDate: new Date('2026-07-20'),
         endDate: new Date('2026-07-22'),
       });
-      txMock.leaveApplication.update.mockResolvedValue({});
-
       const result = await svc.cancel(SCHOOL, LEAVE_ID, ADMIN_USER, 'SCHOOL_ADMIN');
 
-      expect(txMock.leaveApplication.update).toHaveBeenCalledWith({
-        where: { id: LEAVE_ID },
+      expect(txMock.leaveApplication.updateMany).toHaveBeenCalledTimes(1);
+      expect(txMock.leaveApplication.updateMany).toHaveBeenCalledWith({
+        where: { id: LEAVE_ID, schoolId: SCHOOL, status: 'PENDING' },
         data: { status: 'CANCELLED' },
       });
       expect(txMock.substitution.deleteMany).not.toHaveBeenCalled();
@@ -378,7 +434,6 @@ describe('LeaveService', () => {
         endDate: new Date('2026-07-20'),
       });
       txMock.teacher.findFirst.mockResolvedValue({ id: TEACHER });
-      txMock.leaveApplication.update.mockResolvedValue({});
 
       const result = await svc.cancel(SCHOOL, LEAVE_ID, TEACHER_USER, 'TEACHER');
 
@@ -401,7 +456,6 @@ describe('LeaveService', () => {
           startDate: new Date('2026-07-20'), // past
           endDate: new Date('2026-07-22'), // today + 1 future day
         });
-        txMock.leaveApplication.update.mockResolvedValue({});
         txMock.substitution.deleteMany.mockResolvedValue({ count: 1 });
       });
 
@@ -426,10 +480,13 @@ describe('LeaveService', () => {
         expect(txMock.staffAttendance.delete).toHaveBeenCalledTimes(2);
         expect(txMock.staffAttendance.delete).toHaveBeenCalledWith({ where: { id: 'mark-x' } });
 
-        expect(txMock.leaveApplication.update).toHaveBeenCalledWith({
-          where: { id: LEAVE_ID },
+        expect(txMock.leaveApplication.updateMany).toHaveBeenCalledWith({
+          where: { id: LEAVE_ID, schoolId: SCHOOL, status: 'APPROVED' },
           data: { status: 'CANCELLED' },
         });
+        // The row is claimed BEFORE anything is unwound.
+        expect(txMock.leaveApplication.updateMany.mock.invocationCallOrder[0])
+          .toBeLessThan(txMock.substitution.deleteMany.mock.invocationCallOrder[0]);
         expect(result).toEqual({ status: 'CANCELLED', restoredDates: 2 });
       });
 
@@ -474,6 +531,66 @@ describe('LeaveService', () => {
         expect(txMock.substitution.deleteMany).not.toHaveBeenCalled();
         expect(txMock.staffAttendance.findFirst).not.toHaveBeenCalled();
         expect(result).toEqual({ status: 'CANCELLED', restoredDates: 0 });
+      });
+
+      it('a second cancel racing the first unwinds NOTHING: its claim matches no APPROVED row, and it is told', async () => {
+        txMock.leaveApplication.updateMany.mockResolvedValue({ count: 0 });
+        txMock.leaveApplication.findFirst
+          .mockResolvedValueOnce({ id: LEAVE_ID, schoolId: SCHOOL, teacherId: TEACHER, status: 'APPROVED', startDate: new Date('2026-07-20'), endDate: new Date('2026-07-22') })
+          .mockResolvedValueOnce({ status: 'CANCELLED', reviewedById: 'u-head', reviewedAt: new Date('2026-07-20T04:12:00Z') });
+
+        await expect(svc.cancel(SCHOOL, LEAVE_ID, ADMIN_USER, 'SCHOOL_ADMIN')).rejects.toMatchObject({
+          // A cancel stamps no reviewer, so the approver is NOT named as the canceller.
+          response: { code: 'LEAVE_NOT_PENDING', message: 'Already withdrawn. Nothing changed.' },
+          status: 409,
+        });
+        expect(txMock.substitution.deleteMany).not.toHaveBeenCalled();
+        expect(txMock.staffAttendance.findFirst).not.toHaveBeenCalled();
+        expect(txMock.staffAttendance.delete).not.toHaveBeenCalled();
+        expect(txMock.user.findFirst).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('a PENDING cancel racing a decision', () => {
+      beforeEach(() => jest.useFakeTimers().setSystemTime(new Date('2026-07-21T03:00:00.000Z')));
+
+      it('loses to an APPROVE: the approval is unwound in the same transaction — no orphaned gaps or ON_LEAVE marks', async () => {
+        txMock.leaveApplication.findFirst
+          .mockResolvedValueOnce({ id: LEAVE_ID, schoolId: SCHOOL, teacherId: TEACHER, status: 'PENDING', startDate: new Date('2026-07-20'), endDate: new Date('2026-07-22') })
+          .mockResolvedValueOnce({ status: 'APPROVED' });
+        txMock.leaveApplication.updateMany
+          .mockResolvedValueOnce({ count: 0 }) // PENDING → CANCELLED: the approve got there first
+          .mockResolvedValueOnce({ count: 1 }); // APPROVED → CANCELLED: ours
+        txMock.substitution.deleteMany.mockResolvedValue({ count: 1 });
+        txMock.staffAttendance.findFirst.mockResolvedValue({ id: 'mark-x', status: 'ON_LEAVE' });
+        txMock.staffAttendance.delete.mockResolvedValue({});
+
+        const result = await svc.cancel(SCHOOL, LEAVE_ID, TEACHER_USER, 'SCHOOL_ADMIN');
+
+        expect(txMock.leaveApplication.updateMany).toHaveBeenNthCalledWith(1, { where: { id: LEAVE_ID, schoolId: SCHOOL, status: 'PENDING' }, data: { status: 'CANCELLED' } });
+        expect(txMock.leaveApplication.updateMany).toHaveBeenNthCalledWith(2, { where: { id: LEAVE_ID, schoolId: SCHOOL, status: 'APPROVED' }, data: { status: 'CANCELLED' } });
+        expect(txMock.substitution.deleteMany).toHaveBeenCalledTimes(2); // 07-21 and 07-22; 07-20 is past
+        expect(txMock.staffAttendance.delete).toHaveBeenCalledTimes(2);
+        expect(result).toEqual({ status: 'CANCELLED', restoredDates: 2 });
+      });
+
+      it('loses to a REJECT: 409 naming who rejected, and nothing is written', async () => {
+        txMock.leaveApplication.findFirst
+          .mockResolvedValueOnce({ id: LEAVE_ID, schoolId: SCHOOL, teacherId: TEACHER, status: 'PENDING', startDate: new Date('2026-07-20'), endDate: new Date('2026-07-22') })
+          .mockResolvedValueOnce({ status: 'REJECTED' })
+          .mockResolvedValueOnce({ status: 'REJECTED', reviewedById: 'u-head', reviewedAt: new Date('2026-07-21T02:30:00Z') });
+        txMock.leaveApplication.updateMany.mockResolvedValueOnce({ count: 0 });
+        txMock.user.findFirst.mockResolvedValueOnce({ name: 'Darshan Jain', email: 'head@x' });
+
+        await expect(svc.cancel(SCHOOL, LEAVE_ID, ADMIN_USER, 'SCHOOL_ADMIN')).rejects.toMatchObject({
+          response: { code: 'LEAVE_NOT_PENDING', message: 'Already rejected by Darshan Jain at 8:00 am. Nothing changed.' },
+          status: 409,
+        });
+        expect(txMock.leaveApplication.updateMany).toHaveBeenCalledTimes(1);
+        expect(txMock.substitution.deleteMany).not.toHaveBeenCalled();
+        expect(txMock.staffAttendance.findFirst).not.toHaveBeenCalled();
+        expect(txMock.staffAttendance.delete).not.toHaveBeenCalled();
+        expect(txMock.leaveApplication.update).not.toHaveBeenCalled();
       });
     });
   });
@@ -554,7 +671,7 @@ describe('LeaveService', () => {
       txMock.leaveApplication.findMany.mockResolvedValue([
         { id: LEAVE_ID, teacherId: TEACHER, status: 'PENDING' },
       ]);
-      txMock.teacher.findMany.mockResolvedValue([{ id: TEACHER, firstName: 'Asha', lastName: 'Rao' }]);
+      txMock.teacher.findMany.mockResolvedValue([{ id: TEACHER, firstName: 'Asha', lastName: 'Rao', userId: TEACHER_USER }]);
 
       const result = await svc.list(SCHOOL);
 
@@ -562,7 +679,7 @@ describe('LeaveService', () => {
         expect.objectContaining({ where: { schoolId: SCHOOL, status: 'PENDING' } }),
       );
       expect(result).toEqual([
-        { id: LEAVE_ID, teacherId: TEACHER, status: 'PENDING', teacherName: 'Asha Rao', personKind: 'TEACHER' },
+        { id: LEAVE_ID, teacherId: TEACHER, status: 'PENDING', teacherName: 'Asha Rao', personKind: 'TEACHER', personUserId: TEACHER_USER },
       ]);
     });
 
@@ -596,17 +713,91 @@ describe('LeaveService notices', () => {
     expect(row.payload).toEqual({ schoolName: 'Raffles', leaveId: 'l1', teacherName: 'Priya Nair', dates: 'Mon 21 – Tue 22 Sep 2026', days: 2, reason: 'Family function', periodsAffected: 5 });
   });
 
+  it('apply tells the accounts officer too — she runs the desk the guard lets her into', async () => {
+    txMock.teacher.findFirst.mockResolvedValue({ id: 't1', firstName: 'Priya', lastName: 'Nair' });
+    txMock.leaveTypeDef.findFirst.mockResolvedValue(null);
+    txMock.leaveApplication.create.mockResolvedValue({ id: 'l1', schoolId: 'S', teacherId: 't1', type: 'CASUAL', startDate: new Date('2026-09-21'), endDate: new Date('2026-09-21'), reason: null, status: 'PENDING', reviewedById: null, reviewedAt: null, createdAt: new Date() });
+    txMock.user.findMany.mockResolvedValueOnce([{ id: 'a1', email: 'a1@x' }]).mockResolvedValueOnce([{ id: 'acc', email: 'acc@x' }]);
+    txMock.staff.findMany.mockResolvedValueOnce([{ userId: 'acc' }]);
+    await svc.apply('S', 'u-teacher', { type: 'CASUAL', startDate: '2026-09-21', endDate: '2026-09-21' } as never);
+    expect(txMock.notificationOutbox.create.mock.calls.map((c) => c[0].data.targetUserId)).toEqual(['a1', 'acc']);
+    expect(txMock.notification.create).toHaveBeenCalledTimes(2);
+  });
+
+  it('an accounts officer applying for her own leave is not asked to approve it', async () => {
+    txMock.teacher.findFirst.mockResolvedValue(null);
+    txMock.staff.findFirst.mockResolvedValue({ id: 'st-acc', firstName: 'Meera', lastName: 'Shah' });
+    txMock.leaveTypeDef.findFirst.mockResolvedValue(null);
+    txMock.leaveApplication.create.mockResolvedValue({ id: 'l2', schoolId: 'S', teacherId: null, staffId: 'st-acc', type: 'CASUAL', startDate: new Date('2026-09-21'), endDate: new Date('2026-09-21'), reason: null, status: 'PENDING', reviewedById: null, reviewedAt: null, createdAt: new Date() });
+    txMock.user.findMany.mockResolvedValueOnce([{ id: 'a1', email: 'a1@x' }]);
+    txMock.staff.findMany.mockResolvedValueOnce([{ userId: 'u-acc' }]);
+    await svc.apply('S', 'u-acc', { type: 'CASUAL', startDate: '2026-09-21', endDate: '2026-09-21' } as never);
+    expect(txMock.notificationOutbox.create.mock.calls.map((c) => c[0].data.targetUserId)).toEqual(['a1']);
+    expect(txMock.user.findMany).toHaveBeenCalledTimes(1);
+  });
+
   it('reject tells the teacher, and nothing happens when the teacher has no login', async () => {
     txMock.leaveApplication.findFirst.mockResolvedValue({ id: 'l1', schoolId: 'S', teacherId: 't1', status: 'PENDING', startDate: new Date('2026-09-21'), endDate: new Date('2026-09-21') });
-    txMock.leaveApplication.update.mockResolvedValue({ id: 'l1', status: 'REJECTED' });
+    txMock.leaveApplication.updateMany.mockResolvedValue({ count: 1 });
     txMock.teacher.findFirst.mockResolvedValue({ userId: 'u-teacher' });
     await svc.reject('S', 'l1', 'u-admin');
     expect(txMock.notificationOutbox.create.mock.calls[0][0].data).toMatchObject({ kind: 'LEAVE_DECIDED', targetUserId: 'u-teacher', payload: { decision: 'REJECTED', dates: 'Mon 21 Sep 2026', leaveId: 'l1' } });
     jest.clearAllMocks();
     txMock.leaveApplication.findFirst.mockResolvedValue({ id: 'l1', schoolId: 'S', teacherId: 't1', status: 'PENDING', startDate: new Date('2026-09-21'), endDate: new Date('2026-09-21') });
-    txMock.leaveApplication.update.mockResolvedValue({ id: 'l1', status: 'REJECTED' });
+    txMock.leaveApplication.updateMany.mockResolvedValue({ count: 1 });
     txMock.teacher.findFirst.mockResolvedValue({ userId: null });
     await svc.reject('S', 'l1', 'u-admin');
     expect(txMock.notificationOutbox.create).not.toHaveBeenCalled();
   });
+
+  it('the decision names the decider', async () => {
+    txMock.leaveApplication.findFirst.mockResolvedValue({ id: 'l1', schoolId: 'S', teacherId: 't1', status: 'PENDING', startDate: new Date('2026-09-21'), endDate: new Date('2026-09-21') });
+    txMock.leaveApplication.updateMany.mockResolvedValue({ count: 1 });
+    txMock.teacher.findFirst.mockResolvedValue({ userId: 'u-teacher' });
+    txMock.user.findFirst.mockResolvedValue({ name: 'Darshan Jain', email: 'head@x' });
+    await svc.reject('S', 'l1', 'u-admin');
+    expect(txMock.notificationOutbox.create.mock.calls[0][0].data.payload.byName).toBe('Darshan Jain');
+    txMock.user.findFirst.mockResolvedValue(null);
+  });
+});
+
+describe('LeaveService.decidedSentence — the IST clock, whatever the server TZ', () => {
+  const tz = process.env.TZ;
+  afterAll(() => {
+    if (tz === undefined) delete process.env.TZ;
+    else process.env.TZ = tz;
+  });
+
+  for (const zone of ['UTC', 'America/Los_Angeles']) {
+    describe(`with the process TZ at ${zone}`, () => {
+      beforeAll(() => { process.env.TZ = zone; });
+
+      it('today in IST: the clock time only', () => {
+        // 04:12Z is 9:42 am IST; "now" is the same IST day.
+        expect(LeaveService.decidedSentence('APPROVED', 'Darshan Jain', new Date('2026-10-06T04:12:00Z'), new Date('2026-10-06T10:00:00Z')))
+          .toBe('Already approved by Darshan Jain at 9:42 am. Nothing changed.');
+      });
+
+      it('the IST day, not the UTC one: 18:45Z on the 6th is 12:15 am on the 7th in India, the same day as 19:00Z', () => {
+        expect(LeaveService.decidedSentence('REJECTED', 'Asha Rao', new Date('2026-10-06T18:45:00Z'), new Date('2026-10-06T19:00:00Z')))
+          .toBe('Already rejected by Asha Rao at 12:15 am. Nothing changed.');
+      });
+
+      it('another day: the day is named; the year only when it is not this year', () => {
+        expect(LeaveService.decidedSentence('APPROVED', 'Darshan Jain', new Date('2026-10-06T04:12:00Z'), new Date('2026-10-07T04:00:00Z')))
+          .toBe('Already approved by Darshan Jain on Tue 6 Oct at 9:42 am. Nothing changed.');
+        // 18:45Z on 5 Oct is already Tue 6 Oct in India.
+        expect(LeaveService.decidedSentence('APPROVED', 'Darshan Jain', new Date('2026-10-05T18:45:00Z'), new Date('2026-10-07T04:00:00Z')))
+          .toBe('Already approved by Darshan Jain on Tue 6 Oct at 12:15 am. Nothing changed.');
+        expect(LeaveService.decidedSentence('REJECTED', null, new Date('2025-12-31T10:00:00Z'), new Date('2026-01-02T04:00:00Z')))
+          .toBe('Already rejected on Wed 31 Dec 2025 at 3:30 pm. Nothing changed.');
+      });
+
+      it('noon and a withdrawn request read naturally; no time when none is recorded', () => {
+        expect(LeaveService.decidedSentence('APPROVED', 'X', new Date('2026-10-06T06:30:00Z'), new Date('2026-10-06T07:00:00Z')))
+          .toBe('Already approved by X at 12:00 pm. Nothing changed.');
+        expect(LeaveService.decidedSentence('CANCELLED', null, null)).toBe('Already withdrawn. Nothing changed.');
+      });
+    });
+  }
 });

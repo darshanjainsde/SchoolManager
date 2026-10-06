@@ -260,6 +260,7 @@ export class LibraryFinesService {
               targetUserId: reader.userId,
               payload: payload as unknown as Prisma.InputJsonValue,
             },
+            select: { id: true },
           });
           await emitNotifications(tx, {
             schoolId,

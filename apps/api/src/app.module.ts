@@ -8,6 +8,7 @@ import { HealthModule } from './health/health.module';
 import { EventBusModule } from './common/event-bus/event-bus.module';
 import { CommonAuthModule } from './common/auth/auth.module';
 import { AuditModule } from './common/audit/audit.module';
+import { InvocationClockInterceptor } from './common/notifications/invocation-clock';
 import { MetricsInterceptor } from './common/metrics/metrics.interceptor';
 import { MetricsModule } from './common/metrics/metrics.module';
 import { RedisModule } from './common/redis/redis.module';
@@ -113,6 +114,8 @@ import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storag
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    // First: registration order is nesting order, and the invocation clock must be outermost.
+    { provide: APP_INTERCEPTOR, useClass: InvocationClockInterceptor },
     { provide: APP_INTERCEPTOR, useClass: MetricsInterceptor },
     { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
     {

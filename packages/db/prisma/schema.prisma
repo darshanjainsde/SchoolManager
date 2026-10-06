@@ -406,6 +406,7 @@ model School {
   classTodos             ClassTodo[]
   registerChangeRequests RegisterChangeRequest[]
   notificationOutbox     NotificationOutbox[]
+  notificationDeliveries NotificationDelivery[]
   assignments            Assignment[]
   messageThreads         MessageThread[]
   messages               Message[]
@@ -1662,6 +1663,10 @@ model NotificationOutbox {
   claimedAt      DateTime?
   attempts       Int           @default(0)
   lastError      String?
+  /// Stamped when the drain has turned this row into NotificationDelivery
+  /// rows (one per person per channel). Null = not yet expanded.
+  expandedAt     DateTime?
+  deliveries     NotificationDelivery[]
   school         School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   classSection   ClassSection? @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
 
@@ -1675,6 +1680,40 @@ model NotificationOutbox {
   // without a leading index it reads every school's rows. See migration
   // 20260921_010000_fk_indexes for the measurements.
   @@index([classSectionId])
+}
+
+/// What happened to one outbox row, for one person, on one channel.
+/// The truth about a message on a channel; provider ledgers keep receipts.
+model NotificationDelivery {
+  id            String             @id @default(uuid()) @db.Uuid
+  schoolId      String             @db.Uuid
+  outboxId      String             @db.Uuid
+  userId        String             @db.Uuid
+  /// EMAIL | PUSH | WHATSAPP
+  channel       String
+  /// QUEUED | HELD | SENT | DELIVERED | READ | FAILED | SUPPRESSED | SKIPPED
+  status        String             @default("QUEUED")
+  /// Why HELD / SUPPRESSED / SKIPPED: no-address | channel-off | duplicate | template-pending | …
+  reason        String?
+  attempts      Int                @default(0)
+  /// When this row is next due. QUEUED rows are due at once; a failure moves it out.
+  nextAttemptAt DateTime           @default(now())
+  /// The drain that took it. A claim older than 5 minutes is abandoned.
+  claimedAt     DateTime?
+  error         String?
+  /// waMessageId / Resend id / expo ticket.
+  providerId    String?
+  createdAt     DateTime           @default(now())
+  sentAt        DateTime?
+  deliveredAt   DateTime?
+  readAt        DateTime?
+  school        School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  outbox        NotificationOutbox @relation(fields: [outboxId], references: [id], onDelete: Cascade)
+
+  @@unique([outboxId, userId, channel])
+  @@index([schoolId, createdAt])
+  @@index([status, nextAttemptAt])
+  @@index([userId, createdAt])
 }
 
 /// A teacher-posted assignment for one class section (T21, Portal Parity R3

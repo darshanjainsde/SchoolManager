@@ -2,7 +2,6 @@ const db = {
   whatsAppInbound: { create: jest.fn().mockResolvedValue({}), update: jest.fn().mockResolvedValue({}), delete: jest.fn().mockResolvedValue({}) },
   leaveApplication: { findUnique: jest.fn() },
   substitution: { findUnique: jest.fn(), findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
-  user: { findFirst: jest.fn() },
   teacher: { findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
   timetableSlot: { findFirst: jest.fn().mockResolvedValue(null), findMany: jest.fn().mockResolvedValue([]) },
   staffAttendance: { findMany: jest.fn().mockResolvedValue([]) },
@@ -30,7 +29,8 @@ describe('WhatsAppActionsService', () => {
   const env = { ...process.env };
   const leave = { approve: jest.fn(), reject: jest.fn(), assign: jest.fn() };
   const channel = { deliverWith: jest.fn().mockResolvedValue({ ok: true, code: null }) };
-  const svc = () => new WhatsAppActionsService(leave as never, channel as never);
+  const identity = { actorFor: jest.fn() };
+  const svc = () => new WhatsAppActionsService(leave as never, channel as never, identity as never);
   // The reply body lives inside the send closure, so the spec reads it off the private text() seam.
   const textSpy = jest.spyOn(WhatsAppActionsService.prototype as unknown as { text: (...a: unknown[]) => Promise<unknown> }, 'text');
   const sentTexts = () => textSpy.mock.calls.map((c) => c[2] as string);
@@ -43,7 +43,7 @@ describe('WhatsAppActionsService', () => {
     channel.deliverWith.mockResolvedValue({ ok: true, code: null });
     db.leaveApplication.findUnique.mockResolvedValue({ id: LEAVE, schoolId: SCHOOL, status: 'PENDING', teacherId: T1 });
     db.teacher.findFirst.mockResolvedValue({ firstName: 'Priya', lastName: 'Nair' });
-    db.user.findFirst.mockResolvedValue({ id: 'admin-1' });
+    identity.actorFor.mockResolvedValue({ ok: true, profile: { userId: 'admin-1', kind: 'ADMIN', role: 'SCHOOL_ADMIN' } });
   });
   afterAll(() => { process.env = env; });
 
@@ -90,12 +90,33 @@ describe('WhatsAppActionsService', () => {
     expect(db.whatsAppInbound.update).toHaveBeenCalledWith({ where: { id: 'wamid.oldack' }, data: { result: 'expired', schoolId: SCHOOL } });
   });
 
-  it('a number that is not a verified admin of THAT school is answered, and nothing changes', async () => {
-    db.user.findFirst.mockResolvedValue(null);
-    expect(await svc().handleInbound(tap(leavePayload('approve', LEAVE, actionKeys())))).toBe('not-admin');
-    expect(db.user.findFirst.mock.calls[0][0].where).toEqual({ schoolId: SCHOOL, phone: '+919876543210', phoneVerifiedAt: { not: null }, role: 'SCHOOL_ADMIN', isActive: true });
+  it('a number that cannot run the leave desk at THAT school is told so — the school named, the request not', async () => {
+    identity.actorFor.mockResolvedValue({ ok: false, why: 'NOT_ALLOWED' });
+    expect(await svc().handleInbound(tap(leavePayload('approve', LEAVE, actionKeys())))).toBe('not-allowed');
+    expect(identity.actorFor).toHaveBeenCalledWith('+919876543210', SCHOOL, { kind: 'LEAVE_DESK' });
     expect(leave.approve).not.toHaveBeenCalled();
-    expect(sentTexts()[0]).toMatch(/not a verified admin/);
+    expect(sentTexts()[0]).toBe('This number cannot do that at Raffles. Decide in the console.');
+  });
+
+  it('two people on one number: nothing changes, and the reply says why', async () => {
+    identity.actorFor.mockResolvedValue({ ok: false, why: 'AMBIGUOUS' });
+    expect(await svc().handleInbound(tap(leavePayload('approve', LEAVE, actionKeys())))).toBe('ambiguous');
+    expect(leave.approve).not.toHaveBeenCalled();
+    expect(sentTexts()[0]).toBe('This number belongs to more than one person at Raffles, so nothing was done. Please decide in the console.');
+  });
+
+  it('the accounts officer approves on WhatsApp exactly as on the web — as herself', async () => {
+    identity.actorFor.mockResolvedValue({ ok: true, profile: { userId: 'u-accounts', kind: 'STAFF', role: 'STAFF' } });
+    leave.approve.mockResolvedValue({ gaps: 0, gapIds: [] });
+    expect(await svc().handleInbound(tap(leavePayload('approve', LEAVE, actionKeys())))).toBe('approved');
+    expect(leave.approve).toHaveBeenCalledWith(SCHOOL, LEAVE, 'u-accounts');
+  });
+
+  it('a cover pick is a leave-desk act too', async () => {
+    identity.actorFor.mockResolvedValue({ ok: false, why: 'NOT_ALLOWED' });
+    db.substitution.findUnique.mockResolvedValue({ id: SUB, schoolId: SCHOOL, date: new Date('2026-09-21'), periodId: 'p3', classSectionId: 'cs', originalTeacherId: T1, substituteTeacherId: null });
+    expect(await svc().handleInbound(tap(coverPayload(SUB, 'ta', actionKeys())))).toBe('not-allowed');
+    expect(leave.assign).not.toHaveBeenCalled();
   });
 
   it('Approve runs the SAME LeaveService.approve the console runs, then offers the cover list for the first gap', async () => {
@@ -151,11 +172,35 @@ describe('WhatsAppActionsService', () => {
     expect(db.whatsAppInbound.update).toHaveBeenCalledTimes(1); // only the success is recorded
   });
 
-  it('Approve on an already-decided request says so and changes nothing', async () => {
-    leave.approve.mockRejectedValue(new ApiError('LEAVE_NOT_PENDING', 'already', 409));
-    db.leaveApplication.findUnique.mockResolvedValueOnce({ id: LEAVE, schoolId: SCHOOL, status: 'PENDING', teacherId: T1 }).mockResolvedValueOnce({ status: 'REJECTED', reviewedAt: new Date('2026-09-20T04:30:00Z') });
+  it('Approve on an already-decided request says who decided, and changes nothing', async () => {
+    leave.approve.mockRejectedValue(new ApiError('LEAVE_NOT_PENDING', 'Already rejected by Darshan Jain at 10:00 am. Nothing changed.', 409));
     expect(await svc().handleInbound(tap(leavePayload('approve', LEAVE, actionKeys())))).toBe('already-decided');
-    expect(sentTexts()[0]).toMatch(/already rejected at/);
+    // The school, then the service's own sentence — never the request row.
+    expect(sentTexts()).toEqual(['Raffles: Already rejected by Darshan Jain at 10:00 am. Nothing changed.']);
+    expect(db.whatsAppInbound.delete).not.toHaveBeenCalled();
+    expect(db.whatsAppInbound.update).toHaveBeenCalledWith({ where: { id: 'wamid.tap' }, data: { result: 'already-decided', schoolId: SCHOOL } });
+  });
+
+  it('Reject on an already-decided request is answered the same way', async () => {
+    leave.reject.mockRejectedValue(new ApiError('LEAVE_NOT_PENDING', 'Already approved by Asha Rao on Mon 5 Oct at 4:10 pm. Nothing changed.', 409));
+    expect(await svc().handleInbound(tap(leavePayload('reject', LEAVE, actionKeys()), 'wamid.rej'))).toBe('already-decided');
+    expect(sentTexts()).toEqual(['Raffles: Already approved by Asha Rao on Mon 5 Oct at 4:10 pm. Nothing changed.']);
+  });
+
+  it('an officer tapping Approve on her own leave is told no, and nothing changes', async () => {
+    leave.approve.mockRejectedValue(new ApiError('LEAVE_OWN_DECISION', 'You cannot decide your own leave. Another admin or the accounts officer has to.', 403));
+    expect(await svc().handleInbound(tap(leavePayload('approve', LEAVE, actionKeys()), 'wamid.own'))).toBe('own-leave');
+    expect(sentTexts()[0]).toMatch(/cannot decide your own leave/);
+    expect(sentTexts()).toEqual(['Raffles: You cannot decide your own leave. Another admin or the accounts officer has to.']);
+    expect(leave.approve).toHaveBeenCalledWith(SCHOOL, LEAVE, 'admin-1');
+    expect(db.whatsAppInbound.delete).not.toHaveBeenCalled();
+    expect(db.whatsAppInbound.update).toHaveBeenCalledWith({ where: { id: 'wamid.own' }, data: { result: 'own-leave', schoolId: SCHOOL } });
+  });
+
+  it('… and on Reject too', async () => {
+    leave.reject.mockRejectedValue(new ApiError('LEAVE_OWN_DECISION', 'You cannot decide your own leave. Another admin or the accounts officer has to.', 403));
+    expect(await svc().handleInbound(tap(leavePayload('reject', LEAVE, actionKeys()), 'wamid.own2'))).toBe('own-leave');
+    expect(sentTexts()).toEqual(['Raffles: You cannot decide your own leave. Another admin or the accounts officer has to.']);
   });
 
   it('Reject runs LeaveService.reject and tells the admin', async () => {
@@ -174,7 +219,7 @@ describe('WhatsAppActionsService', () => {
 
     jest.clearAllMocks();
     channel.deliverWith.mockResolvedValue({ ok: true, code: null });
-    db.user.findFirst.mockResolvedValue({ id: 'admin-1' });
+    identity.actorFor.mockResolvedValue({ ok: true, profile: { userId: 'admin-1', kind: 'ADMIN', role: 'SCHOOL_ADMIN' } });
     db.substitution.findUnique.mockResolvedValue({ id: SUB, schoolId: SCHOOL, date: new Date('2026-09-21'), periodId: 'p3', classSectionId: 'cs', originalTeacherId: T1, substituteTeacherId: null });
     leave.assign.mockRejectedValue(new ApiError('TEACHER_CONFLICT', 'busy', 409));
     expect(await svc().handleInbound(tap(coverPayload(SUB, 'tb', actionKeys()), 'wamid.2'))).toBe('conflict');
@@ -192,12 +237,13 @@ describe('WhatsAppActionsService', () => {
     expect(channel.deliverWith.mock.calls.map((c) => c[3])).toEqual(['interactive:list', 'sckools_cover_pending']);
   });
 
-  it('an acknowledgement is accepted only from the substitute themself', async () => {
+  it('an acknowledgement is accepted only from the substitute themself, and anyone else is answered with nothing', async () => {
     db.substitution.findUnique.mockResolvedValue({ schoolId: SCHOOL, substituteTeacherId: 'ta' });
-    db.teacher.findFirst.mockResolvedValue({ userId: 'u-ta' });
-    db.user.findFirst.mockResolvedValueOnce(null);
+    identity.actorFor.mockResolvedValueOnce({ ok: false, why: 'NOT_ALLOWED' });
     expect(await svc().handleInbound(tap(ackPayload(SUB, actionKeys())))).toBe('ack-not-substitute');
-    db.user.findFirst.mockResolvedValueOnce({ id: 'u-ta' });
+    expect(sentTexts()).toEqual([]);
+    identity.actorFor.mockResolvedValueOnce({ ok: true, profile: { userId: 'u-ta', kind: 'TEACHER', role: 'TEACHER' } });
     expect(await svc().handleInbound(tap(ackPayload(SUB, actionKeys()), 'wamid.4'))).toBe('acked');
+    expect(identity.actorFor).toHaveBeenLastCalledWith('+919876543210', SCHOOL, { kind: 'SUBSTITUTE', substitutionId: SUB });
   });
 });

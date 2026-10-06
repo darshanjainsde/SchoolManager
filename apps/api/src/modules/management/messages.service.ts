@@ -405,6 +405,7 @@ export class MessagesService {
         targetUserId: args.targetUserId,
         payload: payload as unknown as Prisma.InputJsonValue,
       },
+      select: { id: true },
     });
 
     // In-app inbox row (the bell) for the same recipient, in the SAME

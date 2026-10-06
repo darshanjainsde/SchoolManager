@@ -115,6 +115,8 @@ const ALLOWED: Record<string, string> = {
     'User is the platform identity table auth already owns; every query carries the caller\'s own schoolId and userId',
   'modules/whatsapp/whatsapp-actions.service.ts':
     'a tap arrives with no tenant context; the tenant is the school the signed payload\'s row belongs to, every lookup carries that schoolId, and the writes go through LeaveService under withTenant',
+  'modules/whatsapp/inbound-identity.service.ts':
+    'an inbound webhook tap has no tenant context; the school comes from the signed payload\'s row, and every query carries that schoolId',
   'modules/whatsapp/whatsapp-webhook.service.ts':
     'Meta posts delivery receipts for every school to one URL; each is matched to its row by Meta\'s message id and updated under that row\'s own schoolId',
   'modules/management/sessions.service.ts': 'scheduled session-start cron scans SCHEDULED plans across all schools; every write then runs under withTenant per school',

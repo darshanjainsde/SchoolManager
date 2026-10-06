@@ -6,7 +6,7 @@ jest.mock('@skoolos/db', () => ({
   withTenant: (_s: string, fn: (tx: unknown) => unknown) => fn(txMock),
 }));
 
-import { LeaveDeskGuard } from './leave-desk.guard';
+import { LeaveDeskGuard, isLeaveDesk } from './leave-desk.guard';
 import { ApiError } from '../../../common/errors/api-error';
 
 const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
@@ -51,5 +51,63 @@ describe('who may decide leave', () => {
 
   it('refuses a request with no signed-in user at all', async () => {
     expect(await guard().canActivate(ctxFor(undefined))).toBe(false);
+  });
+});
+
+describe('isLeaveDesk — the same rule for the console and for WhatsApp', () => {
+  const db = { staff: { findFirst: jest.fn() } };
+  beforeEach(() => db.staff.findFirst.mockReset());
+
+  it('an admin is the desk without a lookup', async () => {
+    expect(await isLeaveDesk(db as never, SCHOOL, { userId: 'u1', role: 'SCHOOL_ADMIN' })).toBe(true);
+    expect(db.staff.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('a staff login is the desk only as an active accounts officer of THIS school', async () => {
+    db.staff.findFirst.mockResolvedValue({ id: 's1' });
+    expect(await isLeaveDesk(db as never, SCHOOL, { userId: 'u2', role: 'STAFF' })).toBe(true);
+    expect(db.staff.findFirst).toHaveBeenCalledWith({ where: { schoolId: SCHOOL, role: 'ACCOUNTS', isActive: true, userId: 'u2' }, select: { id: true } });
+  });
+
+  it('a teacher or a family never is', async () => {
+    expect(await isLeaveDesk(db as never, SCHOOL, { userId: 'u3', role: 'TEACHER' })).toBe(false);
+    expect(await isLeaveDesk(db as never, SCHOOL, { userId: 'u4', role: 'STUDENT' })).toBe(false);
+    expect(db.staff.findFirst).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * THE TABLE. A real in-memory Staff table answers the query, so the rule is
+ * proved by what `where` actually selects, not by what a mock was told to
+ * return. The guard and `isLeaveDesk` must admit exactly the same people.
+ */
+describe('isLeaveDesk and LeaveDeskGuard admit exactly the same people', () => {
+  const OTHER_SCHOOL = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+  const rows = [
+    { id: 's-acc', schoolId: SCHOOL, userId: 'u-acc', role: 'ACCOUNTS', isActive: true },
+    { id: 's-gone', schoolId: SCHOOL, userId: 'u-gone', role: 'ACCOUNTS', isActive: false },
+    { id: 's-driver', schoolId: SCHOOL, userId: 'u-driver', role: 'DRIVER', isActive: true },
+    { id: 's-away', schoolId: OTHER_SCHOOL, userId: 'u-away', role: 'ACCOUNTS', isActive: true },
+  ];
+  const fakeStaff = {
+    findFirst: jest.fn(async ({ where }: { where: Record<string, unknown> }) =>
+      rows.find((r) => Object.entries(where).every(([k, v]) => (r as Record<string, unknown>)[k] === v)) ?? null),
+  };
+  const cases: [string, { sub: string; role: string }, boolean][] = [
+    ['an admin', { sub: 'u-admin', role: 'SCHOOL_ADMIN' }, true],
+    ['an active accounts officer', { sub: 'u-acc', role: 'STAFF' }, true],
+    ['an inactive accounts officer', { sub: 'u-gone', role: 'STAFF' }, false],
+    ['a staff member with another job', { sub: 'u-driver', role: 'STAFF' }, false],
+    ['a teacher', { sub: 'u-teacher', role: 'TEACHER' }, false],
+    ['a staff login whose Staff row belongs to another school', { sub: 'u-away', role: 'STAFF' }, false],
+  ];
+
+  it.each(cases)('%s', async (_name, who, expected) => {
+    txMock.staff.findFirst.mockImplementation(fakeStaff.findFirst as never);
+    expect(await isLeaveDesk({ staff: fakeStaff } as never, SCHOOL, { userId: who.sub, role: who.role })).toBe(expected);
+    const viaGuard = await guard()
+      .canActivate(ctxFor({ ...who, schoolId: SCHOOL }))
+      .then(() => true, (e: unknown) => (e instanceof ApiError ? false : Promise.reject(e)));
+    expect(viaGuard).toBe(expected);
   });
 });

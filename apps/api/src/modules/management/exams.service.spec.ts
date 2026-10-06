@@ -303,6 +303,7 @@ describe('ExamsService', () => {
             maxMarks: 100,
           },
         },
+        select: { id: true },
       });
       // Both writes happened via the SAME `withTenant` call (the mutation
       // transaction) — the notification-context withTenant call used by the
@@ -695,6 +696,7 @@ describe('ExamsService', () => {
             maxMarks: 100,
           },
         },
+        select: { id: true },
       });
       expect(txMock.notificationOutbox.create.mock.invocationCallOrder[0]).toBeGreaterThan(
         txMock.result.updateMany.mock.invocationCallOrder[0],

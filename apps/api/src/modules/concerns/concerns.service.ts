@@ -430,6 +430,7 @@ export class ConcernsService {
           });
           await tx.notificationOutbox.create({
             data: { schoolId, kind: 'CONCERN_RAISED', payload: { schoolName, title, body }, targetUserId: r.userId },
+            select: { id: true },
           });
         }
       });
@@ -451,6 +452,7 @@ export class ConcernsService {
         });
         await tx.notificationOutbox.create({
           data: { schoolId, kind, payload: { schoolName: school?.name ?? 'Your school', title, body: concern.title }, targetUserId: concern.raisedById },
+          select: { id: true },
         });
       });
       requestOutboxDrain();

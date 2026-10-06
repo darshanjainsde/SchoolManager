@@ -24,7 +24,9 @@ export interface LadderInput {
   instances: number;
   txTimeouts: number;
   poolTimeouts: number;
+  /** Outbox work due now — see OpsService.readOutbox. */
   outboxDepth: number;
+  /** Minutes the longest-waiting due work has been due. */
   outboxOldestMinutes: number | null;
 }
 
@@ -93,6 +95,10 @@ export function evaluateLadder(m: LadderInput): Trigger[] {
     detail: `${m.loginsPerSec.toFixed(1)}/s against a measured ceiling of ~${loginCeiling}/s. argon2id is memory-bandwidth bound — only more instances help.`,
   });
 
+  // Depth and age count work DUE NOW (unexpanded outbox rows + deliveries whose
+  // nextAttemptAt has come), never a delivery waiting out its back-off: that
+  // can last ~14.6 h by design and is not a stuck queue. So 15 minutes still
+  // means "due work has waited a quarter of an hour for a drain".
   t.push({
     key: 'outbox',
     label: 'Notification outbox',
@@ -104,8 +110,8 @@ export function evaluateLadder(m: LadderInput): Trigger[] {
           : 'ok',
     detail:
       m.outboxDepth === 0
-        ? 'Empty — the minutely drain is keeping up.'
-        : `${m.outboxDepth} pending, oldest ${m.outboxOldestMinutes ?? 0} min. Sustained depth means the drain needs a persistent worker.`,
+        ? 'Nothing due — the drain is keeping up. Deliveries backing off after a failure are not counted.'
+        : `${m.outboxDepth} due now, the longest waiting ${m.outboxOldestMinutes ?? 0} min. Sustained depth means the drain needs a persistent worker.`,
   });
 
   return t;

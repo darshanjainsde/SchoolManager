@@ -2,9 +2,9 @@ import 'reflect-metadata';
 
 const txMock = {
   teacher: { findFirst: jest.fn() },
-  staff: { findFirst: jest.fn() },
+  staff: { findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
   leaveTypeDef: { findFirst: jest.fn() },
-  leaveApplication: { create: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn(), count: jest.fn() },
+  leaveApplication: { create: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn(), updateMany: jest.fn(), count: jest.fn() },
   timetableSlot: { groupBy: jest.fn().mockResolvedValue([]) },
   substitution: { deleteMany: jest.fn() },
   staffAttendance: { findFirst: jest.fn(), delete: jest.fn() },
@@ -44,6 +44,7 @@ beforeEach(() => {
   txMock.leaveApplication.findMany.mockResolvedValue([]);
   txMock.school.findFirst.mockResolvedValue({ name: 'Raffles' });
   txMock.user.findMany.mockResolvedValue([]);
+  txMock.leaveApplication.updateMany.mockResolvedValue({ count: 1 });
 });
 
 /**
