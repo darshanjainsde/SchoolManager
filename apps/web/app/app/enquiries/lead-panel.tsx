@@ -1,23 +1,18 @@
+// apps/web/app/app/enquiries/lead-panel.tsx
 'use client';
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
+import type { ContactKind, ContactOutcome, EnquiryDeskMember } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
+import { ApiError } from '@/lib/api';
 import {
-  PIPELINE, STAGE_LABEL, dialable, dueLabel, stageTone,
+  OUTCOMES, STAGE_LABEL, dialable, dueLabel, sourceLabel, stageButtons, stageTone,
   type EnquiryNote, type EnquiryStage, type Lead,
 } from './lead';
 
 interface Detail extends Lead {
   notes: EnquiryNote[];
-}
-
-interface StaffMember {
-  id: string;
-  userId: string | null;
-  firstName: string;
-  lastName: string;
 }
 
 function when(iso: string): string {
@@ -26,12 +21,23 @@ function when(iso: string): string {
   });
 }
 
+/** The question the sheet asks, by what was just used. */
+const ASK: Record<ContactKind, string> = {
+  CALL: 'How did the call go?',
+  WHATSAPP: 'How did the WhatsApp go?',
+  VISIT: 'How did the visit go?',
+};
+
 /**
  * The lead you are working on.
  *
  * Everything the list does not say lives here — the message, the way to reach
  * them, where it has got to, and what was actually said. The list carries who
  * and when and nothing else, so the two halves never state the same fact twice.
+ *
+ * Call and WhatsApp open the phone AND ask how it went. The answer is what gets
+ * logged, in one request, so a call that rang out is recorded as exactly that
+ * and never moves a new family to "Contacted".
  */
 export function LeadPanel({ id }: { id: string }) {
   const host = useHost();
@@ -40,6 +46,11 @@ export function LeadPanel({ id }: { id: string }) {
   const [note, setNote] = useState('');
   const [lostWhy, setLostWhy] = useState('');
   const [askingWhy, setAskingWhy] = useState(false);
+  const [contact, setContact] = useState<ContactKind | null>(null);
+  const [contactLost, setContactLost] = useState(false);
+  const [contactWhy, setContactWhy] = useState('');
+  // The API's own words for why a write was refused, shown where the officer is looking.
+  const [error, setError] = useState<string | null>(null);
 
   const detail = useQuery({
     queryKey: ['enquiry', id, host],
@@ -47,19 +58,24 @@ export function LeadPanel({ id }: { id: string }) {
     queryFn: () => api.get<Detail>(`/site/enquiries/${id}`),
   });
 
-  const staff = useQuery({
-    queryKey: ['staff-for-leads', host],
+  // The desk's own list — works on every plan, unlike /manage/staff.
+  const owners = useQuery({
+    queryKey: ['enquiry-owners', host],
     enabled: !!host,
-    queryFn: () => api.get<StaffMember[]>('/manage/staff'),
+    queryFn: () => api.get<EnquiryDeskMember[]>('/site/enquiries/owners'),
     staleTime: 5 * 60_000,
   });
 
-  // A different lead is a different form; carrying the half-typed note across
-  // would attach it to the wrong family.
+  // A different lead is a different form; carrying the half-typed note — or an
+  // open "how did it go?" — across would attach it to the wrong family.
   useEffect(() => {
     setNote('');
     setLostWhy('');
     setAskingWhy(false);
+    setContact(null);
+    setContactLost(false);
+    setContactWhy('');
+    setError(null);
   }, [id]);
 
   const refresh = () => {
@@ -67,19 +83,53 @@ export function LeadPanel({ id }: { id: string }) {
     void qc.invalidateQueries({ queryKey: ['site-enquiries'] });
   };
 
+  const closeSheet = () => {
+    setContact(null);
+    setContactLost(false);
+    setContactWhy('');
+  };
+
+  // A write can lose a race to a colleague (409 ENQUIRY_CHANGED). Say so, and
+  // refetch: the stage the officer is looking at is already out of date, and so
+  // is any half-answered question built on it.
+  const fail = (e: unknown) => {
+    setError(e instanceof Error ? e.message : 'That did not save. Check your connection and try again.');
+    const code = e instanceof ApiError ? (e.body as { code?: string } | null)?.code : undefined;
+    if (code === 'ENQUIRY_CHANGED') {
+      setAskingWhy(false);
+      setLostWhy('');
+      closeSheet();
+      refresh();
+    }
+  };
+
+  // Each write sends only what it changes — never the whole lead.
   const patch = useMutation({
     mutationFn: (body: Record<string, unknown>) => api.patch(`/site/enquiries/${id}`, body),
+    onMutate: () => setError(null),
     onSuccess: refresh,
-    onError: (e: Error) => toast.error(e.message),
+    onError: fail,
   });
 
   const addNote = useMutation({
     mutationFn: (body: string) => api.post(`/site/enquiries/${id}/notes`, { body }),
+    onMutate: () => setError(null),
     onSuccess: () => {
       setNote('');
       refresh();
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: fail,
+  });
+
+  const log = useMutation({
+    mutationFn: (body: { kind: ContactKind; outcome: ContactOutcome; lostReason?: string | null }) =>
+      api.post(`/site/enquiries/${id}/notes`, body),
+    onMutate: () => setError(null),
+    onSuccess: () => {
+      closeSheet();
+      refresh();
+    },
+    onError: fail,
   });
 
   if (detail.isLoading) return <p className="sk-state">Opening the lead…</p>;
@@ -90,8 +140,11 @@ export function LeadPanel({ id }: { id: string }) {
   const l = detail.data;
   const tel = dialable(l.phone);
   const due = dueLabel(l);
-  const here = PIPELINE.findIndex((s) => s.key === l.status);
   const lost = l.status === 'LOST' || l.status === 'CLOSED';
+  const members = owners.data ?? [];
+  // An owner who has left the desk is still the owner on the row; without an
+  // option for them the select would silently read "Nobody yet".
+  const ownerMissing = !!l.ownerUserId && !members.some((m) => m.userId === l.ownerUserId);
 
   function moveTo(stage: EnquiryStage) {
     if (stage === 'LOST') {
@@ -99,6 +152,15 @@ export function LeadPanel({ id }: { id: string }) {
       return;
     }
     patch.mutate({ status: stage });
+  }
+
+  function answer(outcome: ContactOutcome) {
+    if (!contact) return;
+    if (outcome === 'LOST') {
+      setContactLost(true);
+      return;
+    }
+    log.mutate({ kind: contact, outcome });
   }
 
   return (
@@ -111,13 +173,29 @@ export function LeadPanel({ id }: { id: string }) {
       </div>
 
       <div className="sk-card-b">
+        {error ? <p className="sk-state err" role="alert">{error}</p> : null}
+
+        <p className="sk-muted" style={{ fontSize: 12 }}>
+          {sourceLabel(l)}
+          {l.childName ? ` · for ${l.childName}` : ''}
+          {' · '}
+          {l.lastContactedAt ? `last contacted ${when(l.lastContactedAt)}` : 'not contacted yet'}
+          {l.whatsappOk ? ' · happy to get WhatsApp' : ''}
+        </p>
+
         {l.message ? <p style={{ fontSize: 13.5, color: 'var(--sk-ink-2)' }}>{l.message}</p> : null}
 
-        {/* The number was text you had to select and copy. On a desk that lives
-            on the phone, that was the biggest friction on the page. */}
         <div className="sk-enq-contact">
-          <a className="sk-btn" data-variant="primary" href={`tel:${tel}`}>Call {l.phone}</a>
-          <a className="sk-btn" href={`https://wa.me/${tel.replace(/^\+/, '')}`} target="_blank" rel="noreferrer">
+          <a className="sk-btn" data-variant="primary" href={`tel:${tel}`} onClick={() => setContact('CALL')}>
+            Call {l.phone}
+          </a>
+          <a
+            className="sk-btn"
+            href={`https://wa.me/${tel.replace(/^\+/, '')}`}
+            target="_blank"
+            rel="noreferrer"
+            onClick={() => setContact('WHATSAPP')}
+          >
             WhatsApp
           </a>
           {l.email ? (
@@ -129,20 +207,64 @@ export function LeadPanel({ id }: { id: string }) {
           )}
         </div>
 
+        {contact ? (
+          <div className="sk-enq-outcome" role="group" aria-label="How did it go?">
+            <p className="sk-lab">{ASK[contact]}</p>
+            <div className="opts">
+              {OUTCOMES.map((o) => (
+                <button
+                  key={o.key}
+                  type="button"
+                  className="sk-btn"
+                  aria-pressed={o.key === 'LOST' ? contactLost : undefined}
+                  disabled={log.isPending}
+                  onClick={() => answer(o.key)}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+            {contactLost ? (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <input
+                  className="sk-input"
+                  style={{ flex: '1 1 180px' }}
+                  value={contactWhy}
+                  onChange={(e) => setContactWhy(e.target.value)}
+                  placeholder="Why are they not going ahead?"
+                  aria-label="Why the family is not going ahead"
+                />
+                <button
+                  className="sk-btn"
+                  data-variant="primary"
+                  type="button"
+                  disabled={log.isPending || !contactWhy.trim()}
+                  onClick={() => log.mutate({ kind: contact, outcome: 'LOST', lostReason: contactWhy.trim() })}
+                >
+                  Mark lost
+                </button>
+              </div>
+            ) : null}
+            <button type="button" className="sk-btn" style={{ justifySelf: 'start' }} onClick={closeSheet}>
+              Not now
+            </button>
+          </div>
+        ) : null}
+
         <div>
           <p className="sk-lab" style={{ marginBottom: 5 }}>Where it has got to</p>
           <div className="sk-enq-stages" role="group" aria-label="Admissions stage">
-            {PIPELINE.map((s, i) => (
+            {stageButtons(l.status).map((b) => (
               <button
-                key={s.key}
+                key={b.key}
                 type="button"
                 className="sk-enq-stage"
-                data-state={lost ? undefined : i < here ? 'done' : i === here ? 'now' : undefined}
-                aria-pressed={!lost && i === here}
-                disabled={patch.isPending}
-                onClick={() => moveTo(s.key)}
+                data-state={b.state}
+                aria-pressed={b.state === 'now'}
+                disabled={!b.canClick || patch.isPending}
+                onClick={() => moveTo(b.key)}
               >
-                {s.label}
+                {b.label}
               </button>
             ))}
             <button
@@ -150,14 +272,20 @@ export function LeadPanel({ id }: { id: string }) {
               className="sk-enq-stage"
               data-state={lost ? 'lost' : undefined}
               aria-pressed={lost}
-              disabled={patch.isPending}
+              disabled={lost || patch.isPending}
               onClick={() => moveTo('LOST')}
             >
               Lost
             </button>
           </div>
-          {lost && l.lostReason ? (
-            <p className="sk-muted" style={{ fontSize: 11.5, marginTop: 5 }}>Reason: {l.lostReason}</p>
+
+          {lost ? (
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 6 }}>
+              {l.lostReason ? <span className="sk-muted" style={{ fontSize: 11.5 }}>Reason: {l.lostReason}</span> : null}
+              <button type="button" className="sk-btn" data-size="sm" disabled={patch.isPending} onClick={() => patch.mutate({ status: 'CONTACTED' })}>
+                Reopen
+              </button>
+            </div>
           ) : null}
 
           {askingWhy ? (
@@ -174,8 +302,9 @@ export function LeadPanel({ id }: { id: string }) {
                 className="sk-btn"
                 data-variant="primary"
                 type="button"
+                disabled={patch.isPending || !lostWhy.trim()}
                 onClick={() => {
-                  patch.mutate({ status: 'LOST', lostReason: lostWhy.trim() || null });
+                  patch.mutate({ status: 'LOST', lostReason: lostWhy.trim() });
                   setAskingWhy(false);
                 }}
               >
@@ -205,13 +334,16 @@ export function LeadPanel({ id }: { id: string }) {
               onChange={(e) => patch.mutate({ ownerUserId: e.target.value || null })}
             >
               <option value="">Nobody yet</option>
-              {(staff.data ?? [])
-                .filter((s) => s.userId)
-                .map((s) => (
-                  <option key={s.id} value={s.userId as string}>
-                    {s.firstName} {s.lastName}
-                  </option>
-                ))}
+              {ownerMissing ? (
+                <option value={l.ownerUserId as string}>
+                  {owners.isSuccess ? `${l.ownerName ?? 'Somebody'} — no longer on the desk` : (l.ownerName ?? '…')}
+                </option>
+              ) : null}
+              {members.map((m) => (
+                <option key={m.userId} value={m.userId}>
+                  {m.name} · {m.job === 'ADMISSIONS' ? 'Admissions' : 'Admin'}
+                </option>
+              ))}
             </select>
           </label>
         </div>
