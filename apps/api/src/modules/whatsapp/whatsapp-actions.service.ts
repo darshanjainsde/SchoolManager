@@ -76,7 +76,10 @@ export class WhatsAppActionsService {
         if (!parsed.ok && parsed.why === 'foreign') result = 'unknown-payload';
         else if (!parsed.ok) {
           schoolId = await this.schoolOf(db, parsed.action);
-          if (schoolId) await this.text(schoolId, phone, 'This button has expired. Please decide in the console or the app.');
+          // An expired "got it" is recorded and NOT answered: the live ack
+          // path is silent to anyone but the substitute, and a substitute has
+          // nothing to "decide in the console".
+          if (schoolId && parsed.action.kind !== 'ack') await this.text(schoolId, phone, 'This button has expired. Please decide in the console or the app.');
           result = 'expired';
         } else ({ result, schoolId } = await this.act(db, parsed.action, phone));
       }

@@ -81,6 +81,15 @@ describe('WhatsAppActionsService', () => {
     expect(db.whatsAppInbound.update).toHaveBeenCalledWith({ where: { id: 'wamid.old' }, data: { result: 'expired', schoolId: SCHOOL } });
   });
 
+  it('an expired acknowledgement is recorded as expired and answered with NOTHING — a substitute has nothing to decide in the console', async () => {
+    db.substitution.findUnique.mockResolvedValue({ schoolId: SCHOOL });
+    const old = ackPayload(SUB, actionKeys(), Date.now() - ACTION_TTL_MS - 3_600_000);
+    expect(await svc().handleInbound(tap(old, 'wamid.oldack'))).toBe('expired');
+    expect(sentTexts()).toEqual([]);
+    expect(channel.deliverWith).not.toHaveBeenCalled();
+    expect(db.whatsAppInbound.update).toHaveBeenCalledWith({ where: { id: 'wamid.oldack' }, data: { result: 'expired', schoolId: SCHOOL } });
+  });
+
   it('a number that is not a verified admin of THAT school is answered, and nothing changes', async () => {
     db.user.findFirst.mockResolvedValue(null);
     expect(await svc().handleInbound(tap(leavePayload('approve', LEAVE, actionKeys())))).toBe('not-admin');
