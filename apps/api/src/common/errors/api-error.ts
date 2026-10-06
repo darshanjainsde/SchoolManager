@@ -94,6 +94,14 @@ export type ErrorCode =
   | 'LEAVE_NOT_PENDING'
   /** The decider is the applicant — nobody approves or rejects their own leave. Pair with 403. */
   | 'LEAVE_OWN_DECISION'
+  /** A leave whose first day has already gone (IST) — pair with 400. */
+  | 'LEAVE_IN_PAST'
+  /** One request longer than MAX_LEAVE_DAYS — pair with 400. */
+  | 'LEAVE_TOO_LONG'
+  /** The same person already has PENDING/APPROVED leave on one of these dates — pair with 409. */
+  | 'LEAVE_OVERLAP'
+  /** The applicant has left the school — pair with 403. */
+  | 'LEAVE_INACTIVE'
   /** The LeaveApplication is REJECTED or already CANCELLED — nothing to cancel. */
   | 'LEAVE_NOT_CANCELLABLE'
   /** Caller is neither the owning teacher nor a SCHOOL_ADMIN — pair with 403. */

@@ -753,6 +753,11 @@ export class CreateLeaveDto {
   @IsOptional()
   @IsBoolean()
   halfDay?: boolean;
+
+  /** Which half of a half day. Optional so an older app's half day still applies (all periods are then covered). */
+  @IsOptional()
+  @IsIn(['AM', 'PM'])
+  halfDayPart?: 'AM' | 'PM';
 }
 
 export class AssignSubstitutionDto {

@@ -86,7 +86,7 @@ export default function TeacherRequestsPage() {
   });
 
   const apply = useMutation({
-    mutationFn: (v: { type: string; startDate: string; endDate: string; reason?: string }) =>
+    mutationFn: (v: { type: string; startDate: string; endDate: string; reason?: string; halfDay?: boolean; halfDayPart?: 'AM' | 'PM' }) =>
       api.post<LeaveApplication>('/manage/leave', v),
     onSuccess: () => {
       toast.success('Leave request submitted — your admin will review it.');

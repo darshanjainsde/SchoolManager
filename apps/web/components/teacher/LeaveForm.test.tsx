@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { LeaveForm } from './LeaveForm';
 
@@ -107,5 +107,53 @@ describe('LeaveForm', () => {
     fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-08-11' } });
     await user.click(screen.getByRole('button', { name: 'Submit request' }));
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ halfDay: false }));
+  });
+
+  it('a half day asks which half, and sends it', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    render(<LeaveForm isSubmitting={false} onSubmit={onSubmit} />);
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-11-10' } });
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-11-10' } });
+    expect(screen.queryByRole('group', { name: 'Which half' })).not.toBeInTheDocument();
+    await user.click(screen.getByLabelText(/half day/i));
+    const group = screen.getByRole('group', { name: 'Which half' });
+    // Morning is the starting choice; the afternoon is one tap away.
+    expect(within(group).getByRole('button', { name: 'Morning' })).toHaveAttribute('aria-pressed', 'true');
+    await user.click(within(group).getByRole('button', { name: 'Afternoon' }));
+    expect(within(group).getByRole('button', { name: 'Afternoon' })).toHaveAttribute('aria-pressed', 'true');
+    await user.click(screen.getByRole('button', { name: 'Submit request' }));
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ halfDay: true, halfDayPart: 'PM' }));
+  });
+
+  it('a full day sends no half', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    render(<LeaveForm isSubmitting={false} onSubmit={onSubmit} />);
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-11-10' } });
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-11-10' } });
+    await user.click(screen.getByRole('button', { name: 'Submit request' }));
+    expect(onSubmit.mock.calls[0][0].halfDayPart).toBeUndefined();
+  });
+
+  it('a half day taken back sends no half either', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    render(<LeaveForm isSubmitting={false} onSubmit={onSubmit} />);
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-11-10' } });
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-11-10' } });
+    await user.click(screen.getByLabelText(/half day/i));
+    await user.click(screen.getByRole('button', { name: 'Afternoon' }));
+    await user.click(screen.getByLabelText(/half day/i));
+    await user.click(screen.getByRole('button', { name: 'Submit request' }));
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({ halfDay: false });
+    expect(onSubmit.mock.calls[0][0].halfDayPart).toBeUndefined();
+  });
+
+  it('the date pickers never offer a day that has already gone (IST)', () => {
+    render(<LeaveForm isSubmitting={false} onSubmit={vi.fn()} />);
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    expect(screen.getByLabelText('From')).toHaveAttribute('min', today);
+    expect(screen.getByLabelText('To')).toHaveAttribute('min', today);
   });
 });

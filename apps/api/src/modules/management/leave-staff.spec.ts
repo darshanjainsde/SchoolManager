@@ -35,7 +35,10 @@ const created = (o: Record<string, unknown> = {}) => ({
   createdAt: new Date('2026-10-01T00:00:00.000Z'), ...o,
 });
 
+afterEach(() => jest.useRealTimers());
 beforeEach(() => {
+  jest.useFakeTimers().setSystemTime(new Date('2026-10-01T03:00:00.000Z'));
+  txMock.leaveApplication.findFirst.mockResolvedValue(null);
   jest.clearAllMocks();
   txMock.teacher.findFirst.mockResolvedValue(null);
   txMock.staff.findFirst.mockResolvedValue({ id: DRIVER, firstName: 'Ram', lastName: 'Singh' });
@@ -163,5 +166,13 @@ describe('cancelling', () => {
     txMock.leaveApplication.findFirst.mockResolvedValue(created({ status: 'APPROVED' }));
     await svc.cancel(SCHOOL, LEAVE, DRIVER_USER, 'STAFF');
     expect(txMock.substitution.deleteMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('a staff member who has left', () => {
+  it('cannot apply — the same rule as a teacher', async () => {
+    txMock.staff.findFirst.mockResolvedValue({ id: DRIVER, firstName: 'Ram', lastName: 'Singh', isActive: false });
+    await expect(svc.apply(SCHOOL, DRIVER_USER, { type: 'CASUAL', startDate: '2026-10-05', endDate: '2026-10-05' })).rejects.toMatchObject({ response: { code: 'LEAVE_INACTIVE' } });
+    expect(txMock.staff.findFirst.mock.calls[0][0].where).toEqual({ schoolId: SCHOOL, userId: DRIVER_USER });
   });
 });

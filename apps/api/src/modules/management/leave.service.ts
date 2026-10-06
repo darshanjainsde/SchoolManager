@@ -11,6 +11,9 @@ import { shortDayDate } from '../../common/dates/timetable-date';
 
 export type { LeaveApplication };
 
+/** The most days one leave request may cover. */
+export const MAX_LEAVE_DAYS = 60;
+
 /** Raw `LeaveApplication` row shape as Prisma returns it — dates still `Date`. */
 type LeaveApplicationRow = {
   id: string;
@@ -20,6 +23,7 @@ type LeaveApplicationRow = {
   reason: string | null;
   status: string;
   halfDay?: boolean;
+  halfDayPart?: string | null;
   createdAt: Date;
 };
 
@@ -40,6 +44,7 @@ export class LeaveService {
       reason: a.reason,
       status: a.status as LeaveApplication['status'],
       halfDay: a.halfDay ?? false,
+      halfDayPart: (a.halfDayPart as 'AM' | 'PM' | null | undefined) ?? null,
       createdAt: a.createdAt.toISOString(),
     };
   }
@@ -51,19 +56,39 @@ export class LeaveService {
    * `NOT_A_TEACHER` rather than silently creating a bogus application.
    */
   async apply(schoolId: string, callerUserId: string, dto: CreateLeaveDto): Promise<LeaveApplication> {
-    if (dto.endDate < dto.startDate) {
+    const start = dto.startDate.slice(0, 10);
+    const end = dto.endDate.slice(0, 10);
+    if (end < start) {
       throw new ApiError('VALIDATION', 'endDate must be on or after startDate', 400, 'endDate');
     }
     // The DB carries this as a CHECK. Refusing it here means the person is
     // told what is wrong instead of being shown a constraint violation.
-    if (dto.halfDay && dto.endDate !== dto.startDate) {
+    if (dto.halfDay && end !== start) {
       throw new ApiError('VALIDATION', 'A half day is one day. Pick the same date for both, or turn the half day off.', 400, 'halfDay');
+    }
+    if (dto.halfDayPart && !dto.halfDay) {
+      throw new ApiError('VALIDATION', 'Morning or afternoon is only for a half day.', 400, 'halfDayPart');
+    }
+    // School days are IST days: at 23:00 IST "today" is still today.
+    if (start < todayIstDateStr(new Date())) {
+      throw new ApiError('LEAVE_IN_PAST', 'Leave cannot start on a day that has already gone. Ask the office to record it.', 400, 'startDate');
+    }
+    if (dateRangeInclusive(start, end).length > MAX_LEAVE_DAYS) {
+      throw new ApiError('LEAVE_TOO_LONG', `One request can cover at most ${MAX_LEAVE_DAYS} days. Apply for a longer leave in parts.`, 400, 'endDate');
     }
 
     const out = await withTenant(schoolId, async (tx) => {
       const person = await LeaveService.personFor(tx, schoolId, callerUserId);
       if (!person) {
         throw new ApiError('NOT_A_TEACHER', 'Only a teacher or a staff member can apply for leave', 403);
+      }
+      if (person.isActive === false) {
+        throw new ApiError('LEAVE_INACTIVE', 'This login belongs to someone who no longer works here, so it cannot apply for leave.', 403);
+      }
+      const clash = await LeaveService.overlapping(tx, schoolId, person, start, end, dto);
+      if (clash) {
+        const word = clash.status === 'APPROVED' ? 'approved' : 'pending';
+        throw new ApiError('LEAVE_OVERLAP', `You already have ${word} leave for ${LeaveService.datesLabel(toDateStr(clash.startDate), toDateStr(clash.endDate))}. Cancel it or pick other dates.`, 409, 'startDate');
       }
 
       // Link the application to the school's own leave-type row (if the
@@ -84,6 +109,7 @@ export class LeaveService {
           startDate: new Date(dto.startDate),
           endDate: new Date(dto.endDate),
           halfDay: dto.halfDay ?? false,
+          halfDayPart: dto.halfDay ? (dto.halfDayPart ?? null) : null,
           reason: dto.reason,
         },
       });
@@ -108,15 +134,15 @@ export class LeaveService {
     tx: TenantTx,
     schoolId: string,
     userId: string,
-  ): Promise<{ kind: 'TEACHER' | 'STAFF'; id: string; firstName: string; lastName: string | null } | null> {
+  ): Promise<{ kind: 'TEACHER' | 'STAFF'; id: string; firstName: string; lastName: string | null; isActive: boolean } | null> {
     const teacher = await tx.teacher.findFirst({
       where: { schoolId, userId },
-      select: { id: true, firstName: true, lastName: true },
+      select: { id: true, firstName: true, lastName: true, isActive: true },
     });
     if (teacher) return { kind: 'TEACHER', ...teacher };
     const staff = await tx.staff.findFirst({
-      where: { schoolId, userId, isActive: true },
-      select: { id: true, firstName: true, lastName: true },
+      where: { schoolId, userId },
+      select: { id: true, firstName: true, lastName: true, isActive: true },
     });
     return staff ? { kind: 'STAFF', ...staff } : null;
   }
@@ -124,6 +150,32 @@ export class LeaveService {
   /** The one-person filter for whichever record this login turned out to be. */
   private static whereIs(person: { kind: 'TEACHER' | 'STAFF'; id: string }) {
     return person.kind === 'TEACHER' ? { teacherId: person.id } : { staffId: person.id };
+  }
+
+  /**
+   * Leave of the same person that shares a date with [start, end]. The morning
+   * and the afternoon of one date are two halves, not a clash.
+   */
+  private static async overlapping(
+    tx: TenantTx,
+    schoolId: string,
+    person: { kind: 'TEACHER' | 'STAFF'; id: string },
+    start: string,
+    end: string,
+    dto: { halfDay?: boolean; halfDayPart?: 'AM' | 'PM' },
+  ) {
+    const rows = await tx.leaveApplication.findMany({
+      take: 5,
+      where: {
+        schoolId,
+        ...LeaveService.whereIs(person),
+        status: { in: ['PENDING', 'APPROVED'] },
+        startDate: { lte: new Date(end) },
+        endDate: { gte: new Date(start) },
+      },
+      select: { startDate: true, endDate: true, status: true, halfDay: true, halfDayPart: true },
+    });
+    return rows.find((r) => !(dto.halfDay && r.halfDay && dto.halfDayPart && r.halfDayPart && dto.halfDayPart !== r.halfDayPart)) ?? null;
   }
 
   /**

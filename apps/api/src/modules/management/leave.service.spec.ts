@@ -41,6 +41,7 @@ jest.mock('@skoolos/db', () => ({
 
 import { LeaveService } from './leave.service';
 import { ApiError } from '../../common/errors/api-error';
+import { CreateLeaveDto as CreateLeaveDtoClass } from './management.dto';
 import type { AssignSubstitutionDto, CreateLeaveDto } from './management.dto';
 
 const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
@@ -71,6 +72,12 @@ describe('LeaveService', () => {
   describe('apply', () => {
     const dto: CreateLeaveDto = { type: 'SICK', startDate: '2026-07-20', endDate: '2026-07-22' };
 
+    beforeEach(() => {
+      jest.useFakeTimers().setSystemTime(new Date('2026-07-19T03:00:00.000Z')); // IST 19 Jul, 08:30
+      txMock.leaveApplication.findMany.mockResolvedValue([]); // no other leave
+    });
+    afterEach(() => jest.useRealTimers());
+
     it('creates a PENDING application for the caller\'s own Teacher record', async () => {
       txMock.teacher.findFirst.mockResolvedValue({ id: TEACHER });
       // A real `leaveApplication.create()` row has Date columns (startDate,
@@ -91,7 +98,7 @@ describe('LeaveService', () => {
 
       expect(txMock.teacher.findFirst).toHaveBeenCalledWith({
         where: { schoolId: SCHOOL, userId: TEACHER_USER },
-        select: { id: true, firstName: true, lastName: true },
+        select: { id: true, firstName: true, lastName: true, isActive: true },
       });
       expect(txMock.leaveApplication.create).toHaveBeenCalledWith({
         data: {
@@ -99,6 +106,7 @@ describe('LeaveService', () => {
           teacherId: TEACHER,
           staffId: null,
           halfDay: false,
+          halfDayPart: null,
           type: 'SICK',
           // No LeaveTypeDef configured (pre-policy school) → null, resolved
           // later through the enum when balances are computed.
@@ -151,6 +159,104 @@ describe('LeaveService', () => {
         svc.apply(SCHOOL, TEACHER_USER, { type: 'SICK', startDate: '2026-07-22', endDate: '2026-07-20' }),
       ).rejects.toMatchObject({ response: { code: 'VALIDATION' } });
       expect(withTenantMock).not.toHaveBeenCalled();
+    });
+
+    describe('refuses what a school cannot act on', () => {
+      beforeEach(() => {
+        txMock.teacher.findFirst.mockResolvedValue({ id: TEACHER, firstName: 'Asha', lastName: 'Rao', isActive: true });
+        txMock.leaveApplication.create.mockResolvedValue({ id: LEAVE_ID, teacherId: TEACHER, status: 'PENDING', type: 'SICK', startDate: new Date('2026-07-19'), endDate: new Date('2026-07-19'), reason: null, createdAt: new Date() });
+      });
+
+      it('a start date that has already gone (IST) is refused before any query', async () => {
+        await expect(svc.apply(SCHOOL, TEACHER_USER, { type: 'SICK', startDate: '2026-07-18', endDate: '2026-07-19' })).rejects.toMatchObject({ response: { code: 'LEAVE_IN_PAST', field: 'startDate' } });
+        expect(withTenantMock).not.toHaveBeenCalled();
+      });
+
+      it('today itself is fine', async () => {
+        await expect(svc.apply(SCHOOL, TEACHER_USER, { type: 'SICK', startDate: '2026-07-19', endDate: '2026-07-19' })).resolves.toMatchObject({ status: 'PENDING' });
+      });
+
+      it('60 days is the most one request can cover; 61 is refused', async () => {
+        // 20 Jul → 17 Sep inclusive: 12 + 31 + 17 = 60 days.
+        await expect(svc.apply(SCHOOL, TEACHER_USER, { type: 'UNPAID', startDate: '2026-07-20', endDate: '2026-09-17' })).resolves.toBeDefined();
+        await expect(svc.apply(SCHOOL, TEACHER_USER, { type: 'UNPAID', startDate: '2026-07-20', endDate: '2026-09-18' })).rejects.toMatchObject({ response: { code: 'LEAVE_TOO_LONG' } });
+      });
+
+      it('an overlap with pending or approved leave is refused, naming those dates', async () => {
+        txMock.leaveApplication.findMany.mockResolvedValue([{ startDate: new Date('2026-07-22'), endDate: new Date('2026-07-23'), status: 'APPROVED', halfDay: false, halfDayPart: null }]);
+        await expect(svc.apply(SCHOOL, TEACHER_USER, { type: 'SICK', startDate: '2026-07-21', endDate: '2026-07-22' })).rejects.toMatchObject({
+          response: { code: 'LEAVE_OVERLAP', message: expect.stringContaining('approved leave for Wed 22 – Thu 23 Jul 2026') },
+        });
+        expect(txMock.leaveApplication.findMany.mock.calls[0][0].where).toEqual({
+          schoolId: SCHOOL, teacherId: TEACHER, status: { in: ['PENDING', 'APPROVED'] },
+          startDate: { lte: new Date('2026-07-22') }, endDate: { gte: new Date('2026-07-21') },
+        });
+        expect(txMock.leaveApplication.create).not.toHaveBeenCalled();
+      });
+
+      it('the morning and the afternoon of one day are two halves, not a clash', async () => {
+        txMock.leaveApplication.findMany.mockResolvedValue([{ startDate: new Date('2026-07-21'), endDate: new Date('2026-07-21'), status: 'PENDING', halfDay: true, halfDayPart: 'AM' }]);
+        await expect(svc.apply(SCHOOL, TEACHER_USER, { type: 'CASUAL', startDate: '2026-07-21', endDate: '2026-07-21', halfDay: true, halfDayPart: 'PM' })).resolves.toBeDefined();
+        expect(txMock.leaveApplication.create.mock.calls[0][0].data).toMatchObject({ halfDay: true, halfDayPart: 'PM' });
+      });
+
+      it('two half days of the SAME half are a clash', async () => {
+        txMock.leaveApplication.findMany.mockResolvedValue([{ startDate: new Date('2026-07-21'), endDate: new Date('2026-07-21'), status: 'PENDING', halfDay: true, halfDayPart: 'AM' }]);
+        await expect(svc.apply(SCHOOL, TEACHER_USER, { type: 'CASUAL', startDate: '2026-07-21', endDate: '2026-07-21', halfDay: true, halfDayPart: 'AM' })).rejects.toMatchObject({ response: { code: 'LEAVE_OVERLAP' } });
+      });
+
+      it('a full day clashes with a half day, either way round', async () => {
+        txMock.leaveApplication.findMany.mockResolvedValue([{ startDate: new Date('2026-07-21'), endDate: new Date('2026-07-21'), status: 'PENDING', halfDay: true, halfDayPart: 'AM' }]);
+        await expect(svc.apply(SCHOOL, TEACHER_USER, { type: 'CASUAL', startDate: '2026-07-21', endDate: '2026-07-21' })).rejects.toMatchObject({ response: { code: 'LEAVE_OVERLAP' } });
+        txMock.leaveApplication.findMany.mockResolvedValue([{ startDate: new Date('2026-07-21'), endDate: new Date('2026-07-21'), status: 'APPROVED', halfDay: false, halfDayPart: null }]);
+        await expect(svc.apply(SCHOOL, TEACHER_USER, { type: 'CASUAL', startDate: '2026-07-21', endDate: '2026-07-21', halfDay: true, halfDayPart: 'PM' })).rejects.toMatchObject({ response: { code: 'LEAVE_OVERLAP' } });
+      });
+
+      it('two full days on the same date are a clash', async () => {
+        txMock.leaveApplication.findMany.mockResolvedValue([{ startDate: new Date('2026-07-21'), endDate: new Date('2026-07-21'), status: 'PENDING', halfDay: false, halfDayPart: null }]);
+        await expect(svc.apply(SCHOOL, TEACHER_USER, { type: 'CASUAL', startDate: '2026-07-21', endDate: '2026-07-21' })).rejects.toMatchObject({ response: { code: 'LEAVE_OVERLAP' } });
+      });
+
+      it('an older app sends a half day with no part: still accepted, stored with no part', async () => {
+        await expect(svc.apply(SCHOOL, TEACHER_USER, { type: 'CASUAL', startDate: '2026-07-21', endDate: '2026-07-21', halfDay: true })).resolves.toBeDefined();
+        expect(txMock.leaveApplication.create.mock.calls[0][0].data).toMatchObject({ halfDay: true, halfDayPart: null });
+      });
+
+      it('a teacher who has left cannot apply', async () => {
+        txMock.teacher.findFirst.mockResolvedValue({ id: TEACHER, firstName: 'Asha', lastName: 'Rao', isActive: false });
+        await expect(svc.apply(SCHOOL, TEACHER_USER, { type: 'SICK', startDate: '2026-07-20', endDate: '2026-07-20' })).rejects.toMatchObject({ response: { code: 'LEAVE_INACTIVE' } });
+      });
+
+      it('morning/afternoon without a half day is refused', async () => {
+        await expect(svc.apply(SCHOOL, TEACHER_USER, { type: 'SICK', startDate: '2026-07-20', endDate: '2026-07-20', halfDayPart: 'AM' })).rejects.toMatchObject({ response: { code: 'VALIDATION', field: 'halfDayPart' } });
+      });
+
+      describe('with the process in UTC', () => {
+        const before = process.env.TZ;
+        afterEach(() => { if (before === undefined) delete process.env.TZ; else process.env.TZ = before; });
+
+        it('at 20:00 UTC it is already tomorrow in IST: yesterday-in-IST is refused, IST today is allowed', async () => {
+          process.env.TZ = 'UTC';
+          jest.setSystemTime(new Date('2026-07-19T20:00:00.000Z')); // IST 20 Jul, 01:30
+          await expect(svc.apply(SCHOOL, TEACHER_USER, { type: 'SICK', startDate: '2026-07-19', endDate: '2026-07-19' })).rejects.toMatchObject({ response: { code: 'LEAVE_IN_PAST' } });
+          await expect(svc.apply(SCHOOL, TEACHER_USER, { type: 'SICK', startDate: '2026-07-20', endDate: '2026-07-20' })).resolves.toBeDefined();
+        });
+      });
+    });
+
+    describe('the request body (DTO)', () => {
+      const check = async (body: object) => {
+        const { validate } = await import('class-validator');
+        const { plainToInstance } = await import('class-transformer');
+        return validate(plainToInstance(CreateLeaveDtoClass, body));
+      };
+      it('takes AM and PM, nothing else', async () => {
+        expect(await check({ type: 'SICK', startDate: '2026-07-20', endDate: '2026-07-20', halfDay: true, halfDayPart: 'PM' })).toHaveLength(0);
+        expect((await check({ type: 'SICK', startDate: '2026-07-20', endDate: '2026-07-20', halfDay: true, halfDayPart: 'NOON' })).map((e) => e.property)).toEqual(['halfDayPart']);
+      });
+      it('an older app\'s half day with no part still validates', async () => {
+        expect(await check({ type: 'SICK', startDate: '2026-07-20', endDate: '2026-07-20', halfDay: true })).toHaveLength(0);
+      });
     });
   });
 
@@ -439,7 +545,7 @@ describe('LeaveService', () => {
 
       expect(txMock.teacher.findFirst).toHaveBeenCalledWith({
         where: { schoolId: SCHOOL, userId: TEACHER_USER },
-        select: { id: true, firstName: true, lastName: true },
+        select: { id: true, firstName: true, lastName: true, isActive: true },
       });
       expect(result).toEqual({ status: 'CANCELLED', restoredDates: 0 });
     });
@@ -691,7 +797,10 @@ describe('LeaveService', () => {
 
 describe('LeaveService notices', () => {
   const svc = new LeaveService();
+  afterEach(() => jest.useRealTimers());
   beforeEach(() => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-09-01T03:00:00.000Z'));
+    txMock.leaveApplication.findMany.mockResolvedValue([]);
     jest.clearAllMocks();
     withTenantMock.mockImplementation((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));
     txMock.school.findFirst.mockResolvedValue({ name: 'Raffles' });

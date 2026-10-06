@@ -14,7 +14,7 @@ const LEAVE_TYPES: { value: LeaveType; label: string }[] = [
   { value: 'OTHER', label: 'Other' },
 ];
 
-const EMPTY_FORM = { type: 'SICK' as LeaveType, startDate: '', endDate: '', reason: '', halfDay: false };
+const EMPTY_FORM = { type: 'SICK' as LeaveType, startDate: '', endDate: '', reason: '', halfDay: false, halfDayPart: 'AM' as 'AM' | 'PM' };
 
 const fieldCls =
   'rounded-[10px] border border-[var(--sk-line-2)] bg-[var(--sk-card)] px-[11px] py-[9px] text-[13.5px] text-[var(--sk-ink)] placeholder:text-[var(--sk-ink-3)] focus-visible:outline-none focus-visible:border-[var(--sk-brand)] focus-visible:shadow-[0_0_0_3px_var(--sk-brand-tint)] disabled:opacity-60 disabled:cursor-not-allowed';
@@ -24,7 +24,7 @@ export interface LeaveFormProps {
   /** Remaining days by built-in type — shown under the Type picker so the
       teacher knows the balance BEFORE submitting. Absent = no policy set up. */
   remainingByType?: Partial<Record<LeaveType, number | null>>;
-  onSubmit: (v: { type: string; startDate: string; endDate: string; reason?: string; halfDay?: boolean }) => void;
+  onSubmit: (v: { type: string; startDate: string; endDate: string; reason?: string; halfDay?: boolean; halfDayPart?: 'AM' | 'PM' }) => void;
 }
 
 /**
@@ -52,8 +52,12 @@ export function LeaveForm({ isSubmitting, remainingByType, onSubmit }: LeaveForm
       endDate: form.endDate,
       reason: form.reason.trim() || undefined,
       halfDay,
+      halfDayPart: halfDay ? form.halfDayPart : undefined,
     });
   }
+
+  // IST "today", the day the server judges a start date against.
+  const todayIst = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 
   return (
     <div className="grid gap-3 sm:grid-cols-2">
@@ -87,6 +91,7 @@ export function LeaveForm({ isSubmitting, remainingByType, onSubmit }: LeaveForm
         <Input
           id="leave-from"
           type="date"
+          min={todayIst}
           className={`${fieldCls} w-full`}
           value={form.startDate}
           onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))}
@@ -99,6 +104,7 @@ export function LeaveForm({ isSubmitting, remainingByType, onSubmit }: LeaveForm
         <Input
           id="leave-to"
           type="date"
+          min={todayIst}
           className={`${fieldCls} w-full`}
           value={form.endDate}
           onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))}
@@ -118,8 +124,8 @@ export function LeaveForm({ isSubmitting, remainingByType, onSubmit }: LeaveForm
         />
       </div>
       {oneDay ? (
-        <div className="sm:col-span-2">
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+        <div className="sm:col-span-2" style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, minHeight: 24 }}>
             <input
               type="checkbox"
               style={{ width: 16, height: 16, flex: 'none' }}
@@ -128,6 +134,22 @@ export function LeaveForm({ isSubmitting, remainingByType, onSubmit }: LeaveForm
             />
             <span>Half day — I will be in for the other half</span>
           </label>
+          {form.halfDay ? (
+            <div className="space-y-1.5" style={{ flex: '1 1 260px', minWidth: 0 }}>
+              <span id="leave-half-lab" className="sk-lab">
+                Which half
+              </span>
+              {/* Only that half's classes get a substitute, so the office needs to know. */}
+              <div className="sk-seg" role="group" aria-labelledby="leave-half-lab">
+                <button type="button" aria-pressed={form.halfDayPart === 'AM'} onClick={() => setForm((f) => ({ ...f, halfDayPart: 'AM' }))}>
+                  Morning
+                </button>
+                <button type="button" aria-pressed={form.halfDayPart === 'PM'} onClick={() => setForm((f) => ({ ...f, halfDayPart: 'PM' }))}>
+                  Afternoon
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
       <div className="sm:col-span-2" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
