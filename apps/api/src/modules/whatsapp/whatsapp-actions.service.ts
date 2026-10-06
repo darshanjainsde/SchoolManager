@@ -1,8 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { getPlatformPrisma, type PrismaClient } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
+import { isP2002 } from '../../common/errors/prisma-errors';
 import { WhatsAppChannel } from '../../common/notifications/whatsapp.channel';
 import { actionKeys, coverPayload, parseAction, type Action } from '../../common/notifications/whatsapp/actions';
+import { toE164 } from '../../common/notifications/whatsapp/phone';
 import { sendList, sendTemplate, sendText } from '../../common/notifications/whatsapp/graph.client';
 import { coverPendingTemplate, COVER_PENDING } from '../../common/notifications/whatsapp/templates';
 import { isoWeekdayOf, LeaveService, toDateStr } from '../management';
@@ -51,14 +53,18 @@ export class WhatsAppActionsService {
 
   async handleInbound(m: InboundMessage): Promise<string> {
     const db = getPlatformPrisma();
-    const phone = `+${m.from.replace(/^\+/, '')}`;
+    const phone = toE164(m.from) ?? `+${m.from.replace(/^\+/, '')}`;
     const payload = m.button?.payload ?? m.interactive?.button_reply?.id ?? m.interactive?.list_reply?.id ?? null;
     const kind = m.button ? 'button' : m.interactive?.list_reply ? 'list' : m.interactive?.button_reply ? 'button' : m.text ? 'text' : 'other';
     // Idempotency first: a retried webhook must not approve twice.
     try {
       await db.whatsAppInbound.create({ data: { id: m.id, phone, kind, payload: (payload ?? m.text?.body ?? m.type).slice(0, 1000) } });
-    } catch {
-      return 'duplicate';
+    } catch (e) {
+      // ONLY a repeated Meta message id is a duplicate. Anything else (a pool
+      // timeout, a reset) used to be called "duplicate" too, and the tap — an
+      // approval — vanished without trace. Throw, and Meta retries.
+      if (isP2002(e)) return 'duplicate';
+      throw e;
     }
     let result = 'ignored';
     let schoolId: string | null = null;

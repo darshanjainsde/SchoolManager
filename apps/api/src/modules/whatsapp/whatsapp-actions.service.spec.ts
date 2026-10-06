@@ -12,6 +12,7 @@ const db = {
 };
 jest.mock('@skoolos/db', () => ({ ...jest.requireActual('@skoolos/db'), getPlatformPrisma: () => db }));
 
+import { Prisma } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
 import { leavePayload, coverPayload, ackPayload, actionKeys, ACTION_TTL_MS } from '../../common/notifications/whatsapp/actions';
 import { WhatsAppActionsService } from './whatsapp-actions.service';
@@ -46,9 +47,20 @@ describe('WhatsAppActionsService', () => {
   afterAll(() => { process.env = env; });
 
   it('a retried webhook (same Meta message id) is a no-op', async () => {
-    db.whatsAppInbound.create.mockRejectedValueOnce(new Error('unique'));
+    db.whatsAppInbound.create.mockRejectedValueOnce(new Prisma.PrismaClientKnownRequestError('Unique constraint failed', { code: 'P2002', clientVersion: 'test' }));
     expect(await svc().handleInbound(tap(leavePayload('approve', LEAVE, actionKeys())))).toBe('duplicate');
     expect(leave.approve).not.toHaveBeenCalled();
+  });
+
+  it('a database failure is NOT a duplicate — it throws so Meta retries, and nothing is approved', async () => {
+    db.whatsAppInbound.create.mockRejectedValueOnce(new Error('connection reset'));
+    await expect(svc().handleInbound(tap(leavePayload('approve', LEAVE, actionKeys()), 'wamid.2'))).rejects.toThrow('connection reset');
+    expect(leave.approve).not.toHaveBeenCalled();
+  });
+
+  it('the tapping number is normalised like every stored number', async () => {
+    await svc().handleInbound({ ...tap(leavePayload('approve', LEAVE, actionKeys()), 'wamid.3'), from: '09876543210' });
+    expect(db.whatsAppInbound.create).toHaveBeenCalledWith({ data: expect.objectContaining({ phone: '+919876543210' }) });
   });
 
   it('a tampered or foreign payload is recorded and never acted on', async () => {

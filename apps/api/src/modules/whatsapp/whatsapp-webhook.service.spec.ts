@@ -77,8 +77,31 @@ describe('WhatsAppWebhookService', () => {
   it('hands every inbound message to the actions service, and a failing one never blocks the rest', async () => {
     const body = { object: 'whatsapp_business_account', entry: [{ changes: [{ value: { messages: [{ id: 'm1', from: '919876543210', type: 'text', text: { body: 'ok' } }, { id: 'm2', from: '919876543210', type: 'button', button: { payload: 'lv:a:x:y', text: 'Approve' } }] } }] }] };
     actions.handleInbound.mockRejectedValueOnce(new Error('boom')).mockResolvedValueOnce('approved');
-    expect(await make().handle(body as never)).toEqual({ statuses: 0, updated: 0, inbound: 2 });
+    await expect(make().handle(body as never)).rejects.toThrow('boom');
     expect(actions.handleInbound).toHaveBeenCalledTimes(2);
     expect(updateMany).not.toHaveBeenCalled();
+  });
+
+  it('processes every message, then fails the request if one hit an infrastructure error', async () => {
+    const msg = (id: string) => ({ id, from: '919876543210', type: 'text', text: { body: 'ok' } });
+    const bodyWith = (messages: unknown[]) => ({ object: 'whatsapp_business_account', entry: [{ changes: [{ value: { messages } }] }] });
+    actions.handleInbound.mockRejectedValueOnce(new Error('pool timeout')).mockResolvedValueOnce('approved');
+    await expect(make().handle(bodyWith([msg('m1'), msg('m2')]) as never)).rejects.toThrow('pool timeout');
+    expect(actions.handleInbound).toHaveBeenCalledTimes(2);
+  });
+
+  it('rethrows the FIRST error, and only after the statuses of the same body were applied too', async () => {
+    findUnique.mockResolvedValue({ id: 'd1', schoolId: SCHOOL, status: 'SENT' });
+    const msg = (id: string) => ({ id, from: '919876543210', type: 'text', text: { body: 'ok' } });
+    const body = {
+      object: 'whatsapp_business_account',
+      entry: [
+        { changes: [{ value: { messages: [msg('m1'), msg('m2')] } }] },
+        { changes: [{ value: { statuses: [{ id: 'wamid.1', status: 'read', timestamp: '1789700000' }] } }] },
+      ],
+    };
+    actions.handleInbound.mockRejectedValueOnce(new Error('first')).mockRejectedValueOnce(new Error('second'));
+    await expect(make().handle(body as never)).rejects.toThrow('first');
+    expect(updateMany).toHaveBeenCalledTimes(1);
   });
 });
