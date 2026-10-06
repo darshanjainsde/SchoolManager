@@ -1,0 +1,3 @@
+No school code is needed. The app opens on a sign-in screen: type the username in "Student code or email", type the password, tap "Log in".
+This account is a teacher at our demo school (Raffles Primary, sample data): attendance, timetable, diary, homework, marks, notices, messages, leave.
+A second entry, "Parent / student", opens the family side: attendance, diary, homework, results, fees, holidays, notices, library, messages.

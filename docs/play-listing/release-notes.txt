@@ -1,0 +1,3 @@
+Sign in is simpler: the app opens straight on the sign-in screen.
+Fixes for the Profile tab, the Complaint box and staff notifications.
+Works with Android 16: the back button goes back instead of closing the app.

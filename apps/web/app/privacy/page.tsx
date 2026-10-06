@@ -6,7 +6,7 @@ import { getRequestHost } from '@/lib/request';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
 import styles from './privacy.module.css';
 
-const LAST_UPDATED = '26 July 2026';
+const LAST_UPDATED = '7 October 2026';
 const CONTACT_EMAIL = 'admin@sckools.com';
 
 const ICONS = {
@@ -62,16 +62,16 @@ export default async function PrivacyPage() {
         <p className={styles.updated}>Last updated: {LAST_UPDATED}</p>
 
         <p className={styles.lede}>
-          Sckools provides school websites and management tools, and the Sckools
-          mobile app that lets parents, students and staff view attendance,
-          notices and school holidays. This policy explains what personal
-          information we handle, why, and the choices you have.
+          Sckools gives schools a website and tools to run the school, and the
+          Sckools mobile app for parents, students, teachers and school staff.
+          This policy explains what personal information we handle, why, who
+          helps us run the service, and the choices you have.
         </p>
 
         <div className={styles.note}>
           <strong>Your school is in charge of your data.</strong> When you use
           Sckools through your school, the school decides what information is
-          entered and how it is used — the school is the <em>data controller</em>
+          entered and how it is used. The school is the <em>data controller</em>
           {' '}and Sckools acts as its <em>data processor</em>. For access,
           correction or deletion of a student&apos;s or child&apos;s data, contact
           your school first; we act on the school&apos;s instructions.
@@ -86,7 +86,7 @@ export default async function PrivacyPage() {
             <li><a href="#share">How we share it</a></li>
             <li><a href="#retention">Data retention</a></li>
             <li><a href="#security">Security</a></li>
-            <li><a href="#rights">Your rights</a></li>
+            <li><a href="#rights">Your rights and choices</a></li>
             <li><a href="#providers">Service providers</a></li>
             <li><a href="#changes">Changes</a></li>
             <li><a href="#contact">Contact us</a></li>
@@ -95,43 +95,60 @@ export default async function PrivacyPage() {
 
         <section className={styles.section} id="collect">
           <h2>1. Information we collect</h2>
-          <p>We collect only what is needed to run the service for your school:</p>
+          <p>We collect only what is needed to run the service for your school.</p>
 
-          <h3>Account &amp; sign-in</h3>
+          <h3>Account and sign-in</h3>
           <ul>
-            <li>Your login identifier (an email address or username issued by your school) and password. Passwords are stored only as a salted hash — we never store them in readable form.</li>
+            <li>Your login: an email address, or a student code issued by your school, and your password. Passwords are stored only as a salted hash; we never store them in readable form.</li>
+            <li>Your mobile number, if you or your school add one. It is used to send you a sign-in code when your school turns that on, and to send school messages.</li>
             <li>Session tokens that keep you signed in.</li>
           </ul>
 
-          <h3>School profile</h3>
+          <h3>School records</h3>
           <ul>
-            <li>Details your school records about you — for example name, class or section, admission number, roll number and a profile photo (where provided).</li>
+            <li>Details your school records about a student or staff member, for example name, class and section, admission and roll number, date of birth, a profile photo, and a parent&apos;s contact number.</li>
+            <li>Records the school keeps as part of school life: attendance, timetable, homework, tests and results, report cards, the class diary, notices, the holiday calendar, library loans, sports houses and results, and leave.</li>
           </ul>
 
-          <h3>App activity created at school</h3>
+          <h3>Things you send in the app</h3>
           <ul>
-            <li>Attendance records, notices and announcements, and the school holiday calendar that staff manage and that parents and students view.</li>
+            <li>Messages between parents and teachers, complaint-box entries and replies, diary sign-offs, and leave applications.</li>
+            <li>Photos and files you choose to upload, such as a profile photo or a homework attachment.</li>
           </ul>
 
-          <h3>Notifications &amp; device</h3>
+          <h3>Fees and payments</h3>
           <ul>
-            <li>If you enable push notifications, a push token for your device so we can deliver alerts (for example an attendance notice). We use basic device information for this purpose only.</li>
+            <li>The fees your school charges and the receipts it issues.</li>
+            <li>When you tell the school you have paid: the amount, the date, how you paid, the UPI or bank reference, and a screenshot if you add one.</li>
+            <li>The app can open your own UPI app (such as Google Pay or PhonePe) with the amount filled in. The payment happens in that app, between you and the school; we never see your UPI PIN or bank login.</li>
+            <li>If your school turns on online payment, the payment is handled by the payment company (Razorpay or PhonePe). Card and bank details go to them, not to us.</li>
+          </ul>
+
+          <h3>Pay details for school staff</h3>
+          <ul>
+            <li>If your school runs staff pay on Sckools, staff can enter their bank account number, IFSC, bank name, PAN and UAN. Only the school&apos;s administrators and pay office can see them, and they are used only to pay you and to file statutory returns.</li>
+          </ul>
+
+          <h3>Notifications and your device</h3>
+          <ul>
+            <li>If you allow notifications, a push token for your device so we can deliver school alerts.</li>
+            <li>If the app crashes or hits an error, a crash report: the device model, Android version, app version and the technical error. Crash reports do not include your messages or school records.</li>
           </ul>
 
           <p>
-            The Sckools app does <strong>not</strong> include third-party
-            advertising, and we do <strong>not</strong> track you across other
-            apps or websites.
+            The Sckools app does <strong>not</strong> show ads, does not use an
+            advertising ID, does not collect your location or contacts, and does
+            not track you across other apps or websites.
           </p>
         </section>
 
         <section className={styles.section} id="use">
           <h2>2. How we use information</h2>
           <ul>
-            <li>To authenticate you and keep your account secure.</li>
-            <li>To provide the features you use — attendance, notices and holidays.</li>
-            <li>To send notifications you have opted into.</li>
-            <li>To operate, maintain, troubleshoot and improve the service.</li>
+            <li>To sign you in and keep your account secure.</li>
+            <li>To provide the features your school uses: attendance, diary, homework, results, notices, holidays, fees, messages, library, sports, leave and pay.</li>
+            <li>To send the notifications and school messages you receive, by push notification, email, or WhatsApp where your school uses it.</li>
+            <li>To find and fix crashes and errors, and to keep the service running.</li>
             <li>To meet legal obligations and enforce our terms.</li>
           </ul>
           <p>
@@ -143,16 +160,22 @@ export default async function PrivacyPage() {
         <section className={styles.section} id="students">
           <h2>3. Students and children</h2>
           <p>
-            Sckools is provided to schools for educational use. Student accounts
-            and student information are created and controlled by the school. The
-            school is responsible for obtaining any consent required from parents
-            or guardians under applicable law.
+            Sckools is provided to schools for educational use, and students of
+            all school ages may use the app with a login their school gives them.
+            Student accounts and student information are created and controlled
+            by the school. The school is responsible for getting any consent
+            required from parents or guardians under applicable law.
           </p>
           <p>
-            We process student information solely to provide the service to the
-            school and on the school&apos;s instructions. We do not use student
-            information to build advertising profiles. Parents and guardians can
-            exercise rights over a child&apos;s data through the school.
+            We process student information only to provide the service to the
+            school and on the school&apos;s instructions. The app has no ads, no
+            advertising or analytics tracking, and no way for a student to
+            contact anyone outside their own school. We never use children&apos;s
+            information for advertising or to build profiles.
+          </p>
+          <p>
+            Parents and guardians can see, correct or delete a child&apos;s data
+            through the school, or by writing to us (see <a href="#rights">Your rights</a>).
           </p>
         </section>
 
@@ -160,32 +183,33 @@ export default async function PrivacyPage() {
           <h2>4. How we share information</h2>
           <p>We share information only in these limited ways:</p>
           <ul>
-            <li><strong>With your school.</strong> Information is visible to the authorised staff and members of the school you belong to, according to their role.</li>
-            <li><strong>With service providers</strong> that host and operate the platform on our behalf, under contract and only as needed (see <a href="#providers">Service providers</a>).</li>
+            <li><strong>Within your school.</strong> Information is visible to the people at your school who need it for their role. For example, a class teacher sees their class, and the administrators and pay office see staff pay details.</li>
+            <li><strong>With service providers</strong> that run parts of the service for us, under contract and only as needed (see <a href="#providers">Service providers</a>).</li>
             <li><strong>For legal reasons</strong> when required by law, or to protect the rights, safety and security of users and the service.</li>
             <li><strong>In a business transfer</strong> such as a merger or acquisition, subject to this policy.</li>
           </ul>
-          <p>Data for one school is kept logically isolated from every other school on the platform.</p>
+          <p>Each school&apos;s data is kept separate from every other school on the platform.</p>
         </section>
 
         <section className={styles.section} id="retention">
           <h2>5. Data retention</h2>
           <p>
-            We keep personal information for as long as your account is active
-            and your school uses the service, and as needed to provide it. When a
-            school ends its use of Sckools, or on the school&apos;s instruction,
-            we delete or anonymise the associated data within a reasonable period,
-            except where we must retain it to meet a legal obligation.
+            We keep personal information while your account is active and your
+            school uses the service. When a school stops using Sckools, or on the
+            school&apos;s instruction, we delete or anonymise the associated data
+            within a reasonable period, except where we must keep it to meet a
+            legal obligation, such as fee and pay records. Crash reports are kept
+            for up to 90 days.
           </p>
         </section>
 
         <section className={styles.section} id="security">
           <h2>6. Security</h2>
           <ul>
-            <li>Data is encrypted in transit (HTTPS/TLS).</li>
+            <li>Data is encrypted in transit (HTTPS/TLS) and encrypted at rest by our database provider.</li>
             <li>Passwords are stored only as salted hashes.</li>
             <li>Each school&apos;s data is isolated from other schools at the database level.</li>
-            <li>Access is limited by role and protected by authentication.</li>
+            <li>Access is limited by role and protected by sign-in.</li>
           </ul>
           <p>No method of transmission or storage is perfectly secure, but we work to protect your information using appropriate measures.</p>
         </section>
@@ -193,21 +217,26 @@ export default async function PrivacyPage() {
         <section className={styles.section} id="rights">
           <h2>7. Your rights and choices</h2>
           <ul>
-            <li><strong>Access &amp; correction.</strong> You can view your profile in the app. To correct school-held details, contact your school.</li>
-            <li><strong>Deletion.</strong> Requests to delete a student&apos;s or child&apos;s data are handled through the school as data controller; you may also contact us and we will act on the school&apos;s instructions.</li>
-            <li><strong>Notifications.</strong> You can turn push notifications off at any time in your device settings.</li>
+            <li><strong>Access and correction.</strong> You can see your profile in the app. To correct details the school holds, contact your school.</li>
+            <li><strong>Deletion.</strong> You can ask to delete your account and its data at <Link href="/delete-account">sckools.com/delete-account</Link>. Because your school owns the account, we confirm the request with the school first.</li>
+            <li><strong>Notifications.</strong> You can turn push notifications off at any time in your phone&apos;s settings. To stop school messages on WhatsApp, ask your school or write to us.</li>
+            <li><strong>Optional details.</strong> A profile photo, a mobile number and uploads are optional; you can leave them out.</li>
           </ul>
-          <p>Depending on where you live, you may have additional rights under local law. Contact us and we will help route your request appropriately.</p>
+          <p>Depending on where you live, you may have more rights under local law, including India&apos;s Digital Personal Data Protection Act. Contact us and we will help route your request.</p>
         </section>
 
         <section className={styles.section} id="providers">
           <h2>8. Service providers</h2>
-          <p>We rely on a small number of trusted providers to run Sckools:</p>
+          <p>We use a small number of providers to run Sckools. They may use information only to provide their service to us.</p>
           <ul>
-            <li><strong>Hosting &amp; database</strong> — cloud infrastructure that stores and serves platform data.</li>
-            <li><strong>Push notification delivery</strong> — the Expo push service, used to deliver app notifications to your device.</li>
+            <li><strong>Vercel</strong> runs our website and servers.</li>
+            <li><strong>Supabase</strong> stores our database and uploaded files, in Mumbai, India.</li>
+            <li><strong>Expo</strong> and <strong>Google Firebase Cloud Messaging</strong> deliver push notifications to your phone.</li>
+            <li><strong>Meta (WhatsApp Business Platform)</strong> delivers school messages on WhatsApp, where your school uses it.</li>
+            <li><strong>Our email provider</strong>, or your school&apos;s own mail server, sends email.</li>
+            <li><strong>Sentry</strong> receives crash reports from the app, stored in the European Union.</li>
+            <li><strong>Razorpay</strong> or <strong>PhonePe</strong> process online fee payments, only if your school turns that on.</li>
           </ul>
-          <p>These providers may process information only to perform services for us, under obligations consistent with this policy.</p>
         </section>
 
         <section className={styles.section} id="changes">
@@ -215,7 +244,7 @@ export default async function PrivacyPage() {
           <p>
             We may update this policy from time to time. When we make material
             changes, we will update the date at the top of this page and, where
-            appropriate, notify you through the service.
+            appropriate, tell you through the service.
           </p>
         </section>
 

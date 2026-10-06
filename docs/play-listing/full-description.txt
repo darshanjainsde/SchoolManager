@@ -1,0 +1,32 @@
+Sckools is the school app for families and teachers at schools that use Sckools. Your school creates your account and gives you your login.
+
+FOR PARENTS AND STUDENTS
+• Attendance — see each day your child was present, absent or late, month by month.
+• Diary — read the teacher's notes and sign them in the app.
+• Homework — see what is set and when it is due.
+• Tests and results — upcoming tests, marks and report cards.
+• Timetable — the day's periods and teachers.
+• Notices and holidays — school notices and the holiday calendar.
+• Fees — see what is due, pay your school by UPI or bank transfer, send the payment details to the office, and keep your receipts.
+• Messages — write to your child's teachers.
+• Library and sports — books borrowed with due dates, and your house and events.
+• Complaint box — raise a concern with the school and follow its replies.
+• More than one child? Switch between them in one tap.
+
+FOR TEACHERS
+• Take attendance for your class in a few taps.
+• See your periods for the day.
+• Write the class diary, set homework and enter marks.
+• Post notices to your classes.
+• Reply to messages from parents.
+• Apply for leave and see your balance.
+
+NOTIFICATIONS
+Get a notification when there is a new notice, diary note, message, result or fee update.
+
+IMPORTANT
+This app works only for schools that use Sckools. There is no sign-up in the app: your school creates your account. If you have not received your login, please contact your school office.
+
+Your data belongs to your school and is used only to run the school. We do not sell data and the app has no ads. Privacy policy: https://sckools.com/privacy
+
+Questions: admin@sckools.com

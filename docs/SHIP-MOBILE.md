@@ -2,7 +2,7 @@
 
 Package: `com.sckools.app` (see `apps/mobile/app.config.ts`). This is the
 ordered runbook to take the current `apps/mobile` code to Google Play Closed
-testing, then Production, with EAS Update for daily OTA pushes in between.
+testing, then Production. There is no OTA channel: every change ships as a new store build.
 
 Everything below except step 0 requires **your** Expo account, Google Play
 Console access, and a device — none of it can be run by an agent.
@@ -183,44 +183,36 @@ sanity-check the Play Console pipeline before committing to Closed testing.
 
 ---
 
-## Step 7 — complete the Play Console checklist (do this in parallel with the 14-day wait)
+## Step 7 — the Play Console listing and declarations
 
-These sections gate submission for production access — finish them while
-testers are opted in, not after:
+**Everything Google reads lives in [`docs/play-listing/`](play-listing/README.md)**:
+the short and full description, the reviewer sign-in notes, the release notes and
+the Data safety answers. Paste from there; never type listing text straight into
+Play Console. `apps/mobile/src/__tests__/play-listing.test.ts` fails if:
 
-1. **Privacy policy.** Play requires a live, publicly reachable privacy
-   policy URL. The intended URL is `https://sckools.com/privacy`.
-   **This page does not exist yet** — checked `apps/web/app/` and there is
-   no `privacy` route. You must add it to the web app (a simple static
-   page under `apps/web/app/privacy/page.tsx`, covering what data the app
-   collects — accounts, attendance, push tokens, device info via
-   `expo-device` — and how it's used/retained) and deploy it **before**
-   filling in this field, or the Data safety section below will be
-   inconsistent with what you declare.
-2. **Data safety** (Play Console → App content → Data safety). Declare what
-   the app actually collects/transmits, matching the privacy policy:
-   - Personal info: email, name (login/account data)
-   - App activity: attendance records, notices/announcements read
-   - Device/other IDs: Expo push token (`PushToken` model), device platform
-   - Note purpose (app functionality, account management) and whether data
-     is encrypted in transit (yes, HTTPS) and deletable (account deletion
-     path, if one exists — otherwise declare accordingly).
-3. **Content rating** (App content → Content rating): fill the
-   questionnaire — this is a school-management/communication app, no UGC
-   beyond school-posted notices, expect a low/child-safe-adjacent rating.
-   Note: since this app is usable by/relevant to guardians of school
-   children, review Play's **Families policy** requirements if any content
-   rating question flags it as directed at children — extra requirements
-   (ads, data collection limits) may apply.
-4. **Target audience** (App content → Target audience and content): declare
-   the actual audience (school staff + parents/guardians, not children
-   directly using unsupervised, unless the product intends student
-   self-login on personal devices — check current product scope before
-   answering).
-5. **App access**: if any part of the app requires login credentials to
-   review (all of it does), provide the review team a working test account
-   here.
-6. **Ads**: declare no ads (unless that's changed).
+- a text goes over Play's limit;
+- a reviewer note quotes a sign-in label the app does not have, or asks for a school code;
+- the description claims a feature with no screen in the app, or names a web-only feature.
+
+The first production release (vc18) was rejected on 2 Oct 2026 under the
+Misleading Claims policy for exactly these drifts. See the README for the story.
+
+Before every submission:
+
+1. **Sign in details** (App content): two entries, **Teacher** and **Parent / student**,
+   with the notes from `docs/play-listing/`. Walk them on the build you submit.
+2. **Data safety** matches the table in `docs/play-listing/README.md` and
+   <https://sckools.com/privacy> (`apps/web/app/privacy/page.tsx`). If new data
+   leaves the phone, update all three in one PR.
+3. **Account deletion URL**: <https://sckools.com/delete-account>.
+4. **Target audience**: students log in, so children are users and the Families
+   policy applies. Don't declare 18+ only.
+5. **Content rating**: parents and teachers message each other, so answer "users
+   can interact" truthfully.
+6. **Screenshots** from the submitted build, 9:16 at 1080×1920 or larger, never
+   leading with the sign-in screen.
+7. **The release holds the build you mean.** Check the version code in Publishing
+   overview before pressing Send. A stale draft (vc18) once sat there for two months.
 
 ---
 
@@ -262,25 +254,12 @@ pnpm --filter @skoolos/mobile exec npx eas-cli submit -p android --profile produ
 
 ---
 
-## Daily OTA pushes to testers (EAS Update)
+## Over-the-air updates: not available
 
-Once testers are on a build that includes the `updates`/`runtimeVersion`
-config (this one does — `runtimeVersion: { policy: 'appVersion' }`), you can
-push JS/asset-only changes without a new Play Console release, as long as
-the native code (dependencies, permissions, etc.) hasn't changed:
-
-```bash
-pnpm --filter @skoolos/mobile exec npx eas-cli update --branch production --message "fix: attendance retake bug"
-```
-
-Testers get the update the next time they cold-start the app (or per your
-`expo-updates` check policy). If a change touches native modules or
-`app.config.ts`'s native-relevant fields (icons, permissions, plugins), you
-need a new build (Step 3/5), not an OTA update — `runtimeVersion:
-{policy:'appVersion'}` means updates only apply to devices whose installed
-build has a matching `version` (`0.1.0` in `app.config.ts`), so bumping
-`version` on a native build automatically fences off old OTA updates from
-mismatched installs.
+`app.config.ts` carries an `updates.url`, but **`expo-updates` is not installed**,
+so `eas update` reaches nobody. Every change, JS-only or not, ships as a new
+store build: EAS production build → Internal testing → Closed testing → Production.
+Installing `expo-updates` needs a native build and its own device test.
 
 ---
 
@@ -315,6 +294,5 @@ pnpm --filter @skoolos/mobile exec npx eas-cli build -p android --profile intern
 pnpm --filter @skoolos/mobile exec npx eas-cli build -p android --profile production
 pnpm --filter @skoolos/mobile exec npx eas-cli submit -p android --profile production
 
-# ongoing: OTA pushes between store releases
-pnpm --filter @skoolos/mobile exec npx eas-cli update --branch production --message "..."
+# ongoing: no OTA (expo-updates not installed) — every change is a new store build
 ```
