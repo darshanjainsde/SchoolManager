@@ -26,7 +26,9 @@ const txMock = {
   // The notices apply/approve/reject/assign write: no admins, no school name,
   // no slots → every notice is a no-op in the tests above, and the two tests
   // at the bottom prove the writes themselves.
-  school: { findFirst: jest.fn().mockResolvedValue({ name: 'Raffles' }) },
+  school: { findFirst: jest.fn().mockResolvedValue({ name: 'Raffles' }), findUnique: jest.fn() },
+  // The school calendar approve() covers on: Mon–Sat, no holidays, unless a test says otherwise.
+  holiday: { findMany: jest.fn() },
   user: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null) },
   notification: { create: jest.fn() },
   notificationOutbox: { create: jest.fn() },
@@ -67,6 +69,8 @@ describe('LeaveService', () => {
     // null = the school never opened its leave policy (pre-policy behaviour).
     txMock.leaveTypeDef.findFirst.mockResolvedValue(null);
     txMock.leaveApplication.updateMany.mockResolvedValue({ count: 1 });
+    txMock.school.findUnique.mockResolvedValue({ workingDays: [1, 2, 3, 4, 5, 6] });
+    txMock.holiday.findMany.mockResolvedValue([]);
   });
 
   describe('apply', () => {
@@ -300,6 +304,7 @@ describe('LeaveService', () => {
           date: new Date('2026-07-20'),
           originalTeacherId: TEACHER,
           reason: 'leave',
+          leaveApplicationId: LEAVE_ID,
         },
       });
       expect(result).toEqual({ gaps: 2, gapIds: [undefined, undefined] }); // the mock's create returns nothing; the count is what matters here
@@ -386,6 +391,178 @@ describe('LeaveService', () => {
       expect(txMock.leaveApplication.updateMany).not.toHaveBeenCalled();
       txMock.staff.findFirst.mockResolvedValue(null);
       txMock.teacher.findFirst.mockResolvedValue(null);
+    });
+
+    describe('only the classes that would really be empty', () => {
+      const leaveOf = (o: Record<string, unknown>) => txMock.leaveApplication.findFirst.mockResolvedValue({ id: LEAVE_ID, schoolId: SCHOOL, teacherId: TEACHER, staffId: null, status: 'PENDING', ...o });
+      const live = (d: string) => ({
+        effectiveFrom: { lte: new Date(`${d}T00:00:00+05:30`) },
+        OR: [{ effectiveTo: null }, { effectiveTo: { gt: new Date(`${d}T00:00:00+05:30`) } }],
+      });
+      beforeEach(() => {
+        jest.useFakeTimers().setSystemTime(new Date('2026-11-01T03:00:00.000Z'));
+        txMock.leaveApplication.updateMany.mockResolvedValue({ count: 1 });
+        txMock.substitution.findFirst.mockResolvedValue(null);
+        txMock.substitution.create.mockImplementation(async ({ data }: { data: { periodId: string; date: Date } }) => ({ id: `${data.periodId}@${data.date.toISOString().slice(0, 10)}` }));
+        txMock.staffAttendance.findFirst.mockResolvedValue(null);
+        txMock.staffAttendance.create.mockResolvedValue({});
+      });
+      afterEach(() => {
+        jest.useRealTimers();
+        txMock.substitution.create.mockReset();
+        txMock.timetableSlot.findMany.mockReset();
+      });
+
+      it('Diwali inside the span: no gap and no ON_LEAVE mark that day', async () => {
+        leaveOf({ startDate: new Date('2026-11-09'), endDate: new Date('2026-11-11') }); // Mon–Wed
+        txMock.holiday.findMany.mockResolvedValue([{ name: 'Diwali', startDate: new Date('2026-11-09'), endDate: null }]);
+        txMock.timetableSlot.findMany.mockResolvedValue([{ classSectionId: CLASS_SECTION, periodId: PERIOD, period: { startTime: '9:00' } }]);
+        const r = await svc.approve(SCHOOL, LEAVE_ID, ADMIN_USER);
+        expect(r.gapIds).toEqual([`${PERIOD}@2026-11-10`, `${PERIOD}@2026-11-11`]);
+        expect(txMock.staffAttendance.create.mock.calls.map((c) => c[0].data.date)).toEqual([new Date('2026-11-10'), new Date('2026-11-11')]);
+        // Diwali's timetable is never even asked for.
+        expect(txMock.timetableSlot.findMany.mock.calls.map((c) => c[0].where.effectiveFrom.lte)).toEqual([
+          new Date('2026-11-10T00:00:00+05:30'),
+          new Date('2026-11-11T00:00:00+05:30'),
+        ]);
+      });
+
+      it('a Sunday inside the span: the Saturday and Monday are covered, the Sunday is not', async () => {
+        leaveOf({ startDate: new Date('2026-11-14'), endDate: new Date('2026-11-16') }); // Sat–Mon
+        txMock.timetableSlot.findMany.mockResolvedValue([{ classSectionId: CLASS_SECTION, periodId: PERIOD, period: { startTime: '9:00' } }]);
+        const r = await svc.approve(SCHOOL, LEAVE_ID, ADMIN_USER);
+        expect(r).toEqual({ gaps: 2, gapIds: [`${PERIOD}@2026-11-14`, `${PERIOD}@2026-11-16`] });
+        expect(txMock.timetableSlot.findMany.mock.calls.map((c) => c[0].where.dayOfWeek)).toEqual([6, 1]);
+        expect(txMock.staffAttendance.create.mock.calls.map((c) => c[0].data.date)).toEqual([new Date('2026-11-14'), new Date('2026-11-16')]);
+      });
+
+      it('a Mon–Fri school: the Saturday is not a working day either', async () => {
+        txMock.school.findUnique.mockResolvedValue({ workingDays: [1, 2, 3, 4, 5] });
+        leaveOf({ startDate: new Date('2026-11-13'), endDate: new Date('2026-11-16') }); // Fri–Mon
+        txMock.timetableSlot.findMany.mockResolvedValue([{ classSectionId: CLASS_SECTION, periodId: PERIOD, period: { startTime: '9:00' } }]);
+        const r = await svc.approve(SCHOOL, LEAVE_ID, ADMIN_USER);
+        expect(r.gapIds).toEqual([`${PERIOD}@2026-11-13`, `${PERIOD}@2026-11-16`]);
+        expect(txMock.school.findUnique).toHaveBeenCalledWith({ where: { id: SCHOOL }, select: { workingDays: true } });
+        expect(txMock.holiday.findMany.mock.calls[0][0].where).toMatchObject({ schoolId: SCHOOL });
+      });
+
+      it('a leave that falls wholly on holidays is approved with no gap and no mark', async () => {
+        leaveOf({ startDate: new Date('2026-11-09'), endDate: new Date('2026-11-10') });
+        txMock.holiday.findMany.mockResolvedValue([{ name: 'Diwali break', startDate: new Date('2026-11-09'), endDate: new Date('2026-11-10') }]);
+        const r = await svc.approve(SCHOOL, LEAVE_ID, ADMIN_USER);
+        expect(r).toEqual({ gaps: 0, gapIds: [] });
+        expect(txMock.timetableSlot.findMany).not.toHaveBeenCalled();
+        expect(txMock.staffAttendance.create).not.toHaveBeenCalled();
+        // Still approved, and the teacher still hears.
+        expect(txMock.leaveApplication.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: 'APPROVED' }) }));
+      });
+
+      it('asks only for slots LIVE on that date, not every slot that was ever active', async () => {
+        leaveOf({ startDate: new Date('2026-11-11'), endDate: new Date('2026-11-11') });
+        txMock.timetableSlot.findMany.mockResolvedValue([]);
+        await svc.approve(SCHOOL, LEAVE_ID, ADMIN_USER);
+        expect(txMock.timetableSlot.findMany.mock.calls[0][0].where).toEqual({
+          schoolId: SCHOOL, teacherId: TEACHER, dayOfWeek: 3,
+          effectiveFrom: { lte: new Date('2026-11-11T00:00:00+05:30') },
+          OR: [{ effectiveTo: null }, { effectiveTo: { gt: new Date('2026-11-11T00:00:00+05:30') } }],
+        });
+        expect(txMock.timetableSlot.findMany.mock.calls[0][0].take).toBeGreaterThan(0);
+      });
+
+      it('a timetable published mid-leave: each day is covered from the version live THAT day', async () => {
+        // Old version ran to Thu 12 Nov (effectiveTo = 12 Nov IST midnight); the new one starts that day.
+        const NEW_FROM = new Date('2026-11-12T00:00:00+05:30');
+        const versions = [
+          { classSectionId: CLASS_SECTION, periodId: 'old-p2', period: { startTime: '9:00' }, effectiveFrom: new Date('2026-04-01T00:00:00+05:30'), effectiveTo: NEW_FROM },
+          { classSectionId: CLASS_SECTION, periodId: 'new-p4', period: { startTime: '10:30' }, effectiveFrom: NEW_FROM, effectiveTo: null },
+        ];
+        txMock.timetableSlot.findMany.mockImplementation(async ({ where }: { where: { effectiveFrom: { lte: Date } } }) => {
+          const asOf = where.effectiveFrom.lte.getTime();
+          return versions.filter((v) => v.effectiveFrom.getTime() <= asOf && (v.effectiveTo === null || v.effectiveTo.getTime() > asOf));
+        });
+        leaveOf({ startDate: new Date('2026-11-11'), endDate: new Date('2026-11-12') }); // Wed–Thu
+        const r = await svc.approve(SCHOOL, LEAVE_ID, ADMIN_USER);
+        expect(r.gapIds).toEqual(['old-p2@2026-11-11', 'new-p4@2026-11-12']);
+        expect(txMock.timetableSlot.findMany.mock.calls[1][0].where).toMatchObject(live('2026-11-12'));
+      });
+
+      it('a day the teacher has no class: no gap, but still marked ON_LEAVE', async () => {
+        leaveOf({ startDate: new Date('2026-11-11'), endDate: new Date('2026-11-12') });
+        txMock.timetableSlot.findMany.mockImplementation(async ({ where }: { where: { dayOfWeek: number } }) =>
+          where.dayOfWeek === 3 ? [] : [{ classSectionId: CLASS_SECTION, periodId: PERIOD, period: { startTime: '9:00' } }],
+        );
+        const r = await svc.approve(SCHOOL, LEAVE_ID, ADMIN_USER);
+        expect(r.gapIds).toEqual([`${PERIOD}@2026-11-12`]);
+        expect(txMock.staffAttendance.create.mock.calls.map((c) => c[0].data.date)).toEqual([new Date('2026-11-11'), new Date('2026-11-12')]);
+      });
+
+      it('a half day PM leaves only the afternoon periods to cover — "8:00" is morning', async () => {
+        leaveOf({ startDate: new Date('2026-11-11'), endDate: new Date('2026-11-11'), halfDay: true, halfDayPart: 'PM' });
+        txMock.timetableSlot.findMany.mockResolvedValue([
+          { classSectionId: CLASS_SECTION, periodId: 'p1', period: { startTime: '8:00' } },
+          { classSectionId: CLASS_SECTION, periodId: 'p6', period: { startTime: '12:40' } },
+        ]);
+        const r = await svc.approve(SCHOOL, LEAVE_ID, ADMIN_USER);
+        expect(r.gapIds).toEqual(['p6@2026-11-11']);
+        // A half day keeps the day's ON_LEAVE mark: there is no half-day attendance status.
+        expect(txMock.staffAttendance.create).toHaveBeenCalledTimes(1);
+      });
+
+      it('a half day AM leaves only the morning periods; "1:30 pm" is afternoon', async () => {
+        leaveOf({ startDate: new Date('2026-11-11'), endDate: new Date('2026-11-11'), halfDay: true, halfDayPart: 'AM' });
+        txMock.timetableSlot.findMany.mockResolvedValue([
+          { classSectionId: CLASS_SECTION, periodId: 'p1', period: { startTime: '8:00' } },
+          { classSectionId: CLASS_SECTION, periodId: 'p5', period: { startTime: '11:55' } },
+          { classSectionId: CLASS_SECTION, periodId: 'p7', period: { startTime: '1:30 pm' } },
+        ]);
+        const r = await svc.approve(SCHOOL, LEAVE_ID, ADMIN_USER);
+        expect(r.gapIds).toEqual(['p1@2026-11-11', 'p5@2026-11-11']);
+      });
+
+      it('a half day whose period time nobody can read: that period is covered rather than left empty', async () => {
+        leaveOf({ startDate: new Date('2026-11-11'), endDate: new Date('2026-11-11'), halfDay: true, halfDayPart: 'PM' });
+        txMock.timetableSlot.findMany.mockResolvedValue([
+          { classSectionId: CLASS_SECTION, periodId: 'p1', period: { startTime: '8:00' } },
+          { classSectionId: CLASS_SECTION, periodId: 'pX', period: { startTime: 'after lunch' } },
+          { classSectionId: CLASS_SECTION, periodId: 'pY', period: null },
+        ]);
+        const r = await svc.approve(SCHOOL, LEAVE_ID, ADMIN_USER);
+        expect(r.gapIds).toEqual(['pX@2026-11-11', 'pY@2026-11-11']);
+      });
+
+      it('a half day from an older app (no part) covers every period of the day, as before', async () => {
+        leaveOf({ startDate: new Date('2026-11-11'), endDate: new Date('2026-11-11'), halfDay: true, halfDayPart: null });
+        txMock.timetableSlot.findMany.mockResolvedValue([
+          { classSectionId: CLASS_SECTION, periodId: 'p1', period: { startTime: '8:00' } },
+          { classSectionId: CLASS_SECTION, periodId: 'p6', period: { startTime: '12:40' } },
+        ]);
+        const r = await svc.approve(SCHOOL, LEAVE_ID, ADMIN_USER);
+        expect(r.gapIds).toEqual(['p1@2026-11-11', 'p6@2026-11-11']);
+      });
+
+      it('every gap names the leave it was opened for', async () => {
+        leaveOf({ startDate: new Date('2026-11-11'), endDate: new Date('2026-11-11') });
+        txMock.timetableSlot.findMany.mockResolvedValue([{ classSectionId: CLASS_SECTION, periodId: PERIOD, period: { startTime: '9:00' } }]);
+        await svc.approve(SCHOOL, LEAVE_ID, ADMIN_USER);
+        expect(txMock.substitution.create.mock.calls[0][0].data.leaveApplicationId).toBe(LEAVE_ID);
+      });
+
+      it('the gaps are written AFTER the winning conditional update, inside the same transaction', async () => {
+        leaveOf({ startDate: new Date('2026-11-11'), endDate: new Date('2026-11-11') });
+        txMock.timetableSlot.findMany.mockResolvedValue([{ classSectionId: CLASS_SECTION, periodId: PERIOD, period: { startTime: '9:00' } }]);
+        await svc.approve(SCHOOL, LEAVE_ID, ADMIN_USER);
+        expect(withTenantMock).toHaveBeenCalledTimes(1);
+        expect(txMock.leaveApplication.updateMany.mock.invocationCallOrder[0]).toBeLessThan(txMock.school.findUnique.mock.invocationCallOrder[0]);
+        expect(txMock.leaveApplication.updateMany.mock.invocationCallOrder[0]).toBeLessThan(txMock.substitution.create.mock.invocationCallOrder[0]);
+      });
+
+      it('a staff member\'s leave opens no gaps and asks no timetable', async () => {
+        leaveOf({ teacherId: null, staffId: 'staff-driver', startDate: new Date('2026-11-11'), endDate: new Date('2026-11-11') });
+        const r = await svc.approve(SCHOOL, LEAVE_ID, ADMIN_USER);
+        expect(r).toEqual({ gaps: 0, gapIds: [] });
+        expect(txMock.timetableSlot.findMany).not.toHaveBeenCalled();
+        expect(txMock.staffAttendance.create).not.toHaveBeenCalled();
+      });
     });
 
     describe('auto-marks ON_LEAVE in StaffAttendance', () => {

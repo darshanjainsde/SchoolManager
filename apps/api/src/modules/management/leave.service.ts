@@ -2,7 +2,9 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { withTenant, type TenantTx, type UserRole } from '@skoolos/db';
 import { LEAVE_STATUSES, type LeaveApplication, type LeaveStatusValue } from '@skoolos/types';
 import { ApiError } from '../../common/errors/api-error';
-import { dateRangeInclusive, isValidDateStr, isoWeekdayOf, toDateStr, todayIstDateStr } from './internal/leave-dates';
+import { dateRangeInclusive, inHalf, isValidDateStr, isoWeekdayOf, toDateStr, todayIstDateStr } from './internal/leave-dates';
+import { workingDates } from './internal/school-calendar';
+import { resolveAsOfDate } from './internal/timetable-date';
 import type { AssignSubstitutionDto, CreateLeaveDto } from './management.dto';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
 import { resolveLeaveDeskRecipients } from '../../common/notifications/recipients';
@@ -346,12 +348,14 @@ export class LeaveService {
   }
 
   /**
-   * Approves the application, then generates a coverage gap — an unfilled
-   * `Substitution` row — for every one of the teacher's ACTIVE timetable
-   * slots (`effectiveTo IS NULL`) on every weekday the leave spans, AND
-   * marks the teacher `ON_LEAVE` in `StaffAttendance` for every calendar
-   * date the leave spans that is today-or-later (IST) — see
-   * `markOnLeaveIfDue` below.
+   * Approves the application, then — for every WORKING day of the leave
+   * (School.workingDays minus holidays) — opens one gap (an unfilled
+   * `Substitution` row) per timetable slot LIVE on that date (only the away
+   * half's periods on a half day), linked to this leave by
+   * `leaveApplicationId`, AND marks the teacher `ON_LEAVE` in
+   * `StaffAttendance` for every working date that is today-or-later (IST) —
+   * see `markOnLeaveIfDue` below. A half day keeps the whole day's ON_LEAVE
+   * mark (there is no half-day attendance status).
    *
    * Idempotent by construction: for each (classSectionId, periodId, date) we
    * check for an existing `Substitution` row before creating one, so
@@ -372,7 +376,9 @@ export class LeaveService {
       // here, before any gap, attendance mark or notice is written.
       const app = await LeaveService.decide(tx, schoolId, id, adminUserId, 'APPROVED');
 
-      const dates = dateRangeInclusive(toDateStr(app.startDate), toDateStr(app.endDate));
+      // Only WORKING days: a Sunday or Diwali inside the span has no class to
+      // cover and no attendance to mark (the same calendar the balance uses).
+      const dates = await workingDates(tx, schoolId, toDateStr(app.startDate), toDateStr(app.endDate));
       const todayStr = todayIstDateStr(new Date());
 
       // Substitutions and the staff-attendance mark are TEACHER work: a driver
@@ -382,15 +388,8 @@ export class LeaveService {
       let gaps = 0;
       const gapIds: string[] = [];
       for (const dateStr of teacherId ? dates : []) {
-        const weekday = isoWeekdayOf(dateStr);
         const date = new Date(dateStr);
-
-        const slots = await tx.timetableSlot.findMany({ take: LIST_CEILING.ACTIVITY,
-          where: { schoolId, teacherId: teacherId!, dayOfWeek: weekday, effectiveTo: null },
-          select: { classSectionId: true, periodId: true },
-        });
-
-        for (const slot of slots) {
+        for (const slot of await LeaveService.slotsOfTheDay(tx, schoolId, teacherId!, dateStr, app)) {
           const existing = await tx.substitution.findFirst({
             where: { schoolId, classSectionId: slot.classSectionId, periodId: slot.periodId, date },
           });
@@ -404,6 +403,7 @@ export class LeaveService {
               date,
               originalTeacherId: teacherId!,
               reason: 'leave',
+              leaveApplicationId: app.id,
             },
           });
           gaps += 1;
@@ -449,6 +449,34 @@ export class LeaveService {
         data: { status: 'ON_LEAVE', markedById },
       });
     }
+  }
+
+  /**
+   * The teacher's slots LIVE on that date (`effectiveFrom <= date AND
+   * (effectiveTo IS NULL OR effectiveTo > date)` — a timetable published
+   * mid-leave changes the answer from that date on), cut to the half they are
+   * away for.
+   */
+  private static async slotsOfTheDay(
+    tx: TenantTx,
+    schoolId: string,
+    teacherId: string,
+    dateStr: string,
+    app: { halfDay?: boolean | null; halfDayPart?: string | null },
+  ) {
+    const asOf = resolveAsOfDate(dateStr, new Date());
+    const slots = await tx.timetableSlot.findMany({
+      take: LIST_CEILING.ACTIVITY,
+      where: {
+        schoolId,
+        teacherId,
+        dayOfWeek: isoWeekdayOf(dateStr),
+        effectiveFrom: { lte: asOf },
+        OR: [{ effectiveTo: null }, { effectiveTo: { gt: asOf } }],
+      },
+      select: { classSectionId: true, periodId: true, period: { select: { startTime: true } } },
+    });
+    return slots.filter((s) => inHalf(app, s.period?.startTime));
   }
 
   /**
