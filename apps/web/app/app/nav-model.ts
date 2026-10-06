@@ -187,3 +187,14 @@ export function visibleModel(features: string[] | null): NavEntry[] {
   }
   return out;
 }
+
+/**
+ * A desk job's whole sidebar: the one room it is admitted to. Drawn from the
+ * full model, ignoring tier features — the room is the job's, and every other
+ * link would only bounce back here.
+ */
+export function deskModel(desk: string): NavEntry[] {
+  return navLeaves(NAV_MODEL)
+    .filter((l) => l.href === desk)
+    .map((item) => ({ kind: 'item' as const, item }));
+}

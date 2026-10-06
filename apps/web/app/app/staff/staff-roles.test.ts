@@ -81,4 +81,30 @@ describe('staff roles agree across database, API and console', () => {
       expect(labels.slice(0, labels.indexOf('};'))).toContain(`${role}:`);
     }
   });
+
+  it('offers the admissions officer at every school — ENQUIRY is in every tier', () => {
+    // LIBRARIAN, SPORTS and ACCOUNTS hide where the school lacks their module.
+    // Admissions has no module to lack, so the filter must never name it.
+    const at = consoleSrc.indexOf('const allowedRoles');
+    expect(at).toBeGreaterThan(-1);
+    expect(consoleSrc.slice(at, at + 300)).not.toContain("'ADMISSIONS'");
+  });
+
+  it('every other place a job is named has a label for every job (else the job reads as "Staff")', () => {
+    const maps: Array<[string, string]> = [
+      ['apps/web/app/staff/page.tsx', 'const STAFF_ROLE_LABEL'],
+      ['apps/web/app/staff/profile/page.tsx', 'const STAFF_ROLE_LABEL'],
+      ['apps/api/src/modules/payroll/internal/pay-people.service.ts', 'const STAFF_LABEL'],
+      ['apps/api/src/modules/payroll/internal/pay-run.service.ts', 'const STAFF_LABEL'],
+    ];
+    for (const [file, decl] of maps) {
+      const src = file.startsWith('apps/web/') ? readFileSync(resolve(process.cwd(), file.replace('apps/web/', '')), 'utf8') : readFileSync(resolve(root, file), 'utf8');
+      const at = src.indexOf(decl);
+      expect(at, `${file} ${decl}`).toBeGreaterThan(-1);
+      const block = src.slice(at, src.indexOf('};', at));
+      for (const role of prismaEnumValues(schemaSrc, 'StaffRole')) {
+        expect(block, `${file} lacks ${role}`).toContain(`${role}:`);
+      }
+    }
+  });
 });

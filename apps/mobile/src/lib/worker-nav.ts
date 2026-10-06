@@ -28,6 +28,9 @@ export function jobFor(s: Pick<Session, 'staffRole' | 'features'> | null | undef
   // leave desk at all, while the API would have let them decide leave. The
   // pay tab is dropped on its own below when SALARY is off.
   if (s.staffRole === 'ACCOUNTS') return 'ACCOUNTS';
+  // ADMISSIONS falls through to GENERAL on purpose: the Leads and Pipeline
+  // tabs arrive in Tier C of the admissions design. Until then an officer has
+  // Today and Profile here, and works the desk on the web (/app/enquiries).
   return 'GENERAL';
 }
 
