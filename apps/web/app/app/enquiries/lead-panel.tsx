@@ -66,22 +66,29 @@ export function LeadPanel({ id }: { id: string }) {
     staleTime: 5 * 60_000,
   });
 
-  // A different lead is a different form; carrying the half-typed note — or an
-  // open "how did it go?" — across would attach it to the wrong family.
-  useEffect(() => {
-    setNote('');
-    setLostWhy('');
-    setAskingWhy(false);
-    setContact(null);
-    setContactLost(false);
-    setContactWhy('');
-    setError(null);
-  }, [id]);
+  // A different lead is a different form: the page mounts this with key={id}, so
+  // a half-typed note or an open "how did it go?" can never carry across, and a
+  // late answer to a write on lead A has no state of B's to land in.
 
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: ['enquiry', id] });
     void qc.invalidateQueries({ queryKey: ['site-enquiries'] });
   };
+
+  // Escape puts the question away, wherever focus is — the link that opened it
+  // is the thing with focus, not the sheet.
+  useEffect(() => {
+    if (!contact) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setContact(null);
+        setContactLost(false);
+        setContactWhy('');
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [contact]);
 
   const closeSheet = () => {
     setContact(null);
@@ -187,7 +194,7 @@ export function LeadPanel({ id }: { id: string }) {
 
         <div className="sk-enq-contact">
           <a className="sk-btn" data-variant="primary" href={`tel:${tel}`} onClick={() => setContact('CALL')}>
-            Call {l.phone}
+            Call <span style={{ whiteSpace: 'nowrap' }}>{l.phone}</span>
           </a>
           <a
             className="sk-btn"
@@ -232,6 +239,7 @@ export function LeadPanel({ id }: { id: string }) {
                   value={contactWhy}
                   onChange={(e) => setContactWhy(e.target.value)}
                   placeholder="Why are they not going ahead?"
+                  maxLength={200}
                   aria-label="Why the family is not going ahead"
                 />
                 <button
@@ -261,6 +269,8 @@ export function LeadPanel({ id }: { id: string }) {
                 className="sk-enq-stage"
                 data-state={b.state}
                 aria-pressed={b.state === 'now'}
+                aria-current={b.state === 'now' ? 'step' : undefined}
+                aria-label={b.state === 'done' ? `${b.label} — done` : undefined}
                 disabled={!b.canClick || patch.isPending}
                 onClick={() => moveTo(b.key)}
               >
@@ -296,6 +306,7 @@ export function LeadPanel({ id }: { id: string }) {
                 value={lostWhy}
                 onChange={(e) => setLostWhy(e.target.value)}
                 placeholder="Why did it not go ahead?"
+                maxLength={200}
                 aria-label="Why the lead was lost"
               />
               <button
@@ -303,10 +314,11 @@ export function LeadPanel({ id }: { id: string }) {
                 data-variant="primary"
                 type="button"
                 disabled={patch.isPending || !lostWhy.trim()}
-                onClick={() => {
-                  patch.mutate({ status: 'LOST', lostReason: lostWhy.trim() });
-                  setAskingWhy(false);
-                }}
+                // The form closes only when the write lands: a refusal keeps what was typed.
+                onClick={() => patch.mutate(
+                  { status: 'LOST', lostReason: lostWhy.trim() },
+                  { onSuccess: () => { setAskingWhy(false); setLostWhy(''); } },
+                )}
               >
                 Mark lost
               </button>
@@ -362,7 +374,7 @@ export function LeadPanel({ id }: { id: string }) {
               value={note}
               onChange={(e) => setNote(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && note.trim()) addNote.mutate(note.trim());
+                if (e.key === 'Enter' && note.trim() && !addNote.isPending) addNote.mutate(note.trim());
               }}
               placeholder="What did they say?"
               aria-label="Add a note"

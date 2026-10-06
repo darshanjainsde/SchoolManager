@@ -1,6 +1,6 @@
 // apps/web/app/app/enquiries/page.tsx
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
@@ -18,6 +18,9 @@ interface Me {
   role?: string;
   staffRole?: string | null;
 }
+
+/** More than this on screen is a wall; the rest is one tap away. */
+const PAGE = 200;
 
 const CHIPS: { key: DeskFilter; label: string }[] = [
   { key: 'MINE', label: 'My leads' },
@@ -56,6 +59,11 @@ export default function EnquiriesPage() {
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [limit, setLimit] = useState(PAGE);
+  // A lead just added at the desk: it must be the one opened, and the list has
+  // not refetched yet, so the selection effect must not replace it.
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const savedAt = useRef(0);
 
   const me = useQuery({
     queryKey: ['me', host],
@@ -75,10 +83,25 @@ export default function EnquiriesPage() {
     staleTime: 30_000,
   });
 
+  // Until /auth/me answers nobody knows whose desk this is. Showing the admin
+  // view meanwhile would put a stranger's lead on an officer's screen (and fetch it).
+  const meLoading = me.isLoading;
+
   const rows = useMemo(() => {
+    if (meLoading) return [];
     const all = leads.data ?? [];
     return deskOrder(all.filter((l) => matchesFilter(l, filter, undefined, meId) && matchesQuery(l, query)));
-  }, [leads.data, filter, query, meId]);
+  }, [leads.data, filter, query, meId, meLoading]);
+
+  // The chip counts walk every lead once per chip — not on every keystroke.
+  const chipCounts = useMemo(() => {
+    const all = leads.data ?? [];
+    return Object.fromEntries(CHIPS.map((c) => [c.key, all.filter((l) => matchesFilter(l, c.key, undefined, meId)).length])) as Record<string, number>;
+  }, [leads.data, meId]);
+
+  // The lead being worked on is always on screen, however far down it sits.
+  const selectedAt = selected ? rows.findIndex((r) => r.id === selected) : -1;
+  const shown = rows.slice(0, Math.max(limit, selectedAt + 1));
 
   const counts = useMemo(() => deskCounts(leads.data ?? []), [leads.data]);
 
@@ -86,12 +109,17 @@ export default function EnquiriesPage() {
   // filtered away — a detail panel showing a family you cannot see in the list
   // is how you edit the wrong record.
   useEffect(() => {
+    if (pendingId) {
+      if (rows.some((r) => r.id === pendingId)) setPendingId(null);
+      else if (leads.isFetching || leads.dataUpdatedAt < savedAt.current) return;
+      else setPendingId(null);
+    }
     if (rows.length === 0) {
       setSelected(null);
       return;
     }
     if (!selected || !rows.some((r) => r.id === selected)) setSelected(rows[0].id);
-  }, [rows, selected]);
+  }, [rows, selected, pendingId, leads.isFetching, leads.dataUpdatedAt]);
 
   function exportCsv() {
     const day = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
@@ -148,7 +176,7 @@ export default function EnquiriesPage() {
               className="sk-input"
               type="search"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => { setQuery(e.target.value); setLimit(PAGE); }}
               placeholder="Search a name or a phone number…"
               aria-label="Search leads"
             />
@@ -160,17 +188,17 @@ export default function EnquiriesPage() {
                   type="button"
                   className="sk-enq-chip"
                   aria-pressed={filter === c.key}
-                  onClick={() => setPicked(c.key)}
+                  onClick={() => { setPicked(c.key); setLimit(PAGE); }}
                 >
-                  {c.label} {(leads.data ?? []).filter((l) => matchesFilter(l, c.key, undefined, meId)).length}
+                  {c.label} {chipCounts[c.key]}
                 </button>
               ))}
             </div>
 
-            {leads.isLoading ? <p className="sk-state">Reading the enquiries…</p> : null}
+            {leads.isLoading || meLoading ? <p className="sk-state">Reading the enquiries…</p> : null}
             {leads.error ? <p className="sk-state err">{(leads.error as Error).message}</p> : null}
 
-            {!leads.isLoading && !leads.error && rows.length === 0 ? (
+            {!leads.isLoading && !meLoading && !leads.error && rows.length === 0 ? (
               <p className="sk-state">
                 {(leads.data ?? []).length === 0
                   ? 'No enquiries yet — they appear here the moment somebody submits the form on your website, or you add one.'
@@ -180,7 +208,7 @@ export default function EnquiriesPage() {
 
             {rows.length > 0 ? (
               <div className="sk-enq-list" role="listbox" aria-label="Leads">
-                {rows.map((l) => {
+                {shown.map((l) => {
                   const due = dueLabel(l);
                   return (
                     <button
@@ -212,13 +240,27 @@ export default function EnquiriesPage() {
                 })}
               </div>
             ) : null}
+
+            {shown.length < rows.length ? (
+              <button type="button" className="sk-btn" onClick={() => setLimit(shown.length + PAGE)}>
+                Show {rows.length - shown.length} more
+              </button>
+            ) : null}
           </div>
         </div>
 
-        <div>{selected ? <LeadPanel id={selected} /> : <p className="sk-state">Pick a family on the left.</p>}</div>
+        <div>{selected ? <LeadPanel key={selected} id={selected} /> : <p className="sk-state">Pick a family on the left.</p>}</div>
       </div>
 
-      {adding ? <AddEnquiryDrawer onClose={() => setAdding(false)} onSaved={(id) => setSelected(id)} /> : null}
+      {adding ? <AddEnquiryDrawer onClose={() => setAdding(false)} onSaved={(id) => {
+        // Open the new lead, and make it visible: back to the home filter, no search.
+        savedAt.current = Date.now();
+        setPendingId(id);
+        setSelected(id);
+        setPicked(null);
+        setQuery('');
+        setLimit(PAGE);
+      }} /> : null}
     </div>
   );
 }

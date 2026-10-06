@@ -2864,8 +2864,7 @@ html[data-theme='light'] .sk-eh-tick[aria-pressed="true"] > .box::after { border
   display: grid; gap: 9px; padding: 12px; border-radius: 12px;
   border: 1.5px solid var(--sk-brand); background: var(--sk-card);
 }
-.sk-enq-outcome .opts { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-@media (min-width: 560px) { .sk-enq-outcome .opts { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.sk-enq-outcome .opts { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 110px), 1fr)); }
 
 /* Where a lead came from, on its row. Outlined and grey on purpose: a source
    is a fact, not a status, and a second filled pill under the stage pill read
@@ -2876,7 +2875,14 @@ html[data-theme='light'] .sk-eh-tick[aria-pressed="true"] > .box::after { border
 }
 
 .sk-enq-contact { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 130px), 1fr)); }
+/* A button must wrap rather than clip: the number inside it is nowrap, so it
+   never splits mid-digit, and the words around it give way. */
+.sk-enq-contact .sk-btn { white-space: normal; text-align: center; }
 .sk-enq-fields { display: grid; gap: 11px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 165px), 1fr)); }
+/* A grid item will not shrink below its content (min-width: auto): the owner
+   select took the width of its longest option and pushed the page sideways. */
+.sk-enq-fields > label { min-width: 0; }
+.sk-enq-fields .sk-input { width: 100%; min-width: 0; }
 
 /* The history. A timeline, so a note and a stage change read as one story. */
 .sk-enq-tl { display: flex; gap: 10px; padding: 10px 0; border-top: 1px solid var(--sk-line); }

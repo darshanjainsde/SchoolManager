@@ -51,8 +51,10 @@ describe('the lead panel', () => {
     const api = mount();
     await screen.findByRole('heading', { name: 'Meera Purohit' });
     const stages = within(screen.getByRole('group', { name: 'Admissions stage' }));
-    expect(stages.getByRole('button', { name: 'New' })).toBeDisabled();
+    expect(stages.getByRole('button', { name: 'New — done' })).toBeDisabled();
     expect(stages.getByRole('button', { name: 'Contacted' })).toBeDisabled();
+    expect(stages.getByRole('button', { name: 'Contacted' })).toHaveAttribute('aria-current', 'step');
+    expect(stages.getByRole('button', { name: 'Interested' })).not.toHaveAttribute('aria-current');
     fireEvent.click(stages.getByRole('button', { name: 'Interested' }));
     await waitFor(() => expect(api.patch).toHaveBeenCalledWith('/site/enquiries/L1', { status: 'INTERESTED' }));
   });
@@ -171,5 +173,48 @@ describe('the lead panel', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(msg);
     await waitFor(() => expect((api.get as ReturnType<typeof vi.fn>).mock.calls.filter((c) => c[0] === '/site/enquiries/L1')).toHaveLength(2));
     expect(screen.queryByRole('group', { name: 'How did it go?' })).not.toBeInTheDocument();
+  });
+
+  it('Escape puts the "how did it go?" question away and writes nothing', async () => {
+    const api = mount();
+    fireEvent.click(await screen.findByRole('link', { name: /^Call / }));
+    expect(screen.getByRole('group', { name: 'How did it go?' })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('group', { name: 'How did it go?' })).not.toBeInTheDocument();
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it('a refused "Mark lost" keeps the form and the typed reason; the reason field is capped at the 200 the API allows', async () => {
+    const api = mount();
+    (api.patch as ReturnType<typeof vi.fn>).mockRejectedValue(new ApiError(400, 'Reason is too long', { code: 'VALIDATION', message: 'Reason is too long' }));
+    const stages = within(await screen.findByRole('group', { name: 'Admissions stage' }));
+    fireEvent.click(stages.getByRole('button', { name: 'Lost' }));
+    const why = screen.getByLabelText('Why the lead was lost') as HTMLInputElement;
+    expect(why.maxLength).toBe(200);
+    fireEvent.change(why, { target: { value: 'Too far' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Mark lost' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Reason is too long');
+    expect((screen.getByLabelText('Why the lead was lost') as HTMLInputElement).value).toBe('Too far');
+  });
+
+  it('the contact "why" field is capped at 200 too', async () => {
+    mount();
+    fireEvent.click(await screen.findByRole('link', { name: 'WhatsApp' }));
+    fireEvent.click(within(screen.getByRole('group', { name: 'How did it go?' })).getByRole('button', { name: 'Lost' }));
+    expect((screen.getByLabelText('Why the family is not going ahead') as HTMLInputElement).maxLength).toBe(200);
+  });
+
+  it('Enter in the note box is ignored while the note is still being saved', async () => {
+    const api = mount();
+    let release!: (v: unknown) => void;
+    (api.post as ReturnType<typeof vi.fn>).mockImplementation(() => new Promise((r) => { release = r; }));
+    const box = await screen.findByLabelText('Add a note');
+    fireEvent.change(box, { target: { value: 'Rang, will visit Saturday' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+    expect(api.post).toHaveBeenCalledWith('/site/enquiries/L1/notes', { body: 'Rang, will visit Saturday' });
+    release({});
   });
 });
