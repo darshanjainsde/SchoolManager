@@ -1219,6 +1219,32 @@ describe('LeaveService', () => {
       await expect(svc.list(SCHOOL, 'BOGUS')).rejects.toMatchObject({ response: { code: 'VALIDATION' } });
     });
   });
+
+  describe('coverage', () => {
+    const lookups = () => {
+      txMock.classSection.findMany.mockResolvedValue([{ id: CLASS_SECTION, name: 'B', grade: { name: 'VII' } }]);
+      txMock.period.findMany.mockResolvedValue([{ id: PERIOD, label: 'Period I', order: 1 }]);
+      txMock.teacher.findMany.mockResolvedValue([{ id: TEACHER, firstName: 'Asha', lastName: 'Rao' }, { id: OTHER_TEACHER, firstName: 'Kavya', lastName: 'Rao' }]);
+    };
+
+    it('says whether each substitute has seen their cover', async () => {
+      const seen = new Date('2026-10-05T02:40:00Z');
+      txMock.substitution.findMany.mockResolvedValue([{ id: SUB_ID, date: new Date('2026-10-05'), classSectionId: CLASS_SECTION, periodId: PERIOD, originalTeacherId: TEACHER, substituteTeacherId: OTHER_TEACHER, acknowledgedAt: seen }]);
+      lookups();
+      const [row] = await svc.coverage(SCHOOL, '2026-10-05', '2026-10-05');
+      expect(row).toMatchObject({ substituteTeacherName: 'Kavya Rao', acknowledgedAt: seen });
+    });
+
+    it('a cover nobody has tapped Got it on, and a gap with nobody, both say null — never undefined', async () => {
+      txMock.substitution.findMany.mockResolvedValue([
+        { id: SUB_ID, date: new Date('2026-10-05'), classSectionId: CLASS_SECTION, periodId: PERIOD, originalTeacherId: TEACHER, substituteTeacherId: OTHER_TEACHER, acknowledgedAt: null },
+        { id: 'gap-2', date: new Date('2026-10-05'), classSectionId: CLASS_SECTION, periodId: PERIOD, originalTeacherId: TEACHER, substituteTeacherId: null, acknowledgedAt: null },
+      ]);
+      lookups();
+      const rows = await svc.coverage(SCHOOL, '2026-10-05', '2026-10-05');
+      expect(rows.map((r) => r.acknowledgedAt)).toEqual([null, null]);
+    });
+  });
 });
 
 describe('LeaveService notices', () => {

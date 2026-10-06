@@ -23,11 +23,12 @@ describe('freeTeachersFor is the only free-teacher computation', () => {
     expect(src).not.toMatch(/regularClash|substitutionClash/);
   });
 
-  // RATCHET until Task 9 moves the console onto GET /manage/substitution/:id/candidates:
-  // `it.failing` passes while the page still has its own busySet and FAILS the
-  // moment it is gone — whoever removes it must turn this back into `it`.
-  it.failing('the console leave page has no busySet of its own', () => {
+  // The console asks GET /manage/substitution/:id/candidates per gap (Task 9),
+  // so it can never again offer a teacher the server would refuse.
+  it('the console leave page has no busySet of its own', () => {
     const page = readFileSync(join(WEB, 'app/app/leave/page.tsx'), 'utf8');
     expect(page).not.toMatch(/busySet/);
+    expect(page).not.toMatch(/\/manage\/availability/);
+    expect(page).toMatch(/\/manage\/substitution\/\$\{gap\.id\}\/candidates/);
   });
 });

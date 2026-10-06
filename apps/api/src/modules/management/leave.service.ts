@@ -683,6 +683,8 @@ export class LeaveService {
           originalTeacherName: teacherName(r.originalTeacherId) ?? 'Unknown teacher',
           substituteTeacherId: r.substituteTeacherId,
           substituteTeacherName: teacherName(r.substituteTeacherId),
+          // When the substitute tapped "Got it" — null until they do, and again after any reassignment.
+          acknowledgedAt: r.acknowledgedAt ?? null,
         }))
         .sort((a, b) => a.date.getTime() - b.date.getTime() || a._periodOrder - b._periodOrder)
         .map(({ _periodOrder, ...rest }) => rest);
