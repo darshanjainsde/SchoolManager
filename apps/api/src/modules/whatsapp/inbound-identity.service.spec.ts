@@ -124,6 +124,28 @@ describe('InboundIdentityService.actorFor', () => {
     expect(await svc().actorFor(PHONE, A, { kind: 'LEAVE_DESK' })).toEqual({ ok: false, why: 'NO_PROFILE' });
   });
 
+  // ── One login, several profiles: one person, never AMBIGUOUS ───────────
+
+  it('LEAVE_DESK: one admin login that comes back twice (admin + teacher row) is ok, and the ADMIN profile is the one returned', async () => {
+    profiles.resolve.mockResolvedValue([profile('u-head', 'TEACHER', 'SCHOOL_ADMIN'), profile('u-head', 'ADMIN', 'SCHOOL_ADMIN')]);
+    expect(await svc().actorFor(PHONE, A, { kind: 'LEAVE_DESK' })).toEqual({ ok: true, profile: expect.objectContaining({ userId: 'u-head', kind: 'ADMIN' }) });
+  });
+
+  it('SUBSTITUTE: the covering teacher\'s login that comes back twice is ok', async () => {
+    profiles.resolve.mockResolvedValue([profile('u-ramesh', 'TEACHER', 'TEACHER'), { ...profile('u-ramesh', 'TEACHER', 'TEACHER'), label: 'Ramesh (2)' }]);
+    db.substitution.findFirst.mockResolvedValue({ substituteTeacherId: 't-ramesh' });
+    db.teacher.findFirst.mockResolvedValue({ userId: 'u-ramesh' });
+    expect(await svc().actorFor(PHONE, A, { kind: 'SUBSTITUTE', substitutionId: 'sub-1' })).toEqual({ ok: true, profile: expect.objectContaining({ userId: 'u-ramesh', label: 'u-ramesh' }) });
+  });
+
+  it('two DIFFERENT logins, each listed twice, are still AMBIGUOUS', async () => {
+    profiles.resolve.mockResolvedValue([
+      profile('u-1', 'ADMIN', 'SCHOOL_ADMIN'), profile('u-1', 'TEACHER', 'SCHOOL_ADMIN'),
+      profile('u-2', 'ADMIN', 'SCHOOL_ADMIN'), profile('u-2', 'ADMIN', 'SCHOOL_ADMIN'),
+    ]);
+    expect(await svc().actorFor(PHONE, A, { kind: 'LEAVE_DESK' })).toEqual({ ok: false, why: 'AMBIGUOUS' });
+  });
+
   it.each(['+91 98290 11223', '919829011223', '09829011223', '98290 11223', '+91-98290-11223'])(
     'the phone "%s" reaches the profile lookup as +919829011223',
     async (raw) => {

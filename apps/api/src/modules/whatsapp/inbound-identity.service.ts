@@ -12,6 +12,21 @@ export type ActorResult =
 type Db = ReturnType<typeof getPlatformPrisma>;
 
 /**
+ * One LOGIN is one actor. PhoneProfile is keyed by `userId` (one login per
+ * person per school); resolve() already merges by userId today, but an admin
+ * with a Teacher row, or a family login per child, must never count as "two
+ * people" here — that would turn one person into AMBIGUOUS. Keep the first
+ * profile per userId; for LEAVE_DESK prefer the ADMIN / STAFF profile.
+ */
+function dedupeByUser(list: PhoneProfile[], need: InboundNeed): PhoneProfile[] {
+  const deskKind = (p: PhoneProfile) => p.kind === 'ADMIN' || p.kind === 'STAFF';
+  const ordered = need.kind === 'LEAVE_DESK' ? [...list.filter(deskKind), ...list.filter((p) => !deskKind(p))] : list;
+  const out = new Map<string, PhoneProfile>();
+  for (const p of ordered) if (!out.has(p.userId)) out.set(p.userId, p);
+  return [...out.values()];
+}
+
+/**
  * WHO IS TAPPING — decided once, the same way login decides it.
  *
  * The login side already knew who is behind a phone (PhoneProfilesService);
@@ -36,7 +51,7 @@ export class InboundIdentityService {
       const switchedOff = await db.user.count({ where: { schoolId, phone, isActive: false } });
       return { ok: false, why: switchedOff > 0 ? 'INACTIVE' : 'NO_PROFILE' };
     }
-    const eligible = await this.eligible(db, schoolId, profiles, need);
+    const eligible = dedupeByUser(await this.eligible(db, schoolId, profiles, need), need);
     if (eligible.length === 1) return { ok: true, profile: eligible[0] };
     return { ok: false, why: eligible.length === 0 ? 'NOT_ALLOWED' : 'AMBIGUOUS' };
   }
