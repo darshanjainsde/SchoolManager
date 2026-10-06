@@ -286,6 +286,12 @@ export type ErrorCode =
   | 'PAY_RUN_EMPTY'
   | 'NOT_SPORTS_DESK'
   | 'NOT_LEAVE_DESK'
+  /** Neither a school admin nor an active admissions officer. 403. */
+  | 'NOT_ADMISSIONS_DESK'
+  /** A stage change against the pipeline's direction (LOST and the one reopen excepted). 409. */
+  | 'ENQUIRY_STAGE_BACKWARDS'
+  /** A lead given to somebody who is not an admissions officer or an admin here. 400. */
+  | 'ENQUIRY_OWNER_NOT_DESK'
   /** The sports teacher's permission list does not include this action. 403. */
   | 'SPORTS_PERM'
   /** Bands overlap, are empty or malformed. 400. */

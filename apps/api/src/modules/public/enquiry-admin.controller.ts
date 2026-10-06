@@ -6,16 +6,17 @@ import { CurrentUser } from '../../common/auth/current-user.decorator';
 import type { AnyJwtPayload } from '../../common/auth/jwt-payload';
 import { TenantContextService } from '../tenancy';
 import { EnquiryService } from './enquiry.service';
+import { AdmissionsDeskGuard } from './internal/admissions-desk.guard';
 import { AddEnquiryNoteDto, SetEnquiryStatusDto } from './public.dto';
 
 @Controller('site')
-// SchoolJwtGuard establishes WHICH school you belong to; it reads no role at
-// all. Without RolesGuard beside it every route here was reachable with a
-// STUDENT or PARENT token — and the enquiries ones hand back other families'
-// names and phone numbers. Every caller lives under /app, which is already
-// SCHOOL_ADMIN-only, so this locks out nobody who was legitimately using it.
-@UseGuards(SchoolJwtGuard, RolesGuard)
-@Roles('SCHOOL_ADMIN')
+// SchoolJwtGuard establishes WHICH school you belong to and reads no role.
+// RolesGuard admits SCHOOL_ADMIN and STAFF; AdmissionsDeskGuard then narrows
+// STAFF to an active admissions officer. A STUDENT, PARENT or TEACHER token is
+// refused by RolesGuard, a driver by the desk guard — these routes hand back
+// other families' names and phone numbers.
+@UseGuards(SchoolJwtGuard, RolesGuard, AdmissionsDeskGuard)
+@Roles('SCHOOL_ADMIN', 'STAFF')
 export class EnquiryAdminController {
   constructor(
     private readonly enquiry: EnquiryService,
@@ -34,6 +35,16 @@ export class EnquiryAdminController {
   @Get('enquiries')
   list() {
     return this.enquiry.list(this.sid());
+  }
+
+  /**
+   * Who a lead can be given to. Declared BEFORE `enquiries/:id`: Express
+   * matches in declaration order, and `:id`'s ParseUUIDPipe would answer the
+   * word "owners" with a 400.
+   */
+  @Get('enquiries/owners')
+  owners() {
+    return this.enquiry.owners(this.sid());
   }
 
   @Get('enquiries/:id')

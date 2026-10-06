@@ -1,9 +1,10 @@
 import 'reflect-metadata';
 
 const txMock = {
-  enquiry: { findFirst: jest.fn(), update: jest.fn(), findMany: jest.fn() },
+  enquiry: { findFirst: jest.fn(), update: jest.fn(), findMany: jest.fn(), create: jest.fn() },
   enquiryNote: { create: jest.fn(), findMany: jest.fn(), groupBy: jest.fn() },
   staff: { findMany: jest.fn(), findFirst: jest.fn() },
+  user: { findMany: jest.fn(), findFirst: jest.fn() },
 };
 
 const withTenantMock = jest.fn((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));
@@ -27,6 +28,9 @@ import { EnquiryService } from './enquiry.service';
 const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const LEAD = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
 const USER = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+const OFFICER = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
+const GONE = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
+const ADMIN = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
 
 const tenant = { requireTenant: () => ({ schoolId: SCHOOL }) } as never;
 const features = { getFeatures: jest.fn() } as never;
@@ -42,6 +46,10 @@ beforeEach(() => {
     Promise.resolve({ id: LEAD, schoolId: SCHOOL, status: 'NEW', lostReason: null, ...data }),
   );
   txMock.enquiryNote.create.mockResolvedValue({ id: 'n1' });
+  txMock.staff.findFirst.mockResolvedValue(null);
+  txMock.staff.findMany.mockResolvedValue([]);
+  txMock.user.findFirst.mockResolvedValue(null);
+  txMock.user.findMany.mockResolvedValue([]);
 });
 
 describe('moving a lead through the pipeline', () => {
@@ -140,5 +148,54 @@ describe('a lead from another school', () => {
     txMock.enquiry.findFirst.mockResolvedValue(null);
     await expect(service().addNote(SCHOOL, LEAD, 'hello')).rejects.toBeInstanceOf(NotFoundException);
     expect(txMock.enquiryNote.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('who sits at the desk', () => {
+  beforeEach(() => {
+    // Officers are asked for by role; owner names for the list are asked for by user id.
+    txMock.staff.findMany.mockImplementation(({ where }: { where: { role?: string } }) =>
+      Promise.resolve(
+        where.role === 'ADMISSIONS'
+          ? [{ userId: OFFICER, firstName: 'Sunita', lastName: 'Kale' }]
+          : [
+              { userId: OFFICER, firstName: 'Sunita', lastName: 'Kale' },
+              { userId: GONE, firstName: 'Ravi', lastName: 'Old' },
+            ],
+      ),
+    );
+    txMock.user.findMany.mockResolvedValue([{ id: ADMIN, name: null, email: 'office@school.test' }]);
+  });
+
+  it('is the active admissions officers, then the school admins', async () => {
+    expect(await service().owners(SCHOOL)).toEqual([
+      { userId: OFFICER, name: 'Sunita Kale', job: 'ADMISSIONS' },
+      { userId: ADMIN, name: 'office@school.test', job: 'ADMIN' },
+    ]);
+    expect(txMock.staff.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { schoolId: SCHOOL, role: 'ADMISSIONS', isActive: true, userId: { not: null } },
+    }));
+    expect(txMock.user.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { schoolId: SCHOOL, role: 'SCHOOL_ADMIN', isActive: true },
+    }));
+  });
+
+  /**
+   * An officer who leaves keeps their name on the history, but their open
+   * leads are nobody's now — the desk lists them under Unowned.
+   */
+  it("marks a lead whose owner has left the desk, and keeps that owner's name on it", async () => {
+    txMock.enquiry.findMany.mockResolvedValue([
+      { id: 'a', ownerUserId: OFFICER },
+      { id: 'b', ownerUserId: GONE },
+      { id: 'c', ownerUserId: null },
+    ]);
+    txMock.enquiryNote.groupBy.mockResolvedValue([]);
+    const rows = await service().list(SCHOOL);
+    expect(rows.map((r) => [r.id, r.ownerOnDesk, r.ownerName])).toEqual([
+      ['a', true, 'Sunita Kale'],
+      ['b', false, 'Ravi Old'],
+      ['c', false, null],
+    ]);
   });
 });

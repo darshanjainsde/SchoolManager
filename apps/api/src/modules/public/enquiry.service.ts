@@ -4,13 +4,45 @@ import { TenantContextService } from '../tenancy';
 import { FeatureResolverService } from '../features';
 import type { SubmitEnquiryDto } from './public.dto';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
-import type { EnquiryStatus } from '@skoolos/db';
+import type { EnquiryStatus, TenantTx } from '@skoolos/db';
+import type { EnquiryDeskMember } from '@skoolos/types';
 
 /** How a stage reads in a history line. */
 const STAGE_LABEL: Record<string, string> = {
   NEW: 'New', CONTACTED: 'Contacted', VISITED: 'Visited',
   APPLIED: 'Applied', ENROLLED: 'Enrolled', LOST: 'Lost', CLOSED: 'Closed',
 };
+
+/**
+ * Who sits at the admissions desk: every active admissions officer with a
+ * login, then every active school admin. The owner picker reads this, and so
+ * does "Unowned" — a lead whose owner is not on this list is nobody's.
+ */
+export async function deskMembers(
+  tx: Pick<TenantTx, 'staff' | 'user'>,
+  schoolId: string,
+): Promise<EnquiryDeskMember[]> {
+  const officers = await tx.staff.findMany({
+    where: { schoolId, role: 'ADMISSIONS', isActive: true, userId: { not: null } },
+    select: { userId: true, firstName: true, lastName: true },
+    orderBy: { firstName: 'asc' },
+    take: LIST_CEILING.STRUCTURE,
+  });
+  const admins = await tx.user.findMany({
+    where: { schoolId, role: 'SCHOOL_ADMIN', isActive: true },
+    select: { id: true, name: true, email: true },
+    orderBy: { createdAt: 'asc' },
+    take: LIST_CEILING.STRUCTURE,
+  });
+  return [
+    ...officers.map((o) => ({
+      userId: o.userId as string,
+      name: `${o.firstName} ${o.lastName}`.trim(),
+      job: 'ADMISSIONS' as const,
+    })),
+    ...admins.map((a) => ({ userId: a.id, name: a.name?.trim() || a.email, job: 'ADMIN' as const })),
+  ];
+}
 
 @Injectable()
 export class EnquiryService {
@@ -92,12 +124,22 @@ export class EnquiryService {
       });
       const noteCount = new Map(counts.map((c) => [c.enquiryId, c._count._all]));
 
+      const onDesk = new Set((await deskMembers(tx, schoolId)).map((m) => m.userId));
+
       return rows.map((r) => ({
         ...r,
         ownerName: r.ownerUserId ? (byUser.get(r.ownerUserId) ?? null) : null,
+        // False for an owner who has left the desk — the desk shows the lead
+        // under Unowned, while the name above keeps the history honest.
+        ownerOnDesk: r.ownerUserId ? onDesk.has(r.ownerUserId) : false,
         noteCount: noteCount.get(r.id) ?? 0,
       }));
     });
+  }
+
+  /** The owner picker. Works on every plan — it reads no MANAGEMENT route. */
+  async owners(schoolId: string): Promise<EnquiryDeskMember[]> {
+    return withTenant(schoolId, (tx) => deskMembers(tx, schoolId));
   }
 
   /** One lead with its whole history — what the detail panel reads. */

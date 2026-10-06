@@ -459,6 +459,10 @@ export const AUTHZ_REVIEWED: string[] = [
   "GET /owner/print-orders/counts",
   "GET /site/enquiries/:id",
   "POST /site/enquiries/:id/notes",
+  // Admissions desk, Oct 2026 — enquiry-admin.authz.spec.ts pins the guard
+  // chain and the declaration order; admissions-desk.e2e-spec.ts proves a
+  // driver is refused and an officer reads the list.
+  "GET /site/enquiries/owners",
   // School backups — backups-authz.e2e-spec.ts: every owner route proven four
   // ways (anonymous, school token on owner host, platform token on school
   // host, operator); the engine room refuses any caller without the cron
