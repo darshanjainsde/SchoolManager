@@ -295,6 +295,38 @@ export interface CoverAssignedPayload {
   ackPayload: string;
 }
 
+/** Payload for LEAVE_CANCELLED — to the leave desk: a request (or an approved leave) was withdrawn. */
+export interface LeaveCancelledPayload {
+  schoolName: string;
+  leaveId: string;
+  teacherName: string;
+  dates: string;
+  /** Covers that were given to substitutes and are now released (0 for a pending request). */
+  releasedCovers: number;
+}
+
+/** Payload for COVER_CANCELLED — to ONE substitute: a cover they were given is off. */
+export interface CoverCancelledPayload {
+  schoolName: string;
+  substitutionId: string;
+  when: string;
+  className: string;
+  /** LEAVE_CANCELLED: the leave was withdrawn · CHANGED: the desk cleared or reassigned it · TEACHER_ON_LEAVE: the substitute is on leave that day. */
+  why: 'LEAVE_CANCELLED' | 'CHANGED' | 'TEACHER_ON_LEAVE';
+}
+
+/** Payload for COVER_UNFILLED — to the leave desk: classes with nobody in front of them. */
+export interface CoverUnfilledPayload {
+  schoolName: string;
+  gaps: number;
+  /** YYYY-MM-DD the gaps fall on — also what makes the evening nudge once-only. */
+  forDate: string;
+  /** "tomorrow, Tue 14 Oct 2026" / "Mon 13 Oct 2026". */
+  forWhen: string;
+  /** Why now, when it is not the evening nudge: "Ramesh Kumar can't take 9-A, …". */
+  note: string | null;
+}
+
 /** The single source of truth mapping each event to its payload shape. */
 export interface NotificationPayloadMap {
   TEST_SCHEDULED: TestScheduledPayload;
@@ -307,6 +339,9 @@ export interface NotificationPayloadMap {
   LEAVE_APPLIED: LeaveAppliedPayload;
   LEAVE_DECIDED: LeaveDecidedPayload;
   COVER_ASSIGNED: CoverAssignedPayload;
+  LEAVE_CANCELLED: LeaveCancelledPayload;
+  COVER_CANCELLED: CoverCancelledPayload;
+  COVER_UNFILLED: CoverUnfilledPayload;
 }
 
 /**

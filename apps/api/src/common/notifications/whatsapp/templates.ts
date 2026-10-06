@@ -1,4 +1,5 @@
 import type { NoticeTopic, NotificationKind, NotificationMessage, PayloadFor } from '../notification.types';
+import { coverCancelledReason } from '../format';
 
 /**
  * The WhatsApp template registry — ONE place that says, for each
@@ -49,6 +50,11 @@ export const TEMPLATE_NAMES: Record<NotificationKind, string> = {
   LEAVE_APPLIED: `${TEMPLATE_PREFIX}leave_applied`,
   LEAVE_DECIDED: `${TEMPLATE_PREFIX}leave_decided`,
   COVER_ASSIGNED: `${TEMPLATE_PREFIX}cover_assigned`,
+  // Both readers get the one "called off" card; the parameters differ.
+  LEAVE_CANCELLED: `${TEMPLATE_PREFIX}cover_cancelled`,
+  COVER_CANCELLED: `${TEMPLATE_PREFIX}cover_cancelled`,
+  // The approved "periods still need cover" pointer.
+  COVER_UNFILLED: `${TEMPLATE_PREFIX}cover_pending`,
 };
 
 /** One narrow Utility template per notice topic — what lets a holiday or fee date reach WhatsApp with its facts. */
@@ -213,6 +219,18 @@ export function templateFor(message: NotificationMessage, ctx: TemplateContext =
         buttons: [{ type: 'quick_reply', index: 0, payload: p.ackPayload }],
       };
     }
+    case 'LEAVE_CANCELLED': {
+      const p = message.payload;
+      const n = p.releasedCovers;
+      const why = n > 0 ? `it was withdrawn, so ${n} cover${n === 1 ? ' was' : 's were'} released` : 'it was withdrawn';
+      return { name, language, params: [param(p.schoolName), param(`${p.teacherName}'s leave`), param(p.dates), param(why)] };
+    }
+    case 'COVER_CANCELLED': {
+      const p = message.payload;
+      return { name, language, params: [param(p.schoolName), param(`your cover of ${p.className}`), param(p.when), param(coverCancelledReason(p.why))] };
+    }
+    case 'COVER_UNFILLED':
+      return coverPendingTemplate(message.payload.schoolName, message.payload.gaps);
     default: {
       const _exhaustive: never = message;
       return _exhaustive;
@@ -241,6 +259,16 @@ export function templateFor(message: NotificationMessage, ctx: TemplateContext =
  * `scripts/whatsapp-templates.mjs` reads THIS object to submit them, so what
  * Meta approves can never drift from what `templateFor` sends.
  */
+// Declared above SUBMISSIONS so both records below can use them.
+const COVER_CANCELLED_BODY = {
+  body: 'A change at {{1}}: {{2}} on {{3}} is called off, because {{4}}. Open the Sckools app to see the day as it now stands.',
+  samples: ['Raffles Public School', 'your cover of 9-A, period 3', 'Mon 22 Sep 2026', 'the leave it was for was cancelled'],
+};
+const COVER_PENDING_BODY = {
+  body: 'A message from {{1}}. {{2}} periods still need cover after the leave you approved. Open the console to assign teachers.',
+  samples: ['Raffles Public School', '3'],
+};
+
 export const SUBMISSIONS: Record<NotificationKind, { body: string; samples: string[]; buttons?: string[] }> = {
   TEST_SCHEDULED: {
     body: 'A message from {{1}}. {{2}} has a {{3}} test, "{{4}}", on {{5}}. Open the Sckools app to see the syllabus and the timing.',
@@ -290,6 +318,9 @@ export const SUBMISSIONS: Record<NotificationKind, { body: string; samples: stri
     samples: ['Raffles Public School', 'Mon 22 Sep, period 3 (10:15–11:00)', '9-A', 'Mathematics', 'Priya Nair'],
     buttons: ['Got it'],
   },
+  LEAVE_CANCELLED: COVER_CANCELLED_BODY,
+  COVER_CANCELLED: COVER_CANCELLED_BODY,
+  COVER_UNFILLED: COVER_PENDING_BODY,
 };
 
 /** Not notification kinds, but templates all the same — submitted with the others. */
@@ -300,22 +331,14 @@ export const EXTRA_SUBMISSIONS: Record<string, { category: 'AUTHENTICATION' | 'U
     samples: ['482911'],
     buttons: ['Copy code'],
   },
-  [COVER_PENDING]: {
-    category: 'UTILITY',
-    body: 'A message from {{1}}. {{2}} periods still need cover after the leave you approved. Open the console to assign teachers.',
-    samples: ['Raffles Public School', '3'],
-  },
+  [COVER_PENDING]: { category: 'UTILITY', ...COVER_PENDING_BODY },
   [COVER_ASSIGNED_V2]: {
     category: 'UTILITY',
     body: "A cover duty at {{1}}. On {{2}} you are covering class {{3}} for {{4}}, in place of {{5}}. Tap Got it if you will take it, or Can't so the office can find someone else.",
     samples: ['Raffles Public School', 'Mon 22 Sep, period 3 (10:15–11:00)', '9-A', 'Mathematics', 'Priya Nair'],
     buttons: ['Got it', "Can't"],
   },
-  [COVER_CANCELLED]: {
-    category: 'UTILITY',
-    body: 'A change at {{1}}: {{2}} on {{3}} is called off, because {{4}}. Open the Sckools app to see the day as it now stands.',
-    samples: ['Raffles Public School', 'your cover of 9-A, period 3', 'Mon 22 Sep 2026', 'the leave it was for was cancelled'],
-  },
+  [COVER_CANCELLED]: { category: 'UTILITY', ...COVER_CANCELLED_BODY },
   [NOTICE_TEMPLATES.HOLIDAY]: {
     category: 'UTILITY',
     body: 'Holiday at {{1}}: the school will be closed on {{2}} for {{3}}. Classes resume as usual on {{4}}. Nothing else changes.',

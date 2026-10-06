@@ -1,6 +1,6 @@
 import type { NotificationOutboxKind } from '@skoolos/types';
 import { NOTIFICATION_OUTBOX_KINDS } from '@skoolos/types';
-import { toNotificationMessage } from './notification-outbox.service';
+import { OUTBOX_EMAIL, toNotificationMessage } from './notification-outbox.service';
 import { FIXTURES } from './notification-outbox.fixtures';
 
 describe('toNotificationMessage', () => {
@@ -27,5 +27,15 @@ describe('toNotificationMessage', () => {
     expect(withTerm.kind === 'ANNOUNCEMENT' && withTerm.payload.topic).toEqual({ kind: 'FEE', term: 'Term 2', dueOn: 'Mon 13 Oct 2026' });
     const old = toNotificationMessage('FEE_DUE', { schoolName: S, title: 't', body: 'b' }, 'x');
     expect(old.kind === 'ANNOUNCEMENT' && old.payload.topic).toBeFalsy();
+  });
+
+  it('the three leave-desk notices keep their own kind and words — no ANNOUNCEMENT overloading', () => {
+    for (const kind of ['LEAVE_CANCELLED', 'COVER_CANCELLED', 'COVER_UNFILLED'] as const) {
+      expect(toNotificationMessage(kind, FIXTURES[kind], 'x')).toEqual({ kind, payload: FIXTURES[kind] });
+    }
+  });
+
+  it('every one of the three is emailed by the drain (none has a writer that sends its own letter)', () => {
+    for (const kind of ['LEAVE_CANCELLED', 'COVER_CANCELLED', 'COVER_UNFILLED'] as const) expect(OUTBOX_EMAIL[kind]).toBe(true);
   });
 });

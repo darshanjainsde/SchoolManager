@@ -57,6 +57,12 @@ export class EmailChannel implements DeliveryChannel {
         return this.mail.sendLeaveDecided(to, message.payload, schoolId, out);
       case 'COVER_ASSIGNED':
         return this.mail.sendCoverAssigned(to, message.payload, schoolId, out);
+      case 'LEAVE_CANCELLED':
+        return this.mail.sendLeaveCancelled(to, message.payload, schoolId, out);
+      case 'COVER_CANCELLED':
+        return this.mail.sendCoverCancelled(to, message.payload, schoolId, out);
+      case 'COVER_UNFILLED':
+        return this.mail.sendCoverUnfilled(to, message.payload, schoolId, out);
       default: {
         // Exhaustiveness guard — a new NotificationKind must be handled above.
         const _exhaustive: never = message;

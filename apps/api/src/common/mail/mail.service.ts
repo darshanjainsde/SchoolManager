@@ -8,7 +8,10 @@ import type {
   AbsenceNoticePayload,
   AnnouncementPayload,
   CoverAssignedPayload,
+  CoverCancelledPayload,
+  CoverUnfilledPayload,
   LeaveAppliedPayload,
+  LeaveCancelledPayload,
   LeaveDecidedPayload,
   DiaryRemarkPayload,
   LowAttendancePayload,
@@ -16,6 +19,7 @@ import type {
   TestReminderPayload,
   TestScheduledPayload,
 } from '../notifications/notification.types';
+import { coverCancelledReason } from '../notifications/format';
 
 /**
  * The notification payload interfaces live in `notification.types.ts` (the
@@ -370,6 +374,33 @@ export class MailService {
         { label: 'For', value: p.originalTeacherName },
       ],
     }, 'COVER_ASSIGNED', out);
+  }
+
+  async sendLeaveCancelled(to: string, p: LeaveCancelledPayload, schoolId: string | null = null, out?: MailOutcomeSink): Promise<boolean> {
+    const n = p.releasedCovers;
+    return this.sendLetter(to, schoolId, `${p.teacherName} withdrew their leave for ${p.dates}`, {
+      title: 'Leave withdrawn',
+      intro: `${p.teacherName} has withdrawn their leave for ${p.dates}.${n ? ` ${n} cover${n === 1 ? ' was' : 's were'} released and the substitute${n === 1 ? ' has' : 's have'} been told.` : ''}`,
+      rows: [{ label: 'Dates', value: p.dates }, { label: 'Covers released', value: String(n) }],
+    }, 'LEAVE_CANCELLED', out);
+  }
+
+  async sendCoverCancelled(to: string, p: CoverCancelledPayload, schoolId: string | null = null, out?: MailOutcomeSink): Promise<boolean> {
+    return this.sendLetter(to, schoolId, `Your cover of ${p.className} on ${p.when} is called off`, {
+      title: 'Cover called off',
+      intro: `You no longer need to cover ${p.className} on ${p.when}, because ${coverCancelledReason(p.why)}.`,
+      rows: [{ label: 'When', value: p.when }, { label: 'Class', value: p.className }],
+    }, 'COVER_CANCELLED', out);
+  }
+
+  async sendCoverUnfilled(to: string, p: CoverUnfilledPayload, schoolId: string | null = null, out?: MailOutcomeSink): Promise<boolean> {
+    const s = p.gaps === 1 ? '' : 's';
+    return this.sendLetter(to, schoolId, `${p.gaps} period${s} still ${p.gaps === 1 ? 'needs' : 'need'} cover — ${p.forWhen}`, {
+      title: 'Classes still need a teacher',
+      tone: 'alert',
+      intro: `${p.gaps} period${s} on ${p.forWhen} ${p.gaps === 1 ? 'has' : 'have'} nobody to take ${p.gaps === 1 ? 'it' : 'them'} yet.${p.note ? ` ${p.note}` : ''}`,
+      note: 'Open the console → Leave → Coverage (or the Leave tab in the app) to pick a teacher for each.',
+    }, 'COVER_UNFILLED', out);
   }
 
   async sendAnnouncement(to: string, info: AnnouncementInfo, schoolId: string | null = null, out?: MailOutcomeSink): Promise<boolean> {

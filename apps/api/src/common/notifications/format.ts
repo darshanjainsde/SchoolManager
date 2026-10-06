@@ -82,6 +82,13 @@ export interface NotificationText {
  * consumer today, but any future non-email channel that just needs
  * plain-text title/body can reuse this instead of writing its own switch.
  */
+/** Why a cover is off, as the end of a sentence ("…, because <this>"). */
+export function coverCancelledReason(why: 'LEAVE_CANCELLED' | 'CHANGED' | 'TEACHER_ON_LEAVE'): string {
+  if (why === 'LEAVE_CANCELLED') return 'the leave it was for was cancelled';
+  if (why === 'TEACHER_ON_LEAVE') return 'you are on leave that day';
+  return 'the office has changed the cover';
+}
+
 export function formatNotification(message: NotificationMessage): NotificationText {
   switch (message.kind) {
     case 'TEST_SCHEDULED':
@@ -136,6 +143,26 @@ export function formatNotification(message: NotificationMessage): NotificationTe
         title: `You cover ${message.payload.className}`,
         body: `${message.payload.when}${message.payload.subjectName ? ` · ${message.payload.subjectName}` : ''}, for ${message.payload.originalTeacherName}.`,
       };
+    case 'LEAVE_CANCELLED': {
+      const n = message.payload.releasedCovers;
+      return {
+        title: `Leave withdrawn: ${message.payload.teacherName}`,
+        body: `${message.payload.dates}${n ? ` · ${n} cover${n === 1 ? '' : 's'} released` : ''}`,
+      };
+    }
+    case 'COVER_CANCELLED':
+      return {
+        title: `Cover called off: ${message.payload.className}`,
+        body: `${message.payload.when} — ${coverCancelledReason(message.payload.why)}.`,
+      };
+    case 'COVER_UNFILLED': {
+      const g = message.payload.gaps;
+      return {
+        title: `${g} period${g === 1 ? ' still needs' : 's still need'} cover`,
+        // A note is a whole sentence; its own full stop is not doubled.
+        body: `${message.payload.forWhen}${message.payload.note ? ` · ${message.payload.note.replace(/\.$/, '')}` : ''}. Open Leave → Coverage.`,
+      };
+    }
     default: {
       // Exhaustiveness guard — a new NotificationKind must be handled above.
       const _exhaustive: never = message;

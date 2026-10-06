@@ -15,11 +15,14 @@ import { isDeliverySchemaMissing } from '../../common/errors/prisma-errors';
 import type {
   MessageReceivedOutboxPayload,
   AssignmentPostedOutboxPayload,
+  CoverCancelledPayload,
+  CoverUnfilledPayload,
   DeliveryChannel,
   DeliveryOutcome,
   ExamScheduledOutboxPayload,
   LibraryNoticeOutboxPayload,
   FeeDecisionOutboxPayload,
+  LeaveCancelledPayload,
   NotificationMessage,
   ResultPublishedOutboxPayload,
   SessionStartedOutboxPayload,
@@ -123,6 +126,9 @@ export const OUTBOX_EMAIL: Record<NotificationOutboxKind, boolean> = {
   CONCERN_RAISED: true,
   CONCERN_REPLIED: true,
   CONCERN_RESOLVED: true,
+  LEAVE_CANCELLED: true,
+  COVER_CANCELLED: true,
+  COVER_UNFILLED: true,
 };
 
 /**
@@ -272,6 +278,13 @@ export function toNotificationMessage(kind: NotificationOutboxKind, payload: unk
       const keys = actionKeys();
       return { kind: 'COVER_ASSIGNED', payload: { ...p, ackPayload: ackPayload(p.substitutionId, keys) } };
     }
+    // The leave desk's own notices: their kind and words, never an ANNOUNCEMENT.
+    case 'LEAVE_CANCELLED':
+      return { kind: 'LEAVE_CANCELLED', payload: payload as LeaveCancelledPayload };
+    case 'COVER_CANCELLED':
+      return { kind: 'COVER_CANCELLED', payload: payload as CoverCancelledPayload };
+    case 'COVER_UNFILLED':
+      return { kind: 'COVER_UNFILLED', payload: payload as CoverUnfilledPayload };
     case 'FEE_VERIFIED':
     case 'FEE_REJECTED':
     case 'FEE_DUE': {
