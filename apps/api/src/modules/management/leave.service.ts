@@ -7,6 +7,7 @@ import type { AssignSubstitutionDto, CreateLeaveDto } from './management.dto';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
 import { resolveLeaveDeskRecipients } from '../../common/notifications/recipients';
 import { requestOutboxDrain } from '../../common/notifications/outbox-signal';
+import { shortDayDate } from '../../common/dates/timetable-date';
 
 export type { LeaveApplication };
 
@@ -125,6 +126,86 @@ export class LeaveService {
     return person.kind === 'TEACHER' ? { teacherId: person.id } : { staffId: person.id };
   }
 
+  /**
+   * THE DECISION, RACE-SAFE. Two desks — the admin on the console, the
+   * officer on WhatsApp — can tap within the same second. The update only
+   * matches a row still PENDING, so Postgres lets exactly one through (READ
+   * COMMITTED: the loser's update waits on the winner's row lock, then
+   * re-checks the WHERE against the committed row and matches nothing); the
+   * other is told who decided and when. The loser throws BEFORE any side
+   * effect, so its transaction writes nothing at all.
+   */
+  private static async decide(tx: TenantTx, schoolId: string, id: string, deciderUserId: string, to: 'APPROVED' | 'REJECTED') {
+    const app = await tx.leaveApplication.findFirst({ where: { id, schoolId } });
+    if (!app) throw new NotFoundException('Leave application not found');
+    if (app.status !== 'PENDING') throw await LeaveService.alreadyDecided(tx, schoolId, id);
+    await LeaveService.refuseOwn(tx, schoolId, app, deciderUserId);
+    const decided = { status: to, reviewedById: deciderUserId, reviewedAt: new Date() };
+    const { count } = await tx.leaveApplication.updateMany({
+      where: { id, schoolId, status: 'PENDING' },
+      data: decided,
+    });
+    if (count === 0) throw await LeaveService.alreadyDecided(tx, schoolId, id);
+    // The row as the update left it — what `update()` used to return.
+    return { ...app, ...decided };
+  }
+
+  /**
+   * Nobody decides their own leave — on the console or on WhatsApp. The
+   * applicant's login is the Teacher.userId or Staff.userId of the person the
+   * row belongs to. (A school whose only admin applies for leave can then not
+   * have it decided by that admin; that is the rule, not a gap.)
+   */
+  private static async refuseOwn(tx: TenantTx, schoolId: string, app: { teacherId: string | null; staffId: string | null }, deciderUserId: string): Promise<void> {
+    const owner = app.teacherId
+      ? await tx.teacher.findFirst({ where: { id: app.teacherId, schoolId }, select: { userId: true } })
+      : app.staffId
+        ? await tx.staff.findFirst({ where: { id: app.staffId, schoolId }, select: { userId: true } })
+        : null;
+    if (owner?.userId && owner.userId === deciderUserId) {
+      throw new ApiError('LEAVE_OWN_DECISION', 'You cannot decide your own leave. Another admin or the accounts officer has to.', 403);
+    }
+  }
+
+  /** The 409 for a decision that lost — read AFTER the winner committed, so it names the winner. */
+  private static async alreadyDecided(tx: TenantTx, schoolId: string, id: string): Promise<ApiError> {
+    const fresh = await tx.leaveApplication.findFirst({ where: { id, schoolId }, select: { status: true, reviewedById: true, reviewedAt: true } });
+    const by = fresh?.reviewedById ? await LeaveService.nameOf(tx, schoolId, fresh.reviewedById) : null;
+    return new ApiError('LEAVE_NOT_PENDING', LeaveService.decidedSentence(fresh?.status, by, fresh?.reviewedAt ?? null), 409);
+  }
+
+  private static async nameOf(tx: TenantTx, schoolId: string, userId: string): Promise<string | null> {
+    const u = await tx.user.findFirst({ where: { id: userId, schoolId }, select: { name: true, email: true } });
+    return u ? (u.name?.trim() || u.email.split('@')[0]) : null;
+  }
+
+  /**
+   * "Already approved by Darshan Jain at 9:42 am. Nothing changed." — and
+   * "… on Tue 6 Oct at 9:42 am …" when the decision was not today. Always the
+   * IST clock and the IST calendar day, whatever the server's TZ. IST has no
+   * daylight saving, so a fixed +05:30 is exact, and it avoids ICU's
+   * locale-dependent "am"/"AM" and narrow no-break space.
+   */
+  static decidedSentence(status: string | undefined, byName: string | null, at: Date | null, now: Date = new Date()): string {
+    const word = status === 'APPROVED' ? 'approved' : status === 'REJECTED' ? 'rejected' : status === 'CANCELLED' ? 'withdrawn' : 'decided';
+    const by = byName ? ` by ${byName}` : '';
+    return `Already ${word}${by}${at ? LeaveService.istWhen(at, now) : ''}. Nothing changed.`;
+  }
+
+  /** " at 9:42 am" today (IST), " on Tue 6 Oct at 9:42 am" another day, with the year only when it differs. */
+  private static istWhen(at: Date, now: Date): string {
+    const IST_MS = 330 * 60_000;
+    const a = new Date(at.getTime() + IST_MS); // UTC fields of `a` = IST wall clock of `at`
+    const n = new Date(now.getTime() + IST_MS);
+    const h24 = a.getUTCHours();
+    const clock = `${h24 % 12 === 0 ? 12 : h24 % 12}:${String(a.getUTCMinutes()).padStart(2, '0')} ${h24 < 12 ? 'am' : 'pm'}`;
+    const sameDay = a.toISOString().slice(0, 10) === n.toISOString().slice(0, 10);
+    if (sameDay) return ` at ${clock}`;
+    const full = shortDayDate(a); // "Tue 6 Oct 2026" — reads the UTC fields, i.e. the IST day
+    const day = a.getUTCFullYear() === n.getUTCFullYear() ? full.replace(/ \d{4}$/, '') : full;
+    return ` on ${day} at ${clock}`;
+  }
+
   /** The caller's own leave applications, most recent first. */
   async mine(schoolId: string, callerUserId: string): Promise<LeaveApplication[]> {
     return withTenant(schoolId, async (tx) => {
@@ -198,18 +279,9 @@ export class LeaveService {
 
   async reject(schoolId: string, id: string, adminUserId: string) {
     const out = await withTenant(schoolId, async (tx) => {
-      const app = await tx.leaveApplication.findFirst({ where: { id, schoolId } });
-      if (!app) throw new NotFoundException('Leave application not found');
-      if (app.status !== 'PENDING') {
-        throw new ApiError('LEAVE_NOT_PENDING', 'This application has already been reviewed', 409);
-      }
-
-      const updated = await tx.leaveApplication.update({
-        where: { id },
-        data: { status: 'REJECTED', reviewedById: adminUserId, reviewedAt: new Date() },
-      });
+      const app = await LeaveService.decide(tx, schoolId, id, adminUserId, 'REJECTED');
       await this.tellTeacherDecided(tx, schoolId, app, 'REJECTED', adminUserId);
-      return updated;
+      return app;
     });
     requestOutboxDrain();
     return out;
@@ -238,16 +310,9 @@ export class LeaveService {
    */
   async approve(schoolId: string, id: string, adminUserId: string) {
     const out = await withTenant(schoolId, async (tx) => {
-      const app = await tx.leaveApplication.findFirst({ where: { id, schoolId } });
-      if (!app) throw new NotFoundException('Leave application not found');
-      if (app.status !== 'PENDING') {
-        throw new ApiError('LEAVE_NOT_PENDING', 'This application has already been reviewed', 409);
-      }
-
-      await tx.leaveApplication.update({
-        where: { id },
-        data: { status: 'APPROVED', reviewedById: adminUserId, reviewedAt: new Date() },
-      });
+      // Only the winner gets past this line: a losing desk throws the 409
+      // here, before any gap, attendance mark or notice is written.
+      const app = await LeaveService.decide(tx, schoolId, id, adminUserId, 'APPROVED');
 
       const dates = dateRangeInclusive(toDateStr(app.startDate), toDateStr(app.endDate));
       const todayStr = todayIstDateStr(new Date());
@@ -603,7 +668,7 @@ export class LeaveService {
     if (!teacher?.userId) return;
     const label = LeaveService.datesLabel(toDateStr(app.startDate), toDateStr(app.endDate));
     const word = decision === 'APPROVED' ? 'approved' : 'not approved';
-    const payload = { schoolName: school?.name ?? 'Your school', leaveId: app.id, decision, dates: label, byName: null as string | null, byUserId: adminUserId };
+    const payload = { schoolName: school?.name ?? 'Your school', leaveId: app.id, decision, dates: label, byName: await LeaveService.nameOf(tx, schoolId, adminUserId), byUserId: adminUserId };
     await tx.notification.create({ data: { schoolId, userId: teacher.userId, kind: 'LEAVE_DECIDED', title: `Leave ${word}`, body: label, linkType: 'leave', linkId: app.id } });
     await tx.notificationOutbox.create({ data: { schoolId, kind: 'LEAVE_DECIDED', payload, targetUserId: teacher.userId } });
   }

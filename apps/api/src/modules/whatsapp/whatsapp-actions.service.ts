@@ -122,7 +122,7 @@ export class WhatsAppActionsService {
   // ── leave: Approve / Reject ────────────────────────────────────────────
 
   private async onLeave(db: Db, a: Extract<Action, { kind: 'leave' }>, phone: string) {
-    const app = await db.leaveApplication.findUnique({ where: { id: a.leaveId }, select: { id: true, schoolId: true, status: true, teacherId: true, staffId: true, reviewedById: true, reviewedAt: true } });
+    const app = await db.leaveApplication.findUnique({ where: { id: a.leaveId }, select: { id: true, schoolId: true, status: true, teacherId: true, staffId: true } });
     if (!app) return { result: 'leave-not-found', schoolId: null };
     const actor = await this.deskActor(db, app.schoolId, phone);
     if ('refused' in actor) return { result: actor.refused, schoolId: app.schoolId };
@@ -147,11 +147,15 @@ export class WhatsAppActionsService {
       await this.text(app.schoolId, phone, `Not approved. ${teacherName} has been told.`);
       return { result: 'rejected', schoolId: app.schoolId };
     } catch (e) {
-      if (apiCode(e) === 'LEAVE_NOT_PENDING') {
-        const fresh = await db.leaveApplication.findUnique({ where: { id: app.id }, select: { status: true, reviewedAt: true } });
-        const when = fresh?.reviewedAt ? ` at ${fresh.reviewedAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })}` : '';
-        await this.text(app.schoolId, phone, `This request was already ${fresh?.status === 'APPROVED' ? 'approved' : fresh?.status === 'REJECTED' ? 'rejected' : 'decided'}${when}. Nothing changed.`);
-        return { result: 'already-decided', schoolId: app.schoolId };
+      const code = apiCode(e);
+      if (code === 'LEAVE_NOT_PENDING' || code === 'LEAVE_OWN_DECISION') {
+        // The service's own sentence — who decided and when, or why not you —
+        // headed by the school, since one number can sit on two schools' desks.
+        // Never the request row: the button already said whose leave it was.
+        const school = await db.school.findFirst({ where: { id: app.schoolId }, select: { name: true } });
+        const said = ((e as ApiError).getResponse() as { message: string }).message;
+        await this.text(app.schoolId, phone, `${school?.name ?? 'Your school'}: ${said}`);
+        return { result: code === 'LEAVE_NOT_PENDING' ? 'already-decided' : 'own-leave', schoolId: app.schoolId };
       }
       throw e;
     }

@@ -172,11 +172,35 @@ describe('WhatsAppActionsService', () => {
     expect(db.whatsAppInbound.update).toHaveBeenCalledTimes(1); // only the success is recorded
   });
 
-  it('Approve on an already-decided request says so and changes nothing', async () => {
-    leave.approve.mockRejectedValue(new ApiError('LEAVE_NOT_PENDING', 'already', 409));
-    db.leaveApplication.findUnique.mockResolvedValueOnce({ id: LEAVE, schoolId: SCHOOL, status: 'PENDING', teacherId: T1 }).mockResolvedValueOnce({ status: 'REJECTED', reviewedAt: new Date('2026-09-20T04:30:00Z') });
+  it('Approve on an already-decided request says who decided, and changes nothing', async () => {
+    leave.approve.mockRejectedValue(new ApiError('LEAVE_NOT_PENDING', 'Already rejected by Darshan Jain at 10:00 am. Nothing changed.', 409));
     expect(await svc().handleInbound(tap(leavePayload('approve', LEAVE, actionKeys())))).toBe('already-decided');
-    expect(sentTexts()[0]).toMatch(/already rejected at/);
+    // The school, then the service's own sentence — never the request row.
+    expect(sentTexts()).toEqual(['Raffles: Already rejected by Darshan Jain at 10:00 am. Nothing changed.']);
+    expect(db.whatsAppInbound.delete).not.toHaveBeenCalled();
+    expect(db.whatsAppInbound.update).toHaveBeenCalledWith({ where: { id: 'wamid.tap' }, data: { result: 'already-decided', schoolId: SCHOOL } });
+  });
+
+  it('Reject on an already-decided request is answered the same way', async () => {
+    leave.reject.mockRejectedValue(new ApiError('LEAVE_NOT_PENDING', 'Already approved by Asha Rao on Mon 5 Oct at 4:10 pm. Nothing changed.', 409));
+    expect(await svc().handleInbound(tap(leavePayload('reject', LEAVE, actionKeys()), 'wamid.rej'))).toBe('already-decided');
+    expect(sentTexts()).toEqual(['Raffles: Already approved by Asha Rao on Mon 5 Oct at 4:10 pm. Nothing changed.']);
+  });
+
+  it('an officer tapping Approve on her own leave is told no, and nothing changes', async () => {
+    leave.approve.mockRejectedValue(new ApiError('LEAVE_OWN_DECISION', 'You cannot decide your own leave. Another admin or the accounts officer has to.', 403));
+    expect(await svc().handleInbound(tap(leavePayload('approve', LEAVE, actionKeys()), 'wamid.own'))).toBe('own-leave');
+    expect(sentTexts()[0]).toMatch(/cannot decide your own leave/);
+    expect(sentTexts()).toEqual(['Raffles: You cannot decide your own leave. Another admin or the accounts officer has to.']);
+    expect(leave.approve).toHaveBeenCalledWith(SCHOOL, LEAVE, 'admin-1');
+    expect(db.whatsAppInbound.delete).not.toHaveBeenCalled();
+    expect(db.whatsAppInbound.update).toHaveBeenCalledWith({ where: { id: 'wamid.own' }, data: { result: 'own-leave', schoolId: SCHOOL } });
+  });
+
+  it('… and on Reject too', async () => {
+    leave.reject.mockRejectedValue(new ApiError('LEAVE_OWN_DECISION', 'You cannot decide your own leave. Another admin or the accounts officer has to.', 403));
+    expect(await svc().handleInbound(tap(leavePayload('reject', LEAVE, actionKeys()), 'wamid.own2'))).toBe('own-leave');
+    expect(sentTexts()).toEqual(['Raffles: You cannot decide your own leave. Another admin or the accounts officer has to.']);
   });
 
   it('Reject runs LeaveService.reject and tells the admin', async () => {

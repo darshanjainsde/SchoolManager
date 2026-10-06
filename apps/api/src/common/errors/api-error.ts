@@ -89,8 +89,11 @@ export type ErrorCode =
   | 'NOT_A_TEACHER'
   /** Caller has no linked Staff record — e.g. a STAFF-role JWT with no matching Staff.userId row. */
   | 'NOT_STAFF'
-  /** The LeaveApplication is no longer PENDING — already approved/rejected. */
+  /** The LeaveApplication is no longer PENDING — already approved/rejected.
+   *  The message names who decided and when. Pair with 409. */
   | 'LEAVE_NOT_PENDING'
+  /** The decider is the applicant — nobody approves or rejects their own leave. Pair with 403. */
+  | 'LEAVE_OWN_DECISION'
   /** The LeaveApplication is REJECTED or already CANCELLED — nothing to cancel. */
   | 'LEAVE_NOT_CANCELLABLE'
   /** Caller is neither the owning teacher nor a SCHOOL_ADMIN — pair with 403. */
