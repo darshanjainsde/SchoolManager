@@ -77,4 +77,17 @@ describe('WhatsAppChannel — a template Meta has not approved yet', () => {
     // The ledger names what was actually sent.
     expect(d.whatsAppDelivery.create.mock.calls[0][0].data.templateName).toBe('sckools_cover_assigned');
   });
+  it('attempt: a gated template with no approved v1 is SKIPPED template-pending, never a failure to retry, and the claim is given back', async () => {
+    const store = new Set<string>();
+    const redis = () => ({ status: 'ready', set: async (k: string) => (store.has(k) ? null : (store.add(k), 'OK')), del: async (k: string) => void store.delete(k) }) as never;
+    (templateFor as jest.Mock).mockReturnValueOnce({ ...V2, name: 'sckools_cover_cancelled', fallback: undefined });
+    const d = db();
+    const f = okFetch();
+    const ch = new WhatsAppChannel(d as never, () => CFG, f, redis, { isApproved: async () => false });
+    expect(await ch.attempt('t@x', MSG, SCHOOL)).toEqual({ status: 'SKIPPED', reason: 'template-pending' });
+    expect(f).not.toHaveBeenCalled();
+    expect(d.whatsAppDelivery.create).not.toHaveBeenCalled();
+    expect(store.size).toBe(0);
+  });
 });
+

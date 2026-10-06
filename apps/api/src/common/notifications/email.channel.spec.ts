@@ -215,3 +215,24 @@ describe('EmailChannel', () => {
     ).resolves.toBe(false);
   });
 });
+
+describe('EmailChannel.attempt', () => {
+  function withOutcome(outcome: unknown) {
+    const mail = Object.create(MailService.prototype) as MailService;
+    (mail as unknown as { sendLetter: MailService['sendLetter'] }).sendLetter = async (_to, _s, _subj, _l, _k, out) => {
+      if (out) out.outcome = outcome as never;
+      return (outcome as { status: string }).status === 'SENT';
+    };
+    return new EmailChannel(mail);
+  }
+  const msg = { kind: 'ABSENCE_NOTICE' as const, payload: { schoolName: 'Raffles', studentName: 'Ravi', date: 'Thu 18 Sep' } };
+
+  it('passes the mail service outcome through', async () => {
+    expect(await withOutcome({ status: 'RETRY', error: 'SMTP 421' }).attempt('a@x', msg, 's')).toEqual({ status: 'RETRY', error: 'SMTP 421' });
+    expect(await withOutcome({ status: 'SENT', providerId: 're_1' }).attempt('a@x', msg, 's')).toEqual({ status: 'SENT', providerId: 're_1' });
+  });
+
+  it('send() is still a boolean for notify()', async () => {
+    expect(await withOutcome({ status: 'FAILED', error: 'SMTP 550' }).send('a@x', msg, 's')).toBe(false);
+  });
+});

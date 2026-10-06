@@ -59,3 +59,15 @@ export function codeFromError(error: string | null | undefined): number | null {
   const m = /\(code (\d+)\)/.exec(error ?? '');
   return m ? Number(m[1]) : null;
 }
+
+/**
+ * Worth trying again? Only when Meta never answered (a dropped connection),
+ * answered 5xx, or rate-limited us (130429). Every other refusal — not on
+ * WhatsApp (131026), a template problem (132xxx), a bad parameter — is the
+ * same answer the next time.
+ */
+export function isTransientWhatsAppFailure(code: number | null, httpStatus: number | null): boolean {
+  if (code === 130429) return true;
+  if (httpStatus === null) return true;
+  return httpStatus >= 500;
+}

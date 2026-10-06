@@ -190,3 +190,24 @@ describe('PushChannel', () => {
     ).resolves.toBe(false);
   });
 });
+
+describe('PushChannel.attempt', () => {
+  const msg = { kind: 'ABSENCE_NOTICE' as const, payload: ABSENCE_NOTICE };
+
+  it('no device on record is SKIPPED no-address, not a failure to retry', async () => {
+    prisma.pushToken.findMany.mockResolvedValue([]);
+    expect(await harness().attempt('p@x', msg, SCHOOL_A)).toEqual({ status: 'SKIPPED', reason: 'no-address' });
+  });
+
+  it('Expo unreachable for every chunk is a RETRY', async () => {
+    prisma.pushToken.findMany.mockResolvedValue([{ token: 'ExponentPushToken[a]' }]);
+    send.mockRejectedValue(new Error('socket hang up'));
+    expect((await harness().attempt('p@x', msg, SCHOOL_A)).status).toBe('RETRY');
+  });
+
+  it('one ok ticket is SENT', async () => {
+    prisma.pushToken.findMany.mockResolvedValue([{ token: 'ExponentPushToken[a]' }]);
+    send.mockResolvedValue([{ status: 'ok' }]);
+    expect(await harness().attempt('p@x', msg, SCHOOL_A)).toEqual({ status: 'SENT' });
+  });
+});

@@ -336,4 +336,46 @@ describe('WhatsAppChannel', () => {
       expect(d.whatsAppDelivery.create.mock.calls[0][0].data).toMatchObject({ status: 'FAILED', error: 'Re-engagement message (code 131047)' });
     });
   });
+  describe('attempt — what the delivery row records', () => {
+    const graphError = (status: number, code: number) => jest.fn().mockResolvedValue({ ok: false, status, json: async () => ({ error: { message: 'x', code } }) });
+
+    it('SENT carries Meta\'s message id', async () => {
+      expect(await new WhatsAppChannel(db() as never, () => CFG, okFetch(), () => null).attempt('p@x', MSG, SCHOOL)).toEqual({ status: 'SENT', providerId: 'wamid.1' });
+    });
+
+    it('a school with WhatsApp off is SKIPPED channel-off', async () => {
+      const d = db({ whatsAppSettings: { findUnique: jest.fn().mockResolvedValue({ enabled: false, phoneNumberId: null }) } });
+      expect(await new WhatsAppChannel(d as never, () => CFG, okFetch(), () => null).attempt('p@x', MSG, SCHOOL)).toEqual({ status: 'SKIPPED', reason: 'channel-off' });
+    });
+
+    it('no usable phone is SKIPPED no-address', async () => {
+      const d = db({ student: { findFirst: jest.fn().mockResolvedValue({ guardianPhone: 'office' }) } });
+      expect(await new WhatsAppChannel(d as never, () => CFG, okFetch(), () => null).attempt('p@x', MSG, SCHOOL)).toEqual({ status: 'SKIPPED', reason: 'no-address' });
+    });
+
+    it('Meta 130429 (rate limited) is a RETRY, and the dedup claim is given back', async () => {
+      const store = new Set<string>();
+      const redis = { status: 'ready', set: jest.fn(async (k: string) => (store.has(k) ? null : (store.add(k), 'OK'))), del: jest.fn(async (k: string) => (store.delete(k) ? 1 : 0)) };
+      const o = await new WhatsAppChannel(db() as never, () => CFG, graphError(400, 130429), () => redis as never).attempt('p@x', MSG, SCHOOL);
+      expect(o.status).toBe('RETRY');
+      expect(store.size).toBe(0);
+    });
+
+    it('Meta 131026 (not on WhatsApp) is FAILED — retrying cannot help', async () => {
+      expect((await new WhatsAppChannel(db() as never, () => CFG, graphError(400, 131026), () => null).attempt('p@x', MSG, SCHOOL)).status).toBe('FAILED');
+    });
+
+    it('a 5xx from Meta or a dropped connection is a RETRY', async () => {
+      expect((await new WhatsAppChannel(db() as never, () => CFG, graphError(503, 2), () => null).attempt('p@x', MSG, SCHOOL)).status).toBe('RETRY');
+      expect((await new WhatsAppChannel(db() as never, () => CFG, jest.fn().mockRejectedValue(new Error('ECONNRESET')), () => null).attempt('p@x', MSG, SCHOOL)).status).toBe('RETRY');
+    });
+
+    it('the same words to the same phone within a minute are SKIPPED duplicate; send() still calls that true', async () => {
+      const c = new WhatsAppChannel(db() as never, () => CFG, okFetch(), () => null);
+      await c.attempt('p@x', MSG, SCHOOL);
+      expect(await c.attempt('p@x', MSG, SCHOOL)).toEqual({ status: 'SKIPPED', reason: 'duplicate' });
+      expect(await c.send('p@x', MSG, SCHOOL)).toBe(true);
+    });
+  });
 });
+
