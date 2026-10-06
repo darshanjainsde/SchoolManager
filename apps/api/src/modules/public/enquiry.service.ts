@@ -207,7 +207,14 @@ export class EnquiryService {
       const ownerName = enquiry.ownerUserId
         ? ((await ownerNames(tx, schoolId, [enquiry.ownerUserId])).get(enquiry.ownerUserId) ?? null)
         : null;
-      return { ...enquiry, ownerName, notes };
+      // The same two answers list() gives each row, so the panel's lead and the
+      // list's lead are one shape: only NOTE lines count (not the system's own
+      // STAGE/CONTACT history), and an owner who left the desk is not "on" it.
+      const noteCount = await tx.enquiryNote.count({ where: { schoolId, enquiryId: id, kind: 'NOTE' } });
+      const ownerOnDesk = enquiry.ownerUserId
+        ? (await deskMembers(tx, schoolId)).some((m) => m.userId === enquiry.ownerUserId)
+        : false;
+      return { ...enquiry, ownerName, ownerOnDesk, noteCount, notes };
     });
   }
 

@@ -183,6 +183,11 @@ describe('whose leads these are', () => {
     expect(matchesFilter(lead({ ownerUserId: null }), 'MINE', TODAY, null)).toBe(false);
   });
 
+  /** The owner who left the desk is still the owner: Unowned shows it for taking, My leads does not hide it from them. */
+  it('My leads still holds a lead whose owner is me, even if I have left the desk', () => {
+    expect(matchesFilter(lead({ ownerUserId: 'me', ownerOnDesk: false }), 'MINE', TODAY, 'me')).toBe(true);
+  });
+
   it('Unowned holds the open leads nobody is on — including one whose owner has left the desk', () => {
     expect(matchesFilter(lead({ ownerUserId: null }), 'UNOWNED', TODAY)).toBe(true);
     expect(matchesFilter(lead({ ownerUserId: 'gone', ownerOnDesk: false }), 'UNOWNED', TODAY)).toBe(true);
@@ -214,6 +219,16 @@ describe('the stage buttons only go forward', () => {
     expect(b.map((x) => x.key)).toEqual(['NEW', 'CONTACTED', 'INTERESTED', 'VISITED', 'APPLIED', 'ENROLLED']);
     expect(b.map((x) => x.state)).toEqual(['done', 'now', undefined, undefined, undefined, undefined]);
     expect(b.filter((x) => x.canClick).map((x) => x.key)).toEqual(['INTERESTED', 'VISITED', 'APPLIED', 'ENROLLED']);
+  });
+
+  it('an enrolled family has nothing left to press, and every earlier stage is done', () => {
+    const b = stageButtons('ENROLLED');
+    expect(b.some((x) => x.canClick)).toBe(false);
+    expect(b.map((x) => x.state)).toEqual(['done', 'done', 'done', 'done', 'done', 'now']);
+  });
+
+  it('an interested lead can go to Visited, Applied or Enrolled and nothing else', () => {
+    expect(stageButtons('INTERESTED').filter((x) => x.canClick).map((x) => x.key)).toEqual(['VISITED', 'APPLIED', 'ENROLLED']);
   });
 
   it('a lost lead presses nothing on the road — it is reopened instead', () => {
@@ -254,5 +269,24 @@ describe('exporting the list on screen', () => {
     expect(csv).toContain(`"'=HYPERLINK(""http://x"",""click"")"`);
     expect(csv).toContain("'+91 98123 00011");
     expect(csv).not.toMatch(/(^|,)=HYPERLINK/m);
+  });
+
+  it.each([
+    ['a leading minus', '-2+3', "'-2+3"],
+    ['a leading @', '@SUM(A1)', "'@SUM(A1)"],
+    ['a leading tab', '\tcmd', "'\tcmd"],
+    ['spaces before the trigger', ' =1+1', "' =1+1"],
+  ])('neutralises %s', (_name, typed, cell) => {
+    const line = leadsCsv([lead({ parentName: typed })]).split('\r\n')[1];
+    expect(line.split(',')[1]).toBe(cell);
+  });
+
+  it('neutralises a leading carriage return, and quotes it too', () => {
+    expect(leadsCsv([lead({ parentName: '\r=1' })])).toContain('"\'\r=1"');
+  });
+
+  it('leaves a plain name untouched', () => {
+    const line = leadsCsv([lead({ parentName: 'Sneha Kulkarni', childName: "D'Souza" })]).split('\r\n')[1];
+    expect(line.split(',').slice(1, 3)).toEqual(['Sneha Kulkarni', "D'Souza"]);
   });
 });

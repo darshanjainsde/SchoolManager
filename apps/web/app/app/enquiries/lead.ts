@@ -220,13 +220,13 @@ function istDay(iso: string | null): string {
 }
 
 /**
- * One CSV cell. A value a spreadsheet would read as a formula (= + - @, tab,
- * carriage return) gets a leading apostrophe: the website form is public, so
+ * One CSV cell. A value a spreadsheet would read as a formula (= + - @, even after
+ * leading spaces, or a leading tab or carriage return) gets a leading apostrophe: the website form is public, so
  * these strings come from anybody. Then the usual quoting for , " and newlines.
  */
 function csvCell(v: string | null | undefined): string {
   let s = v ?? '';
-  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  if (/^\s*[=+\-@]|^[\t\r]/.test(s)) s = `'${s}`;
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 

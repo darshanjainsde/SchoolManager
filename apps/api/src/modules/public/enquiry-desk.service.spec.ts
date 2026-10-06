@@ -2,7 +2,7 @@ import 'reflect-metadata';
 
 const txMock = {
   enquiry: { findFirst: jest.fn(), update: jest.fn(), updateMany: jest.fn(), findMany: jest.fn(), create: jest.fn() },
-  enquiryNote: { create: jest.fn(), findMany: jest.fn(), groupBy: jest.fn() },
+  enquiryNote: { create: jest.fn(), findMany: jest.fn(), groupBy: jest.fn(), count: jest.fn() },
   staff: { findMany: jest.fn(), findFirst: jest.fn() },
   user: { findMany: jest.fn(), findFirst: jest.fn() },
 };
@@ -62,6 +62,7 @@ beforeEach(() => {
   );
   txMock.enquiry.updateMany.mockResolvedValue({ count: 1 });
   txMock.enquiryNote.create.mockResolvedValue({ id: 'n1' });
+  txMock.enquiryNote.count.mockResolvedValue(0);
   txMock.staff.findFirst.mockResolvedValue(null);
   txMock.staff.findMany.mockResolvedValue([]);
   txMock.user.findFirst.mockResolvedValue(null);
@@ -345,6 +346,141 @@ describe('every history line says who wrote it', () => {
     expect(txMock.enquiryNote.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ kind: 'STAGE', authorUserId: USER, authorName: 'Sunita Kale' }),
     }));
+  });
+});
+
+describe('the lead panel reads the same shape as the list', () => {
+  beforeEach(() => {
+    txMock.staff.findMany.mockImplementation(({ where }: { where: { role?: string } }) =>
+      Promise.resolve(
+        where.role === 'ADMISSIONS'
+          ? [{ userId: OFFICER, firstName: 'Sunita', lastName: 'Kale' }]
+          : [
+              { userId: OFFICER, firstName: 'Sunita', lastName: 'Kale' },
+              { userId: GONE, firstName: 'Ravi', lastName: 'Old' },
+            ],
+      ),
+    );
+    txMock.user.findMany.mockResolvedValue([]);
+    txMock.enquiryNote.findMany.mockResolvedValue([
+      { id: 'n1', kind: 'NOTE' }, { id: 'n2', kind: 'STAGE' }, { id: 'n3', kind: 'NOTE' },
+    ]);
+    // Counted the way list() counts: NOTE lines only.
+    txMock.enquiryNote.count.mockResolvedValue(2);
+  });
+
+  it('says ownerOnDesk and noteCount for an owner who is on the desk', async () => {
+    at('CONTACTED', { ownerUserId: OFFICER });
+    const lead = await service().detail(SCHOOL, LEAD);
+    expect(lead.ownerOnDesk).toBe(true);
+    expect(lead.noteCount).toBe(2);
+    expect(txMock.enquiryNote.count).toHaveBeenCalledWith({ where: { schoolId: SCHOOL, enquiryId: LEAD, kind: 'NOTE' } });
+  });
+
+  it('says ownerOnDesk false for an owner who has left the desk, and keeps their name', async () => {
+    // GONE is not an active officer (the desk query), but the name lookup by user id still finds them.
+    at('CONTACTED', { ownerUserId: GONE });
+    await service().update(SCHOOL, LEAD, { ownerUserId: GONE, followUpAt: '2026-10-09' }, { userId: USER, name: 'x' });
+    expect(txMock.staff.findFirst).not.toHaveBeenCalled();
+    expect(txMock.enquiry.update).toHaveBeenCalled();
+  });
+
+  it('clearing the owner needs no check', async () => {
+    at('CONTACTED', { ownerUserId: OFFICER });
+    await service().update(SCHOOL, LEAD, { ownerUserId: null }, { userId: USER, name: 'x' });
+    expect(txMock.staff.findFirst).not.toHaveBeenCalled();
+  });
+});
+
+describe('every history line says who wrote it', () => {
+  it('names a member of staff from their staff record', async () => {
+    txMock.staff.findFirst.mockResolvedValue({ firstName: 'Sunita', lastName: 'Kale' });
+    await service().addNote(SCHOOL, LEAD, 'Asked about the bus', { userId: USER });
+    expect(txMock.enquiryNote.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ kind: 'NOTE', authorUserId: USER, authorName: 'Sunita Kale' }),
+    }));
+  });
+
+  it('names an admin from the name on their profile', async () => {
+    txMock.user.findFirst.mockResolvedValue({ name: 'Mrs Rathore', role: 'SCHOOL_ADMIN' });
+    await service().addNote(SCHOOL, LEAD, 'Spoke to the father', { userId: USER });
+    expect(txMock.enquiryNote.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ authorName: 'Mrs Rathore' }),
+    }));
+  });
+
+  it('calls an admin who never typed a name "School admin" rather than nobody', async () => {
+    txMock.user.findFirst.mockResolvedValue({ name: null, role: 'SCHOOL_ADMIN' });
+    await service().addNote(SCHOOL, LEAD, 'Left a message', { userId: USER });
+    expect(txMock.enquiryNote.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ authorName: 'School admin' }),
+    }));
+  });
+
+  it('signs a STAGE line the controller left unnamed, from the staff record', async () => {
+    at('NEW');
+    txMock.staff.findFirst.mockResolvedValue({ firstName: 'Sunita', lastName: 'Kale' });
+    await service().update(SCHOOL, LEAD, { status: 'CONTACTED' }, { userId: USER });
+    expect(txMock.enquiryNote.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ kind: 'STAGE', authorUserId: USER, authorName: 'Sunita Kale' }),
+    }));
+  });
+});
+
+describe('the lead panel reads the same shape as the list', () => {
+  beforeEach(() => {
+    txMock.staff.findMany.mockImplementation(({ where }: { where: { role?: string } }) =>
+      Promise.resolve(
+        where.role === 'ADMISSIONS'
+          ? [{ userId: OFFICER, firstName: 'Sunita', lastName: 'Kale' }]
+          : [
+              { userId: OFFICER, firstName: 'Sunita', lastName: 'Kale' },
+              { userId: GONE, firstName: 'Ravi', lastName: 'Old' },
+            ],
+      ),
+    );
+    txMock.user.findMany.mockResolvedValue([]);
+    txMock.enquiryNote.findMany.mockResolvedValue([
+      { id: 'n1', kind: 'NOTE' }, { id: 'n2', kind: 'STAGE' }, { id: 'n3', kind: 'NOTE' },
+    ]);
+    // Counted the way list() counts: NOTE lines only.
+    txMock.enquiryNote.count.mockResolvedValue(2);
+  });
+
+  it('says ownerOnDesk and noteCount for an owner who is on the desk', async () => {
+    at('CONTACTED', { ownerUserId: OFFICER });
+    const lead = await service().detail(SCHOOL, LEAD);
+    expect(lead.ownerOnDesk).toBe(true);
+    expect(lead.noteCount).toBe(2);
+    expect(txMock.enquiryNote.count).toHaveBeenCalledWith({ where: { schoolId: SCHOOL, enquiryId: LEAD, kind: 'NOTE' } });
+  });
+
+  it('says ownerOnDesk false for an owner who has left the desk, and keeps their name', async () => {
+    txMock.staff.findMany.mockImplementation(({ where }: { where: { role?: string } }) =>
+      Promise.resolve(
+        where.role === 'ADMISSIONS'
+          ? [{ userId: OFFICER, firstName: 'Sunita', lastName: 'Kale' }]
+          : [{ userId: GONE, firstName: 'Ravi', lastName: 'Old' }],
+      ),
+    );
+    // GONE is no longer an active officer: only the name lookup (by user id) still finds them.
+    txMock.staff.findMany.mockImplementation(({ where }: { where: { role?: string; isActive?: boolean } }) =>
+      Promise.resolve(
+        where.role === 'ADMISSIONS'
+          ? [{ userId: OFFICER, firstName: 'Sunita', lastName: 'Kale' }]
+          : [{ userId: OFFICER, firstName: 'Sunita', lastName: 'Kale' }, { userId: GONE, firstName: 'Ravi', lastName: 'Old' }],
+      ),
+    );
+    at('CONTACTED', { ownerUserId: GONE });
+    const lead = await service().detail(SCHOOL, LEAD);
+    expect(lead.ownerOnDesk).toBe(false);
+    expect(lead.ownerName).toBe('Ravi Old');
+    expect(lead.noteCount).toBe(2);
+  });
+
+  it('says ownerOnDesk false when nobody owns it', async () => {
+    at('NEW', { ownerUserId: null });
+    expect((await service().detail(SCHOOL, LEAD)).ownerOnDesk).toBe(false);
   });
 });
 
