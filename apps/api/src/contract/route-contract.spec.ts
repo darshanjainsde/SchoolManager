@@ -123,6 +123,17 @@ describe('route contract — scanner edge cases', () => {
     expect(dups[0]).toContain('GET /me/profile');
   });
 
+  it('finds one controller declaring the same verb + path twice', () => {
+    write('api/a.controller.ts', `@Controller('fees') export class A { @Get('mine') one() {} @Get('mine') two() {} }`);
+    expect(duplicateRoutes(server().routes)).toHaveLength(1);
+  });
+
+  it('finds a :param route in ANOTHER controller that could swallow a static path — mount order decides, so either is a bug', () => {
+    write('api/a.controller.ts', `@Controller('me') export class A { @Get(':id') one() {} }`);
+    write('api/b.controller.ts', `@Controller('me') export class B { @Get('home') home() {} @Post('home') save() {} }`);
+    expect(shadowedRoutes(server().routes)).toEqual(['GET /me/:id (A) can swallow /me/home (B) — whichever module mounts first wins']);
+  });
+
   it('finds a :param declared above the static path it swallows — but not the reverse', () => {
     write('api/a.controller.ts', `@Controller('leave') export class A { @Get(':id') one() {} @Get('mine') mine() {} }`);
     write('api/b.controller.ts', `@Controller('fees') export class B { @Get('mine') mine() {} @Get(':id') one() {} }`);

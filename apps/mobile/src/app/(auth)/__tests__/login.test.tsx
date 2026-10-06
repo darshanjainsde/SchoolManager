@@ -254,3 +254,14 @@ it('with code login on, opens on the phone door and the password tab still works
   fireEvent.press(getByTestId('login-btn'));
   await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(family)/(tabs)/home'));
 });
+
+it('does not snatch the password door from someone already typing when code login turns out to be on', async () => {
+  let answer: (v: boolean) => void = () => {};
+  (api.otpReady as jest.Mock).mockReturnValue(new Promise<boolean>((r) => { answer = r; }));
+  const { getByTestId, findByTestId, queryByTestId } = render(<Login />);
+  fireEvent.changeText(getByTestId('login-id'), 'RPS-00021');
+  answer(true);
+  await findByTestId('login-mode-phone');
+  expect(getByTestId('login-id').props.value).toBe('RPS-00021');
+  expect(queryByTestId('otp-phone')).toBeNull();
+});

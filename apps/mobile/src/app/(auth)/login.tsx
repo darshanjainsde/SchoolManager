@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -48,6 +48,12 @@ export default function Login() {
     api.otpReady().then((r) => { if (live) setOtpReady(r); }).catch(() => { if (live) setOtpReady(false); });
     return () => { live = false; };
   }, []);
+  // The password door is what shows while we ask; if someone has already
+  // started typing into it, a late "yes" adds the tabs but does not move them.
+  const typedEarly = useRef(false);
+  useEffect(() => {
+    if (otpReady === true && typedEarly.current) setMode('password');
+  }, [otpReady]);
   const door: Mode = otpReady === true ? mode : 'password';
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -254,14 +260,14 @@ export default function Login() {
               <>
                 <Field label="Student code or email">
                   <TextInput
-                    value={identifier} onChangeText={setIdentifier} placeholder="RAF-00042" placeholderTextColor={tokens.color.placeholder}
+                    value={identifier} onChangeText={(v) => { if (otpReady !== true) typedEarly.current = true; setIdentifier(v); }} placeholder="RAF-00042" placeholderTextColor={tokens.color.placeholder}
                     autoCapitalize="none" autoCorrect={false} keyboardType="email-address" autoComplete="username" textContentType="username" testID="login-id"
                     onFocus={() => setFocus('id')} onBlur={() => setFocus(null)} style={fieldInputStyle(tokens, { focused: focus === 'id' })}
                   />
                 </Field>
                 <Field label="Password">
                   <TextInput
-                    value={password} onChangeText={setPassword} placeholder="••••••••" placeholderTextColor={tokens.color.placeholder}
+                    value={password} onChangeText={(v) => { if (otpReady !== true) typedEarly.current = true; setPassword(v); }} placeholder="••••••••" placeholderTextColor={tokens.color.placeholder}
                     secureTextEntry autoComplete="password" textContentType="password" testID="login-pw"
                     onFocus={() => setFocus('pw')} onBlur={() => setFocus(null)} style={fieldInputStyle(tokens, { focused: focus === 'pw' })}
                   />

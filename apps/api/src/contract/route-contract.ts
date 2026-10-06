@@ -173,20 +173,30 @@ export function duplicateRoutes(routes: ServerRoute[]): string[] {
     by.set(k, [...(by.get(k) ?? []), r]);
   }
   return [...by.entries()]
-    .filter(([, rs]) => new Set(rs.map((r) => r.controller + r.path)).size > 1)
+    // Two declarations of one shape, whether in two controllers or twice in one.
+    .filter(([, rs]) => rs.length > 1)
     .map(([k, rs]) => `${k} ← ${rs.map((r) => `${r.controller} [${r.roles?.join(',') ?? 'any'}]`).join(' AND ')}`);
 }
 
-/** In ONE controller, `GET :id` declared above `GET mine` swallows `mine`. */
+/**
+ * A `:param` route that matches a static sibling's path. Inside one controller
+ * the declaration order decides (Nest mounts top to bottom), so only a param
+ * ABOVE the static is a bug. Across controllers the MODULE import order
+ * decides — the very thing that refused students on 2026-10-06 — and a static
+ * scan cannot see it, so any overlap is reported.
+ */
 export function shadowedRoutes(routes: ServerRoute[]): string[] {
   const out: string[] = [];
   for (const a of routes) for (const b of routes) {
-    if (a.controller !== b.controller || a.file !== b.file || a.verb !== b.verb || a.order >= b.order) continue;
+    if (a === b || a.verb !== b.verb || a.path === b.path) continue;
     const sa = a.path.split('/');
     const sb = b.path.split('/');
-    if (sa.length !== sb.length || a.path === b.path) continue;
+    if (sa.length !== sb.length) continue;
     const swallows = sa.every((seg, i) => seg === sb[i] || (seg.startsWith(':') && !sb[i].startsWith(':')));
-    if (swallows) out.push(`${a.verb} ${a.path} is declared above ${b.path} in ${a.controller}`);
+    if (!swallows) continue;
+    const same = a.controller === b.controller && a.file === b.file;
+    if (same && a.order < b.order) out.push(`${a.verb} ${a.path} is declared above ${b.path} in ${a.controller}`);
+    if (!same) out.push(`${a.verb} ${a.path} (${a.controller}) can swallow ${b.path} (${b.controller}) — whichever module mounts first wins`);
   }
   return out;
 }
