@@ -148,7 +148,7 @@ export class SportsRecordsService {
       const body = standing ? `${text} — you beat the ${line} record of ${scoring ? formatMark(scoring, standing.value) : standing.value} (${standing.holderName}, ${standing.sinceYear}).` : `${text} — the first ${line} record in the book. Your name is in it.`;
       if (student?.userId) {
         await tx.notification.create({ data: { schoolId, userId: student.userId, kind: 'SPORTS', title, body, linkType: 'records', linkId: rec.id } });
-        await tx.notificationOutbox.create({ data: { schoolId, kind: 'SPORTS_NOTICE', targetUserId: student.userId, payload: { title, body, recordId: rec.id } as unknown as Prisma.InputJsonValue } });
+        await tx.notificationOutbox.create({ data: { schoolId, kind: 'SPORTS_NOTICE', targetUserId: student.userId, payload: { title, body, recordId: rec.id, emailed: true } as unknown as Prisma.InputJsonValue } });
         this.sendLetter(schoolId, student.userId, title, body, holderName);
       }
       return { status: 'APPROVED', recordId: rec.id };

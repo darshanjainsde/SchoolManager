@@ -1,6 +1,6 @@
 const dbMock = {
   $queryRaw: jest.fn(),
-  notificationOutbox: { findMany: jest.fn(), update: jest.fn(), deleteMany: jest.fn() },
+  notificationOutbox: { findMany: jest.fn(), update: jest.fn(), updateMany: jest.fn(), deleteMany: jest.fn() },
   student: { findMany: jest.fn() },
   user: { findMany: jest.fn() },
   school: { findFirst: jest.fn() },
@@ -10,12 +10,22 @@ jest.mock('@skoolos/db', () => ({
   getPlatformPrisma: () => dbMock,
 }));
 
-import { NotificationOutboxService } from './notification-outbox.service';
+import { NOTIFICATION_OUTBOX_KINDS } from '@skoolos/types';
+import { DRAIN_TIME_BUDGET_MS, NotificationOutboxService, OUTBOX_EMAIL } from './notification-outbox.service';
+import { FIXTURES } from './notification-outbox.fixtures';
 import type { PushChannel } from '../../common/notifications/push.channel';
 import { OUTBOX_DRAIN_DELAY_MS, resetOutboxSignal, requestOutboxDrain } from '../../common/notifications/outbox-signal';
 
 const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const CLASS_SECTION = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+const ADMIN = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+const USER = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
+const EMAILS: Record<string, string> = { [ADMIN]: 'admin@raffles.test', [USER]: 'family@raffles.test' };
+const LEAVE_FIXTURE = FIXTURES.LEAVE_APPLIED;
+
+/** The claim statement hands the drain these rows. */
+const claim = (rows: unknown[]) => dbMock.$queryRaw.mockResolvedValue(rows);
+const row = (id: string) => ({ id, schoolId: SCHOOL, kind: 'ASSIGNMENT_POSTED', payload: FIXTURES.ASSIGNMENT_POSTED, classSectionId: null, targetUserId: USER });
 
 const examScheduledRow = {
   id: 'row-1',
@@ -72,7 +82,8 @@ const assignmentPostedRow = {
 describe('NotificationOutboxService', () => {
   const push = { send: jest.fn() };
   const whatsapp = { send: jest.fn().mockResolvedValue(false) };
-  const svc = new NotificationOutboxService(push as unknown as PushChannel, whatsapp as never);
+  const email = { send: jest.fn() };
+  const svc = new NotificationOutboxService(push as unknown as PushChannel, whatsapp as never, email as never);
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -80,9 +91,13 @@ describe('NotificationOutboxService', () => {
     dbMock.notificationOutbox.update.mockResolvedValue({});
     dbMock.notificationOutbox.deleteMany.mockResolvedValue({ count: 0 });
     dbMock.student.findMany.mockResolvedValue([]);
-    dbMock.user.findMany.mockResolvedValue([]);
     dbMock.school.findFirst.mockResolvedValue({ name: 'Raffles Public School' });
-    push.send.mockResolvedValue(true);
+    dbMock.notificationOutbox.updateMany.mockResolvedValue({ count: 0 });
+    push.send.mockReset().mockResolvedValue(true);
+    email.send.mockReset().mockResolvedValue(true);
+    dbMock.user.findMany.mockImplementation(async (args: { where: { id: { in: string[] } } }) =>
+      (args?.where?.id?.in ?? []).filter((id) => EMAILS[id]).map((id) => ({ id, email: EMAILS[id] })),
+    );
   });
 
   it('claims unsent rows under the attempt cap, oldest first, skipping rows another drain holds', async () => {
@@ -286,6 +301,64 @@ describe('NotificationOutboxService', () => {
     dbMock.notificationOutbox.update.mockRejectedValue(new Error('db also down'));
 
     await expect(svc.drain()).resolves.toEqual({ processed: 1, sent: 0, failed: 1, purged: 0 });
+  });
+
+  describe('email and the time budget', () => {
+    it('emails a leave request to the desk — the email composer existed and was never reached', async () => {
+      claim([{ id: 'r1', schoolId: SCHOOL, kind: 'LEAVE_APPLIED', payload: LEAVE_FIXTURE, classSectionId: null, targetUserId: ADMIN }]);
+      await svc.drain({ purge: false });
+      expect(email.send).toHaveBeenCalledWith('admin@raffles.test', expect.objectContaining({ kind: 'LEAVE_APPLIED' }), SCHOOL);
+    });
+
+    it.each(['LIBRARY_NOTICE', 'SESSION_STARTED', 'RESULT_PUBLISHED', 'EXAM_SCHEDULED'])('does not email %s — its writer already does', async (kind) => {
+      claim([{ id: 'r1', schoolId: SCHOOL, kind, payload: FIXTURES[kind as keyof typeof FIXTURES], classSectionId: null, targetUserId: USER }]);
+      await svc.drain({ purge: false });
+      expect(email.send).not.toHaveBeenCalled();
+    });
+
+    it('a sports record the writer already emailed is not emailed twice', async () => {
+      claim([{ id: 'r1', schoolId: SCHOOL, kind: 'SPORTS_NOTICE', payload: { ...(FIXTURES.SPORTS_NOTICE as object), emailed: true }, classSectionId: null, targetUserId: USER }]);
+      await svc.drain({ purge: false });
+      expect(email.send).not.toHaveBeenCalled();
+    });
+
+    it('an email that throws does not fail the row — push and WhatsApp must not resend', async () => {
+      email.send.mockRejectedValueOnce(new Error('SMTP 421'));
+      claim([{ id: 'r1', schoolId: SCHOOL, kind: 'FEE_VERIFIED', payload: FIXTURES.FEE_VERIFIED, classSectionId: null, targetUserId: USER }]);
+      const r = await svc.drain({ purge: false });
+      expect(r).toMatchObject({ sent: 1, failed: 0 });
+      expect(push.send).toHaveBeenCalledTimes(1);
+      expect(whatsapp.send).toHaveBeenCalledTimes(1);
+    });
+
+    it('stops taking rows after the time budget, releases the rest, and asks for another drain', async () => {
+      const t0 = 1_000_000;
+      const now = jest.spyOn(Date, 'now').mockReturnValue(t0);
+      try {
+        push.send.mockImplementation(async () => {
+          now.mockReturnValue(t0 + DRAIN_TIME_BUDGET_MS + 1);
+          return true;
+        });
+        claim([row('r1'), row('r2'), row('r3')]);
+        const r = await svc.drain({ purge: false });
+        expect(r.sent).toBe(1);
+        expect(dbMock.notificationOutbox.updateMany).toHaveBeenCalledTimes(1);
+        expect(dbMock.notificationOutbox.updateMany).toHaveBeenCalledWith({ where: { id: { in: ['r2', 'r3'] } }, data: { claimedAt: null } });
+      } finally {
+        now.mockRestore();
+      }
+    });
+
+    it('releases nothing when the batch finishes inside the budget', async () => {
+      claim([row('r1'), row('r2')]);
+      const r = await svc.drain({ purge: false });
+      expect(r.sent).toBe(2);
+      expect(dbMock.notificationOutbox.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('OUTBOX_EMAIL names every kind', () => {
+      expect(Object.keys(OUTBOX_EMAIL).sort()).toEqual([...NOTIFICATION_OUTBOX_KINDS].sort());
+    });
   });
 
   describe('retention sweep', () => {

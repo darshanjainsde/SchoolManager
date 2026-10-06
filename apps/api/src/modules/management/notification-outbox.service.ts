@@ -3,6 +3,7 @@ import { readableIstDate } from '../../common/dates/timetable-date';
 import { registerOutboxDrainer, requestOutboxDrain } from '../../common/notifications/outbox-signal';
 import { getPlatformPrisma } from '@skoolos/db';
 import { assertNotificationOutboxKind, type NotificationOutboxKind } from '@skoolos/types';
+import { EmailChannel } from '../../common/notifications/email.channel';
 import { PushChannel } from '../../common/notifications/push.channel';
 import { WhatsAppChannel } from '../../common/notifications/whatsapp.channel';
 import { ackPayload, leavePayload } from '../../common/notifications/whatsapp/actions';
@@ -74,6 +75,33 @@ const CLAIM_TTL_MS = 5 * 60_000;
  * convenient.
  */
 const PURGE_DELIVERED_AFTER_DAYS = 30;
+
+/**
+ * Which outbox kinds the DRAIN emails. False means the writer already sends
+ * its own email, and the drain sending one too would reach the family twice.
+ * Tier 1 replaces this table with one NotificationDelivery row per channel.
+ */
+export const OUTBOX_EMAIL: Record<NotificationOutboxKind, boolean> = {
+  RESULT_PUBLISHED: false, // ExamsService.publish → notify(EMAIL_ONLY)
+  EXAM_SCHEDULED: false, // ExamsService.create → notify(EMAIL_ONLY)
+  LIBRARY_NOTICE: false, // all three library writers send their own letter
+  SESSION_STARTED: false, // SessionsService.afterStart → sendSessionStarted
+  ASSIGNMENT_POSTED: true,
+  MESSAGE_RECEIVED: true,
+  SPORTS_NOTICE: true, // a record letter sets `emailed: true` on its payload
+  FEE_VERIFIED: true,
+  FEE_REJECTED: true,
+  FEE_DUE: true,
+  LEAVE_APPLIED: true,
+  LEAVE_DECIDED: true,
+  COVER_ASSIGNED: true,
+  CONCERN_RAISED: true,
+  CONCERN_REPLIED: true,
+  CONCERN_RESOLVED: true,
+};
+
+/** Leaves 20 s of the function's 60 s for the bookkeeping and the purge. */
+export const DRAIN_TIME_BUDGET_MS = 40_000;
 
 /**
  * Maps a drained row's `kind` + denormalised `payload` onto the SAME
@@ -268,6 +296,7 @@ export class NotificationOutboxService implements OnModuleInit, OnModuleDestroy 
   constructor(
     private readonly push: PushChannel,
     private readonly whatsapp: WhatsAppChannel,
+    private readonly email: EmailChannel,
   ) {}
 
   onModuleInit(): void {
@@ -360,7 +389,18 @@ export class NotificationOutboxService implements OnModuleInit, OnModuleDestroy 
     // per run than the daily reminder scan), so a simple loop stays well
     // inside maxDuration without the added complexity of chunking. One bad
     // row's `catch` below still can never block the rest of the batch.
-    for (const row of rows) {
+    const started = Date.now();
+    for (let i = 0; i < rows.length; i += 1) {
+      const row = rows[i];
+      // The budget is checked BEFORE a row starts; the row in flight finishes.
+      // Rows not started are released in one statement and another drain is asked for.
+      if (Date.now() - started > DRAIN_TIME_BUDGET_MS) {
+        const rest = rows.slice(i).map((r) => r.id);
+        await db.notificationOutbox.updateMany({ where: { id: { in: rest } }, data: { claimedAt: null } });
+        this.logger.warn(`Outbox drain stopped at its time budget; ${rest.length} rows released for the next run.`);
+        requestOutboxDrain();
+        break;
+      }
       try {
         assertNotificationOutboxKind(row.kind);
         const message = toNotificationMessage(row.kind, row.payload);
@@ -373,9 +413,15 @@ export class NotificationOutboxService implements OnModuleInit, OnModuleDestroy 
             ? await resolveSectionRecipients(db, row.schoolId, row.classSectionId)
             : [];
 
-        for (const email of recipients) {
-          await this.push.send(email, message, row.schoolId);
-          await this.whatsapp.send(email, message, row.schoolId);
+        const emailIt = OUTBOX_EMAIL[row.kind] && !(row.payload as { emailed?: boolean } | null)?.emailed;
+        for (const to of recipients) {
+          await this.push.send(to, message, row.schoolId);
+          await this.whatsapp.send(to, message, row.schoolId);
+          if (emailIt) {
+            // An email failure is logged, never thrown: throwing would retry the
+            // whole row and push + WhatsApp would go out a second time.
+            await this.email.send(to, message, row.schoolId).catch((e) => this.logger.warn(`outbox email to ${to} failed: ${(e as Error).message}`));
+          }
         }
 
         await db.notificationOutbox.update({
