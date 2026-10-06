@@ -1,5 +1,7 @@
+import { createHash } from 'node:crypto';
 import { Logger } from '@nestjs/common';
 import type { PrismaClient } from '@skoolos/db';
+import { ensureConnected, sharedRedis, type SharedRedis } from '../redis/redis.client';
 import type { NotificationChannel, NotificationMessage } from './notification.types';
 import { toE164 } from './whatsapp/phone';
 import { WhatsAppApiError, sendTemplate, senderDisplayNumber, type SendResult, type WhatsAppConfig, whatsAppConfig, whatsAppConfigProblem } from './whatsapp/graph.client';
@@ -47,6 +49,7 @@ export class WhatsAppChannel implements NotificationChannel {
     private readonly prisma: Db,
     private readonly config: () => WhatsAppConfig | null = () => whatsAppConfig(),
     private readonly fetchImpl: typeof fetch = fetch,
+    private readonly redis: () => SharedRedis = () => sharedRedis(),
   ) {}
 
   /** The platform credentials, or null when the environment has none. */
@@ -64,18 +67,41 @@ export class WhatsAppChannel implements NotificationChannel {
    * The same words to the same phone within a minute are one message. A
    * family with three children at the school gets ONE "PTM on Saturday",
    * not three; the per-child kinds (absence, remark) differ in their
-   * parameters and pass. Keyed on phone + template + parameters; the map is
-   * pruned when it grows, so a fan-out of thousands stays bounded.
+   * parameters and pass. Keyed on phone + template + parameters.
+   *
+   * One copy per phone across every serverless instance, through Redis
+   * (SET NX with a 60 s expiry); memory only when Redis is unreachable. The
+   * Redis key is a hash — the phone number is personal data and stays out of
+   * it. The memory map is pruned when it grows, so a fan-out of thousands
+   * stays bounded.
    */
   private readonly recent = new Map<string, number>();
   private static readonly DEDUPE_MS = 60_000;
-  private isDuplicate(phone: string, template: WhatsAppTemplate): boolean {
-    const key = `${phone}|${template.name}|${template.params.join('\u0001')}`;
+  private warnedRedis = false;
+
+  private async isDuplicate(phone: string, template: WhatsAppTemplate): Promise<boolean> {
+    const raw = `${phone}|${template.name}|${template.params.join('\u0001')}`;
+    try {
+      const r = this.redis();
+      if (r && (await ensureConnected(r))) {
+        const key = `wa:dedup:${createHash('sha256').update(raw).digest('hex').slice(0, 32)}`;
+        return (await r.set(key, '1', 'EX', WhatsAppChannel.DEDUPE_MS / 1000, 'NX')) === null;
+      }
+    } catch (e) {
+      if (!this.warnedRedis) {
+        this.warnedRedis = true;
+        this.logger.warn(`WhatsApp dedup fell back to memory: ${(e as Error).message}`);
+      }
+    }
+    return this.isDuplicateLocal(raw);
+  }
+
+  private isDuplicateLocal(raw: string): boolean {
     const now = Date.now();
-    const seen = this.recent.get(key);
+    const seen = this.recent.get(raw);
     if (seen && now - seen < WhatsAppChannel.DEDUPE_MS) return true;
     if (this.recent.size > 5000) for (const [k, t] of this.recent) if (now - t > WhatsAppChannel.DEDUPE_MS) this.recent.delete(k);
-    this.recent.set(key, now);
+    this.recent.set(raw, now);
     return false;
   }
 
@@ -99,7 +125,7 @@ export class WhatsAppChannel implements NotificationChannel {
     const { phone } = address;
 
     const template = templateFor(message, { child: address.child });
-    if (this.isDuplicate(phone, template)) return true;
+    if (await this.isDuplicate(phone, template)) return true;
     return this.deliver(cfg, schoolId, phone, message.kind, template, settings.phoneNumberId);
   }
 
