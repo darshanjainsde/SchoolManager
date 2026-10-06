@@ -1,4 +1,5 @@
 import { IsDateString, IsEmail, IsIn, IsOptional, IsString, IsUUID, Length, ValidateIf } from 'class-validator';
+import { ENQUIRY_STAGES, type EnquiryStageValue } from '@skoolos/types';
 import type { PublicEvent } from '../community';
 
 export class SubmitEnquiryDto {
@@ -26,13 +27,12 @@ export class SubmitEnquiryDto {
 
 export class SetEnquiryStatusDto {
   /**
-   * The admissions pipeline. CLOSED is accepted but never sent by the desk —
-   * it is the old three-state model's word for a finished lead and existing
-   * rows still carry it.
+   * The admissions pipeline. CLOSED is accepted by validation and refused by
+   * the service (409): it is the old three-state word, never written again.
    */
   @IsOptional()
-  @IsIn(['NEW', 'CONTACTED', 'VISITED', 'APPLIED', 'ENROLLED', 'LOST', 'CLOSED'])
-  status?: 'NEW' | 'CONTACTED' | 'VISITED' | 'APPLIED' | 'ENROLLED' | 'LOST' | 'CLOSED';
+  @IsIn(ENQUIRY_STAGES)
+  status?: EnquiryStageValue;
 
   /**
    * The day to ring them back, or null to clear it. A DATE — a desk works in

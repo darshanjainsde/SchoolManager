@@ -4,14 +4,54 @@ import { TenantContextService } from '../tenancy';
 import { FeatureResolverService } from '../features';
 import type { SubmitEnquiryDto } from './public.dto';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
-import type { EnquiryStatus, TenantTx } from '@skoolos/db';
-import type { EnquiryDeskMember } from '@skoolos/types';
+import type { TenantTx } from '@skoolos/db';
+import { stageMove, type EnquiryDeskMember, type EnquiryStageValue } from '@skoolos/types';
+import { ApiError } from '../../common/errors/api-error';
+import { isAdmissionsDesk } from './internal/admissions-desk.guard';
 
 /** How a stage reads in a history line. */
 const STAGE_LABEL: Record<string, string> = {
-  NEW: 'New', CONTACTED: 'Contacted', VISITED: 'Visited',
+  NEW: 'New', CONTACTED: 'Contacted', INTERESTED: 'Interested', VISITED: 'Visited',
   APPLIED: 'Applied', ENROLLED: 'Enrolled', LOST: 'Lost', CLOSED: 'Closed',
 };
+
+/** Who did something. `name` absent = the service looks it up; present (even null) = use it. */
+type Actor = { userId?: string; name?: string | null };
+
+/**
+ * Display names for lead owners, from the same sources the desk picker uses:
+ * the Staff record, else the name on the login, else "School admin" for an
+ * admin who never typed one. An owner with no source at all is simply absent.
+ * Not filtered by isActive — an owner who has left keeps their name on the lead.
+ */
+async function ownerNames(
+  tx: Pick<TenantTx, 'staff' | 'user'>,
+  schoolId: string,
+  userIds: string[],
+): Promise<Map<string, string>> {
+  const names = new Map<string, string>();
+  if (!userIds.length) return names;
+  const staff = await tx.staff.findMany({ take: LIST_CEILING.ROSTER,
+    where: { schoolId, userId: { in: userIds } },
+    select: { userId: true, firstName: true, lastName: true },
+  });
+  for (const s of staff) {
+    const full = `${s.firstName} ${s.lastName}`.trim();
+    if (s.userId && full) names.set(s.userId, full);
+  }
+  const missing = userIds.filter((id) => !names.has(id));
+  if (missing.length) {
+    const users = await tx.user.findMany({ take: LIST_CEILING.ROSTER,
+      where: { schoolId, id: { in: missing } },
+      select: { id: true, name: true, role: true },
+    });
+    for (const u of users) {
+      const name = u.name?.trim() || (u.role === 'SCHOOL_ADMIN' ? 'School admin' : '');
+      if (name) names.set(u.id, name);
+    }
+  }
+  return names;
+}
 
 /**
  * Who sits at the admissions desk: every active admissions officer with a
@@ -109,13 +149,7 @@ export class EnquiryService {
       });
 
       const ownerIds = [...new Set(rows.map((r) => r.ownerUserId).filter((x): x is string => !!x))];
-      const owners = ownerIds.length
-        ? await tx.staff.findMany({ take: LIST_CEILING.ROSTER,
-            where: { schoolId, userId: { in: ownerIds } },
-            select: { userId: true, firstName: true, lastName: true },
-          })
-        : [];
-      const byUser = new Map(owners.map((o) => [o.userId, `${o.firstName} ${o.lastName}`.trim()]));
+      const byUser = await ownerNames(tx, schoolId, ownerIds);
 
       const counts = await tx.enquiryNote.groupBy({
         by: ['enquiryId'],
@@ -151,14 +185,9 @@ export class EnquiryService {
         where: { schoolId, enquiryId: id },
         orderBy: { createdAt: 'desc' },
       });
-      let ownerName: string | null = null;
-      if (enquiry.ownerUserId) {
-        const staff = await tx.staff.findFirst({
-          where: { schoolId, userId: enquiry.ownerUserId },
-          select: { firstName: true, lastName: true },
-        });
-        ownerName = staff ? `${staff.firstName} ${staff.lastName}`.trim() : null;
-      }
+      const ownerName = enquiry.ownerUserId
+        ? ((await ownerNames(tx, schoolId, [enquiry.ownerUserId])).get(enquiry.ownerUserId) ?? null)
+        : null;
       return { ...enquiry, ownerName, notes };
     });
   }
@@ -179,16 +208,32 @@ export class EnquiryService {
     schoolId: string,
     id: string,
     dto: {
-      status?: EnquiryStatus;
+      status?: EnquiryStageValue;
       followUpAt?: string | null;
       ownerUserId?: string | null;
       lostReason?: string | null;
     },
-    actor?: { userId?: string; name?: string | null },
+    actor?: Actor,
   ) {
     return withTenant(schoolId, async (tx) => {
       const existing = await tx.enquiry.findFirst({ where: { id, schoolId } });
       if (!existing) throw new NotFoundException('Enquiry not found');
+
+      const move = dto.status !== undefined ? stageMove(existing.status as EnquiryStageValue, dto.status) : 'SAME';
+      if (move === 'BACKWARDS') {
+        throw new ApiError(
+          'ENQUIRY_STAGE_BACKWARDS',
+          `A lead only moves forward — this one is at ${STAGE_LABEL[existing.status] ?? existing.status}. Mark it lost, or reopen a lost one.`,
+          409,
+          'status',
+        );
+      }
+      // A client-supplied id: FK checks bypass RLS, and this is not even an FK.
+      // Checked only when it CHANGES, so a lead whose owner has left can still
+      // have its callback moved.
+      if (dto.ownerUserId && dto.ownerUserId !== existing.ownerUserId && !(await isAdmissionsDesk(tx, schoolId, dto.ownerUserId))) {
+        throw new ApiError('ENQUIRY_OWNER_NOT_DESK', 'A lead can only be given to an admissions officer or a school admin.', 400, 'ownerUserId');
+      }
 
       const data: Record<string, unknown> = {};
       if (dto.status !== undefined) data.status = dto.status;
@@ -208,7 +253,8 @@ export class EnquiryService {
 
       const updated = await tx.enquiry.update({ where: { id }, data });
 
-      if (dto.status !== undefined && dto.status !== existing.status) {
+      if (dto.status !== undefined && move !== 'SAME') {
+        const by = await this.author(tx, schoolId, actor);
         await tx.enquiryNote.create({
           data: {
             schoolId,
@@ -217,9 +263,11 @@ export class EnquiryService {
             body:
               dto.status === 'LOST' && updated.lostReason
                 ? `Marked Lost — ${updated.lostReason}`
-                : `Moved to ${STAGE_LABEL[dto.status] ?? dto.status}`,
-            authorUserId: actor?.userId ?? null,
-            authorName: actor?.name ?? null,
+                : move === 'REOPEN'
+                  ? 'Reopened — back to Contacted'
+                  : `Moved to ${STAGE_LABEL[dto.status] ?? dto.status}`,
+            authorUserId: by.userId,
+            authorName: by.name,
           },
         });
       }
@@ -229,25 +277,35 @@ export class EnquiryService {
   }
 
   /** A note somebody typed. What makes "Contacted" checkable. */
-  async addNote(
-    schoolId: string,
-    id: string,
-    body: string,
-    actor?: { userId?: string; name?: string | null },
-  ) {
+  async addNote(schoolId: string, id: string, body: string, actor?: Actor) {
     return withTenant(schoolId, async (tx) => {
       const existing = await tx.enquiry.findFirst({ where: { id, schoolId } });
       if (!existing) throw new NotFoundException('Enquiry not found');
+      const by = await this.author(tx, schoolId, actor);
       return tx.enquiryNote.create({
-        data: {
-          schoolId,
-          enquiryId: id,
-          kind: 'NOTE',
-          body,
-          authorUserId: actor?.userId ?? null,
-          authorName: actor?.name ?? null,
-        },
+        data: { schoolId, enquiryId: id, kind: 'NOTE', body, authorUserId: by.userId, authorName: by.name },
       });
     });
+  }
+
+  /**
+   * The name a history line is signed with, read at write time and kept on
+   * the row so it survives the person leaving. Staff and officers by their
+   * staff record; an admin by the name on their profile, or "School admin" —
+   * a line that says nobody wrote it is the defect this replaces.
+   */
+  private async author(
+    tx: Pick<TenantTx, 'staff' | 'user'>,
+    schoolId: string,
+    actor?: Actor,
+  ): Promise<{ userId: string | null; name: string | null }> {
+    const userId = actor?.userId ?? null;
+    if (actor && actor.name !== undefined) return { userId, name: actor.name };
+    if (!userId) return { userId: null, name: null };
+    const staff = await tx.staff.findFirst({ where: { schoolId, userId }, select: { firstName: true, lastName: true } });
+    const full = staff ? `${staff.firstName} ${staff.lastName}`.trim() : '';
+    if (full) return { userId, name: full };
+    const user = await tx.user.findFirst({ where: { id: userId, schoolId }, select: { name: true, role: true } });
+    return { userId, name: user?.name?.trim() || (user?.role === 'SCHOOL_ADMIN' ? 'School admin' : null) };
   }
 }

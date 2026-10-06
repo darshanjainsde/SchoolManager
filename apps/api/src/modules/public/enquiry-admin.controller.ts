@@ -27,9 +27,9 @@ export class EnquiryAdminController {
     return this.tenant.requireTenant().schoolId;
   }
 
-  /** Who wrote a note or moved a stage — denormalised onto the history line. */
+  /** Who is acting. The service signs the history line with their name (Actor.name left out on purpose). */
   private actor(user?: AnyJwtPayload) {
-    return { userId: user && 'sub' in user ? user.sub : undefined, name: null };
+    return { userId: user && 'sub' in user ? user.sub : undefined };
   }
 
   @Get('enquiries')

@@ -15,6 +15,7 @@ jest.mock('@skoolos/db', () => ({
 }));
 
 import { NotFoundException } from '@nestjs/common';
+import { ApiError } from '../../common/errors/api-error';
 import { EnquiryService } from './enquiry.service';
 
 /**
@@ -38,6 +39,20 @@ const features = { getFeatures: jest.fn() } as never;
 function service() {
   return new EnquiryService(tenant, features);
 }
+
+/** The code and status an ApiError carried, or {} when the call succeeded. */
+async function refusal(p: Promise<unknown>): Promise<{ code?: string; status?: number }> {
+  try {
+    await p;
+    return {};
+  } catch (e) {
+    const err = e as ApiError;
+    return { code: (err.getResponse() as { code?: string }).code, status: err.getStatus() };
+  }
+}
+
+const at = (status: string, extra: Record<string, unknown> = {}) =>
+  txMock.enquiry.findFirst.mockResolvedValue({ id: LEAD, schoolId: SCHOOL, status, lostReason: null, ownerUserId: null, ...extra });
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -197,5 +212,172 @@ describe('who sits at the desk', () => {
       ['b', false, 'Ravi Old'],
       ['c', false, null],
     ]);
+  });
+});
+
+describe('a lead only moves forward', () => {
+  it('refuses a step backwards with 409 ENQUIRY_STAGE_BACKWARDS, and writes nothing', async () => {
+    at('VISITED');
+    expect(await refusal(service().update(SCHOOL, LEAD, { status: 'CONTACTED' }))).toEqual({ code: 'ENQUIRY_STAGE_BACKWARDS', status: 409 });
+    expect(txMock.enquiry.update).not.toHaveBeenCalled();
+    expect(txMock.enquiryNote.create).not.toHaveBeenCalled();
+  });
+
+  it('takes INTERESTED between Contacted and Visited', async () => {
+    at('CONTACTED');
+    await service().update(SCHOOL, LEAD, { status: 'INTERESTED' }, { userId: USER, name: 'Sunita Kale' });
+    expect(txMock.enquiryNote.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ kind: 'STAGE', body: 'Moved to Interested' }),
+    }));
+  });
+
+  it('lets an enrolled family be marked lost — a family can still withdraw', async () => {
+    at('ENROLLED');
+    await service().update(SCHOOL, LEAD, { status: 'LOST', lostReason: 'Moved city' });
+    expect(txMock.enquiry.update).toHaveBeenCalled();
+  });
+
+  it('reopens a lost lead to Contacted, clears the reason, and says who', async () => {
+    at('LOST', { lostReason: 'Too far' });
+    await service().update(SCHOOL, LEAD, { status: 'CONTACTED' }, { userId: USER, name: 'Sunita Kale' });
+    expect(txMock.enquiry.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: 'CONTACTED', lostReason: null }),
+    }));
+    expect(txMock.enquiryNote.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ kind: 'STAGE', body: 'Reopened — back to Contacted', authorName: 'Sunita Kale' }),
+    }));
+  });
+
+  it('will not reopen a lost lead straight to Visited', async () => {
+    at('LOST');
+    expect((await refusal(service().update(SCHOOL, LEAD, { status: 'VISITED' }))).code).toBe('ENQUIRY_STAGE_BACKWARDS');
+  });
+
+  it('never writes the retired CLOSED', async () => {
+    at('NEW');
+    expect((await refusal(service().update(SCHOOL, LEAD, { status: 'CLOSED' }))).status).toBe(409);
+  });
+
+  it('names the field on the refusal, so the desk can point at it', async () => {
+    at('VISITED');
+    await expect(service().update(SCHOOL, LEAD, { status: 'CONTACTED' })).rejects.toMatchObject({
+      response: expect.objectContaining({ field: 'status' }),
+    });
+  });
+
+  it('treats the same stage as a no-op: no write of a STAGE note', async () => {
+    at('CONTACTED');
+    await service().update(SCHOOL, LEAD, { status: 'CONTACTED' });
+    expect(txMock.enquiryNote.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('who may own a lead', () => {
+  it('refuses somebody who is not on the desk, with 400 ENQUIRY_OWNER_NOT_DESK', async () => {
+    at('NEW');
+    expect(await refusal(service().update(SCHOOL, LEAD, { ownerUserId: OFFICER }, { userId: USER, name: 'x' })))
+      .toEqual({ code: 'ENQUIRY_OWNER_NOT_DESK', status: 400 });
+    expect(txMock.enquiry.update).not.toHaveBeenCalled();
+  });
+
+  it('accepts an admissions officer of THIS school', async () => {
+    at('NEW');
+    txMock.staff.findFirst.mockResolvedValue({ id: 'staff-1' });
+    await service().update(SCHOOL, LEAD, { ownerUserId: OFFICER }, { userId: USER, name: 'x' });
+    expect(txMock.staff.findFirst).toHaveBeenCalledWith({
+      where: { schoolId: SCHOOL, userId: OFFICER, role: 'ADMISSIONS', isActive: true },
+      select: { id: true },
+    });
+    expect(txMock.enquiry.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ ownerUserId: OFFICER }),
+    }));
+  });
+
+  /**
+   * The owner left last month. Changing the callback date sends the whole
+   * row's owner back unchanged — re-checking it would make the lead
+   * uneditable until somebody reassigns it.
+   */
+  it('does not re-check an owner who is not being changed', async () => {
+    at('CONTACTED', { ownerUserId: GONE });
+    await service().update(SCHOOL, LEAD, { ownerUserId: GONE, followUpAt: '2026-10-09' }, { userId: USER, name: 'x' });
+    expect(txMock.staff.findFirst).not.toHaveBeenCalled();
+    expect(txMock.enquiry.update).toHaveBeenCalled();
+  });
+
+  it('clearing the owner needs no check', async () => {
+    at('CONTACTED', { ownerUserId: OFFICER });
+    await service().update(SCHOOL, LEAD, { ownerUserId: null }, { userId: USER, name: 'x' });
+    expect(txMock.staff.findFirst).not.toHaveBeenCalled();
+  });
+});
+
+describe('every history line says who wrote it', () => {
+  it('names a member of staff from their staff record', async () => {
+    txMock.staff.findFirst.mockResolvedValue({ firstName: 'Sunita', lastName: 'Kale' });
+    await service().addNote(SCHOOL, LEAD, 'Asked about the bus', { userId: USER });
+    expect(txMock.enquiryNote.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ kind: 'NOTE', authorUserId: USER, authorName: 'Sunita Kale' }),
+    }));
+  });
+
+  it('names an admin from the name on their profile', async () => {
+    txMock.user.findFirst.mockResolvedValue({ name: 'Mrs Rathore', role: 'SCHOOL_ADMIN' });
+    await service().addNote(SCHOOL, LEAD, 'Spoke to the father', { userId: USER });
+    expect(txMock.enquiryNote.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ authorName: 'Mrs Rathore' }),
+    }));
+  });
+
+  it('calls an admin who never typed a name "School admin" rather than nobody', async () => {
+    txMock.user.findFirst.mockResolvedValue({ name: null, role: 'SCHOOL_ADMIN' });
+    await service().addNote(SCHOOL, LEAD, 'Left a message', { userId: USER });
+    expect(txMock.enquiryNote.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ authorName: 'School admin' }),
+    }));
+  });
+
+  it('signs a STAGE line the controller left unnamed, from the staff record', async () => {
+    at('NEW');
+    txMock.staff.findFirst.mockResolvedValue({ firstName: 'Sunita', lastName: 'Kale' });
+    await service().update(SCHOOL, LEAD, { status: 'CONTACTED' }, { userId: USER });
+    expect(txMock.enquiryNote.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ kind: 'STAGE', authorUserId: USER, authorName: 'Sunita Kale' }),
+    }));
+  });
+});
+
+describe('an admin who owns a lead has a name on it', () => {
+  beforeEach(() => {
+    txMock.staff.findMany.mockResolvedValue([]); // an admin has no Staff row
+    txMock.user.findMany.mockImplementation(({ where }: { where: { id?: { in: string[] }; role?: string } }) =>
+      Promise.resolve(
+        where.role === 'SCHOOL_ADMIN'
+          ? [{ id: ADMIN, name: 'Mrs Rathore', email: 'office@school.test' }]
+          : [{ id: ADMIN, name: null, role: 'SCHOOL_ADMIN' }],
+      ),
+    );
+  });
+
+  it('list falls back to "School admin" for an admin with no typed name, and keeps ownerOnDesk', async () => {
+    txMock.enquiry.findMany.mockResolvedValue([{ id: 'a', ownerUserId: ADMIN }]);
+    txMock.enquiryNote.groupBy.mockResolvedValue([]);
+    const rows = await service().list(SCHOOL);
+    expect(rows.map((r) => [r.id, r.ownerOnDesk, r.ownerName])).toEqual([['a', true, 'School admin']]);
+  });
+
+  it('detail names the admin owner the same way', async () => {
+    at('NEW', { ownerUserId: ADMIN });
+    txMock.enquiryNote.findMany.mockResolvedValue([]);
+    const lead = await service().detail(SCHOOL, LEAD);
+    expect(lead.ownerName).toBe('School admin');
+  });
+
+  it('uses the name on the admin profile when there is one', async () => {
+    txMock.user.findMany.mockResolvedValue([{ id: ADMIN, name: 'Mrs Rathore', role: 'SCHOOL_ADMIN', email: 'office@school.test' }]);
+    txMock.enquiry.findMany.mockResolvedValue([{ id: 'a', ownerUserId: ADMIN }]);
+    txMock.enquiryNote.groupBy.mockResolvedValue([]);
+    const rows = await service().list(SCHOOL);
+    expect(rows[0].ownerName).toBe('Mrs Rathore');
   });
 });
