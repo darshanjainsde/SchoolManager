@@ -1,8 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { HttpException, Injectable, Logger } from '@nestjs/common';
 import { getPlatformPrisma, type PrismaClient } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
+import { isP2002 } from '../../common/errors/prisma-errors';
 import { WhatsAppChannel } from '../../common/notifications/whatsapp.channel';
-import { coverPayload, parseAction, type Action } from '../../common/notifications/whatsapp/actions';
+import { actionKeys, coverPayload, parseAction, type Action } from '../../common/notifications/whatsapp/actions';
+import { toE164 } from '../../common/notifications/whatsapp/phone';
 import { sendList, sendTemplate, sendText } from '../../common/notifications/whatsapp/graph.client';
 import { coverPendingTemplate, COVER_PENDING } from '../../common/notifications/whatsapp/templates';
 import { isoWeekdayOf, LeaveService, toDateStr } from '../management';
@@ -45,20 +47,24 @@ export class WhatsAppActionsService {
     private readonly channel: WhatsAppChannel,
   ) {}
 
-  private secret(): string {
-    return process.env.META_APP_SECRET?.trim() || 'unset';
+  private keys() {
+    return actionKeys();
   }
 
   async handleInbound(m: InboundMessage): Promise<string> {
     const db = getPlatformPrisma();
-    const phone = `+${m.from.replace(/^\+/, '')}`;
+    const phone = toE164(m.from) ?? `+${m.from.replace(/^\+/, '')}`;
     const payload = m.button?.payload ?? m.interactive?.button_reply?.id ?? m.interactive?.list_reply?.id ?? null;
     const kind = m.button ? 'button' : m.interactive?.list_reply ? 'list' : m.interactive?.button_reply ? 'button' : m.text ? 'text' : 'other';
     // Idempotency first: a retried webhook must not approve twice.
     try {
       await db.whatsAppInbound.create({ data: { id: m.id, phone, kind, payload: (payload ?? m.text?.body ?? m.type).slice(0, 1000) } });
-    } catch {
-      return 'duplicate';
+    } catch (e) {
+      // ONLY a repeated Meta message id is a duplicate. Anything else (a pool
+      // timeout, a reset) used to be called "duplicate" too, and the tap — an
+      // approval — vanished without trace. Throw, and Meta retries.
+      if (isP2002(e)) return 'duplicate';
+      throw e;
     }
     let result = 'ignored';
     let schoolId: string | null = null;
@@ -66,16 +72,43 @@ export class WhatsAppActionsService {
       if (!payload) {
         result = 'text'; // a reply in words — the Messages inbox is the next phase
       } else {
-        const action = parseAction(payload, this.secret());
-        if (!action) result = 'unknown-payload';
-        else ({ result, schoolId } = await this.act(db, action, phone));
+        const parsed = parseAction(payload, this.keys());
+        if (!parsed.ok && parsed.why === 'foreign') result = 'unknown-payload';
+        else if (!parsed.ok) {
+          schoolId = await this.schoolOf(db, parsed.action);
+          // An expired "got it" is recorded and NOT answered: the live ack
+          // path is silent to anyone but the substitute, and a substitute has
+          // nothing to "decide in the console".
+          if (schoolId && parsed.action.kind !== 'ack') await this.text(schoolId, phone, 'This button has expired. Please decide in the console or the app.');
+          result = 'expired';
+        } else ({ result, schoolId } = await this.act(db, parsed.action, phone));
       }
     } catch (e) {
-      result = `error: ${(e as Error).message}`.slice(0, 200);
       this.logger.error(`WhatsApp action failed for ${m.id}: ${(e as Error).message}`);
+      // 4xx is an answer; anything else is retried. A refusal LeaveService makes
+      // (ApiError, or Nest's NotFoundException for a leave deleted meanwhile) is
+      // deterministic: record it and answer 200, or Meta would resend a poison tap
+      // for hours.
+      if (!(e instanceof HttpException && e.getStatus() < 500)) {
+        // Infrastructure (a pool timeout inside LeaveService.approve, say), not
+        // a business answer. Recording "error:" and returning 200 would lose the
+        // tap: Meta's resend would then hit the primary key and read 'duplicate'.
+        // Free the key and rethrow; the webhook answers 500 and Meta retries the
+        // tap from the start. That is safe: approve/reject refuse a second
+        // decision (LEAVE_NOT_PENDING -> 'already-decided') and assign on an
+        // already-covered gap answers 'already-covered', so nothing acts twice.
+        await db.whatsAppInbound.delete({ where: { id: m.id } }).catch((de: unknown) => this.logger.warn(`Could not free inbound ${m.id} for retry: ${(de as Error).message}`));
+        throw e;
+      }
+      result = `error: ${(e as Error).message}`.slice(0, 200);
     }
     await db.whatsAppInbound.update({ where: { id: m.id }, data: { result, schoolId } }).catch(() => undefined);
     return result;
+  }
+
+  private async schoolOf(db: Db, a: Action): Promise<string | null> {
+    if (a.kind === 'leave') return (await db.leaveApplication.findUnique({ where: { id: a.leaveId }, select: { schoolId: true } }))?.schoolId ?? null;
+    return (await db.substitution.findUnique({ where: { id: a.substitutionId }, select: { schoolId: true } }))?.schoolId ?? null;
   }
 
   private async act(db: Db, action: Action, phone: string): Promise<{ result: string; schoolId: string | null }> {
@@ -211,17 +244,17 @@ export class WhatsAppActionsService {
     }
     free.sort((a, b) => Number(teachesSubject.has(b.id)) - Number(teachesSubject.has(a.id)) || a.firstName.localeCompare(b.firstName));
     const when = await this.whenOf(db, schoolId, sub.date, sub.periodId, sub.classSectionId);
-    const secret = this.secret();
+    const keys = this.keys();
     if (free.length === 0) {
       await this.text(schoolId, phone, `Nobody is free for ${when.className} on ${when.when}. Decide in the console.`);
       return;
     }
     const rows = free.slice(0, NO_ROWS_CAP).map((t) => ({
-      id: coverPayload(sub.id, t.id, secret),
+      id: coverPayload(sub.id, t.id, keys),
       title: `${t.firstName} ${t.lastName ?? ''}`.trim(),
       description: teachesSubject.has(t.id) ? `teaches ${when.subjectName ?? 'this subject'}` : 'free this period',
     }));
-    rows.push({ id: coverPayload(sub.id, 'skip', secret), title: 'Decide in the console', description: 'leave this one for later' });
+    rows.push({ id: coverPayload(sub.id, 'skip', keys), title: 'Decide in the console', description: 'leave this one for later' });
     const sent = await this.channel.deliverWith(schoolId, phone, 'COVER_LIST', 'interactive:list', (cfg, pnid, f) =>
       sendList(cfg, phone, { header: 'Who covers?', body: `${when.className}${when.subjectName ? ` · ${when.subjectName}` : ''}\n${when.when}`, button: 'Pick a teacher', rows, footer: `${free.length} free` }, { phoneNumberId: pnid, fetchImpl: f }),
     );

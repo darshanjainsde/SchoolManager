@@ -71,3 +71,15 @@ export function istTodayISO(now: Date = new Date()): string {
 export function readableIstDate(d: Date = new Date()): string {
   return new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'long', timeZone: 'Asia/Kolkata' }).format(d);
 }
+
+const SHORT_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/**
+ * "Mon 13 Oct 2026" — a calendar date as WhatsApp templates print it. Reads
+ * the UTC fields: pass a date at UTC midnight (a @db.Date column, or
+ * `new Date('2026-10-13T00:00:00Z')`). Fixed arrays, not Intl, because ICU
+ * writes September as "Sept" in en-IN and en-GB.
+ */
+export function shortDayDate(d: Date): string {
+  return `${SHORT_DAYS[d.getUTCDay()]} ${d.getUTCDate()} ${SHORT_MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+}

@@ -12,6 +12,7 @@ import { SportsRecordsService } from './sports-records.service';
 import { SportsSettingsService } from './sports-settings.service';
 import { SportsTournamentsService } from './sports-tournaments.service';
 import type { MarksDto, ScoreDto } from './sports.dto';
+import { requestOutboxDrain } from '../../../common/notifications/outbox-signal';
 
 type MatchLike = { id: string; stage: string; groupLabel: string; roundIdx: number; roundName: string; pos: number; aSide: string | null; bSide: string | null; winner: string | null; bye: boolean; scoreA: number[]; scoreB: number[] };
 
@@ -38,10 +39,10 @@ export class SportsResultsService {
     private readonly records: SportsRecordsService,
   ) {}
 
-  score(schoolId: string, actorId: string, matchId: string, dto: ScoreDto): Promise<{ version: number; winner: string | null; complete: boolean; finalBuilt: boolean }> {
+  async score(schoolId: string, actorId: string, matchId: string, dto: ScoreDto): Promise<{ version: number; winner: string | null; complete: boolean; finalBuilt: boolean }> {
     assertNotificationKind('SPORTS');
     assertNotificationOutboxKind('SPORTS_NOTICE');
-    return withTenant(schoolId, async (tx) => {
+    const out = await withTenant(schoolId, async (tx) => {
       const m = await tx.sportsMatch.findFirst({
         where: { id: matchId, schoolId },
         include: { event: { select: { id: true, tournamentId: true, sportKey: true, sportName: true, groupKey: true, category: true, structure: true, tournament: { select: { status: true, name: true } } } } },
@@ -128,13 +129,15 @@ export class SportsResultsService {
       await tx.sportsTournament.update({ where: { id: m.event.tournamentId }, data: { version: { increment: 1 } } });
       return { version: dto.version + 1, winner, complete, finalBuilt };
     });
+    requestOutboxDrain();
+    return out;
   }
 
   /** Save a heat sheet. `done` ranks it, queues record attempts, awards final placings and may build the final. */
-  marks(schoolId: string, actorId: string, heatId: string, dto: MarksDto): Promise<{ finalBuilt: boolean; attempts: number }> {
+  async marks(schoolId: string, actorId: string, heatId: string, dto: MarksDto): Promise<{ finalBuilt: boolean; attempts: number }> {
     assertNotificationKind('SPORTS');
     assertNotificationOutboxKind('SPORTS_NOTICE');
-    return withTenant(schoolId, async (tx) => {
+    const out = await withTenant(schoolId, async (tx) => {
       const h = await tx.sportsHeat.findFirst({
         where: { id: heatId, schoolId },
         include: { marks: { orderBy: { lane: 'asc' } }, event: { select: { id: true, tournamentId: true, sportKey: true, sportName: true, groupKey: true, category: true, lanes: true, tournament: { select: { status: true } } } } },
@@ -197,6 +200,8 @@ export class SportsResultsService {
       await tx.sportsTournament.update({ where: { id: h.event.tournamentId }, data: { version: { increment: 1 } } });
       return { finalBuilt, attempts };
     });
+    requestOutboxDrain();
+    return out;
   }
 
   /** side → houseId for the students among the sides (sections have no house). */

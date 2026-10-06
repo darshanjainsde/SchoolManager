@@ -6,6 +6,7 @@ import { dateRangeInclusive, isValidDateStr, isoWeekdayOf, toDateStr, todayIstDa
 import type { AssignSubstitutionDto, CreateLeaveDto } from './management.dto';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
 import { resolveAdminRecipients } from '../../common/notifications/recipients';
+import { requestOutboxDrain } from '../../common/notifications/outbox-signal';
 
 export type { LeaveApplication };
 
@@ -58,7 +59,7 @@ export class LeaveService {
       throw new ApiError('VALIDATION', 'A half day is one day. Pick the same date for both, or turn the half day off.', 400, 'halfDay');
     }
 
-    return withTenant(schoolId, async (tx) => {
+    const out = await withTenant(schoolId, async (tx) => {
       const person = await LeaveService.personFor(tx, schoolId, callerUserId);
       if (!person) {
         throw new ApiError('NOT_A_TEACHER', 'Only a teacher or a staff member can apply for leave', 403);
@@ -88,6 +89,8 @@ export class LeaveService {
       await this.tellAdminsApplied(tx, schoolId, created.id, person, dto.startDate, dto.endDate, dto.reason ?? null);
       return LeaveService.toRow(created);
     });
+    requestOutboxDrain();
+    return out;
   }
 
   /**
@@ -194,7 +197,7 @@ export class LeaveService {
   }
 
   async reject(schoolId: string, id: string, adminUserId: string) {
-    return withTenant(schoolId, async (tx) => {
+    const out = await withTenant(schoolId, async (tx) => {
       const app = await tx.leaveApplication.findFirst({ where: { id, schoolId } });
       if (!app) throw new NotFoundException('Leave application not found');
       if (app.status !== 'PENDING') {
@@ -208,6 +211,8 @@ export class LeaveService {
       await this.tellTeacherDecided(tx, schoolId, app, 'REJECTED', adminUserId);
       return updated;
     });
+    requestOutboxDrain();
+    return out;
   }
 
   /**
@@ -232,7 +237,7 @@ export class LeaveService {
    * catching P2002 is fine there (that catch lives OUTSIDE the transaction).
    */
   async approve(schoolId: string, id: string, adminUserId: string) {
-    return withTenant(schoolId, async (tx) => {
+    const out = await withTenant(schoolId, async (tx) => {
       const app = await tx.leaveApplication.findFirst({ where: { id, schoolId } });
       if (!app) throw new NotFoundException('Leave application not found');
       if (app.status !== 'PENDING') {
@@ -290,6 +295,8 @@ export class LeaveService {
       await this.tellTeacherDecided(tx, schoolId, app, 'APPROVED', adminUserId);
       return { gaps, gapIds };
     });
+    requestOutboxDrain();
+    return out;
   }
 
   /**
@@ -472,7 +479,7 @@ export class LeaveService {
    * gap at that exact date+period.
    */
   async assign(schoolId: string, id: string, dto: AssignSubstitutionDto) {
-    return withTenant(schoolId, async (tx) => {
+    const out = await withTenant(schoolId, async (tx) => {
       const sub = await tx.substitution.findFirst({ where: { id, schoolId } });
       if (!sub) throw new NotFoundException('Substitution not found');
 
@@ -526,6 +533,8 @@ export class LeaveService {
       await this.tellSubstituteAssigned(tx, schoolId, sub, dto.substituteTeacherId);
       return updated;
     });
+    requestOutboxDrain();
+    return out;
   }
 
   // ── notices ──────────────────────────────────────────────────────────────

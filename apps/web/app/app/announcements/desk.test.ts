@@ -73,6 +73,12 @@ describe('the audience says WHICH class', () => {
 });
 
 describe('the stylesheet carries the rules the page depends on', () => {
+  it('the four-way kind chooser is a balanced 2 x 2, never three and an orphan', () => {
+    // Scoped by attribute so the two-button "Who gets it" group keeps its flex row.
+    expect(page).toMatch(/aria-label="What is it\?"\s+data-grid="2"/);
+    expect(css).toMatch(/\.sk-seg\[data-grid="2"\] \{[^}]*display: grid[^}]*repeat\(2, minmax\(0, 1fr\)\)/);
+  });
+
   it('a pill in a row cell hugs its words instead of stretching the track', () => {
     expect(css).toMatch(/\.sk-rowcell:not\(\[data-align="end"\]\) > \.sk-pill \{ justify-self: start; \}/);
   });

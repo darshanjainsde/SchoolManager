@@ -84,6 +84,7 @@ export class WhatsAppWebhookService {
     const db = getPlatformPrisma();
     const out: WebhookOutcome = { statuses: 0, updated: 0, inbound: 0 };
     if (body.object !== 'whatsapp_business_account') return out;
+    let firstError: unknown = null;
     for (const entry of body.entry ?? []) {
       for (const change of entry.changes ?? []) {
         const v = change.value;
@@ -101,10 +102,16 @@ export class WhatsAppWebhookService {
             this.logger.log(`WhatsApp inbound ${m.id} from ${m.from}: ${result}`);
           } catch (e) {
             this.logger.error(`WhatsApp inbound ${m.id} failed: ${(e as Error).message}`);
+            // Keep going so one bad message never blocks the rest, but remember
+            // the first failure: after the whole body is done it fails the
+            // request, Meta retries, and the WhatsAppInbound primary key (Meta's
+            // message id) stops an already-handled message acting twice.
+            firstError ??= e;
           }
         }
       }
     }
+    if (firstError) throw firstError;
     return out;
   }
 

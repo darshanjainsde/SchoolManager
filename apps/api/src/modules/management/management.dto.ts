@@ -564,6 +564,17 @@ export class AvailabilityQueryDto {
 
 // ── Announcement ─────────────────────────────────────────────────────────────
 
+export class NoticeTopicDto {
+  @IsIn(['HOLIDAY', 'PTM', 'TIMING']) kind!: 'HOLIDAY' | 'PTM' | 'TIMING';
+  @ValidateIf((o) => o.kind === 'HOLIDAY') @IsString() @Length(10, 10) closedOn?: string;
+  @ValidateIf((o) => o.kind === 'HOLIDAY') @IsString() @Length(1, 60) occasion?: string;
+  @ValidateIf((o) => o.kind === 'HOLIDAY') @IsString() @Length(10, 10) resumesOn?: string;
+  @ValidateIf((o) => o.kind === 'PTM' || o.kind === 'TIMING') @IsString() @Length(10, 10) on?: string;
+  @ValidateIf((o) => o.kind === 'PTM') @IsString() @Length(5, 5) at?: string;
+  @ValidateIf((o) => o.kind === 'TIMING') @IsString() @Length(5, 5) from?: string;
+  @ValidateIf((o) => o.kind === 'TIMING') @IsString() @Length(5, 5) to?: string;
+}
+
 export class CreateAnnouncementDto {
   @IsString()
   @Length(1, 160)
@@ -592,6 +603,16 @@ export class CreateAnnouncementDto {
   @ArrayMaxSize(30)
   @IsUUID('4', { each: true })
   classSectionIds?: string[];
+
+  /**
+   * What KIND of notice this is, when it is one WhatsApp has a narrow approved
+   * template for (holiday / parents' meeting / timing change). Omitted = a
+   * general notice. The service validates the dates and times and words them.
+   */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => NoticeTopicDto)
+  topic?: NoticeTopicDto;
 }
 
 export class UpdateAnnouncementDto {

@@ -50,6 +50,17 @@ export interface AbsenceNoticePayload {
 }
 
 /**
+ * Structured facts that let WhatsApp use a narrow Utility template. Email and
+ * push still use title and body. Every string is already human-readable
+ * ("Thu 2 Oct 2026", "10:30 am").
+ */
+export type NoticeTopic =
+  | { kind: 'HOLIDAY'; closedOn: string; occasion: string; resumesOn: string }
+  | { kind: 'PTM'; on: string; at: string }
+  | { kind: 'TIMING'; on: string; from: string; to: string }
+  | { kind: 'FEE'; term: string; dueOn: string };
+
+/**
  * Payload for ANNOUNCEMENT — mirrors `MailService.sendAnnouncement` (fired
  * by `AnnouncementsService.create` for both SCHOOL_ADMIN and TEACHER
  * callers). `className` is `null` for a whole-school announcement and the
@@ -71,6 +82,28 @@ export interface AnnouncementPayload {
    * "undefined" in a parent's chat.
    */
   postedOn: string;
+  /**
+   * Set when the notice is really a holiday, a parents meeting, a timing change
+   * or a fee due date: WhatsApp then uses the narrow template for that topic
+   * instead of the general pointer. Email and push ignore it.
+   */
+  topic?: NoticeTopic | null;
+}
+
+/**
+ * Payload STORED in a `NotificationOutbox` row for kind `SPORTS_NOTICE`
+ * (result, record, tournament and similar notices from the Sports desk).
+ * Three of the four writers do not carry the school name, so `schoolName` is
+ * optional here and the outbox drain fills it from the row's `schoolId`.
+ * Rendered through the ANNOUNCEMENT shape under the "Sports" desk.
+ */
+export interface SportsNoticeOutboxPayload {
+  schoolName?: string;
+  title: string;
+  body: string;
+  tournamentId?: string;
+  recordId?: string;
+  emailed?: boolean;
 }
 
 /**
@@ -161,6 +194,9 @@ export interface FeeDecisionOutboxPayload {
   schoolName: string;
   title: string;
   body: string;
+  /** FEE_DUE only: the instalment's term and due date ("Mon 13 Oct 2026"), for the WhatsApp fee template. */
+  termName?: string;
+  dueOn?: string;
 }
 
 /**

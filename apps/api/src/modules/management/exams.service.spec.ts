@@ -1,4 +1,3 @@
-import type { NotificationOutboxService } from './notification-outbox.service';
 const txMock = {
   classSection: { findFirst: jest.fn() },
   exam: { findFirst: jest.fn(), findMany: jest.fn(), create: jest.fn() },
@@ -17,6 +16,9 @@ jest.mock('@skoolos/db', () => ({
   withTenant: (schoolId: string, fn: (tx: unknown) => unknown) => withTenantMock(schoolId, fn),
 }));
 
+jest.mock('../../common/notifications/outbox-signal', () => ({ requestOutboxDrain: jest.fn() }));
+
+import { requestOutboxDrain } from '../../common/notifications/outbox-signal';
 import { ExamsService } from './exams.service';
 import { ApiError } from '../../common/errors/api-error';
 import type { NotificationService } from '../../common/notifications/notification.service';
@@ -37,13 +39,9 @@ const flushBackgroundWork = () => new Promise((resolve) => setImmediate(resolve)
 describe('ExamsService', () => {
   const notifications = { notify: jest.fn() };
   const attendance = { myClassSections: jest.fn() };
-  // The opportunistic drain is fire-and-forget; a stub keeps the unit tests
-  // free of the outbox while still asserting it is kicked where it matters.
-  const outbox = { drainSoon: jest.fn() };
   const svc = new ExamsService(
     notifications as unknown as NotificationService,
     attendance as unknown as AttendanceService,
-    outbox as unknown as NotificationOutboxService,
   );
 
   beforeEach(() => {
@@ -526,7 +524,7 @@ describe('ExamsService', () => {
 
       // On a Vercel Hobby plan the cron cannot run more than once a day, so the
       // opportunistic drain is the delivery path, not an optimisation.
-      expect(outbox.drainSoon).toHaveBeenCalled();
+      expect(requestOutboxDrain).toHaveBeenCalled();
     });
 
     it('sets publishedAt on all of the exam Results in one call and returns the published count', async () => {

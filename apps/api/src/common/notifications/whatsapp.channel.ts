@@ -1,5 +1,7 @@
+import { createHash } from 'node:crypto';
 import { Logger } from '@nestjs/common';
 import type { PrismaClient } from '@skoolos/db';
+import { ensureConnected, sharedRedis, type SharedRedis } from '../redis/redis.client';
 import type { NotificationChannel, NotificationMessage } from './notification.types';
 import { toE164 } from './whatsapp/phone';
 import { WhatsAppApiError, sendTemplate, senderDisplayNumber, type SendResult, type WhatsAppConfig, whatsAppConfig, whatsAppConfigProblem } from './whatsapp/graph.client';
@@ -36,6 +38,21 @@ interface SchoolSettings {
 
 const SETTINGS_TTL_MS = 60_000;
 
+/**
+ * An established-but-stalled Redis socket never rejects, and the outbox drain
+ * awaits send() per recipient — one hung command would stall the whole
+ * fan-out. Past this, the dedup falls back to memory.
+ */
+export const DEDUP_REDIS_TIMEOUT_MS = 750;
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`Redis did not answer within ${ms} ms`)), ms);
+  });
+  return Promise.race([p, timeout]).finally(() => clearTimeout(timer));
+}
+
 export class WhatsAppChannel implements NotificationChannel {
   readonly name = 'whatsapp';
   private readonly logger = new Logger(WhatsAppChannel.name);
@@ -47,6 +64,7 @@ export class WhatsAppChannel implements NotificationChannel {
     private readonly prisma: Db,
     private readonly config: () => WhatsAppConfig | null = () => whatsAppConfig(),
     private readonly fetchImpl: typeof fetch = fetch,
+    private readonly redis: () => SharedRedis = () => sharedRedis(),
   ) {}
 
   /** The platform credentials, or null when the environment has none. */
@@ -64,18 +82,71 @@ export class WhatsAppChannel implements NotificationChannel {
    * The same words to the same phone within a minute are one message. A
    * family with three children at the school gets ONE "PTM on Saturday",
    * not three; the per-child kinds (absence, remark) differ in their
-   * parameters and pass. Keyed on phone + template + parameters; the map is
-   * pruned when it grows, so a fan-out of thousands stays bounded.
+   * parameters and pass. Keyed on phone + template + parameters.
+   *
+   * One copy per phone across every serverless instance, through Redis
+   * (SET NX with a 60 s expiry); memory decides only when Redis is
+   * unreachable, but every Redis grant is mirrored there too. The
+   * Redis key is a hash — the phone number is personal data and stays out of
+   * it. The memory map is pruned when it grows, so a fan-out of thousands
+   * stays bounded.
    */
   private readonly recent = new Map<string, number>();
   private static readonly DEDUPE_MS = 60_000;
-  private isDuplicate(phone: string, template: WhatsAppTemplate): boolean {
-    const key = `${phone}|${template.name}|${template.params.join('\u0001')}`;
+  private warnedRedis = false;
+
+  /**
+   * Claim the right to send this message to this phone. Resolves null when
+   * someone already did within the minute (a duplicate: send nothing), else
+   * a release that gives the claim back — called when the delivery FAILS, so
+   * a retry or an identical sibling send is not counted as sent.
+   */
+  private async claim(phone: string, template: WhatsAppTemplate): Promise<null | (() => Promise<void>)> {
+    const raw = `${phone}|${template.name}|${template.params.join('\u0001')}`;
+    try {
+      const r = this.redis();
+      if (r) {
+        if (await ensureConnected(r)) {
+          const key = `wa:dedup:${createHash('sha256').update(raw).digest('hex').slice(0, 32)}`;
+          const got = await withTimeout(r.set(key, '1', 'EX', WhatsAppChannel.DEDUPE_MS / 1000, 'NX'), DEDUP_REDIS_TIMEOUT_MS);
+          if (got === null) return null;
+          // Record it in memory too: if Redis flaps between this send and an
+          // identical sibling one, the memory fallback must still know this
+          // phone was sent to. (Memory already holding it means this server
+          // sent it during an earlier outage — a duplicate either way.)
+          if (this.isDuplicateLocal(raw)) return null;
+          return async () => {
+            this.recent.delete(raw);
+            try {
+              await withTimeout(r.del(key), DEDUP_REDIS_TIMEOUT_MS);
+            } catch {
+              /* the claim expires on its own in 60 s */
+            }
+          };
+        }
+        this.warnRedisOnce('Redis is configured but unreachable');
+      }
+    } catch (e) {
+      this.warnRedisOnce((e as Error).message);
+    }
+    if (this.isDuplicateLocal(raw)) return null;
+    return async () => {
+      this.recent.delete(raw);
+    };
+  }
+
+  private warnRedisOnce(why: string): void {
+    if (this.warnedRedis) return;
+    this.warnedRedis = true;
+    this.logger.warn(`WhatsApp dedup fell back to memory: ${why}`);
+  }
+
+  private isDuplicateLocal(raw: string): boolean {
     const now = Date.now();
-    const seen = this.recent.get(key);
+    const seen = this.recent.get(raw);
     if (seen && now - seen < WhatsAppChannel.DEDUPE_MS) return true;
     if (this.recent.size > 5000) for (const [k, t] of this.recent) if (now - t > WhatsAppChannel.DEDUPE_MS) this.recent.delete(k);
-    this.recent.set(key, now);
+    this.recent.set(raw, now);
     return false;
   }
 
@@ -99,8 +170,11 @@ export class WhatsAppChannel implements NotificationChannel {
     const { phone } = address;
 
     const template = templateFor(message, { child: address.child });
-    if (this.isDuplicate(phone, template)) return true;
-    return this.deliver(cfg, schoolId, phone, message.kind, template, settings.phoneNumberId);
+    const release = await this.claim(phone, template);
+    if (!release) return true;
+    const ok = await this.deliver(cfg, schoolId, phone, message.kind, template, settings.phoneNumberId);
+    if (!ok) await release();
+    return ok;
   }
 
   /** The platform credentials for callers that compose their own sends (actions, verification). */

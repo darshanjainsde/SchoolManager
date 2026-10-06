@@ -1,4 +1,4 @@
-import type { NotificationKind, NotificationMessage, PayloadFor } from '../notification.types';
+import type { NoticeTopic, NotificationKind, NotificationMessage, PayloadFor } from '../notification.types';
 
 /**
  * The WhatsApp template registry — ONE place that says, for each
@@ -44,6 +44,14 @@ export const TEMPLATE_NAMES: Record<NotificationKind, string> = {
   LEAVE_APPLIED: `${TEMPLATE_PREFIX}leave_applied`,
   LEAVE_DECIDED: `${TEMPLATE_PREFIX}leave_decided`,
   COVER_ASSIGNED: `${TEMPLATE_PREFIX}cover_assigned`,
+};
+
+/** One narrow Utility template per notice topic — what lets a holiday or fee date reach WhatsApp with its facts. */
+export const NOTICE_TEMPLATES: Record<NoticeTopic['kind'], string> = {
+  HOLIDAY: `${TEMPLATE_PREFIX}holiday_notice`,
+  PTM: `${TEMPLATE_PREFIX}ptm_notice`,
+  TIMING: `${TEMPLATE_PREFIX}timing_change`,
+  FEE: `${TEMPLATE_PREFIX}fee_due`,
 };
 
 /** AUTHENTICATION category: Meta fixes the body; only the code is a parameter, and the copy-code button repeats it. */
@@ -139,6 +147,11 @@ export function templateFor(message: NotificationMessage, ctx: TemplateContext =
     }
     case 'ANNOUNCEMENT': {
       const p = message.payload;
+      const t = p.topic;
+      if (t?.kind === 'HOLIDAY') return { name: NOTICE_TEMPLATES.HOLIDAY, language, params: [param(p.schoolName), param(t.closedOn), param(t.occasion), param(t.resumesOn)] };
+      if (t?.kind === 'PTM') return { name: NOTICE_TEMPLATES.PTM, language, params: [param(p.schoolName), param(p.className ?? ctx.child?.className ?? 'every class'), param(t.on), param(t.at)] };
+      if (t?.kind === 'TIMING') return { name: NOTICE_TEMPLATES.TIMING, language, params: [param(p.schoolName), param(t.on), param(t.from), param(t.to)] };
+      if (t?.kind === 'FEE') return { name: NOTICE_TEMPLATES.FEE, language, params: [param(p.schoolName), param(`${t.term} of ${childLabel(ctx, 'your child')}`), param(t.dueOn)] };
       // A class announcement names the child in that class; a school-wide one
       // stays the same words for every child on the phone, so siblings on one
       // number get ONE copy (the channel drops identical text within a minute).
@@ -270,6 +283,26 @@ export const EXTRA_SUBMISSIONS: Record<string, { category: 'AUTHENTICATION' | 'U
     category: 'UTILITY',
     body: 'A message from {{1}}. {{2}} periods still need cover after the leave you approved. Open the console to assign teachers.',
     samples: ['Raffles Public School', '3'],
+  },
+  [NOTICE_TEMPLATES.HOLIDAY]: {
+    category: 'UTILITY',
+    body: 'Holiday at {{1}}: the school will be closed on {{2}} for {{3}}. Classes resume as usual on {{4}}. Nothing else changes.',
+    samples: ['Raffles Public School', 'Thu 2 Oct 2026', 'Gandhi Jayanti', 'Fri 3 Oct 2026'],
+  },
+  [NOTICE_TEMPLATES.PTM]: {
+    category: 'UTILITY',
+    body: 'Parents meeting at {{1}}: the meeting for class {{2}} is on {{3}} at {{4}}. Please come to the school reception a few minutes early.',
+    samples: ['Raffles Public School', '5-B', 'Sat 11 Oct 2026', '10:00 am'],
+  },
+  [NOTICE_TEMPLATES.TIMING]: {
+    category: 'UTILITY',
+    body: 'Timing change at {{1}}: on {{2}} the school day will run from {{3}} to {{4}} instead of the usual hours. Buses follow the same change.',
+    samples: ['Raffles Public School', 'Mon 13 Oct 2026', '8:00 am', '12:30 pm'],
+  },
+  [NOTICE_TEMPLATES.FEE]: {
+    category: 'UTILITY',
+    body: 'Fees at {{1}}: the fees for {{2}} are due on {{3}}. Open the Sckools app to pay, to see the bill, or to tell the office you have already paid.',
+    samples: ['Raffles Public School', 'Term 2 of Ravi Sharma (5-B)', 'Mon 13 Oct 2026'],
   },
 };
 

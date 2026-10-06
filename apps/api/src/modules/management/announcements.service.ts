@@ -5,11 +5,12 @@ import { ApiError } from '../../common/errors/api-error';
 import { NotificationService } from '../../common/notifications/notification.service';
 import { resolveSchoolRecipients, resolveSectionRecipients } from '../../common/notifications/recipients';
 import { runInBackground } from '../../common/notifications/run-in-background';
-import { readableIstDate } from '../../common/dates/timetable-date';
+import { istTodayISO, readableIstDate } from '../../common/dates/timetable-date';
 import { isP2002, isP2025 } from '../../common/errors/prisma-errors';
 import { AttendanceService } from './attendance.service';
 import type { CreateAnnouncementDto, UpdateAnnouncementDto } from './management.dto';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
+import { noticeTopicFrom, type NoticeTopicInput } from './internal/notice-topic';
 
 /** Never let a missing School row render as `undefined` in a parent's inbox. */
 const FALLBACK_SCHOOL_NAME = 'Your school';
@@ -114,6 +115,11 @@ export class AnnouncementsService {
     role: UserRole,
     dto: CreateAnnouncementDto,
   ): Promise<Announcement[]> {
+    // A holiday or a change of timings speaks for the whole school. A teacher
+    // may announce a parents' meeting for their own class, not close the school.
+    if (role === 'TEACHER' && (dto.topic?.kind === 'HOLIDAY' || dto.topic?.kind === 'TIMING')) {
+      throw new ApiError('TOPIC_ADMIN_ONLY', 'Only the school office can announce a holiday or a change of timings.', 403, 'topic.kind');
+    }
     const requestedIds = [
       ...new Set([...(dto.classSectionId ? [dto.classSectionId] : []), ...(dto.classSectionIds ?? [])]),
     ];
@@ -153,6 +159,10 @@ export class AnnouncementsService {
       // is not restricted to owned classes.
       targetIds = requestedIds.length > 0 ? requestedIds : null;
     }
+
+    // Validated and worded BEFORE anything is written: a past date or a
+    // reversed time is the admin's to fix, not a half-posted notice.
+    const topic = dto.topic ? noticeTopicFrom(dto.topic as NoticeTopicInput, istTodayISO()) : null;
 
     const { rows, sectionNames } = await withTenant(schoolId, async (tx) => {
       const names = new Map<string, string>();
@@ -201,7 +211,7 @@ export class AnnouncementsService {
                 return emails.map((email) => ({
                   email,
                   schoolId,
-                  payload: { schoolName, title: dto.title, body: dto.body, className, postedOn },
+                  payload: { schoolName, title: dto.title, body: dto.body, className, postedOn, topic },
                 }));
               }),
             );
@@ -215,7 +225,7 @@ export class AnnouncementsService {
             recipients: emails.map((email) => ({
               email,
               schoolId,
-              payload: { schoolName, title: dto.title, body: dto.body, className: null, postedOn },
+              payload: { schoolName, title: dto.title, body: dto.body, className: null, postedOn, topic },
             })),
           };
         });

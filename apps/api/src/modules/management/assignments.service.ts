@@ -17,6 +17,7 @@ import type { CreateAssignmentDto } from './management.dto';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
 import { seenCountsByAssignment } from '../../common/lists/relation-counts';
 import { assertUploadKind, IMAGE_OR_PDF_KINDS } from '../../common/storage/upload-kind';
+import { requestOutboxDrain } from '../../common/notifications/outbox-signal';
 
 export type { Assignment, AssignmentList, AssignmentUploadResponse };
 
@@ -254,6 +255,8 @@ export class AssignmentsService {
 
       return created;
     });
+
+    requestOutboxDrain();
 
     // A brand-new assignment has no AssignmentSeen rows yet — seenCount is
     // always 0 at creation, never worth a query.

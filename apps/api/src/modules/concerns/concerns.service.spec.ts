@@ -18,11 +18,22 @@ const txMock = {
   notification: { create: jest.fn() },
   notificationOutbox: { create: jest.fn() },
 };
+// Call order, so a test can prove a drain is requested only AFTER the
+// transaction that wrote the outbox row has finished.
+const mockEvents: string[] = [];
 jest.mock('@skoolos/db', () => ({
   ...jest.requireActual('@skoolos/db'),
-  withTenant: (_s: string, fn: (tx: unknown) => unknown) => fn(txMock),
+  withTenant: async (_s: string, fn: (tx: unknown) => unknown) => {
+    const out = await fn(txMock);
+    mockEvents.push('tx-done');
+    return out;
+  },
+}));
+jest.mock('../../common/notifications/outbox-signal', () => ({
+  requestOutboxDrain: jest.fn(() => { mockEvents.push('drain'); }),
 }));
 
+import { requestOutboxDrain } from '../../common/notifications/outbox-signal';
 import { ConcernsService } from './concerns.service';
 import { ApiError } from '../../common/errors/api-error';
 
@@ -50,6 +61,8 @@ const row = (over: Record<string, unknown> = {}) => ({
 let svc: ConcernsService;
 beforeEach(() => {
   jest.clearAllMocks();
+  mockEvents.length = 0;
+  txMock.notificationOutbox.create.mockImplementation(async () => { mockEvents.push('outbox-write'); return {}; });
   svc = new ConcernsService();
   txMock.school.findFirst.mockResolvedValue({ name: 'Raffles International School' });
   txMock.teacher.findFirst.mockResolvedValue({ id: TEACHER_ID });
@@ -130,6 +143,15 @@ describe('raising one', () => {
     expect(targets).toEqual([TEACHER_USER]);
     expect(txMock.notificationOutbox.create.mock.calls[0][0].data).toMatchObject({ kind: 'CONCERN_RAISED', targetUserId: TEACHER_USER });
   });
+
+  it('asks for ONE drain, and only after the transaction that wrote the outbox row has finished', async () => {
+    txMock.concern.findFirst.mockResolvedValue(row({ assignedTeacher: { id: TEACHER_ID, firstName: 'Mohammed Irfan', lastName: 'Qureshi', userId: TEACHER_USER } }));
+    await svc.raise(SCHOOL, FAMILY_USER, { audience: 'CLASS_TEACHER', category: 'BUS', title: 'Bus late twice this week', body: 'Twice.' });
+    expect(requestOutboxDrain).toHaveBeenCalledTimes(1);
+    const at = mockEvents.indexOf('drain');
+    expect(mockEvents.lastIndexOf('outbox-write')).toBeLessThan(at);
+    expect(mockEvents[at - 1]).toBe('tx-done');
+  });
 });
 
 describe('the timeline', () => {
@@ -162,6 +184,22 @@ describe('the timeline', () => {
     txMock.concern.findFirst.mockResolvedValue(row({ raisedById: FAMILY_USER }));
     await svc.comment(SCHOOL, { kind: 'ADMIN', userId: ADMIN_USER }, CONCERN_ID, { body: 'Route 4 has its driver back.' });
     expect(txMock.notificationOutbox.create.mock.calls[0][0].data).toMatchObject({ kind: 'CONCERN_REPLIED' });
+  });
+
+  it('a visible reply asks for ONE drain, only after the transaction that wrote the outbox row has finished', async () => {
+    txMock.concern.findFirst.mockResolvedValue(row({ raisedById: FAMILY_USER }));
+    await svc.comment(SCHOOL, { kind: 'ADMIN', userId: ADMIN_USER }, CONCERN_ID, { body: 'Route 4 has its driver back.' });
+    expect(requestOutboxDrain).toHaveBeenCalledTimes(1);
+    const at = mockEvents.indexOf('drain');
+    expect(mockEvents.indexOf('outbox-write')).toBeGreaterThanOrEqual(0);
+    expect(mockEvents.lastIndexOf('outbox-write')).toBeLessThan(at);
+    expect(mockEvents[at - 1]).toBe('tx-done');
+  });
+
+  it('a private note asks for no drain — nothing was written to the outbox', async () => {
+    txMock.concern.findFirst.mockResolvedValue(row());
+    await svc.comment(SCHOOL, { kind: 'ADMIN', userId: ADMIN_USER }, CONCERN_ID, { body: 'Check with transport.', visibleToFamily: false });
+    expect(requestOutboxDrain).not.toHaveBeenCalled();
   });
 
   it('opening it marks it read for THAT reader only', async () => {

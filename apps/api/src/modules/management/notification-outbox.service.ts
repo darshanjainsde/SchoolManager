@@ -1,11 +1,12 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { readableIstDate } from '../../common/dates/timetable-date';
-import { runInBackground } from '../../common/notifications/run-in-background';
+import { registerOutboxDrainer, requestOutboxDrain } from '../../common/notifications/outbox-signal';
 import { getPlatformPrisma } from '@skoolos/db';
 import { assertNotificationOutboxKind, type NotificationOutboxKind } from '@skoolos/types';
+import { EmailChannel } from '../../common/notifications/email.channel';
 import { PushChannel } from '../../common/notifications/push.channel';
 import { WhatsAppChannel } from '../../common/notifications/whatsapp.channel';
-import { ackPayload, leavePayload } from '../../common/notifications/whatsapp/actions';
+import { ackPayload, actionKeys, leavePayload } from '../../common/notifications/whatsapp/actions';
 import { resolveSectionRecipients, resolveUserRecipients } from '../../common/notifications/recipients';
 import type {
   MessageReceivedOutboxPayload,
@@ -16,6 +17,7 @@ import type {
   NotificationMessage,
   ResultPublishedOutboxPayload,
   SessionStartedOutboxPayload,
+  SportsNoticeOutboxPayload,
 } from '../../common/notifications/notification.types';
 
 export interface NotificationOutboxDrainResult {
@@ -52,6 +54,9 @@ const MAX_ATTEMPTS = 5;
  * comfortably longer than a full DRAIN_BATCH_CAP run (sequential push sends,
  * bounded by the function's maxDuration of 60s) and short enough that a genuine
  * crash costs one cron cycle, not a day.
+ *
+ * It is also the back-off between attempts: a failed row keeps a fresh
+ * `claimedAt`, so it is not retried for five minutes.
  */
 const CLAIM_TTL_MS = 5 * 60_000;
 
@@ -75,6 +80,60 @@ const CLAIM_TTL_MS = 5 * 60_000;
 const PURGE_DELIVERED_AFTER_DAYS = 30;
 
 /**
+ * Which outbox kinds the DRAIN emails. False means the writer already sends
+ * its own email, and the drain sending one too would reach the family twice.
+ * Tier 1 replaces this table with one NotificationDelivery row per channel.
+ */
+export const OUTBOX_EMAIL: Record<NotificationOutboxKind, boolean> = {
+  RESULT_PUBLISHED: false, // ExamsService.publish → notify(EMAIL_ONLY)
+  EXAM_SCHEDULED: false, // ExamsService.create → notify(EMAIL_ONLY)
+  LIBRARY_NOTICE: false, // all three library writers send their own letter
+  SESSION_STARTED: false, // SessionsService.afterStart → sendSessionStarted
+  ASSIGNMENT_POSTED: true,
+  MESSAGE_RECEIVED: true,
+  SPORTS_NOTICE: true, // a record letter sets `emailed: true` on its payload
+  FEE_VERIFIED: true,
+  FEE_REJECTED: true,
+  FEE_DUE: true,
+  LEAVE_APPLIED: true,
+  LEAVE_DECIDED: true,
+  COVER_ASSIGNED: true,
+  CONCERN_RAISED: true,
+  CONCERN_REPLIED: true,
+  CONCERN_RESOLVED: true,
+};
+
+/**
+ * How long after it begins a drain may still START a row (the default
+ * `deadline`). It bounds when a row may START, not when the drain ends: the
+ * row in flight always finishes, and one row can overrun on its own — a
+ * class-wide row is ~3 sends per recipient (push, WhatsApp, email). Bounding a
+ * single row needs per-recipient delivery rows, which is Tier 1
+ * (NotificationDelivery). The 20 s left of the function's 60 s is that row's
+ * room plus the bookkeeping and the purge.
+ */
+export const DRAIN_TIME_BUDGET_MS = 40_000;
+
+/** The function's hard ceiling (`maxDuration: 60` in apps/api/vercel.json). */
+const INVOCATION_CEILING_MS = 60_000;
+
+/**
+ * No row STARTS with less than this left of the 60 s ceiling, measured from
+ * when the drain began — whatever `deadline` a caller passes. A row killed
+ * mid-send has no `sentAt`, so after CLAIM_TTL_MS its whole audience is sent
+ * to again; not starting it is always the safer side.
+ */
+export const ROW_START_RESERVE_MS = 15_000;
+
+/**
+ * Emails one row's recipients this many at a time. SMTP is the slow leg, and a
+ * class-wide row sent one by one could outrun the budget's headroom — the
+ * function would be killed before `sentAt` is written and the whole class would
+ * be sent push + WhatsApp + email again after the claim TTL.
+ */
+export const EMAIL_CONCURRENCY = 5;
+
+/**
  * Maps a drained row's `kind` + denormalised `payload` onto the SAME
  * `NotificationMessage` shape `PushChannel`/`formatNotification` already
  * render for TEST_SCHEDULED/RESULTS_PUBLISHED emails — deliberately reusing
@@ -84,124 +143,149 @@ const PURGE_DELIVERED_AFTER_DAYS = 30;
  * `classSectionName`/`maxMarks` fields the push text doesn't render today),
  * so building the narrower message is a plain field pick, not a lookup.
  */
-function toNotificationMessage(kind: NotificationOutboxKind, payload: unknown, postedOn = readableIstDate()): NotificationMessage {
-  if (kind === 'EXAM_SCHEDULED') {
-    const p = payload as ExamScheduledOutboxPayload;
-    return {
-      kind: 'TEST_SCHEDULED',
-      payload: {
-        schoolName: p.schoolName,
-        subjectName: p.subjectName,
-        examTitle: p.examTitle,
-        scheduledAt: p.scheduledAt,
-        classSectionName: p.classSectionName,
-      },
-    };
+export function toNotificationMessage(kind: NotificationOutboxKind, payload: unknown, postedOn = readableIstDate()): NotificationMessage {
+  switch (kind) {
+    case 'EXAM_SCHEDULED': {
+      const p = payload as ExamScheduledOutboxPayload;
+      return {
+        kind: 'TEST_SCHEDULED',
+        payload: {
+          schoolName: p.schoolName,
+          subjectName: p.subjectName,
+          examTitle: p.examTitle,
+          scheduledAt: p.scheduledAt,
+          classSectionName: p.classSectionName,
+        },
+      };
+    }
+    case 'RESULT_PUBLISHED': {
+      const p = payload as ResultPublishedOutboxPayload;
+      return {
+        kind: 'RESULTS_PUBLISHED',
+        payload: {
+          schoolName: p.schoolName,
+          subjectName: p.subjectName,
+          examTitle: p.examTitle,
+        },
+      };
+    }
+    case 'LIBRARY_NOTICE': {
+      // Composed entirely at write time by the library module; renders through
+      // the EXISTING 'ANNOUNCEMENT' shape like the branches below. Always a
+      // single-reader row (targetUserId).
+      const p = payload as LibraryNoticeOutboxPayload;
+      return {
+        kind: 'ANNOUNCEMENT',
+        payload: {
+          schoolName: p.schoolName,
+          title: p.title,
+          body: p.body,
+          className: 'Library',
+          postedOn,
+        },
+      };
+    }
+    case 'LEAVE_APPLIED': {
+      // The button payloads are signed HERE, at send time, with the action key
+      // — never stored on the row.
+      const p = payload as { schoolName: string; leaveId: string; teacherName: string; dates: string; days: number; reason: string | null; periodsAffected: number };
+      const keys = actionKeys();
+      return { kind: 'LEAVE_APPLIED', payload: { ...p, approvePayload: leavePayload('approve', p.leaveId, keys), rejectPayload: leavePayload('reject', p.leaveId, keys) } };
+    }
+    case 'LEAVE_DECIDED': {
+      const p = payload as { schoolName: string; leaveId: string; decision: 'APPROVED' | 'REJECTED'; dates: string; byName: string | null };
+      return { kind: 'LEAVE_DECIDED', payload: { schoolName: p.schoolName, leaveId: p.leaveId, decision: p.decision, dates: p.dates, byName: p.byName ?? null } };
+    }
+    case 'COVER_ASSIGNED': {
+      const p = payload as { schoolName: string; substitutionId: string; when: string; className: string; subjectName: string | null; originalTeacherName: string };
+      const keys = actionKeys();
+      return { kind: 'COVER_ASSIGNED', payload: { ...p, ackPayload: ackPayload(p.substitutionId, keys) } };
+    }
+    case 'FEE_VERIFIED':
+    case 'FEE_REJECTED':
+    case 'FEE_DUE': {
+      // The fee desk's decision to one family, composed at write time by
+      // FeePaymentService. Renders through the ANNOUNCEMENT shape like the
+      // other single-reader kinds; the class slot names the desk.
+      const p = payload as FeeDecisionOutboxPayload;
+      return {
+        kind: 'ANNOUNCEMENT',
+        payload: {
+          schoolName: p.schoolName,
+          title: p.title,
+          body: p.body,
+          className: 'Fees',
+          postedOn,
+          // Only the due-date reminder has a narrow template; a decision on a claim stays general.
+          topic: kind === 'FEE_DUE' && p.termName && p.dueOn ? { kind: 'FEE', term: p.termName, dueOn: p.dueOn } : null,
+        },
+      };
+    }
+    case 'SESSION_STARTED': {
+      // The year end: "Aarav is in 6 A for 2026-27" to one family (targetUserId).
+      const p = payload as SessionStartedOutboxPayload;
+      return {
+        kind: 'ANNOUNCEMENT',
+        payload: { schoolName: p.schoolName, title: p.title, body: p.body, className: null, postedOn },
+      };
+    }
+    case 'CONCERN_RAISED':
+    case 'CONCERN_REPLIED':
+    case 'CONCERN_RESOLVED': {
+      // The Complaint Box, to one reader (targetUserId): the class teacher or
+      // an admin when a family raises one, the family when the school answers.
+      // Renders through the generic single-reader ANNOUNCEMENT shape; the class
+      // slot names the desk, as the fee kinds do.
+      const p = payload as { schoolName: string; title: string; body: string };
+      return {
+        kind: 'ANNOUNCEMENT',
+        payload: { schoolName: p.schoolName, title: p.title, body: p.body, className: 'Complaint Box', postedOn },
+      };
+    }
+    case 'MESSAGE_RECEIVED': {
+      // Also renders through the EXISTING 'ANNOUNCEMENT' shape (no dedicated
+      // template) — see MessageReceivedOutboxPayload. This row targets a single
+      // user via row.targetUserId (handled in drain()), not a class section.
+      const p = payload as MessageReceivedOutboxPayload;
+      return {
+        kind: 'ANNOUNCEMENT',
+        payload: {
+          schoolName: p.schoolName,
+          title: `New message from ${p.senderName}`,
+          body: p.preview,
+          className: p.subjectName,
+          postedOn,
+        },
+      };
+    }
+    case 'SPORTS_NOTICE': {
+      // Until 2026-10-06 this kind had no branch and fell into the assignment
+      // default: four call sites sent "undefined" to parents.
+      const p = payload as SportsNoticeOutboxPayload;
+      return { kind: 'ANNOUNCEMENT', payload: { schoolName: p.schoolName ?? '', title: p.title, body: p.body, className: 'Sports', postedOn } };
+    }
+    case 'ASSIGNMENT_POSTED': {
+      // ASSIGNMENT_POSTED has no NotificationKind/template of its own (see
+      // AssignmentPostedOutboxPayload's docstring) — it renders through the
+      // EXISTING 'ANNOUNCEMENT' shape instead, the same "reuse the template"
+      // move as the cases above.
+      const p = payload as AssignmentPostedOutboxPayload;
+      return {
+        kind: 'ANNOUNCEMENT',
+        payload: {
+          schoolName: p.schoolName,
+          title: p.assignmentTitle,
+          body: `${p.subjectName} — due ${p.dueDate}`,
+          className: p.classSectionName,
+          postedOn,
+        },
+      };
+    }
+    default: {
+      const never: never = kind;
+      throw new Error(`No message for outbox kind "${String(never)}"`);
+    }
   }
-  if (kind === 'RESULT_PUBLISHED') {
-    const p = payload as ResultPublishedOutboxPayload;
-    return {
-      kind: 'RESULTS_PUBLISHED',
-      payload: {
-        schoolName: p.schoolName,
-        subjectName: p.subjectName,
-        examTitle: p.examTitle,
-      },
-    };
-  }
-  if (kind === 'LIBRARY_NOTICE') {
-    // Composed entirely at write time by the library module; renders through
-    // the EXISTING 'ANNOUNCEMENT' shape like the branches below. Always a
-    // single-reader row (targetUserId).
-    const p = payload as LibraryNoticeOutboxPayload;
-    return {
-      kind: 'ANNOUNCEMENT',
-      payload: {
-        schoolName: p.schoolName,
-        title: p.title,
-        body: p.body,
-        className: 'Library',
-        postedOn,
-      },
-    };
-  }
-  if (kind === 'LEAVE_APPLIED') {
-    // The button payloads are signed HERE, at send time, with the app secret
-    // — never stored on the row.
-    const p = payload as { schoolName: string; leaveId: string; teacherName: string; dates: string; days: number; reason: string | null; periodsAffected: number };
-    const secret = process.env.META_APP_SECRET?.trim() || 'unset';
-    return { kind: 'LEAVE_APPLIED', payload: { ...p, approvePayload: leavePayload('approve', p.leaveId, secret), rejectPayload: leavePayload('reject', p.leaveId, secret) } };
-  }
-  if (kind === 'LEAVE_DECIDED') {
-    const p = payload as { schoolName: string; leaveId: string; decision: 'APPROVED' | 'REJECTED'; dates: string; byName: string | null };
-    return { kind: 'LEAVE_DECIDED', payload: { schoolName: p.schoolName, leaveId: p.leaveId, decision: p.decision, dates: p.dates, byName: p.byName ?? null } };
-  }
-  if (kind === 'COVER_ASSIGNED') {
-    const p = payload as { schoolName: string; substitutionId: string; when: string; className: string; subjectName: string | null; originalTeacherName: string };
-    const secret = process.env.META_APP_SECRET?.trim() || 'unset';
-    return { kind: 'COVER_ASSIGNED', payload: { ...p, ackPayload: ackPayload(p.substitutionId, secret) } };
-  }
-  if (kind === 'FEE_VERIFIED' || kind === 'FEE_REJECTED' || kind === 'FEE_DUE') {
-    // The fee desk's decision to one family, composed at write time by
-    // FeePaymentService. Renders through the ANNOUNCEMENT shape like the
-    // other single-reader kinds; the class slot names the desk.
-    const p = payload as FeeDecisionOutboxPayload;
-    return {
-      kind: 'ANNOUNCEMENT',
-      payload: { schoolName: p.schoolName, title: p.title, body: p.body, className: 'Fees', postedOn },
-    };
-  }
-  if (kind === 'SESSION_STARTED') {
-    // The year end: "Aarav is in 6 A for 2026-27" to one family (targetUserId).
-    const p = payload as SessionStartedOutboxPayload;
-    return {
-      kind: 'ANNOUNCEMENT',
-      payload: { schoolName: p.schoolName, title: p.title, body: p.body, className: null, postedOn },
-    };
-  }
-  if (kind === 'CONCERN_RAISED' || kind === 'CONCERN_REPLIED' || kind === 'CONCERN_RESOLVED') {
-    // The Complaint Box, to one reader (targetUserId): the class teacher or
-    // an admin when a family raises one, the family when the school answers.
-    // Renders through the generic single-reader ANNOUNCEMENT shape; the class
-    // slot names the desk, as the fee kinds do.
-    const p = payload as { schoolName: string; title: string; body: string };
-    return {
-      kind: 'ANNOUNCEMENT',
-      payload: { schoolName: p.schoolName, title: p.title, body: p.body, className: 'Complaint Box', postedOn },
-    };
-  }
-  if (kind === 'MESSAGE_RECEIVED') {
-    // Also renders through the EXISTING 'ANNOUNCEMENT' shape (no dedicated
-    // template) — see MessageReceivedOutboxPayload. This row targets a single
-    // user via row.targetUserId (handled in drain()), not a class section.
-    const p = payload as MessageReceivedOutboxPayload;
-    return {
-      kind: 'ANNOUNCEMENT',
-      payload: {
-        schoolName: p.schoolName,
-        title: `New message from ${p.senderName}`,
-        body: p.preview,
-        className: p.subjectName,
-        postedOn,
-      },
-    };
-  }
-
-  // ASSIGNMENT_POSTED has no NotificationKind/template of its own (see
-  // AssignmentPostedOutboxPayload's docstring) — it renders through the
-  // EXISTING 'ANNOUNCEMENT' shape instead, the same "reuse the template"
-  // move as the two branches above.
-  const p = payload as AssignmentPostedOutboxPayload;
-  return {
-    kind: 'ANNOUNCEMENT',
-    payload: {
-      schoolName: p.schoolName,
-      title: p.assignmentTitle,
-      body: `${p.subjectName} — due ${p.dueDate}`,
-      className: p.classSectionName,
-      postedOn,
-    },
-  };
 }
 
 /**
@@ -241,7 +325,7 @@ interface OutboxRow {
 }
 
 @Injectable()
-export class NotificationOutboxService {
+export class NotificationOutboxService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(NotificationOutboxService.name);
 
   // WhatsApp rides the outbox for the same reason push does: these kinds are
@@ -250,7 +334,16 @@ export class NotificationOutboxService {
   constructor(
     private readonly push: PushChannel,
     private readonly whatsapp: WhatsAppChannel,
+    private readonly email: EmailChannel,
   ) {}
+
+  onModuleInit(): void {
+    registerOutboxDrainer(() => this.drain({ purge: false }));
+  }
+
+  onModuleDestroy(): void {
+    registerOutboxDrainer(null);
+  }
 
   /**
    * Drain shortly, without blocking the caller.
@@ -260,19 +353,19 @@ export class NotificationOutboxService {
    * daily at deploy time, and fires it anywhere within the scheduled hour. A
    * notification enqueued at 09:00 would wait until the small hours.
    *
-   * `runInBackground` wraps Vercel's `waitUntil`, so the work survives the
-   * response being sent instead of being frozen with the instance. Failures are
-   * swallowed: the row is still in the outbox and the cron will retry it, so a
-   * failed opportunistic drain costs latency, never delivery.
+   * The delay (750ms), coalescing, and Vercel's `waitUntil` wrapping now live in
+   * `common/notifications/outbox-signal.ts` — the work survives the response
+   * being sent instead of being frozen with the instance. Failures are swallowed:
+   * the row is still in the outbox and the cron will retry it, so a failed
+   * opportunistic drain costs latency, never delivery.
    *
    * Safe to call concurrently with the cron — the drain claims its batch with
    * FOR UPDATE SKIP LOCKED, so two runs never take the same row.
+   *
+   * Kept for callers that already hold the service; prefer `requestOutboxDrain()`.
    */
   drainSoon(): void {
-    runInBackground(
-      () => this.drain({ purge: false }),
-      (e) => this.logger.warn(`opportunistic outbox drain failed: ${(e as Error)?.message}`),
-    );
+    requestOutboxDrain();
   }
 
   /**
@@ -286,8 +379,14 @@ export class NotificationOutboxService {
    * request, to reclaim rows that are thirty days old. Delivery is urgent and
    * retention is not, so only the cron sweeps.
    */
-  async drain(opts: { purge?: boolean } = {}): Promise<NotificationOutboxDrainResult> {
+  async drain(opts: { purge?: boolean; deadline?: number } = {}): Promise<NotificationOutboxDrainResult> {
     const { purge = true } = opts;
+    // `deadline` is the epoch-ms time after which this drain must not START a
+    // row. Whatever the caller asks for, never start one with fewer than
+    // ROW_START_RESERVE_MS left of the invocation's 60 s ceiling, measured
+    // from when this drain began.
+    const started = Date.now();
+    const deadline = Math.min(opts.deadline ?? started + DRAIN_TIME_BUDGET_MS, started + INVOCATION_CEILING_MS - ROW_START_RESERVE_MS);
     const db = getPlatformPrisma();
 
     // Claim the batch in ONE statement. `FOR UPDATE SKIP LOCKED` makes a second
@@ -321,15 +420,51 @@ export class NotificationOutboxService {
     let sent = 0;
     let failed = 0;
 
+    // Some writers do not carry the school's name on the row (see
+    // SportsNoticeOutboxPayload); fill it once per school per run.
+    const schoolNames = new Map<string, string>();
+    // A FAILED lookup (pooler timeout) is not a reason to fail the row — that
+    // would retry push + WhatsApp for the whole row. The row goes out as
+    // 'Your school' and the miss is NOT cached, so the next row asks again.
+    const schoolNameOf = async (id: string) => {
+      const known = schoolNames.get(id);
+      if (known !== undefined) return known;
+      try {
+        const name = (await db.school.findFirst({ where: { id }, select: { name: true } }))?.name ?? 'Your school';
+        schoolNames.set(id, name);
+        return name;
+      } catch (e) {
+        this.logger.warn(`school name lookup for ${id} failed, sending as 'Your school': ${(e as Error)?.message}`);
+        return 'Your school';
+      }
+    };
+
     // Sequential, not `Promise.allSettled` batches like ExamRemindersService:
     // this drain is expected to run every few minutes (a much smaller window
     // per run than the daily reminder scan), so a simple loop stays well
     // inside maxDuration without the added complexity of chunking. One bad
     // row's `catch` below still can never block the rest of the batch.
-    for (const row of rows) {
+    for (let i = 0; i < rows.length; i += 1) {
+      const row = rows[i];
+      // The deadline is checked BEFORE a row starts; the row in flight finishes.
+      // Rows not started are released in one statement and the drain simply
+      // stops. It does NOT ask for another drain: requestOutboxDrain() runs the
+      // next drain via waitUntil inside THIS invocation, which is already near
+      // its 60 s ceiling — a chained drain would start a fresh budget with
+      // ~15 s of real time left and be killed mid-row, and a killed row (some
+      // of the class pushed/WhatsApped, no sentAt) is sent to the whole class
+      // again after CLAIM_TTL_MS. The next write's requestOutboxDrain() (a new
+      // invocation) or the cron picks the released rows up.
+      if (Date.now() >= deadline) {
+        const rest = rows.slice(i).map((r) => r.id);
+        await db.notificationOutbox.updateMany({ where: { id: { in: rest } }, data: { claimedAt: null } });
+        this.logger.warn(`Outbox drain stopped at its deadline; ${rest.length} rows released for the next run.`);
+        break;
+      }
       try {
         assertNotificationOutboxKind(row.kind);
         const message = toNotificationMessage(row.kind, row.payload);
+        if (!message.payload.schoolName) message.payload.schoolName = await schoolNameOf(row.schoolId);
         // Private messages (targetUserId set) push to that one recipient;
         // broadcast kinds resolve the whole class section as before.
         const recipients = row.targetUserId
@@ -338,9 +473,31 @@ export class NotificationOutboxService {
             ? await resolveSectionRecipients(db, row.schoolId, row.classSectionId)
             : [];
 
-        for (const email of recipients) {
-          await this.push.send(email, message, row.schoolId);
-          await this.whatsapp.send(email, message, row.schoolId);
+        const emailIt = OUTBOX_EMAIL[row.kind] && !(row.payload as { emailed?: boolean } | null)?.emailed;
+        for (const to of recipients) {
+          // Push is first: if it throws the row legitimately retries.
+          await this.push.send(to, message, row.schoolId);
+          // WhatsApp must NOT throw out of this loop: recipients 1..k have
+          // already been pushed, so failing the row here would push them
+          // again on every retry. A WhatsApp-side failure is logged and the
+          // row carries on.
+          try {
+            await this.whatsapp.send(to, message, row.schoolId);
+          } catch (e) {
+            this.logger.warn(`outbox WhatsApp to ${to} failed for row ${row.id}: ${(e as Error)?.message}`);
+          }
+        }
+        if (emailIt) {
+          // After push + WhatsApp, in parallel chunks. An email failure is logged,
+          // never thrown: throwing would retry the whole row and push + WhatsApp
+          // would go out a second time.
+          for (let c = 0; c < recipients.length; c += EMAIL_CONCURRENCY) {
+            const chunk = recipients.slice(c, c + EMAIL_CONCURRENCY);
+            const results = await Promise.allSettled(chunk.map((to) => this.email.send(to, message, row.schoolId)));
+            results.forEach((res, k) => {
+              if (res.status === 'rejected') this.logger.warn(`outbox email to ${chunk[k]} failed: ${(res.reason as Error)?.message}`);
+            });
+          }
         }
 
         await db.notificationOutbox.update({
@@ -355,11 +512,15 @@ export class NotificationOutboxService {
         try {
           await db.notificationOutbox.update({
             where: { id: row.id },
-            // claimedAt back to null: this row is released for the next run.
+            // claimedAt is re-stamped NOW, not cleared: every write asks for a
+            // drain within 750 ms, so a cleared claim let a row failing on a
+            // pooler timeout burn all MAX_ATTEMPTS inside a minute and park
+            // for good. Holding the claim makes CLAIM_TTL_MS (5 min) the
+            // back-off between attempts — five attempts span ~25 minutes.
             data: {
               attempts: { increment: 1 },
               lastError: errorMessage.slice(0, 500),
-              claimedAt: null,
+              claimedAt: new Date(),
             },
           });
         } catch (updateError) {

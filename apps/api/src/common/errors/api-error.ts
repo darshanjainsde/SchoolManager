@@ -101,6 +101,8 @@ export type ErrorCode =
   | 'NO_ACADEMIC_YEAR'
   /** A TEACHER targeted a class section they do not teach — pair with 403. */
   | 'CLASS_NOT_OWNED'
+  /** A teacher tried to send a holiday or timing-change notice — the office's to announce. Pair with 403. */
+  | 'TOPIC_ADMIN_ONLY'
   /** The Complaint Box: a move that belongs to someone else — a family changing
    *  a status, or a non-teacher sending a concern up to the office. Pair with 403. */
   | 'CONCERN_NOT_YOUR_MOVE'
