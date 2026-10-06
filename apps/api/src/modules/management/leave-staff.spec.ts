@@ -2,7 +2,7 @@ import 'reflect-metadata';
 
 const txMock = {
   teacher: { findFirst: jest.fn() },
-  staff: { findFirst: jest.fn() },
+  staff: { findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
   leaveTypeDef: { findFirst: jest.fn() },
   leaveApplication: { create: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn(), count: jest.fn() },
   timetableSlot: { groupBy: jest.fn().mockResolvedValue([]) },

@@ -1,9 +1,22 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import type { Request } from 'express';
-import { withTenant } from '@skoolos/db';
+import { withTenant, type TenantTx } from '@skoolos/db';
 import { ApiError } from '../../../common/errors/api-error';
 import type { SchoolJwtPayload } from '../../../common/auth/jwt-payload';
 import { TenantContextService } from '../../tenancy';
+import { leaveDeskStaffWhere } from '../../../common/notifications/recipients';
+
+/**
+ * THE RULE, without the HTTP. The guard calls it with a tenant transaction;
+ * the WhatsApp resolver calls it with the platform client — both pass the
+ * school explicitly, so the query is scoped either way.
+ */
+export async function isLeaveDesk(db: Pick<TenantTx, 'staff'>, schoolId: string, user: { userId: string; role: string }): Promise<boolean> {
+  if (user.role === 'SCHOOL_ADMIN') return true;
+  if (user.role !== 'STAFF') return false;
+  const staff = await db.staff.findFirst({ where: { ...leaveDeskStaffWhere(schoolId), userId: user.userId }, select: { id: true } });
+  return !!staff;
+}
 
 /**
  * WHO DECIDES LEAVE — the same door the library and sports desks use.
@@ -31,16 +44,9 @@ export class LeaveDeskGuard implements CanActivate {
     const req = ctx.switchToHttp().getRequest<Request & { user?: SchoolJwtPayload }>();
     const user = req.user;
     if (!user) return false;
-    if (user.role === 'SCHOOL_ADMIN') return true;
-
     const { schoolId } = this.tenant.requireTenant();
-    const staff = await withTenant(schoolId, (tx) =>
-      tx.staff.findFirst({
-        where: { schoolId, userId: user.sub, role: 'ACCOUNTS', isActive: true },
-        select: { id: true },
-      }),
-    );
-    if (!staff) {
+    const ok = await withTenant(schoolId, (tx) => isLeaveDesk(tx, schoolId, { userId: user.sub, role: user.role }));
+    if (!ok) {
       throw new ApiError('NOT_LEAVE_DESK', 'Only a school admin or an accounts officer can decide leave.', 403);
     }
     return true;

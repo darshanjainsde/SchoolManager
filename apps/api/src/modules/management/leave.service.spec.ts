@@ -596,6 +596,29 @@ describe('LeaveService notices', () => {
     expect(row.payload).toEqual({ schoolName: 'Raffles', leaveId: 'l1', teacherName: 'Priya Nair', dates: 'Mon 21 – Tue 22 Sep 2026', days: 2, reason: 'Family function', periodsAffected: 5 });
   });
 
+  it('apply tells the accounts officer too — she runs the desk the guard lets her into', async () => {
+    txMock.teacher.findFirst.mockResolvedValue({ id: 't1', firstName: 'Priya', lastName: 'Nair' });
+    txMock.leaveTypeDef.findFirst.mockResolvedValue(null);
+    txMock.leaveApplication.create.mockResolvedValue({ id: 'l1', schoolId: 'S', teacherId: 't1', type: 'CASUAL', startDate: new Date('2026-09-21'), endDate: new Date('2026-09-21'), reason: null, status: 'PENDING', reviewedById: null, reviewedAt: null, createdAt: new Date() });
+    txMock.user.findMany.mockResolvedValueOnce([{ id: 'a1', email: 'a1@x' }]).mockResolvedValueOnce([{ id: 'acc', email: 'acc@x' }]);
+    txMock.staff.findMany.mockResolvedValueOnce([{ userId: 'acc' }]);
+    await svc.apply('S', 'u-teacher', { type: 'CASUAL', startDate: '2026-09-21', endDate: '2026-09-21' } as never);
+    expect(txMock.notificationOutbox.create.mock.calls.map((c) => c[0].data.targetUserId)).toEqual(['a1', 'acc']);
+    expect(txMock.notification.create).toHaveBeenCalledTimes(2);
+  });
+
+  it('an accounts officer applying for her own leave is not asked to approve it', async () => {
+    txMock.teacher.findFirst.mockResolvedValue(null);
+    txMock.staff.findFirst.mockResolvedValue({ id: 'st-acc', firstName: 'Meera', lastName: 'Shah' });
+    txMock.leaveTypeDef.findFirst.mockResolvedValue(null);
+    txMock.leaveApplication.create.mockResolvedValue({ id: 'l2', schoolId: 'S', teacherId: null, staffId: 'st-acc', type: 'CASUAL', startDate: new Date('2026-09-21'), endDate: new Date('2026-09-21'), reason: null, status: 'PENDING', reviewedById: null, reviewedAt: null, createdAt: new Date() });
+    txMock.user.findMany.mockResolvedValueOnce([{ id: 'a1', email: 'a1@x' }]);
+    txMock.staff.findMany.mockResolvedValueOnce([{ userId: 'u-acc' }]);
+    await svc.apply('S', 'u-acc', { type: 'CASUAL', startDate: '2026-09-21', endDate: '2026-09-21' } as never);
+    expect(txMock.notificationOutbox.create.mock.calls.map((c) => c[0].data.targetUserId)).toEqual(['a1']);
+    expect(txMock.user.findMany).toHaveBeenCalledTimes(1);
+  });
+
   it('reject tells the teacher, and nothing happens when the teacher has no login', async () => {
     txMock.leaveApplication.findFirst.mockResolvedValue({ id: 'l1', schoolId: 'S', teacherId: 't1', status: 'PENDING', startDate: new Date('2026-09-21'), endDate: new Date('2026-09-21') });
     txMock.leaveApplication.update.mockResolvedValue({ id: 'l1', status: 'REJECTED' });

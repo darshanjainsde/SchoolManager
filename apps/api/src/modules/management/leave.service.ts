@@ -5,7 +5,7 @@ import { ApiError } from '../../common/errors/api-error';
 import { dateRangeInclusive, isValidDateStr, isoWeekdayOf, toDateStr, todayIstDateStr } from './internal/leave-dates';
 import type { AssignSubstitutionDto, CreateLeaveDto } from './management.dto';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
-import { resolveAdminRecipients } from '../../common/notifications/recipients';
+import { resolveLeaveDeskRecipients } from '../../common/notifications/recipients';
 import { requestOutboxDrain } from '../../common/notifications/outbox-signal';
 
 export type { LeaveApplication };
@@ -86,7 +86,7 @@ export class LeaveService {
           reason: dto.reason,
         },
       });
-      await this.tellAdminsApplied(tx, schoolId, created.id, person, dto.startDate, dto.endDate, dto.reason ?? null);
+      await this.tellDeskApplied(tx, schoolId, callerUserId, created.id, person, dto.startDate, dto.endDate, dto.reason ?? null);
       return LeaveService.toRow(created);
     });
     requestOutboxDrain();
@@ -564,12 +564,12 @@ export class LeaveService {
     return `${fmt(start, false)} – ${fmt(end, true)}`;
   }
 
-  private async tellAdminsApplied(tx: TenantTx, schoolId: string, leaveId: string, person: { kind: 'TEACHER' | 'STAFF'; id: string; firstName: string; lastName: string | null }, startDate: string, endDate: string, reason: string | null): Promise<void> {
-    const [school, admins] = await Promise.all([
+  private async tellDeskApplied(tx: TenantTx, schoolId: string, applicantUserId: string, leaveId: string, person: { kind: 'TEACHER' | 'STAFF'; id: string; firstName: string; lastName: string | null }, startDate: string, endDate: string, reason: string | null): Promise<void> {
+    const [school, desk] = await Promise.all([
       tx.school.findFirst({ where: { id: schoolId }, select: { name: true } }),
-      resolveAdminRecipients(tx, schoolId),
+      resolveLeaveDeskRecipients(tx, schoolId, { exceptUserId: applicantUserId }),
     ]);
-    if (admins.length === 0) return;
+    if (desk.length === 0) return;
     const dates = dateRangeInclusive(startDate, endDate);
     // How many of the teacher's active periods fall on the leave's weekdays.
     const weekdays = [...new Set(dates.map(isoWeekdayOf))];
@@ -585,7 +585,7 @@ export class LeaveService {
     const payload = { schoolName: school?.name ?? 'Your school', leaveId, teacherName, dates: label, days: dates.length, reason, periodsAffected };
     const title = `${teacherName} has applied for leave`;
     const body = `${label} · ${dates.length} day${dates.length === 1 ? '' : 's'}${periodsAffected ? ` · ${periodsAffected} periods to cover` : ''}`;
-    for (const a of admins) {
+    for (const a of desk) {
       await tx.notification.create({ data: { schoolId, userId: a.userId, kind: 'LEAVE_APPLIED', title, body, linkType: 'leave', linkId: leaveId } });
       await tx.notificationOutbox.create({ data: { schoolId, kind: 'LEAVE_APPLIED', payload, targetUserId: a.userId } });
     }
