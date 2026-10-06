@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { renderWithProviders, type ApiStub } from '@/test/render';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
+import { ApiError } from '@/lib/api';
 import AdminRequestsPage from './page';
 
 vi.mock('@/lib/use-api', () => ({ useApi: vi.fn() }));
@@ -184,6 +185,84 @@ describe('AdminRequestsPage', () => {
 
     expect(api.post).not.toHaveBeenCalled();
     expect(within(row).getByRole('button', { name: 'Approve' })).toBeInTheDocument();
+  });
+
+  it('a 409 on Approve (another desk decided first) refetches, so the decided row leaves the desk', async () => {
+    const user = userEvent.setup();
+    const getLeave = vi.fn().mockResolvedValueOnce([leaveApp()]).mockResolvedValue([]);
+    const api = mockApi({
+      get: mockGet([
+        ['/manage/leave', [() => getLeave()]],
+        ['/manage/register-changes', [() => Promise.resolve([])]],
+      ]),
+      post: vi.fn().mockRejectedValue(new ApiError(409, 'Already approved by Darshan Jain at 9:42 am. Nothing changed.', { code: 'LEAVE_NOT_PENDING' })),
+    });
+    vi.mocked(useApi).mockReturnValue(api as never);
+
+    renderWithProviders(<AdminRequestsPage />);
+
+    const row = (await screen.findByText('Asha Verma')).closest('.sk-row') as HTMLElement;
+    await user.click(within(row).getByRole('button', { name: 'Approve' }));
+
+    await waitFor(() => expect(screen.queryByText('Asha Verma')).not.toBeInTheDocument());
+    expect(getLeave).toHaveBeenCalledTimes(2);
+  });
+
+  it('a 409 on Confirm reject refetches too; any other failure leaves the list alone', async () => {
+    const user = userEvent.setup();
+    const getLeave = vi.fn().mockResolvedValue([leaveApp()]);
+    const post = vi
+      .fn()
+      .mockRejectedValueOnce(new ApiError(500, 'Server error', null))
+      .mockRejectedValueOnce(new ApiError(409, 'Already rejected by Darshan Jain at 10:00 am. Nothing changed.', { code: 'LEAVE_NOT_PENDING' }));
+    const api = mockApi({
+      get: mockGet([
+        ['/manage/leave', [() => getLeave()]],
+        ['/manage/register-changes', [() => Promise.resolve([])]],
+      ]),
+      post,
+    });
+    vi.mocked(useApi).mockReturnValue(api as never);
+
+    renderWithProviders(<AdminRequestsPage />);
+
+    const row = (await screen.findByText('Asha Verma')).closest('.sk-row') as HTMLElement;
+    await user.click(within(row).getByRole('button', { name: 'Reject' }));
+    await user.click(within(row).getByRole('button', { name: 'Confirm reject' }));
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    expect(getLeave).toHaveBeenCalledTimes(1); // a 500 is not "decided elsewhere"
+
+    await user.click(within(row).getByRole('button', { name: 'Reject' }));
+    await user.click(within(row).getByRole('button', { name: 'Confirm reject' }));
+    await waitFor(() => expect(getLeave).toHaveBeenCalledTimes(2));
+  });
+
+  it("the viewer's own leave cannot be decided here: Approve and Reject are off, and the row says who decides", async () => {
+    const api = mockApi({
+      get: mockGet([
+        ['/auth/me', [() => Promise.resolve({ userId: 'u-me' })]],
+        [
+          '/manage/leave',
+          [() => Promise.resolve([
+            leaveApp({ id: 'mine', teacherName: 'Me Myself', personUserId: 'u-me' }),
+            leaveApp({ id: 'theirs', teacherName: 'Asha Verma', personUserId: 'u-asha', createdAt: '2026-07-28T03:00:00.000Z' }),
+          ])],
+        ],
+        ['/manage/register-changes', [() => Promise.resolve([])]],
+      ]),
+    });
+    vi.mocked(useApi).mockReturnValue(api as never);
+
+    renderWithProviders(<AdminRequestsPage />);
+
+    const mine = (await screen.findByText('Me Myself')).closest('.sk-row') as HTMLElement;
+    await waitFor(() => expect(within(mine).getByRole('button', { name: 'Approve' })).toBeDisabled());
+    expect(within(mine).getByRole('button', { name: 'Reject' })).toBeDisabled();
+    expect(within(mine).getByText('Your own leave — another admin or the accounts officer decides it')).toBeInTheDocument();
+
+    const theirs = screen.getByText('Asha Verma').closest('.sk-row') as HTMLElement;
+    expect(within(theirs).getByRole('button', { name: 'Approve' })).toBeEnabled();
+    expect(within(theirs).queryByText(/Your own leave/)).not.toBeInTheDocument();
   });
 
   it('renders the quiet-desk empty state when both queries return nothing', async () => {

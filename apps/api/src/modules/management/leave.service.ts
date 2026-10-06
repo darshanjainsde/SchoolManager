@@ -170,8 +170,11 @@ export class LeaveService {
   /** The 409 for a decision that lost — read AFTER the winner committed, so it names the winner. */
   private static async alreadyDecided(tx: TenantTx, schoolId: string, id: string): Promise<ApiError> {
     const fresh = await tx.leaveApplication.findFirst({ where: { id, schoolId }, select: { status: true, reviewedById: true, reviewedAt: true } });
-    const by = fresh?.reviewedById ? await LeaveService.nameOf(tx, schoolId, fresh.reviewedById) : null;
-    return new ApiError('LEAVE_NOT_PENDING', LeaveService.decidedSentence(fresh?.status, by, fresh?.reviewedAt ?? null), 409);
+    // A cancel stamps no reviewer: on a CANCELLED row, reviewedBy/At are the
+    // earlier APPROVER's, so naming them would credit the wrong person.
+    const reviewed = fresh?.status === 'APPROVED' || fresh?.status === 'REJECTED';
+    const by = reviewed && fresh?.reviewedById ? await LeaveService.nameOf(tx, schoolId, fresh.reviewedById) : null;
+    return new ApiError('LEAVE_NOT_PENDING', LeaveService.decidedSentence(fresh?.status, by, reviewed ? fresh?.reviewedAt ?? null : null), 409);
   }
 
   private static async nameOf(tx: TenantTx, schoolId: string, userId: string): Promise<string | null> {
@@ -255,10 +258,10 @@ export class LeaveService {
       const staffIds = apps.map((a) => a.staffId).filter((id): id is string => !!id);
       const [teachers, staff] = await Promise.all([
         teacherIds.length
-          ? tx.teacher.findMany({ take: LIST_CEILING.STRUCTURE, where: { id: { in: [...new Set(teacherIds)] } }, select: { id: true, firstName: true, lastName: true } })
+          ? tx.teacher.findMany({ take: LIST_CEILING.STRUCTURE, where: { id: { in: [...new Set(teacherIds)] } }, select: { id: true, firstName: true, lastName: true, userId: true } })
           : Promise.resolve([]),
         staffIds.length
-          ? tx.staff.findMany({ take: LIST_CEILING.STRUCTURE, where: { id: { in: [...new Set(staffIds)] } }, select: { id: true, firstName: true, lastName: true, role: true } })
+          ? tx.staff.findMany({ take: LIST_CEILING.STRUCTURE, where: { id: { in: [...new Set(staffIds)] } }, select: { id: true, firstName: true, lastName: true, role: true, userId: true } })
           : Promise.resolve([]),
       ]);
       const byTeacher = new Map(teachers.map((t) => [t.id, t]));
@@ -272,6 +275,9 @@ export class LeaveService {
           ...a,
           personKind: a.staffId ? ('STAFF' as const) : ('TEACHER' as const),
           teacherName: who ? `${who.firstName} ${who.lastName}`.trim() : 'Unknown',
+          // The applicant's own login, so a desk can keep the viewer off their
+          // own leave before the API has to refuse it (LEAVE_OWN_DECISION).
+          personUserId: who?.userId ?? null,
         };
       });
     });
@@ -411,6 +417,10 @@ export class LeaveService {
    *   IF it is still `ON_LEAVE` (a mark since changed by hand, e.g. to
    *   `ABSENT`, is left alone). Then the application itself is set to
    *   `CANCELLED`.
+   * - Raced: a PENDING cancel that loses to an approve unwinds that approval
+   *   in the same transaction; one that loses to a reject or another cancel
+   *   is a 409 `LEAVE_NOT_PENDING` naming who decided. Two cancels of one
+   *   APPROVED leave unwind it exactly once.
    *
    * Returns `{ status: 'CANCELLED', restoredDates }` — `restoredDates` is
    * the count of today-or-later dates that were processed (0 for a
@@ -435,12 +445,33 @@ export class LeaveService {
         throw new ApiError('LEAVE_NOT_CANCELLABLE', 'This application has nothing to cancel', 409);
       }
 
+      // RACE-SAFE, like decide(): every status change matches the status this
+      // transaction believes in, so a desk approving in the same second can
+      // never be overwritten blind.
       if (app.status === 'PENDING') {
-        await tx.leaveApplication.update({ where: { id }, data: { status: 'CANCELLED' } });
-        return { status: 'CANCELLED' as const, restoredDates: 0 };
+        const { count } = await tx.leaveApplication.updateMany({
+          where: { id, schoolId, status: 'PENDING' },
+          data: { status: 'CANCELLED' },
+        });
+        if (count === 1) return { status: 'CANCELLED' as const, restoredDates: 0 };
+        // Somebody decided first. If they APPROVED, their gaps and ON_LEAVE
+        // marks are committed and the teacher was told "approved" — cancel
+        // the approved leave properly (below) rather than strand them. A
+        // rejection or another cancel is final: say who, and change nothing.
+        const fresh = await tx.leaveApplication.findFirst({ where: { id, schoolId }, select: { status: true } });
+        if (fresh?.status !== 'APPROVED') throw await LeaveService.alreadyDecided(tx, schoolId, id);
       }
 
-      // APPROVED: restore every today-or-later date, leaving past dates untouched.
+      // APPROVED. Claim the row FIRST: the conditional update takes the row
+      // lock, so of two concurrent cancels exactly one matches APPROVED and
+      // unwinds; the other waits, re-checks, matches nothing and is told.
+      const { count: claimed } = await tx.leaveApplication.updateMany({
+        where: { id, schoolId, status: 'APPROVED' },
+        data: { status: 'CANCELLED' },
+      });
+      if (claimed === 0) throw await LeaveService.alreadyDecided(tx, schoolId, id);
+
+      // Restore every today-or-later date, leaving past dates untouched.
       const todayStr = todayIstDateStr(new Date());
       const dates = dateRangeInclusive(toDateStr(app.startDate), toDateStr(app.endDate)).filter(
         (d) => d >= todayStr,
@@ -460,8 +491,6 @@ export class LeaveService {
           await tx.staffAttendance.delete({ where: { id: mark.id } });
         }
       }
-
-      await tx.leaveApplication.update({ where: { id }, data: { status: 'CANCELLED' } });
 
       return { status: 'CANCELLED' as const, restoredDates: dates.length };
     });
