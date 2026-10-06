@@ -4,7 +4,12 @@ import { toE164 } from '../../common/notifications/whatsapp/phone';
 import { PhoneProfilesService, type PhoneProfile } from '../auth';
 import { isLeaveDesk } from '../management';
 
-export type InboundNeed = { kind: 'LEAVE_DESK' } | { kind: 'SUBSTITUTE'; substitutionId: string };
+/**
+ * LEAVE_DESK: an admin or accounts officer. SUBSTITUTE: whoever covers that
+ * gap NOW. TEACHER: the login of one named teacher — the one a card was sent
+ * to, who may no longer be its substitute (a "Can't" after the desk moved it).
+ */
+export type InboundNeed = { kind: 'LEAVE_DESK' } | { kind: 'SUBSTITUTE'; substitutionId: string } | { kind: 'TEACHER'; teacherId: string };
 export type ActorResult =
   | { ok: true; profile: PhoneProfile }
   | { ok: false; why: 'NO_PROFILE' | 'NOT_ALLOWED' | 'AMBIGUOUS' | 'INACTIVE' };
@@ -63,9 +68,13 @@ export class InboundIdentityService {
       );
       return checks.filter((p): p is PhoneProfile => p !== null);
     }
-    const sub = await db.substitution.findFirst({ where: { id: need.substitutionId, schoolId }, select: { substituteTeacherId: true } });
-    if (!sub?.substituteTeacherId) return [];
-    const teacher = await db.teacher.findFirst({ where: { id: sub.substituteTeacherId, schoolId }, select: { userId: true } });
+    let teacherId: string | null = need.kind === 'TEACHER' ? need.teacherId : null;
+    if (need.kind === 'SUBSTITUTE') {
+      const sub = await db.substitution.findFirst({ where: { id: need.substitutionId, schoolId }, select: { substituteTeacherId: true } });
+      teacherId = sub?.substituteTeacherId ?? null;
+    }
+    if (!teacherId) return [];
+    const teacher = await db.teacher.findFirst({ where: { id: teacherId, schoolId }, select: { userId: true } });
     return teacher?.userId ? profiles.filter((p) => p.userId === teacher.userId) : [];
   }
 }

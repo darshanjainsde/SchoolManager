@@ -2,7 +2,7 @@ const db = {
   whatsAppInbound: { create: jest.fn().mockResolvedValue({}), update: jest.fn().mockResolvedValue({}), delete: jest.fn().mockResolvedValue({}) },
   leaveApplication: { findUnique: jest.fn() },
   substitution: { findUnique: jest.fn(), findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
-  teacher: { findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
+  teacher: { findFirst: jest.fn(), findUnique: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
   timetableSlot: { findFirst: jest.fn().mockResolvedValue(null), findMany: jest.fn().mockResolvedValue([]) },
   staffAttendance: { findMany: jest.fn().mockResolvedValue([]) },
   period: { findFirst: jest.fn().mockResolvedValue({ label: 'Period 3', order: 3, startTime: '10:15', endTime: '11:00' }) },
@@ -14,7 +14,7 @@ jest.mock('@skoolos/db', () => ({ ...jest.requireActual('@skoolos/db'), getPlatf
 import { NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { Prisma } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
-import { leavePayload, coverPayload, ackPayload, actionKeys, ACTION_TTL_MS } from '../../common/notifications/whatsapp/actions';
+import { leavePayload, coverPayload, ackPayload, cantPayload, actionKeys, ACTION_TTL_MS } from '../../common/notifications/whatsapp/actions';
 import { WhatsAppActionsService } from './whatsapp-actions.service';
 
 const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
@@ -27,7 +27,7 @@ const tap = (payload: string, id = 'wamid.tap') => ({ id, from: FROM, type: 'but
 
 describe('WhatsAppActionsService', () => {
   const env = { ...process.env };
-  const leave = { approve: jest.fn(), reject: jest.fn(), assign: jest.fn(), candidates: jest.fn() };
+  const leave = { approve: jest.fn(), reject: jest.fn(), assign: jest.fn(), candidates: jest.fn(), acknowledge: jest.fn().mockResolvedValue({ acknowledgedAt: new Date() }), decline: jest.fn().mockResolvedValue({ declined: true }) };
   const channel = { deliverWith: jest.fn().mockResolvedValue({ ok: true, code: null }) };
   const identity = { actorFor: jest.fn() };
   const svc = () => new WhatsAppActionsService(leave as never, channel as never, identity as never);
@@ -384,5 +384,98 @@ describe('WhatsAppActionsService', () => {
     identity.actorFor.mockResolvedValueOnce({ ok: true, profile: { userId: 'u-ta', kind: 'TEACHER', role: 'TEACHER' } });
     expect(await svc().handleInbound(tap(ackPayload(SUB, actionKeys()), 'wamid.4'))).toBe('acked');
     expect(identity.actorFor).toHaveBeenLastCalledWith('+919876543210', SCHOOL, { kind: 'SUBSTITUTE', substitutionId: SUB });
+  });
+
+  describe('Got it and Can\'t', () => {
+    const TA = 'ta';
+    const asSubstitute = () => identity.actorFor.mockResolvedValueOnce({ ok: true, profile: { userId: 'u-ta', kind: 'TEACHER', role: 'TEACHER' } });
+    beforeEach(() => {
+      leave.acknowledge.mockResolvedValue({ acknowledgedAt: new Date() });
+      leave.decline.mockResolvedValue({ declined: true });
+    });
+
+    it('Got it records the acknowledgement through LeaveService, as the substitute, and names the school', async () => {
+      db.substitution.findUnique.mockResolvedValue({ schoolId: SCHOOL, substituteTeacherId: TA });
+      asSubstitute();
+      expect(await svc().handleInbound(tap(ackPayload(SUB, actionKeys()), 'wamid.ack'))).toBe('acked');
+      expect(leave.acknowledge).toHaveBeenCalledWith(SCHOOL, SUB, 'u-ta');
+      expect(sentTexts()).toEqual(['Raffles: noted — thank you. The office can see you have it.']);
+    });
+
+    it('Got it that loses to a reassignment between the two reads is recorded (4xx) and answered with nothing', async () => {
+      db.substitution.findUnique.mockResolvedValue({ schoolId: SCHOOL, substituteTeacherId: TA });
+      asSubstitute();
+      leave.acknowledge.mockRejectedValueOnce(new ApiError('NOT_THE_SUBSTITUTE', 'This cover is no longer yours.', 409));
+      expect(await svc().handleInbound(tap(ackPayload(SUB, actionKeys()), 'wamid.ack2'))).toMatch(/^error: /);
+      expect(sentTexts()).toEqual([]);
+      expect(db.whatsAppInbound.delete).not.toHaveBeenCalled();
+    });
+
+    it("Can't clears the cover through LeaveService and says the office will find someone, naming the school", async () => {
+      db.substitution.findUnique.mockResolvedValue({ schoolId: SCHOOL, substituteTeacherId: TA });
+      asSubstitute();
+      expect(await svc().handleInbound(tap(cantPayload(SUB, TA, actionKeys()), 'wamid.cant'))).toBe('declined');
+      expect(identity.actorFor).toHaveBeenLastCalledWith('+919876543210', SCHOOL, { kind: 'TEACHER', teacherId: TA });
+      expect(leave.decline).toHaveBeenCalledWith(SCHOOL, SUB, 'u-ta');
+      expect(sentTexts()).toEqual(['Raffles: okay — you are off this cover. The office has been told and will find someone else.']);
+    });
+
+    it("Can't from anyone but the teacher the card was sent to is recorded and not answered", async () => {
+      db.substitution.findUnique.mockResolvedValue({ schoolId: SCHOOL, substituteTeacherId: TA });
+      identity.actorFor.mockResolvedValueOnce({ ok: false, why: 'NOT_ALLOWED' });
+      expect(await svc().handleInbound(tap(cantPayload(SUB, TA, actionKeys()), 'wamid.cant2'))).toBe('cant-not-substitute');
+      expect(leave.decline).not.toHaveBeenCalled();
+      expect(sentTexts()).toEqual([]);
+      expect(db.whatsAppInbound.update).toHaveBeenCalledWith({ where: { id: 'wamid.cant2' }, data: { result: 'cant-not-substitute', schoolId: SCHOOL } });
+    });
+
+    it("Can't after the desk gave the period to someone else: nothing changes, and the tapper is told it already changed", async () => {
+      db.substitution.findUnique.mockResolvedValue({ schoolId: SCHOOL, substituteTeacherId: 'tb' });
+      asSubstitute();
+      expect(await svc().handleInbound(tap(cantPayload(SUB, TA, actionKeys()), 'wamid.cant3'))).toBe('cover-moved');
+      expect(leave.decline).not.toHaveBeenCalled();
+      expect(sentTexts()).toEqual(['Raffles: this cover has already changed, so nothing was done. Open the Sckools app to see your day as it stands.']);
+    });
+
+    it("Can't racing a reassignment (LeaveService's compare-and-set refuses) says the same and changes nothing", async () => {
+      db.substitution.findUnique.mockResolvedValue({ schoolId: SCHOOL, substituteTeacherId: TA });
+      asSubstitute();
+      leave.decline.mockRejectedValueOnce(new ApiError('NOT_THE_SUBSTITUTE', 'This cover is no longer yours, so nothing changed.', 409));
+      expect(await svc().handleInbound(tap(cantPayload(SUB, TA, actionKeys()), 'wamid.cant4'))).toBe('cover-moved');
+      expect(sentTexts()).toEqual(['Raffles: this cover has already changed, so nothing was done. Open the Sckools app to see your day as it stands.']);
+    });
+
+    it("Can't on a gap the desk cleared, or one called off with its leave, is answered to that teacher — the school found from them", async () => {
+      db.substitution.findUnique.mockResolvedValue(null);
+      db.teacher.findUnique.mockResolvedValue({ schoolId: SCHOOL });
+      asSubstitute();
+      expect(await svc().handleInbound(tap(cantPayload(SUB, TA, actionKeys()), 'wamid.cant5'))).toBe('cover-moved');
+      expect(db.teacher.findUnique).toHaveBeenCalledWith({ where: { id: TA }, select: { schoolId: true } });
+      expect(identity.actorFor).toHaveBeenLastCalledWith('+919876543210', SCHOOL, { kind: 'TEACHER', teacherId: TA });
+      expect(leave.decline).not.toHaveBeenCalled();
+    });
+
+    it("an old card's Can't (no teacher on it) acts for whoever covers it now", async () => {
+      db.substitution.findUnique.mockResolvedValue({ schoolId: SCHOOL, substituteTeacherId: TA });
+      asSubstitute();
+      expect(await svc().handleInbound(tap(cantPayload(SUB, null, actionKeys()), 'wamid.cant6'))).toBe('declined');
+      expect(identity.actorFor).toHaveBeenLastCalledWith('+919876543210', SCHOOL, { kind: 'TEACHER', teacherId: TA });
+    });
+
+    it("an infrastructure failure inside decline is rethrown so Meta retries, and the tap is freed", async () => {
+      db.substitution.findUnique.mockResolvedValue({ schoolId: SCHOOL, substituteTeacherId: TA });
+      asSubstitute();
+      leave.decline.mockRejectedValueOnce(new Error('pool timeout'));
+      await expect(svc().handleInbound(tap(cantPayload(SUB, TA, actionKeys()), 'wamid.cant7'))).rejects.toThrow('pool timeout');
+      expect(db.whatsAppInbound.delete).toHaveBeenCalledWith({ where: { id: 'wamid.cant7' } });
+    });
+
+    it("an expired Can't is recorded and not answered, like an expired Got it", async () => {
+      db.substitution.findUnique.mockResolvedValue({ schoolId: SCHOOL });
+      const old = cantPayload(SUB, TA, actionKeys(), Date.now() - ACTION_TTL_MS - 3_600_000);
+      expect(await svc().handleInbound(tap(old, 'wamid.oldcant'))).toBe('expired');
+      expect(sentTexts()).toEqual([]);
+      expect(leave.decline).not.toHaveBeenCalled();
+    });
   });
 });

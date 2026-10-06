@@ -1048,7 +1048,7 @@ describe('LeaveService', () => {
         OR: [{ effectiveTo: null }, { effectiveTo: { gt: new Date('2026-07-20T00:00:00+05:30') } }],
       });
       expect(txMock.notificationOutbox.create).toHaveBeenCalledWith({
-        data: { schoolId: SCHOOL, kind: 'COVER_ASSIGNED', targetUserId: 'u-kavya', payload: { schoolName: 'Raffles', substitutionId: SUB_ID, when: 'Mon 20 Jul 2026, Period 3 (10:15–11:00)', className: '9-A', subjectName: 'Mathematics', originalTeacherName: 'Asha Rao' } },
+        data: { schoolId: SCHOOL, kind: 'COVER_ASSIGNED', targetUserId: 'u-kavya', payload: { schoolName: 'Raffles', substitutionId: SUB_ID, substituteTeacherId: OTHER_TEACHER, when: 'Mon 20 Jul 2026, Period 3 (10:15–11:00)', className: '9-A', subjectName: 'Mathematics', originalTeacherName: 'Asha Rao' } },
         select: { id: true },
       });
     });
@@ -1377,4 +1377,82 @@ describe('LeaveService.decidedSentence — the IST clock, whatever the server TZ
       });
     });
   }
+});
+
+describe('the substitute answers', () => {
+  const svc = new LeaveService();
+  const SUBST_USER = 'u-kavya';
+  beforeEach(() => {
+    jest.clearAllMocks();
+    withTenantMock.mockImplementation((_s: string, fn: (tx: unknown) => unknown) => fn(txMock));
+    txMock.teacher.findFirst.mockResolvedValue({ id: OTHER_TEACHER, firstName: 'Kavya', lastName: 'Rao' });
+    txMock.school.findFirst.mockResolvedValue({ name: 'Raffles' });
+    txMock.user.findMany.mockResolvedValue([{ id: ADMIN_USER, email: 'head@x' }]);
+    txMock.staff.findMany.mockResolvedValue([]);
+    txMock.substitution.updateMany.mockResolvedValue({ count: 1 });
+    txMock.classSection.findMany.mockResolvedValue([{ id: CLASS_SECTION, name: 'A', grade: { name: '9' } }]);
+    txMock.period.findMany.mockResolvedValue([{ id: PERIOD, label: 'Period 3', startTime: '10:15', endTime: '11:00' }]);
+  });
+
+  it('Got it stamps acknowledgedAt once; a second tap keeps the first time', async () => {
+    txMock.substitution.findFirst.mockResolvedValueOnce({ acknowledgedAt: null });
+    const r = await svc.acknowledge(SCHOOL, SUB_ID, SUBST_USER);
+    expect(txMock.teacher.findFirst).toHaveBeenCalledWith({ where: { schoolId: SCHOOL, userId: SUBST_USER }, select: { id: true, firstName: true, lastName: true } });
+    expect(txMock.substitution.findFirst).toHaveBeenCalledWith({ where: { id: SUB_ID, schoolId: SCHOOL, substituteTeacherId: OTHER_TEACHER }, select: { acknowledgedAt: true } });
+    expect(txMock.substitution.updateMany).toHaveBeenCalledWith({ where: { id: SUB_ID, schoolId: SCHOOL, substituteTeacherId: OTHER_TEACHER, acknowledgedAt: null }, data: { acknowledgedAt: r.acknowledgedAt } });
+    const first = new Date('2026-10-12T02:40:00Z');
+    txMock.substitution.findFirst.mockResolvedValueOnce({ acknowledgedAt: first });
+    txMock.substitution.updateMany.mockClear();
+    expect(await svc.acknowledge(SCHOOL, SUB_ID, SUBST_USER)).toEqual({ acknowledgedAt: first });
+    expect(txMock.substitution.updateMany).not.toHaveBeenCalled();
+    // Nobody is told anything about a Got it.
+    expect(txMock.notificationOutbox.create).not.toHaveBeenCalled();
+  });
+
+  it('two Got it taps at once: the second keeps the first one\'s time', async () => {
+    const first = new Date('2026-10-12T02:40:00Z');
+    txMock.substitution.findFirst.mockResolvedValueOnce({ acknowledgedAt: null }).mockResolvedValueOnce({ acknowledgedAt: first });
+    txMock.substitution.updateMany.mockResolvedValue({ count: 0 });
+    expect(await svc.acknowledge(SCHOOL, SUB_ID, SUBST_USER)).toEqual({ acknowledgedAt: first });
+  });
+
+  it('Got it on a cover that is no longer theirs is refused, and stamps nothing', async () => {
+    txMock.substitution.findFirst.mockResolvedValue(null);
+    await expect(svc.acknowledge(SCHOOL, SUB_ID, SUBST_USER)).rejects.toMatchObject({ response: { code: 'NOT_THE_SUBSTITUTE' }, status: 409 });
+    expect(txMock.substitution.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("Can't reopens the gap and tells the desk which class, when, and who", async () => {
+    txMock.substitution.findFirst.mockResolvedValue({ id: SUB_ID, schoolId: SCHOOL, date: new Date('2026-10-12'), periodId: PERIOD, classSectionId: CLASS_SECTION });
+    await svc.decline(SCHOOL, SUB_ID, SUBST_USER);
+    expect(txMock.substitution.updateMany).toHaveBeenCalledWith({ where: { id: SUB_ID, schoolId: SCHOOL, substituteTeacherId: OTHER_TEACHER }, data: { substituteTeacherId: null, acknowledgedAt: null } });
+    expect(txMock.notificationOutbox.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ kind: 'COVER_UNFILLED', targetUserId: ADMIN_USER, payload: { schoolName: 'Raffles', gaps: 1, forDate: '2026-10-12', forWhen: 'Mon 12 Oct 2026', note: "Kavya Rao can't take 9-A, Mon 12 Oct 2026, Period 3 (10:15–11:00)." } }),
+      select: { id: true },
+    });
+    expect(txMock.notification.create).toHaveBeenCalledWith({ data: expect.objectContaining({ userId: ADMIN_USER, kind: 'LEAVE_APPLIED', title: "Kavya Rao can't cover 9-A" }) });
+  });
+
+  it("Can't after the desk already gave the period to someone else changes nothing", async () => {
+    txMock.substitution.updateMany.mockResolvedValue({ count: 0 });
+    await expect(svc.decline(SCHOOL, SUB_ID, SUBST_USER)).rejects.toMatchObject({ response: { code: 'NOT_THE_SUBSTITUTE' }, status: 409 });
+    expect(txMock.notificationOutbox.create).not.toHaveBeenCalled();
+    expect(txMock.notification.create).not.toHaveBeenCalled();
+  });
+
+  it('a login that is not a teacher here cannot answer for a cover', async () => {
+    txMock.teacher.findFirst.mockResolvedValue(null);
+    await expect(svc.acknowledge(SCHOOL, SUB_ID, 'u-stranger')).rejects.toMatchObject({ response: { code: 'NOT_THE_SUBSTITUTE' }, status: 403 });
+    await expect(svc.decline(SCHOOL, SUB_ID, 'u-stranger')).rejects.toMatchObject({ response: { code: 'NOT_THE_SUBSTITUTE' } });
+    expect(txMock.substitution.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('the cover card stores who it is for, so its Can\'t can be signed for that teacher', async () => {
+    const gap = { id: SUB_ID, schoolId: SCHOOL, date: new Date('2026-07-20'), periodId: PERIOD, classSectionId: CLASS_SECTION, originalTeacherId: TEACHER, substituteTeacherId: null };
+    txMock.substitution.findFirst.mockResolvedValue(gap);
+    (freeTeachersFor as jest.Mock).mockResolvedValue([{ id: OTHER_TEACHER, name: 'Kavya Rao', teachesSubject: true, coversThatDay: 0 }]);
+    txMock.teacher.findFirst.mockResolvedValue({ userId: 'u-kavya', firstName: 'Asha', lastName: 'Rao' });
+    await svc.assign(SCHOOL, SUB_ID, { substituteTeacherId: OTHER_TEACHER });
+    expect(txMock.notificationOutbox.create.mock.calls[0][0].data.payload.substituteTeacherId).toBe(OTHER_TEACHER);
+  });
 });

@@ -741,6 +741,75 @@ export class LeaveService {
     return out;
   }
 
+  // ── the substitute answers (WhatsApp "Got it" / "Can't") ──────────────────
+
+  /** The covering teacher, by login — or a refusal that names no one else. */
+  private static async substituteOf(tx: TenantTx, schoolId: string, userId: string) {
+    const teacher = await tx.teacher.findFirst({ where: { schoolId, userId }, select: { id: true, firstName: true, lastName: true } });
+    if (!teacher) throw new ApiError('NOT_THE_SUBSTITUTE', 'Only the teacher covering this period can answer for it.', 403);
+    return teacher;
+  }
+
+  /** "Got it" — the first tap's time is kept; only the teacher covering it now can say it. */
+  async acknowledge(schoolId: string, substitutionId: string, teacherUserId: string): Promise<{ acknowledgedAt: Date }> {
+    return withTenant(schoolId, async (tx) => {
+      const teacher = await LeaveService.substituteOf(tx, schoolId, teacherUserId);
+      const sub = await tx.substitution.findFirst({ where: { id: substitutionId, schoolId, substituteTeacherId: teacher.id }, select: { acknowledgedAt: true } });
+      if (!sub) throw new ApiError('NOT_THE_SUBSTITUTE', 'This cover is no longer yours.', 409);
+      if (sub.acknowledgedAt) return { acknowledgedAt: sub.acknowledgedAt };
+      const acknowledgedAt = new Date();
+      // Compare-and-set like every other write to a gap: a Got it racing a
+      // reassignment never marks the NEW substitute as having seen it.
+      const { count } = await tx.substitution.updateMany({
+        where: { id: substitutionId, schoolId, substituteTeacherId: teacher.id, acknowledgedAt: null },
+        data: { acknowledgedAt },
+      });
+      if (count === 0) {
+        const again = await tx.substitution.findFirst({ where: { id: substitutionId, schoolId, substituteTeacherId: teacher.id }, select: { acknowledgedAt: true } });
+        if (again?.acknowledgedAt) return { acknowledgedAt: again.acknowledgedAt };
+        throw new ApiError('NOT_THE_SUBSTITUTE', 'This cover is no longer yours.', 409);
+      }
+      return { acknowledgedAt };
+    });
+  }
+
+  /**
+   * "Can't" — the cover goes back to the desk, which is told at once.
+   * Compare-and-set on THIS teacher: a Can't tapped after the desk gave the
+   * period to someone else matches nothing and changes nothing (409).
+   */
+  async decline(schoolId: string, substitutionId: string, teacherUserId: string): Promise<{ declined: true }> {
+    const out = await withTenant(schoolId, async (tx) => {
+      const teacher = await LeaveService.substituteOf(tx, schoolId, teacherUserId);
+      const { count } = await tx.substitution.updateMany({
+        where: { id: substitutionId, schoolId, substituteTeacherId: teacher.id },
+        data: { substituteTeacherId: null, acknowledgedAt: null },
+      });
+      if (count === 0) throw new ApiError('NOT_THE_SUBSTITUTE', 'This cover is no longer yours, so nothing changed.', 409);
+      const sub = await tx.substitution.findFirst({ where: { id: substitutionId, schoolId }, select: { id: true, date: true, periodId: true, classSectionId: true } });
+      if (!sub) return { declined: true as const };
+      const [school, described] = await Promise.all([
+        tx.school.findFirst({ where: { id: schoolId }, select: { name: true } }),
+        LeaveService.describeGaps(tx, schoolId, [sub]),
+      ]);
+      const d = described.get(sub.id)!;
+      const name = `${teacher.firstName} ${teacher.lastName ?? ''}`.trim();
+      const day = toDateStr(sub.date);
+      await LeaveService.tellDesk(tx, schoolId, {
+        kind: 'COVER_UNFILLED',
+        payload: { schoolName: school?.name ?? 'Your school', gaps: 1, forDate: day, forWhen: LeaveService.datesLabel(day, day), note: `${name} can't take ${d.className}, ${d.when}.` },
+        title: `${name} can't cover ${d.className}`,
+        body: d.when,
+        linkId: null,
+        // A substitute who also runs the desk does not need telling what they just said.
+        exceptUserId: teacherUserId,
+      });
+      return { declined: true as const };
+    });
+    requestOutboxDrain();
+    return out;
+  }
+
   /**
    * A compare-and-set on a gap matched nothing: someone changed it between
    * this desk's read and its write. If it now holds exactly what this desk
@@ -854,7 +923,8 @@ export class LeaveService {
     const when = `${LeaveService.datesLabel(toDateStr(sub.date), toDateStr(sub.date))}, ${period ? `${period.label} (${period.startTime}–${period.endTime})` : 'a period'}`;
     // "9-A", as every other leave-desk notice names a class — "A" alone names nothing.
     const className = section ? (section.grade?.name ? `${section.grade.name}-${section.name}` : section.name) : 'a class';
-    const payload = { schoolName: school?.name ?? 'Your school', substitutionId: sub.id, when, className, subjectName: slot?.subject?.name ?? null, originalTeacherName: original ? `${original.firstName} ${original.lastName ?? ''}`.trim() : 'a colleague' };
+    // substituteTeacherId: who the card is FOR — the Can't button is signed with it at send time.
+    const payload = { schoolName: school?.name ?? 'Your school', substitutionId: sub.id, substituteTeacherId, when, className, subjectName: slot?.subject?.name ?? null, originalTeacherName: original ? `${original.firstName} ${original.lastName ?? ''}`.trim() : 'a colleague' };
     await tx.notification.create({ data: { schoolId, userId: substitute.userId, kind: 'COVER_ASSIGNED', title: `You cover ${className}`, body: when, linkType: 'timetable', linkId: sub.id } });
     await tx.notificationOutbox.create({ data: { schoolId, kind: 'COVER_ASSIGNED', payload, targetUserId: substitute.userId }, select: { id: true } });
   }

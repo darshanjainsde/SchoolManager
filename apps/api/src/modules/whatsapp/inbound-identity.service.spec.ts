@@ -107,6 +107,25 @@ describe('InboundIdentityService.actorFor', () => {
     expect(db.teacher.findFirst).not.toHaveBeenCalled();
   });
 
+  it('TEACHER: the login of that named teacher (the one a card was sent to), whatever the gap says now', async () => {
+    profiles.resolve.mockResolvedValue([profile('u-head', 'ADMIN', 'SCHOOL_ADMIN'), profile('u-ramesh', 'TEACHER', 'TEACHER')]);
+    db.teacher.findFirst.mockResolvedValue({ userId: 'u-ramesh' });
+    expect(await svc().actorFor(PHONE, A, { kind: 'TEACHER', teacherId: 't-ramesh' })).toEqual({ ok: true, profile: expect.objectContaining({ userId: 'u-ramesh' }) });
+    expect(db.teacher.findFirst).toHaveBeenCalledWith({ where: { id: 't-ramesh', schoolId: A }, select: { userId: true } });
+    // It never asks about the gap: the card's teacher is who it was sent to.
+    expect(db.substitution.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('TEACHER: another teacher on the phone, a teacher of another school, or one with no login is NOT_ALLOWED', async () => {
+    profiles.resolve.mockResolvedValue([profile('u-kavya', 'TEACHER', 'TEACHER')]);
+    db.teacher.findFirst.mockResolvedValue({ userId: 'u-ramesh' });
+    expect(await svc().actorFor(PHONE, A, { kind: 'TEACHER', teacherId: 't-ramesh' })).toEqual({ ok: false, why: 'NOT_ALLOWED' });
+    db.teacher.findFirst.mockResolvedValue(null);
+    expect(await svc().actorFor(PHONE, A, { kind: 'TEACHER', teacherId: 't-of-b' })).toEqual({ ok: false, why: 'NOT_ALLOWED' });
+    db.teacher.findFirst.mockResolvedValue({ userId: null });
+    expect(await svc().actorFor(PHONE, A, { kind: 'TEACHER', teacherId: 't-nologin' })).toEqual({ ok: false, why: 'NOT_ALLOWED' });
+  });
+
   it('a number whose only login at this school is switched off is INACTIVE — counted in THIS school only', async () => {
     profiles.resolve.mockResolvedValue([]);
     db.user.count.mockResolvedValue(1);

@@ -49,7 +49,8 @@ export const TEMPLATE_NAMES: Record<NotificationKind, string> = {
   LOW_ATTENDANCE: `${TEMPLATE_PREFIX}low_attendance`,
   LEAVE_APPLIED: `${TEMPLATE_PREFIX}leave_applied`,
   LEAVE_DECIDED: `${TEMPLATE_PREFIX}leave_decided`,
-  COVER_ASSIGNED: `${TEMPLATE_PREFIX}cover_assigned`,
+  // Got it · Can't. Until Meta approves it, `fallback` sends the approved v1.
+  COVER_ASSIGNED: `${TEMPLATE_PREFIX}cover_assigned_v2`,
   // Both readers get the one "called off" card; the parameters differ.
   LEAVE_CANCELLED: `${TEMPLATE_PREFIX}cover_cancelled`,
   COVER_CANCELLED: `${TEMPLATE_PREFIX}cover_cancelled`,
@@ -83,6 +84,8 @@ export function coverPendingTemplate(schoolName: string, gaps: number): WhatsApp
  * tier; the code sends it only once Meta's list says APPROVED.
  */
 export const COVER_ASSIGNED_V2 = `${TEMPLATE_PREFIX}cover_assigned_v2`;
+/** The approved cover card (Got it only) — what goes while v2 waits for Meta. */
+export const COVER_ASSIGNED_V1 = `${TEMPLATE_PREFIX}cover_assigned`;
 /** A cover (or a whole leave) called off — to the substitute and to the desk. */
 export const COVER_CANCELLED = `${TEMPLATE_PREFIX}cover_cancelled`;
 
@@ -213,10 +216,14 @@ export function templateFor(message: NotificationMessage, ctx: TemplateContext =
     }
     case 'COVER_ASSIGNED': {
       const p = message.payload;
+      const params = [param(p.schoolName), param(p.when), param(p.className), param(p.subjectName, 'the class'), param(p.originalTeacherName)];
+      // ONE Got it button object for both cards: a tap means the same thing whichever card it came from.
+      const gotIt: TemplateButton = { type: 'quick_reply', index: 0, payload: p.ackPayload };
       return {
-        name, language,
-        params: [param(p.schoolName), param(p.when), param(p.className), param(p.subjectName, 'the class'), param(p.originalTeacherName)],
-        buttons: [{ type: 'quick_reply', index: 0, payload: p.ackPayload }],
+        name, language, params,
+        buttons: [gotIt, { type: 'quick_reply', index: 1, payload: p.cantPayload }],
+        // Meta reviews a new template for hours or days; until then the approved v1 card goes.
+        fallback: { name: COVER_ASSIGNED_V1, language, params, buttons: [gotIt] },
       };
     }
     case 'LEAVE_CANCELLED': {
@@ -260,6 +267,11 @@ export function templateFor(message: NotificationMessage, ctx: TemplateContext =
  * Meta approves can never drift from what `templateFor` sends.
  */
 // Declared above SUBMISSIONS so both records below can use them.
+const COVER_ASSIGNED_V2_BODY = {
+  body: "A cover duty at {{1}}. On {{2}} you are covering class {{3}} for {{4}}, in place of {{5}}. Tap Got it if you will take it, or Can't so the office can find someone else.",
+  samples: ['Raffles Public School', 'Mon 22 Sep, period 3 (10:15–11:00)', '9-A', 'Mathematics', 'Priya Nair'],
+  buttons: ['Got it', "Can't"],
+};
 const COVER_CANCELLED_BODY = {
   body: 'A change at {{1}}: {{2}} on {{3}} is called off, because {{4}}. Open the Sckools app to see the day as it now stands.',
   samples: ['Raffles Public School', 'your cover of 9-A, period 3', 'Mon 22 Sep 2026', 'the leave it was for was cancelled'],
@@ -313,11 +325,7 @@ export const SUBMISSIONS: Record<NotificationKind, { body: string; samples: stri
     body: 'A message from {{1}}. Your leave has been {{2}} for {{3}}, by {{4}}. Open the Sckools app for the details.',
     samples: ['Raffles Public School', 'approved', 'Mon 22 – Tue 23 Sep 2026', 'Darshan Jain'],
   },
-  COVER_ASSIGNED: {
-    body: 'A cover duty at {{1}}. On {{2}} you are covering class {{3}} for {{4}}, in place of {{5}}. Tap below to confirm you have seen this.',
-    samples: ['Raffles Public School', 'Mon 22 Sep, period 3 (10:15–11:00)', '9-A', 'Mathematics', 'Priya Nair'],
-    buttons: ['Got it'],
-  },
+  COVER_ASSIGNED: COVER_ASSIGNED_V2_BODY,
   LEAVE_CANCELLED: COVER_CANCELLED_BODY,
   COVER_CANCELLED: COVER_CANCELLED_BODY,
   COVER_UNFILLED: COVER_PENDING_BODY,
@@ -332,11 +340,13 @@ export const EXTRA_SUBMISSIONS: Record<string, { category: 'AUTHENTICATION' | 'U
     buttons: ['Copy code'],
   },
   [COVER_PENDING]: { category: 'UTILITY', ...COVER_PENDING_BODY },
-  [COVER_ASSIGNED_V2]: {
+  [COVER_ASSIGNED_V2]: { category: 'UTILITY', ...COVER_ASSIGNED_V2_BODY },
+  // Approved 2026-09; still sent as v2's fallback, so it stays registered word for word.
+  [COVER_ASSIGNED_V1]: {
     category: 'UTILITY',
-    body: "A cover duty at {{1}}. On {{2}} you are covering class {{3}} for {{4}}, in place of {{5}}. Tap Got it if you will take it, or Can't so the office can find someone else.",
+    body: 'A cover duty at {{1}}. On {{2}} you are covering class {{3}} for {{4}}, in place of {{5}}. Tap below to confirm you have seen this.',
     samples: ['Raffles Public School', 'Mon 22 Sep, period 3 (10:15–11:00)', '9-A', 'Mathematics', 'Priya Nair'],
-    buttons: ['Got it', "Can't"],
+    buttons: ['Got it'],
   },
   [COVER_CANCELLED]: { category: 'UTILITY', ...COVER_CANCELLED_BODY },
   [NOTICE_TEMPLATES.HOLIDAY]: {

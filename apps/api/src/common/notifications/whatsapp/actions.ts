@@ -4,7 +4,7 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
  * Button payloads — what Meta hands back when someone taps.
  *
  *   v2:<body>:<exp>:<sig>
- *   body = lv:a:<leaveId> | lv:r:<leaveId> | cv:<subId>:<teacherId|skip> | ca:<subId>
+ *   body = lv:a:<leaveId> | lv:r:<leaveId> | cv:<subId>:<teacherId|skip> | ca:<subId> | cn:<subId>:<teacherId>
  *   exp  = minutes since the epoch, base 36, when the button stops working
  *   sig  = HMAC-SHA256("v2:<body>:<exp>").hex[0..12]
  *
@@ -19,7 +19,14 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 export type Action =
   | { kind: 'leave'; decision: 'approve' | 'reject'; leaveId: string }
   | { kind: 'cover'; substitutionId: string; teacherId: string | 'skip' }
-  | { kind: 'ack'; substitutionId: string };
+  | { kind: 'ack'; substitutionId: string }
+  /**
+   * "Can't". `teacherId` is the substitute the card was SENT to, so a Can't
+   * tapped after the desk moved the period can still be answered — to that
+   * teacher, and nobody else. Null only on a card rendered before 2026-10-07
+   * (`cn:<subId>`), which acts for whoever covers it now.
+   */
+  | { kind: 'cant'; substitutionId: string; teacherId: string | null };
 
 export type ParsedAction = { ok: true; action: Action } | { ok: false; why: 'foreign' } | { ok: false; why: 'expired'; action: Action };
 export interface ActionKeys { sign: string; verify: readonly string[]; legacy: string | null }
@@ -59,6 +66,13 @@ export const leavePayload = (decision: 'approve' | 'reject', leaveId: string, ke
 export const coverPayload = (substitutionId: string, teacherId: string | 'skip', keys: Pick<ActionKeys, 'sign'>, now = Date.now()) =>
   seal(`cv:${substitutionId}:${teacherId}`, keys, now);
 export const ackPayload = (substitutionId: string, keys: Pick<ActionKeys, 'sign'>, now = Date.now()) => seal(`ca:${substitutionId}`, keys, now);
+/**
+ * The substitute's "Can't" — the cover goes back to the desk. Names the
+ * teacher the card is for; `null` (an outbox row written before the payload
+ * carried the substitute) acts for whoever covers it at tap time.
+ */
+export const cantPayload = (substitutionId: string, teacherId: string | null, keys: Pick<ActionKeys, 'sign'>, now = Date.now()) =>
+  seal(teacherId ? `cn:${substitutionId}:${teacherId}` : `cn:${substitutionId}`, keys, now);
 
 /**
  * What a payload ACTS ON, without when it expires or how it was signed:
@@ -78,6 +92,8 @@ function shape(parts: string[]): Action | null {
   }
   if (parts[0] === 'cv' && parts.length === 3 && parts[1] && parts[2]) return { kind: 'cover', substitutionId: parts[1], teacherId: parts[2] };
   if (parts[0] === 'ca' && parts.length === 2 && parts[1]) return { kind: 'ack', substitutionId: parts[1] };
+  if (parts[0] === 'cn' && parts.length === 3 && parts[1] && parts[2]) return { kind: 'cant', substitutionId: parts[1], teacherId: parts[2] };
+  if (parts[0] === 'cn' && parts.length === 2 && parts[1]) return { kind: 'cant', substitutionId: parts[1], teacherId: null };
   return null;
 }
 

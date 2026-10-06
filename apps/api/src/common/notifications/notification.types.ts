@@ -293,6 +293,8 @@ export interface CoverAssignedPayload {
   subjectName: string | null;
   originalTeacherName: string;
   ackPayload: string;
+  /** The signed "Can't" button (v2 card only — the approved v1 has Got it alone). */
+  cantPayload: string;
 }
 
 /** Payload for LEAVE_CANCELLED — to the leave desk: a request (or an approved leave) was withdrawn. */

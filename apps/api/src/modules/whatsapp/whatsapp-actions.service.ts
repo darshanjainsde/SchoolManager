@@ -82,10 +82,9 @@ export class WhatsAppActionsService {
         if (!parsed.ok && parsed.why === 'foreign') result = 'unknown-payload';
         else if (!parsed.ok) {
           schoolId = await this.schoolOf(db, parsed.action);
-          // An expired "got it" is recorded and NOT answered: the live ack
-          // path is silent to anyone but the substitute, and a substitute has
-          // nothing to "decide in the console".
-          if (schoolId && parsed.action.kind !== 'ack') await this.text(schoolId, phone, 'This button has expired. Please decide in the console or the app.');
+          // An expired Got it / Can't is recorded and NOT answered: a
+          // substitute has nothing to decide in the console.
+          if (schoolId && parsed.action.kind !== 'ack' && parsed.action.kind !== 'cant') await this.text(schoolId, phone, 'This button has expired. Please decide in the console or the app.');
           result = 'expired';
         } else ({ result, schoolId } = await this.act(db, parsed.action, phone));
       }
@@ -120,6 +119,7 @@ export class WhatsAppActionsService {
   private async act(db: Db, action: Action, phone: string): Promise<{ result: string; schoolId: string | null }> {
     if (action.kind === 'leave') return this.onLeave(db, action, phone);
     if (action.kind === 'cover') return this.onCover(db, action, phone);
+    if (action.kind === 'cant') return this.onCant(db, action, phone);
     return this.onAck(db, action, phone);
   }
 
@@ -224,8 +224,51 @@ export class WhatsAppActionsService {
     // Silent to anyone but the substitute: a stranger has nothing to decide here.
     const who = await this.identity.actorFor(phone, sub.schoolId, { kind: 'SUBSTITUTE', substitutionId: a.substitutionId });
     if (!who.ok) return { result: 'ack-not-substitute', schoolId: sub.schoolId };
-    await this.text(sub.schoolId, phone, 'Noted — thank you.');
+    // A NOT_THE_SUBSTITUTE here (moved between the two reads) is a 4xx:
+    // handleInbound records it and answers nothing, as for any stranger.
+    await this.leave.acknowledge(sub.schoolId, a.substitutionId, who.profile.userId);
+    await this.text(sub.schoolId, phone, `${await this.schoolName(db, sub.schoolId)}: noted — thank you. The office can see you have it.`);
     return { result: 'acked', schoolId: sub.schoolId };
+  }
+
+  // ── can't: the substitute hands the period back ───────────────────────
+
+  /**
+   * "Can't" — answered only to the teacher the card was sent to (the
+   * payload names them; a stranger's tap is silent). If the period is still
+   * theirs it goes back to the desk, which LeaveService tells at once. If the
+   * desk has already moved, cleared or called it off, nothing changes and
+   * they are told so.
+   */
+  private async onCant(db: Db, a: Extract<Action, { kind: 'cant' }>, phone: string) {
+    const sub = await db.substitution.findUnique({ where: { id: a.substitutionId }, select: { schoolId: true, substituteTeacherId: true } });
+    // The card's teacher; a card from before the payload named one acts for whoever covers it now.
+    const addressee = a.teacherId ?? sub?.substituteTeacherId ?? null;
+    if (!addressee) return { result: 'gap-not-found', schoolId: sub?.schoolId ?? null };
+    // A gap called off with its leave is gone: the teacher's own row still names the school.
+    const schoolId = sub?.schoolId ?? (await db.teacher.findUnique({ where: { id: addressee }, select: { schoolId: true } }))?.schoolId ?? null;
+    if (!schoolId) return { result: 'gap-not-found', schoolId: null };
+    // Silent to anyone but the teacher the card was for.
+    const who = await this.identity.actorFor(phone, schoolId, { kind: 'TEACHER', teacherId: addressee });
+    if (!who.ok) return { result: 'cant-not-substitute', schoolId };
+    const school = await this.schoolName(db, schoolId);
+    const moved = async () => {
+      await this.text(schoolId, phone, `${school}: this cover has already changed, so nothing was done. Open the Sckools app to see your day as it stands.`);
+      return { result: 'cover-moved', schoolId };
+    };
+    if (sub?.substituteTeacherId !== addressee) return moved();
+    try {
+      await this.leave.decline(schoolId, a.substitutionId, who.profile.userId);
+    } catch (e) {
+      if (apiCode(e) === 'NOT_THE_SUBSTITUTE') return moved();
+      throw e;
+    }
+    await this.text(schoolId, phone, `${school}: okay — you are off this cover. The office has been told and will find someone else.`);
+    return { result: 'declined', schoolId };
+  }
+
+  private async schoolName(db: Db, schoolId: string): Promise<string> {
+    return (await db.school.findFirst({ where: { id: schoolId }, select: { name: true } }))?.name ?? 'Your school';
   }
 
   // ── the cover list ─────────────────────────────────────────────────────
@@ -309,7 +352,7 @@ export class WhatsAppActionsService {
   async whenOf(db: Db, schoolId: string, date: Date, periodId: string, classSectionId: string) {
     const [period, section, slot] = await Promise.all([
       db.period.findFirst({ where: { id: periodId, schoolId }, select: { label: true, order: true, startTime: true, endTime: true } }),
-      db.classSection.findFirst({ where: { id: classSectionId, schoolId }, select: { name: true } }),
+      db.classSection.findFirst({ where: { id: classSectionId, schoolId }, select: { name: true, grade: { select: { name: true } } } }),
       // The subject of the slot LIVE that date — the same timetable version freeTeachersFor reads.
       db.timetableSlot.findFirst({ where: { schoolId, classSectionId, periodId, dayOfWeek: isoWeekdayOf(toDateStr(date)), ...liveOn(date) }, select: { subject: { select: { name: true } } } }),
     ]);
@@ -317,6 +360,8 @@ export class WhatsAppActionsService {
     const day = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getUTCDay()];
     const mon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getUTCMonth()];
     const when = `${day} ${d.getUTCDate()} ${mon}, ${period ? `${period.label} (${period.startTime}–${period.endTime})` : 'a period'}`;
-    return { when, className: section?.name ?? 'a class', subjectName: slot?.subject?.name ?? null };
+    // "9-A": the section's own name ("A") names nothing on its own.
+    const className = section ? (section.grade?.name ? `${section.grade.name}-${section.name}` : section.name) : 'a class';
+    return { when, className, subjectName: slot?.subject?.name ?? null };
   }
 }
