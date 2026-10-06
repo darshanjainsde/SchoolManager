@@ -3,6 +3,7 @@ const dbMock = {
   notificationOutbox: { findMany: jest.fn(), update: jest.fn(), deleteMany: jest.fn() },
   student: { findMany: jest.fn() },
   user: { findMany: jest.fn() },
+  school: { findFirst: jest.fn() },
 };
 
 jest.mock('@skoolos/db', () => ({
@@ -80,6 +81,7 @@ describe('NotificationOutboxService', () => {
     dbMock.notificationOutbox.deleteMany.mockResolvedValue({ count: 0 });
     dbMock.student.findMany.mockResolvedValue([]);
     dbMock.user.findMany.mockResolvedValue([]);
+    dbMock.school.findFirst.mockResolvedValue({ name: 'Raffles Public School' });
     push.send.mockResolvedValue(true);
   });
 
@@ -180,6 +182,35 @@ describe('NotificationOutboxService', () => {
       },
       SCHOOL,
     );
+  });
+
+  it('a SPORTS_NOTICE row with no schoolName gets the school\'s name filled in by the drain, once per school', async () => {
+    const sportsRow = (id: string) => ({
+      id,
+      schoolId: SCHOOL,
+      kind: 'SPORTS_NOTICE',
+      classSectionId: null,
+      targetUserId: 'u-9',
+      payload: { title: '100 m U-11: Final', body: '14.2 s · 1st — champion!' },
+      sentAt: null,
+      attempts: 0,
+      lastError: null,
+    });
+    dbMock.$queryRaw.mockResolvedValue([sportsRow('row-s1'), sportsRow('row-s2')]);
+    dbMock.user.findMany.mockResolvedValue([{ id: 'u-9', email: 'sports@x.com' }]);
+
+    await svc.drain();
+
+    expect(whatsapp.send).toHaveBeenCalledTimes(2);
+    expect(whatsapp.send).toHaveBeenCalledWith(
+      'sports@x.com',
+      expect.objectContaining({
+        kind: 'ANNOUNCEMENT',
+        payload: expect.objectContaining({ schoolName: 'Raffles Public School', title: '100 m U-11: Final', className: 'Sports' }),
+      }),
+      SCHOOL,
+    );
+    expect(dbMock.school.findFirst).toHaveBeenCalledTimes(1);
   });
 
   it('never reads Exam/Subject/ClassSection — the payload is denormalised, so the drain does not join', async () => {

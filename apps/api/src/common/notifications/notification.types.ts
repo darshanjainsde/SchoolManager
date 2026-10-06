@@ -74,6 +74,22 @@ export interface AnnouncementPayload {
 }
 
 /**
+ * Payload STORED in a `NotificationOutbox` row for kind `SPORTS_NOTICE`
+ * (result, record, tournament and similar notices from the Sports desk).
+ * Three of the four writers do not carry the school name, so `schoolName` is
+ * optional here and the outbox drain fills it from the row's `schoolId`.
+ * Rendered through the ANNOUNCEMENT shape under the "Sports" desk.
+ */
+export interface SportsNoticeOutboxPayload {
+  schoolName?: string;
+  title: string;
+  body: string;
+  tournamentId?: string;
+  recordId?: string;
+  emailed?: boolean;
+}
+
+/**
  * Payload STORED in a `NotificationOutbox` row for kind `EXAM_SCHEDULED`
  * (`@skoolos/types` `NotificationOutboxKind`). Denormalised at write time by
  * `ExamsService.create()`, inside the same transaction as the `Exam` row, so

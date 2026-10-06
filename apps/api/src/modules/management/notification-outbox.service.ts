@@ -16,6 +16,7 @@ import type {
   NotificationMessage,
   ResultPublishedOutboxPayload,
   SessionStartedOutboxPayload,
+  SportsNoticeOutboxPayload,
 } from '../../common/notifications/notification.types';
 
 export interface NotificationOutboxDrainResult {
@@ -84,124 +85,141 @@ const PURGE_DELIVERED_AFTER_DAYS = 30;
  * `classSectionName`/`maxMarks` fields the push text doesn't render today),
  * so building the narrower message is a plain field pick, not a lookup.
  */
-function toNotificationMessage(kind: NotificationOutboxKind, payload: unknown, postedOn = readableIstDate()): NotificationMessage {
-  if (kind === 'EXAM_SCHEDULED') {
-    const p = payload as ExamScheduledOutboxPayload;
-    return {
-      kind: 'TEST_SCHEDULED',
-      payload: {
-        schoolName: p.schoolName,
-        subjectName: p.subjectName,
-        examTitle: p.examTitle,
-        scheduledAt: p.scheduledAt,
-        classSectionName: p.classSectionName,
-      },
-    };
+export function toNotificationMessage(kind: NotificationOutboxKind, payload: unknown, postedOn = readableIstDate()): NotificationMessage {
+  switch (kind) {
+    case 'EXAM_SCHEDULED': {
+      const p = payload as ExamScheduledOutboxPayload;
+      return {
+        kind: 'TEST_SCHEDULED',
+        payload: {
+          schoolName: p.schoolName,
+          subjectName: p.subjectName,
+          examTitle: p.examTitle,
+          scheduledAt: p.scheduledAt,
+          classSectionName: p.classSectionName,
+        },
+      };
+    }
+    case 'RESULT_PUBLISHED': {
+      const p = payload as ResultPublishedOutboxPayload;
+      return {
+        kind: 'RESULTS_PUBLISHED',
+        payload: {
+          schoolName: p.schoolName,
+          subjectName: p.subjectName,
+          examTitle: p.examTitle,
+        },
+      };
+    }
+    case 'LIBRARY_NOTICE': {
+      // Composed entirely at write time by the library module; renders through
+      // the EXISTING 'ANNOUNCEMENT' shape like the branches below. Always a
+      // single-reader row (targetUserId).
+      const p = payload as LibraryNoticeOutboxPayload;
+      return {
+        kind: 'ANNOUNCEMENT',
+        payload: {
+          schoolName: p.schoolName,
+          title: p.title,
+          body: p.body,
+          className: 'Library',
+          postedOn,
+        },
+      };
+    }
+    case 'LEAVE_APPLIED': {
+      // The button payloads are signed HERE, at send time, with the app secret
+      // — never stored on the row.
+      const p = payload as { schoolName: string; leaveId: string; teacherName: string; dates: string; days: number; reason: string | null; periodsAffected: number };
+      const secret = process.env.META_APP_SECRET?.trim() || 'unset';
+      return { kind: 'LEAVE_APPLIED', payload: { ...p, approvePayload: leavePayload('approve', p.leaveId, secret), rejectPayload: leavePayload('reject', p.leaveId, secret) } };
+    }
+    case 'LEAVE_DECIDED': {
+      const p = payload as { schoolName: string; leaveId: string; decision: 'APPROVED' | 'REJECTED'; dates: string; byName: string | null };
+      return { kind: 'LEAVE_DECIDED', payload: { schoolName: p.schoolName, leaveId: p.leaveId, decision: p.decision, dates: p.dates, byName: p.byName ?? null } };
+    }
+    case 'COVER_ASSIGNED': {
+      const p = payload as { schoolName: string; substitutionId: string; when: string; className: string; subjectName: string | null; originalTeacherName: string };
+      const secret = process.env.META_APP_SECRET?.trim() || 'unset';
+      return { kind: 'COVER_ASSIGNED', payload: { ...p, ackPayload: ackPayload(p.substitutionId, secret) } };
+    }
+    case 'FEE_VERIFIED':
+    case 'FEE_REJECTED':
+    case 'FEE_DUE': {
+      // The fee desk's decision to one family, composed at write time by
+      // FeePaymentService. Renders through the ANNOUNCEMENT shape like the
+      // other single-reader kinds; the class slot names the desk.
+      const p = payload as FeeDecisionOutboxPayload;
+      return {
+        kind: 'ANNOUNCEMENT',
+        payload: { schoolName: p.schoolName, title: p.title, body: p.body, className: 'Fees', postedOn },
+      };
+    }
+    case 'SESSION_STARTED': {
+      // The year end: "Aarav is in 6 A for 2026-27" to one family (targetUserId).
+      const p = payload as SessionStartedOutboxPayload;
+      return {
+        kind: 'ANNOUNCEMENT',
+        payload: { schoolName: p.schoolName, title: p.title, body: p.body, className: null, postedOn },
+      };
+    }
+    case 'CONCERN_RAISED':
+    case 'CONCERN_REPLIED':
+    case 'CONCERN_RESOLVED': {
+      // The Complaint Box, to one reader (targetUserId): the class teacher or
+      // an admin when a family raises one, the family when the school answers.
+      // Renders through the generic single-reader ANNOUNCEMENT shape; the class
+      // slot names the desk, as the fee kinds do.
+      const p = payload as { schoolName: string; title: string; body: string };
+      return {
+        kind: 'ANNOUNCEMENT',
+        payload: { schoolName: p.schoolName, title: p.title, body: p.body, className: 'Complaint Box', postedOn },
+      };
+    }
+    case 'MESSAGE_RECEIVED': {
+      // Also renders through the EXISTING 'ANNOUNCEMENT' shape (no dedicated
+      // template) — see MessageReceivedOutboxPayload. This row targets a single
+      // user via row.targetUserId (handled in drain()), not a class section.
+      const p = payload as MessageReceivedOutboxPayload;
+      return {
+        kind: 'ANNOUNCEMENT',
+        payload: {
+          schoolName: p.schoolName,
+          title: `New message from ${p.senderName}`,
+          body: p.preview,
+          className: p.subjectName,
+          postedOn,
+        },
+      };
+    }
+    case 'SPORTS_NOTICE': {
+      // Until 2026-10-06 this kind had no branch and fell into the assignment
+      // default: four call sites sent "undefined" to parents.
+      const p = payload as SportsNoticeOutboxPayload;
+      return { kind: 'ANNOUNCEMENT', payload: { schoolName: p.schoolName ?? '', title: p.title, body: p.body, className: 'Sports', postedOn } };
+    }
+    case 'ASSIGNMENT_POSTED': {
+      // ASSIGNMENT_POSTED has no NotificationKind/template of its own (see
+      // AssignmentPostedOutboxPayload's docstring) — it renders through the
+      // EXISTING 'ANNOUNCEMENT' shape instead, the same "reuse the template"
+      // move as the cases above.
+      const p = payload as AssignmentPostedOutboxPayload;
+      return {
+        kind: 'ANNOUNCEMENT',
+        payload: {
+          schoolName: p.schoolName,
+          title: p.assignmentTitle,
+          body: `${p.subjectName} — due ${p.dueDate}`,
+          className: p.classSectionName,
+          postedOn,
+        },
+      };
+    }
+    default: {
+      const never: never = kind;
+      throw new Error(`No message for outbox kind "${String(never)}"`);
+    }
   }
-  if (kind === 'RESULT_PUBLISHED') {
-    const p = payload as ResultPublishedOutboxPayload;
-    return {
-      kind: 'RESULTS_PUBLISHED',
-      payload: {
-        schoolName: p.schoolName,
-        subjectName: p.subjectName,
-        examTitle: p.examTitle,
-      },
-    };
-  }
-  if (kind === 'LIBRARY_NOTICE') {
-    // Composed entirely at write time by the library module; renders through
-    // the EXISTING 'ANNOUNCEMENT' shape like the branches below. Always a
-    // single-reader row (targetUserId).
-    const p = payload as LibraryNoticeOutboxPayload;
-    return {
-      kind: 'ANNOUNCEMENT',
-      payload: {
-        schoolName: p.schoolName,
-        title: p.title,
-        body: p.body,
-        className: 'Library',
-        postedOn,
-      },
-    };
-  }
-  if (kind === 'LEAVE_APPLIED') {
-    // The button payloads are signed HERE, at send time, with the app secret
-    // — never stored on the row.
-    const p = payload as { schoolName: string; leaveId: string; teacherName: string; dates: string; days: number; reason: string | null; periodsAffected: number };
-    const secret = process.env.META_APP_SECRET?.trim() || 'unset';
-    return { kind: 'LEAVE_APPLIED', payload: { ...p, approvePayload: leavePayload('approve', p.leaveId, secret), rejectPayload: leavePayload('reject', p.leaveId, secret) } };
-  }
-  if (kind === 'LEAVE_DECIDED') {
-    const p = payload as { schoolName: string; leaveId: string; decision: 'APPROVED' | 'REJECTED'; dates: string; byName: string | null };
-    return { kind: 'LEAVE_DECIDED', payload: { schoolName: p.schoolName, leaveId: p.leaveId, decision: p.decision, dates: p.dates, byName: p.byName ?? null } };
-  }
-  if (kind === 'COVER_ASSIGNED') {
-    const p = payload as { schoolName: string; substitutionId: string; when: string; className: string; subjectName: string | null; originalTeacherName: string };
-    const secret = process.env.META_APP_SECRET?.trim() || 'unset';
-    return { kind: 'COVER_ASSIGNED', payload: { ...p, ackPayload: ackPayload(p.substitutionId, secret) } };
-  }
-  if (kind === 'FEE_VERIFIED' || kind === 'FEE_REJECTED' || kind === 'FEE_DUE') {
-    // The fee desk's decision to one family, composed at write time by
-    // FeePaymentService. Renders through the ANNOUNCEMENT shape like the
-    // other single-reader kinds; the class slot names the desk.
-    const p = payload as FeeDecisionOutboxPayload;
-    return {
-      kind: 'ANNOUNCEMENT',
-      payload: { schoolName: p.schoolName, title: p.title, body: p.body, className: 'Fees', postedOn },
-    };
-  }
-  if (kind === 'SESSION_STARTED') {
-    // The year end: "Aarav is in 6 A for 2026-27" to one family (targetUserId).
-    const p = payload as SessionStartedOutboxPayload;
-    return {
-      kind: 'ANNOUNCEMENT',
-      payload: { schoolName: p.schoolName, title: p.title, body: p.body, className: null, postedOn },
-    };
-  }
-  if (kind === 'CONCERN_RAISED' || kind === 'CONCERN_REPLIED' || kind === 'CONCERN_RESOLVED') {
-    // The Complaint Box, to one reader (targetUserId): the class teacher or
-    // an admin when a family raises one, the family when the school answers.
-    // Renders through the generic single-reader ANNOUNCEMENT shape; the class
-    // slot names the desk, as the fee kinds do.
-    const p = payload as { schoolName: string; title: string; body: string };
-    return {
-      kind: 'ANNOUNCEMENT',
-      payload: { schoolName: p.schoolName, title: p.title, body: p.body, className: 'Complaint Box', postedOn },
-    };
-  }
-  if (kind === 'MESSAGE_RECEIVED') {
-    // Also renders through the EXISTING 'ANNOUNCEMENT' shape (no dedicated
-    // template) — see MessageReceivedOutboxPayload. This row targets a single
-    // user via row.targetUserId (handled in drain()), not a class section.
-    const p = payload as MessageReceivedOutboxPayload;
-    return {
-      kind: 'ANNOUNCEMENT',
-      payload: {
-        schoolName: p.schoolName,
-        title: `New message from ${p.senderName}`,
-        body: p.preview,
-        className: p.subjectName,
-        postedOn,
-      },
-    };
-  }
-
-  // ASSIGNMENT_POSTED has no NotificationKind/template of its own (see
-  // AssignmentPostedOutboxPayload's docstring) — it renders through the
-  // EXISTING 'ANNOUNCEMENT' shape instead, the same "reuse the template"
-  // move as the two branches above.
-  const p = payload as AssignmentPostedOutboxPayload;
-  return {
-    kind: 'ANNOUNCEMENT',
-    payload: {
-      schoolName: p.schoolName,
-      title: p.assignmentTitle,
-      body: `${p.subjectName} — due ${p.dueDate}`,
-      className: p.classSectionName,
-      postedOn,
-    },
-  };
 }
 
 /**
@@ -329,6 +347,14 @@ export class NotificationOutboxService implements OnModuleInit, OnModuleDestroy 
     let sent = 0;
     let failed = 0;
 
+    // Some writers do not carry the school's name on the row (see
+    // SportsNoticeOutboxPayload); fill it once per school per run.
+    const schoolNames = new Map<string, string>();
+    const schoolNameOf = async (id: string) => {
+      if (!schoolNames.has(id)) schoolNames.set(id, (await db.school.findFirst({ where: { id }, select: { name: true } }))?.name ?? 'Your school');
+      return schoolNames.get(id)!;
+    };
+
     // Sequential, not `Promise.allSettled` batches like ExamRemindersService:
     // this drain is expected to run every few minutes (a much smaller window
     // per run than the daily reminder scan), so a simple loop stays well
@@ -338,6 +364,7 @@ export class NotificationOutboxService implements OnModuleInit, OnModuleDestroy 
       try {
         assertNotificationOutboxKind(row.kind);
         const message = toNotificationMessage(row.kind, row.payload);
+        if (!message.payload.schoolName) message.payload.schoolName = await schoolNameOf(row.schoolId);
         // Private messages (targetUserId set) push to that one recipient;
         // broadcast kinds resolve the whole class section as before.
         const recipients = row.targetUserId
