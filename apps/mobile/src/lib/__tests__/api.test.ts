@@ -311,3 +311,34 @@ it('a refresh refused with "no longer active" closes the child on the shelf inst
   expect(aarav.closed).toBe(true);
   expect(await session.get()).toBeNull();
 });
+
+// The phone door only exists when the server can send a code. Prod answered
+// `{ ready: false }` (WhatsApp AUTHENTICATION template blocked) while the app
+// opened on "Mobile number" anyway, so a family's first tap met "Signing in
+// by code is not switched on". Anything short of an explicit yes is a no.
+describe('api.otpReady()', () => {
+  it('is true only for an explicit { ready: true }', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ready: true }) });
+    await expect(api.otpReady()).resolves.toBe(true);
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(url).toMatch(/\/auth\/otp\/ready$/);
+    expect(init.headers['X-Skoolos-Client']).toBe('native');
+  });
+
+  it.each([
+    ['ready: false', { ok: true, status: 200, json: async () => ({ ready: false }) }],
+    ['a truthy non-boolean', { ok: true, status: 200, json: async () => ({ ready: 'yes' }) }],
+    ['an empty body', { ok: true, status: 200, json: async () => ({}) }],
+    ['a body that is not JSON', { ok: true, status: 200, json: async () => { throw new SyntaxError('x'); } }],
+    ['a 500', { ok: false, status: 500, json: async () => ({ ready: true }) }],
+    ['a 404 from an older API', { ok: false, status: 404, json: async () => ({}) }],
+  ])('is false for %s', async (_label, res) => {
+    mockFetch.mockResolvedValueOnce(res);
+    await expect(api.otpReady()).resolves.toBe(false);
+  });
+
+  it('is false, never a throw, when the network is down', async () => {
+    mockFetch.mockRejectedValueOnce(new TypeError('Network request failed'));
+    await expect(api.otpReady()).resolves.toBe(false);
+  });
+});

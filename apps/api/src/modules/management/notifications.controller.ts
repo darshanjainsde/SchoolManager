@@ -15,7 +15,10 @@ import { ClearNotificationsDto, MarkNotificationsReadDto } from './notifications
  * in-app roles and scopes strictly by the caller's own `sub`.
  */
 @UseGuards(SchoolJwtGuard, RolesGuard)
-@Roles('STUDENT', 'TEACHER', 'SCHOOL_ADMIN')
+// STAFF too: every staff desk in the app (office, library counter, sports desk,
+// pay desk) carries this bell. Rows are scoped to the caller's own userId, so
+// widening the role widens nothing else.
+@Roles('STUDENT', 'TEACHER', 'SCHOOL_ADMIN', 'STAFF')
 @Controller('me/notifications')
 export class NotificationsController {
   constructor(private readonly notifications: NotificationsService) {}

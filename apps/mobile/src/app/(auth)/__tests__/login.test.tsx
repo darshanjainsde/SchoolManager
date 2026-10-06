@@ -20,13 +20,15 @@ jest.mock('expo-router', () => ({
 
 jest.mock('@/lib/api', () => {
   const actual = jest.requireActual('@/lib/api');
-  return { ...actual, api: { ...actual.api, login: jest.fn(), resolveSchool: jest.fn(), otpRequest: jest.fn(), otpVerify: jest.fn(), otpChoose: jest.fn(), sessionFor: jest.fn() } };
+  return { ...actual, api: { ...actual.api, login: jest.fn(), resolveSchool: jest.fn(), otpReady: jest.fn(), otpRequest: jest.fn(), otpVerify: jest.fn(), otpChoose: jest.fn(), sessionFor: jest.fn() } };
 });
 
 beforeEach(async () => {
   mockReplace.mockReset();
   (api.login as jest.Mock).mockReset();
   (api.resolveSchool as jest.Mock).mockReset().mockResolvedValue([]);
+  // Production's answer today: code login is off, so the password door is the door.
+  (api.otpReady as jest.Mock).mockReset().mockResolvedValue(false);
   await session.clear();
   await session.setSchoolHost('raffles.sckools.com');
 });
@@ -59,7 +61,6 @@ it('clears the persisted session and shows the real message when portalForRole r
   });
 
   const { getByTestId, findByText } = render(<Login />);
-  fireEvent.press(getByTestId('login-mode-password'));
   fireEvent.changeText(getByTestId('login-id'), 'owner@raffles.sckools.com');
   fireEvent.changeText(getByTestId('login-pw'), 'password');
   fireEvent.press(getByTestId('login-btn'));
@@ -89,7 +90,6 @@ it('still routes a valid role to its portal', async () => {
   });
 
   const { getByTestId } = render(<Login />);
-  fireEvent.press(getByTestId('login-mode-password'));
   fireEvent.changeText(getByTestId('login-id'), 'teacher@raffles.sckools.com');
   fireEvent.changeText(getByTestId('login-pw'), 'password');
   fireEvent.press(getByTestId('login-btn'));
@@ -109,7 +109,6 @@ it('with no stored host, resolves the school from the identifier and logs in the
   (api.login as jest.Mock).mockImplementation(loginSucceedsAs('STUDENT'));
 
   const { getByTestId } = render(<Login />);
-  fireEvent.press(getByTestId('login-mode-password'));
   fireEvent.changeText(getByTestId('login-id'), 'RAF-00042');
   fireEvent.changeText(getByTestId('login-pw'), 'password');
   fireEvent.press(getByTestId('login-btn'));
@@ -132,7 +131,6 @@ it('falls through a stale stored host to the resolved school', async () => {
   (api.resolveSchool as jest.Mock).mockResolvedValue(['acme.sckools.com']);
 
   const { getByTestId } = render(<Login />);
-  fireEvent.press(getByTestId('login-mode-password'));
   fireEvent.changeText(getByTestId('login-id'), 'teacher@acme.edu');
   fireEvent.changeText(getByTestId('login-pw'), 'password');
   fireEvent.press(getByTestId('login-btn'));
@@ -150,7 +148,6 @@ it('shows a neutral error when the identifier resolves nowhere', async () => {
   // resolveSchool already returns [] from beforeEach.
 
   const { getByTestId, findByText } = render(<Login />);
-  fireEvent.press(getByTestId('login-mode-password'));
   fireEvent.changeText(getByTestId('login-id'), 'ZZZ-99999');
   fireEvent.changeText(getByTestId('login-pw'), 'password');
   fireEvent.press(getByTestId('login-btn'));
@@ -171,7 +168,9 @@ it('phone door: number → code → one profile → straight to that role\'s hom
   (api.otpRequest as jest.Mock).mockResolvedValue(REQ);
   (api.otpVerify as jest.Mock).mockResolvedValue({ choose: false, host: 'raffles.sckools.com', profile: { ...ravi }, accessToken: 'a', refreshToken: 'r', expiresIn: 900 });
   (api.sessionFor as jest.Mock).mockImplementation(async () => { const s = sessionOf('STUDENT', 'Ravi Sharma'); await session.set(s as never); return s; });
+  (api.otpReady as jest.Mock).mockResolvedValue(true);
   const { getByTestId, findByTestId } = render(<Login />);
+  await findByTestId('otp-phone');
   fireEvent.changeText(getByTestId('otp-phone'), '98765 43210');
   fireEvent.press(getByTestId('otp-send'));
   await findByTestId('otp-code');
@@ -187,7 +186,9 @@ it('phone door: two profiles → the chooser; picking the teacher opens the staf
   (api.otpRequest as jest.Mock).mockResolvedValue(REQ);
   (api.otpVerify as jest.Mock).mockResolvedValue({ choose: true, ticket: 't-1', profiles: [ravi, priya] });
   (api.otpChoose as jest.Mock).mockImplementation(async (_t: string, p: { role: string; label: string }) => { const s = sessionOf(p.role, p.label); await session.set(s as never); return s; });
+  (api.otpReady as jest.Mock).mockResolvedValue(true);
   const { getByTestId, findByTestId } = render(<Login />);
+  await findByTestId('otp-phone');
   fireEvent.changeText(getByTestId('otp-phone'), '9876543210');
   fireEvent.press(getByTestId('otp-send'));
   await findByTestId('otp-code');
@@ -202,7 +203,9 @@ it('phone door: two profiles → the chooser; picking the teacher opens the staf
 it('phone door: a wrong code shows the server\'s words and stays on the code step', async () => {
   (api.otpRequest as jest.Mock).mockResolvedValue(REQ);
   (api.otpVerify as jest.Mock).mockRejectedValue(new ApiError(400, 'That code is not right. 4 tries left.'));
+  (api.otpReady as jest.Mock).mockResolvedValue(true);
   const { getByTestId, findByTestId, findByText } = render(<Login />);
+  await findByTestId('otp-phone');
   fireEvent.changeText(getByTestId('otp-phone'), '9876543210');
   fireEvent.press(getByTestId('otp-send'));
   await findByTestId('otp-code');
@@ -211,4 +214,43 @@ it('phone door: a wrong code shows the server\'s words and stays on the code ste
   await findByText('That code is not right. 4 tries left.');
   expect(getByTestId('otp-code')).toBeTruthy();
   expect(mockReplace).not.toHaveBeenCalled();
+});
+
+// ── Which door opens (2026-10-06: prod reports code login OFF) ─────────────
+
+it('with code login off, opens straight on the password door — no phone door, no tabs', async () => {
+  const { getByTestId, queryByTestId } = render(<Login />);
+  await waitFor(() => expect(api.otpReady).toHaveBeenCalled());
+  expect(getByTestId('login-id')).toBeTruthy();
+  expect(queryByTestId('otp-phone')).toBeNull();
+  expect(queryByTestId('login-mode-phone')).toBeNull();
+  expect(queryByTestId('login-mode-password')).toBeNull();
+});
+
+it('never flashes the phone door while the answer is still on its way', async () => {
+  (api.otpReady as jest.Mock).mockReturnValue(new Promise(() => {}));
+  const { getByTestId, queryByTestId } = render(<Login />);
+  expect(getByTestId('login-id')).toBeTruthy();
+  expect(queryByTestId('otp-phone')).toBeNull();
+});
+
+it('keeps the password door if the readiness check itself fails', async () => {
+  (api.otpReady as jest.Mock).mockRejectedValue(new Error('boom'));
+  const { getByTestId, queryByTestId } = render(<Login />);
+  await waitFor(() => expect(api.otpReady).toHaveBeenCalled());
+  expect(getByTestId('login-id')).toBeTruthy();
+  expect(queryByTestId('otp-phone')).toBeNull();
+});
+
+it('with code login on, opens on the phone door and the password tab still works', async () => {
+  (api.otpReady as jest.Mock).mockResolvedValue(true);
+  (api.login as jest.Mock).mockImplementation(loginSucceedsAs('STUDENT'));
+  const { getByTestId, findByTestId, queryByTestId } = render(<Login />);
+  await findByTestId('otp-phone');
+  expect(queryByTestId('login-id')).toBeNull();
+  fireEvent.press(getByTestId('login-mode-password'));
+  fireEvent.changeText(getByTestId('login-id'), 'RPS-00021');
+  fireEvent.changeText(getByTestId('login-pw'), 'password');
+  fireEvent.press(getByTestId('login-btn'));
+  await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(family)/(tabs)/home'));
 });

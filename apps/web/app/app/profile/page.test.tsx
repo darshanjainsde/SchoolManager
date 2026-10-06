@@ -14,7 +14,7 @@ const PHONE = { phone: null, verified: false, verifiedAt: null, pending: null, p
 
 function stub() {
   const api = {
-    get: vi.fn((path: string) => (path === '/me/profile' ? Promise.resolve(ME) : path === '/me/phone' ? Promise.resolve(PHONE) : Promise.reject(new Error(`Unexpected GET ${path}`)))),
+    get: vi.fn((path: string) => (path === '/me/account' ? Promise.resolve(ME) : path === '/me/phone' ? Promise.resolve(PHONE) : Promise.reject(new Error(`Unexpected GET ${path}`)))),
     post: vi.fn().mockResolvedValue({}), put: vi.fn(),
     patch: vi.fn().mockImplementation((_p: string, body: Record<string, unknown>) => Promise.resolve({ ...ME, ...(body.name !== undefined ? { name: body.name } : {}), notifyPrefs: { ...ME.notifyPrefs, ...((body.notifyPrefs as object) ?? {}) } })),
     del: vi.fn(),
@@ -33,7 +33,7 @@ describe('AdminProfilePage', () => {
     expect(within(you).getByText('No name yet')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Your name'), { target: { value: 'Darshan Jain' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await waitFor(() => expect(api.patch).toHaveBeenCalledWith('/me/profile', { name: 'Darshan Jain' }));
+    await waitFor(() => expect(api.patch).toHaveBeenCalledWith('/me/account', { name: 'Darshan Jain' }));
     expect(await within(you).findByText('Darshan Jain')).toBeInTheDocument();
     expect(await screen.findByTestId('phone-card')).toBeInTheDocument();
   });
@@ -47,7 +47,7 @@ describe('AdminProfilePage', () => {
     expect(fees).not.toBeChecked();
     expect(within(prefs).getByRole('switch', { name: 'Leave requests' })).toBeChecked();
     fireEvent.click(fees);
-    await waitFor(() => expect(api.patch).toHaveBeenCalledWith('/me/profile', { notifyPrefs: { fees: true } }));
+    await waitFor(() => expect(api.patch).toHaveBeenCalledWith('/me/account', { notifyPrefs: { fees: true } }));
   });
 
   it('the password form posts to the same route the teacher page uses and needs 8+ characters', async () => {

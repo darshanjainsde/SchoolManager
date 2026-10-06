@@ -33,8 +33,14 @@ export class UpdateMeProfileDto {
  * A person's own page (design §5): the name on their login and what reaches
  * them on WhatsApp. The phone lives at /me/phone (verified by code); the
  * password at /auth/change-password. Families have no page of their own.
+ *
+ * `/me/account`, NOT `/me/profile`: that path is the family's pupil record
+ * (PortalController). This controller first shipped on `me/profile` too, and
+ * because AuthModule is imported before PortalModule its GET won the route —
+ * every student's Profile tab answered "Role not permitted" (2026-09-21 →
+ * 2026-10-06). One path, one handler; `route-coverage` now fails on a repeat.
  */
-@Controller('me/profile')
+@Controller('me/account')
 @UseGuards(SchoolJwtGuard, RolesGuard)
 @Roles('SCHOOL_ADMIN', 'TEACHER', 'STAFF')
 export class MeProfileController {

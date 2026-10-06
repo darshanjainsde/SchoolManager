@@ -160,6 +160,26 @@ commented out behind a probe marker.
 - **A guard nobody has watched fail is not evidence.** Prove every new check by
   removing what it guards, watching the failure, restoring it, and reporting both
   runs.
+- **No feature, endpoint or fix ships without real tests, edge cases included.**
+  On 2026-10-06, three portal bugs were found on prod: a second `GET /me/profile`
+  shadowed the student one, the staff bell was refused, and the app showed a
+  login door the server had switched off. They had been live for up to two
+  weeks under a green CI. The 1,124 app tests mock the server, and the one test
+  that called `/me/profile` as a student is a live-API suite CI always skips.
+  So, for any API or portal change:
+  1. Add role-to-door assertions against the BOOTED app, after
+     `apps/api/test/role-contract.e2e-spec.ts`. The right role gets the real
+     payload (not just "not 403"), every other role gets 403, anonymous gets 401.
+  2. Cover the edges: a login with no record behind it, validation limits,
+     scoping (another user's rows never leak), and every role that reuses a
+     shared component.
+  3. `apps/api/src/contract/route-contract.spec.ts` (in `pnpm test`) checks
+     that every app/web call lands on a route its portal's role may use, and
+     that no verb+path is declared twice. Don't weaken it. Record an intended
+     refusal in its `INTENDED` list, with the reason.
+  4. Client tests must include the server saying no: a capability flag off,
+     403/404/500, offline.
+  A suite that skips in CI is not coverage. Never cite it as evidence.
 - **`pnpm preflight:library` before any push.** It runs the real `ncc` bundle,
   which is the gate `tsc` does not cover.
 - **The e2e suite takes ~17s and exits cleanly.** If it ever appears to hang
