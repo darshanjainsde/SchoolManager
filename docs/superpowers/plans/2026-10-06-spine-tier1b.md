@@ -24,7 +24,9 @@
 
 ## Global Constraints
 
-- Migrations are written, never applied, by a task. Staging applies on push (`db-migrate.yml`); production is the owner's workflow, run before the staging → main merge. Until it runs, every `Substitution` read fails on the new columns — so the prod migration goes first, always.
+- Migrations are written, never applied, by a task. `db-migrate.yml` is workflow_dispatch only and checks out the ref it is run FROM: staging is migrated with `--ref <this branch> -f environment=staging` BEFORE the PR merges; production is the owner's run before the staging → main merge. Until it runs, every `Substitution` read fails on the new columns — so the migration goes first, always.
+- A task that adds a Prisma model, a column the backup engine copies, or a platform-client (BYPASSRLS) file runs the FULL `apps/api` jest suite before it is complete: `backups/engine/buckets.ts` `BUCKET_OF`, `rehome.ts` `PACK_EXCLUDED_MODELS` and `common/tenancy-bypass.spec.ts` `ALLOWED` must name it (Tier 1a missed the first two for `NotificationDelivery`).
+- Every `notificationOutbox.create` carries `select` (guard-pinned in Tier 1a), so a deploy that lands before its migration cannot 500 a writer.
 - Every tenant query inside `withTenant` with an explicit `schoolId`; every list capped with `LIST_CEILING` or a literal `take`.
 - **Apply-time checks** (spec §4): no past `startDate` (IST); no overlap with an existing PENDING/APPROVED application of the same person; span ≤ 60 days; applicant must be active (Teacher and Staff alike). Quota stays a warning, not a block.
 - **Approve** creates gaps only for working days (`School.workingDays` and the `Holiday` table — the calendar `LeavePolicyService` already uses), for slots live on that date (`effectiveFrom <= date AND (effectiveTo IS NULL OR effectiveTo > date)`), and writes `Substitution.leaveApplicationId`.
