@@ -237,7 +237,7 @@ function Composer({
             className="sk-seg"
             role="group"
             aria-label="What is it?"
-            style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))' }}
+            data-grid="2"
           >
             {(Object.keys(TOPIC_LABEL) as TopicKind[]).map((k) => (
               <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)}>{TOPIC_LABEL[k]}</button>

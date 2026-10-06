@@ -1163,6 +1163,12 @@ button.sk-pill { border: 0; cursor: pointer; font-family: inherit; font-size: 10
   border-color: var(--sk-bad); color: var(--sk-bad); background: var(--sk-bad-tint);
 }
 @media (prefers-reduced-motion: reduce) { .sk-seg > button { transition: none; } }
+/* A set of four that fits no single row of a drawer: without this the last
+   option sat alone on a second row ("Timing change" orphaned under three). A
+   balanced 2 x 2 at every width; the attribute is on that group only, so the
+   two-button groups keep the plain flex row. */
+.sk-seg[data-grid="2"] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.sk-seg[data-grid="2"] > button { padding-inline: 8px; }
 
 /* Composer textarea in remark mode — red border and a red-to-page wash, so
    the teacher can see they are writing in red ink before they look at the
