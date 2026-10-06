@@ -9,6 +9,7 @@ import { runInBackground } from '../../../common/notifications/run-in-background
 import { activeStudentsWhere } from '../../../common/roster/active-students';
 import { SportsSettingsService } from './sports-settings.service';
 import type { AddRecordDto, DecideAttemptDto, SubmitAttemptDto } from './sports.dto';
+import { requestOutboxDrain } from '../../../common/notifications/outbox-signal';
 
 export interface RecordLine { sportKey: string; sportName: string; groupKey: string; category: string; scoring: MarkScoring }
 export interface RecordView {
@@ -105,10 +106,10 @@ export class SportsRecordsService {
   }
 
   /** Approve: the standing record becomes history and the attempt becomes the record; the child hears about it. Reject: closed with a note. */
-  decide(schoolId: string, actorId: string, attemptId: string, dto: DecideAttemptDto): Promise<{ status: string; recordId: string | null }> {
+  async decide(schoolId: string, actorId: string, attemptId: string, dto: DecideAttemptDto): Promise<{ status: string; recordId: string | null }> {
     assertNotificationKind('SPORTS');
     assertNotificationOutboxKind('SPORTS_NOTICE');
-    return withTenant(schoolId, async (tx) => {
+    const out = await withTenant(schoolId, async (tx) => {
       const a = await tx.sportsRecordAttempt.findFirst({ where: { id: attemptId, schoolId } });
       if (!a) throw new ApiError('RECORD_NOT_FOUND', 'That attempt is not in this school.', 404);
       if (a.status !== 'PENDING') throw new ApiError('ATTEMPT_DECIDED', `This attempt was already ${a.status.toLowerCase()}.`, 409);
@@ -152,6 +153,8 @@ export class SportsRecordsService {
       }
       return { status: 'APPROVED', recordId: rec.id };
     });
+    requestOutboxDrain();
+    return out;
   }
 
   /** A record from the old register, or a standing one typed in by hand. */

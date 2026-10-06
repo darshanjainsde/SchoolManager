@@ -1,4 +1,3 @@
-import type { NotificationOutboxService } from './notification-outbox.service';
 const txMock = {
   student: { findFirst: jest.fn() },
   teacher: { findFirst: jest.fn() },
@@ -23,6 +22,9 @@ jest.mock('@skoolos/db', () => ({
 jest.mock('../tenancy', () => ({ TenantContextService: class {} }));
 jest.mock('./timetable.service', () => ({ TimetableService: class {} }));
 
+jest.mock('../../common/notifications/outbox-signal', () => ({ requestOutboxDrain: jest.fn() }));
+
+import { requestOutboxDrain } from '../../common/notifications/outbox-signal';
 import { MessagesService } from './messages.service';
 import type { TenantContextService } from '../tenancy';
 import type { TimetableService } from './timetable.service';
@@ -68,11 +70,9 @@ function threadRow(over: Record<string, unknown> = {}) {
 describe('MessagesService', () => {
   const tenant = { requireTenant: jest.fn() };
   const timetable = { listForClass: jest.fn() };
-  const outbox = { drainSoon: jest.fn() };
   const svc = new MessagesService(
     tenant as unknown as TenantContextService,
     timetable as unknown as TimetableService,
-    outbox as unknown as NotificationOutboxService,
   );
 
   beforeEach(() => {
@@ -171,6 +171,7 @@ describe('MessagesService', () => {
           data: expect.objectContaining({ kind: 'MESSAGE_RECEIVED', targetUserId: TEACHER_USER, classSectionId: SECTION }),
         }),
       );
+      expect(requestOutboxDrain).toHaveBeenCalledTimes(1);
     });
 
     it('writes NO outbox row when the teacher has no login (nobody to push)', async () => {
@@ -205,6 +206,7 @@ describe('MessagesService', () => {
       expect(txMock.notificationOutbox.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ kind: 'MESSAGE_RECEIVED', targetUserId: STUDENT_USER }) }),
       );
+      expect(requestOutboxDrain).toHaveBeenCalledTimes(1);
     });
   });
 

@@ -13,6 +13,7 @@ import { ApiError } from '../../common/errors/api-error';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
 import { commentCountsByConcern } from '../../common/lists/relation-counts';
 import { resolveAdminRecipients } from '../../common/notifications/recipients';
+import { requestOutboxDrain } from '../../common/notifications/outbox-signal';
 
 /** Who is asking, and therefore what they may see and do. */
 export type Viewer =
@@ -432,6 +433,7 @@ export class ConcernsService {
           });
         }
       });
+      requestOutboxDrain();
     } catch { /* a notification must never undo the write it describes */ }
   }
 
@@ -450,6 +452,7 @@ export class ConcernsService {
         await tx.notificationOutbox.create({
           data: { schoolId, kind, payload: { schoolName: school?.name ?? 'Your school', title, body: concern.title }, targetUserId: concern.raisedById },
         });
+      requestOutboxDrain();
       });
     } catch { /* as above */ }
   }

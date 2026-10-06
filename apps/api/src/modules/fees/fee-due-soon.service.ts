@@ -3,6 +3,7 @@ import { getPlatformPrisma, resolveFeatures, type Prisma } from '@skoolos/db';
 import type { FeeDecisionOutboxPayload } from '../../common/notifications/notification.types';
 import { istTodayISO } from '../../common/dates/timetable-date';
 import { formatRupees } from './money';
+import { requestOutboxDrain } from '../../common/notifications/outbox-signal';
 
 /** Told twice: a week before the due date, and on the day. Date-exact, so each fires once. */
 const LEADS = [7, 0] as const;
@@ -82,6 +83,7 @@ export class FeeDueSoonService {
       notices++;
       active.add(inv.schoolId);
     }
+    if (notices > 0) requestOutboxDrain();
     this.logger.log({ schools: active.size, notices }, 'fee-due-soon run');
     return { schools: active.size, notices };
   }

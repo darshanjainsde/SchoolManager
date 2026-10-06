@@ -30,6 +30,7 @@ import type {
   StartSessionDto,
   UpdateSessionPlanDto,
 } from './sessions.dto';
+import { requestOutboxDrain } from '../../common/notifications/outbox-signal';
 
 /**
  * Sessions — the year end (Active Roster, Track C). Spec §4.
@@ -937,9 +938,10 @@ export class SessionsService {
     if (rows.length) {
       await withTenant(schoolId, async (tx) => {
         for (const part of chunks(rows, 1000)) await tx.notification.createMany({ data: part });
-        // Push rides the guaranteed outbox (drained by cron), one row per family.
+        // Push rides the guaranteed outbox (drained at once below, cron is the net), one row per family.
         for (const part of chunks(pushes, 1000)) await tx.notificationOutbox.createMany({ data: part });
       });
+      if (pushes.length) requestOutboxDrain();
     }
 
     runInBackground(
