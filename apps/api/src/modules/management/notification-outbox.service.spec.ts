@@ -11,7 +11,7 @@ jest.mock('@skoolos/db', () => ({
 }));
 
 import { NOTIFICATION_OUTBOX_KINDS } from '@skoolos/types';
-import { DRAIN_TIME_BUDGET_MS, NotificationOutboxService, OUTBOX_EMAIL } from './notification-outbox.service';
+import { DRAIN_TIME_BUDGET_MS, EMAIL_CONCURRENCY, NotificationOutboxService, OUTBOX_EMAIL } from './notification-outbox.service';
 import { FIXTURES } from './notification-outbox.fixtures';
 import type { PushChannel } from '../../common/notifications/push.channel';
 import { OUTBOX_DRAIN_DELAY_MS, resetOutboxSignal, requestOutboxDrain } from '../../common/notifications/outbox-signal';
@@ -313,12 +313,14 @@ describe('NotificationOutboxService', () => {
     it.each(['LIBRARY_NOTICE', 'SESSION_STARTED', 'RESULT_PUBLISHED', 'EXAM_SCHEDULED'])('does not email %s — its writer already does', async (kind) => {
       claim([{ id: 'r1', schoolId: SCHOOL, kind, payload: FIXTURES[kind as keyof typeof FIXTURES], classSectionId: null, targetUserId: USER }]);
       await svc.drain({ purge: false });
+      expect(push.send).toHaveBeenCalled(); // positive control: the row had a recipient
       expect(email.send).not.toHaveBeenCalled();
     });
 
     it('a sports record the writer already emailed is not emailed twice', async () => {
       claim([{ id: 'r1', schoolId: SCHOOL, kind: 'SPORTS_NOTICE', payload: { ...(FIXTURES.SPORTS_NOTICE as object), emailed: true }, classSectionId: null, targetUserId: USER }]);
       await svc.drain({ purge: false });
+      expect(push.send).toHaveBeenCalled(); // positive control: the row had a recipient
       expect(email.send).not.toHaveBeenCalled();
     });
 
@@ -329,6 +331,46 @@ describe('NotificationOutboxService', () => {
       expect(r).toMatchObject({ sent: 1, failed: 0 });
       expect(push.send).toHaveBeenCalledTimes(1);
       expect(whatsapp.send).toHaveBeenCalledTimes(1);
+    });
+
+    describe('a class-wide row with 12 recipients', () => {
+      const twelve = Array.from({ length: 12 }, (_, i) => ({ id: `u${i}`, email: `p${i}@raffles.test` }));
+      const classRow = () => ({ id: 'r1', schoolId: SCHOOL, kind: 'ASSIGNMENT_POSTED', payload: FIXTURES.ASSIGNMENT_POSTED, classSectionId: CLASS_SECTION, targetUserId: null });
+      beforeEach(() => {
+        dbMock.student.findMany.mockResolvedValue(twelve.map((u) => ({ userId: u.id })));
+        dbMock.user.findMany.mockResolvedValue(twelve);
+      });
+
+      it('emails at most EMAIL_CONCURRENCY at a time and still sends all 12', async () => {
+        let inFlight = 0;
+        let maxInFlight = 0;
+        email.send.mockImplementation(async () => {
+          inFlight += 1;
+          maxInFlight = Math.max(maxInFlight, inFlight);
+          await new Promise((r) => setTimeout(r, 5));
+          inFlight -= 1;
+          return true;
+        });
+        claim([classRow()]);
+        const r = await svc.drain({ purge: false });
+        expect(r).toMatchObject({ sent: 1, failed: 0 });
+        expect(EMAIL_CONCURRENCY).toBe(5);
+        expect(maxInFlight).toBe(5);
+        expect(email.send).toHaveBeenCalledTimes(12);
+      });
+
+      it('one rejected email among 12 does not fail the row or resend push / WhatsApp', async () => {
+        email.send.mockImplementation(async (to: string) => {
+          if (to === 'p3@raffles.test') throw new Error('SMTP 421');
+          return true;
+        });
+        claim([classRow()]);
+        const r = await svc.drain({ purge: false });
+        expect(r).toMatchObject({ sent: 1, failed: 0 });
+        expect(email.send).toHaveBeenCalledTimes(12);
+        expect(push.send).toHaveBeenCalledTimes(12);
+        expect(whatsapp.send).toHaveBeenCalledTimes(12);
+      });
     });
 
     it('stops taking rows after the time budget, releases the rest, and asks for another drain', async () => {

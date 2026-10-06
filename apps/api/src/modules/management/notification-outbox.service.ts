@@ -104,6 +104,14 @@ export const OUTBOX_EMAIL: Record<NotificationOutboxKind, boolean> = {
 export const DRAIN_TIME_BUDGET_MS = 40_000;
 
 /**
+ * Emails one row's recipients this many at a time. SMTP is the slow leg, and a
+ * class-wide row sent one by one could outrun the budget's headroom — the
+ * function would be killed before `sentAt` is written and the whole class would
+ * be sent push + WhatsApp + email again after the claim TTL.
+ */
+export const EMAIL_CONCURRENCY = 5;
+
+/**
  * Maps a drained row's `kind` + denormalised `payload` onto the SAME
  * `NotificationMessage` shape `PushChannel`/`formatNotification` already
  * render for TEST_SCHEDULED/RESULTS_PUBLISHED emails — deliberately reusing
@@ -417,10 +425,17 @@ export class NotificationOutboxService implements OnModuleInit, OnModuleDestroy 
         for (const to of recipients) {
           await this.push.send(to, message, row.schoolId);
           await this.whatsapp.send(to, message, row.schoolId);
-          if (emailIt) {
-            // An email failure is logged, never thrown: throwing would retry the
-            // whole row and push + WhatsApp would go out a second time.
-            await this.email.send(to, message, row.schoolId).catch((e) => this.logger.warn(`outbox email to ${to} failed: ${(e as Error).message}`));
+        }
+        if (emailIt) {
+          // After push + WhatsApp, in parallel chunks. An email failure is logged,
+          // never thrown: throwing would retry the whole row and push + WhatsApp
+          // would go out a second time.
+          for (let c = 0; c < recipients.length; c += EMAIL_CONCURRENCY) {
+            const chunk = recipients.slice(c, c + EMAIL_CONCURRENCY);
+            const results = await Promise.allSettled(chunk.map((to) => this.email.send(to, message, row.schoolId)));
+            results.forEach((res, k) => {
+              if (res.status === 'rejected') this.logger.warn(`outbox email to ${chunk[k]} failed: ${(res.reason as Error)?.message}`);
+            });
           }
         }
 
