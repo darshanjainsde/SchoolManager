@@ -3,7 +3,7 @@ Sckools is the school app for families and teachers at schools that use Sckools.
 FOR PARENTS AND STUDENTS
 • Attendance — see each day your child was present, absent or late, month by month.
 • Diary — read the teacher's notes and sign them in the app.
-• Homework — see what is set and when it is due.
+• Homework — the assignments set for the class and when they are due.
 • Tests and results — upcoming tests and marks.
 • Timetable — the day's periods and teachers.
 • Notices and holidays — school notices and the holiday calendar.
