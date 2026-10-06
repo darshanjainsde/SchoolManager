@@ -46,7 +46,7 @@ interface OpsResponse {
     loginsPerSec: number;
   };
   routes: RouteRow[];
-  outbox: { pending: number; oldestMinutes: number | null; exhausted: number };
+  outbox: { pending: number; oldestMinutes: number | null; failed24h: number };
   metricsAvailable: boolean;
   history: HistoryPoint[];
 }
@@ -159,16 +159,16 @@ export default function OpsPage() {
           <h3>Outbox</h3>
         </div>
         <div className="sk-card-b" style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-          <Stat label="Pending" value={data.outbox.pending.toLocaleString()} />
+          <Stat label="Due now" value={data.outbox.pending.toLocaleString()} />
           <Stat
             label="Oldest"
             value={data.outbox.oldestMinutes === null ? '—' : `${data.outbox.oldestMinutes} min`}
           />
           <Stat
-            label="Attempts exhausted"
-            value={data.outbox.exhausted.toLocaleString()}
-            tone={data.outbox.exhausted > 0 ? 'var(--sk-bad)' : undefined}
-            hint="dead-letter: nothing will retry these"
+            label="Failed (24 h)"
+            value={data.outbox.failed24h.toLocaleString()}
+            tone={data.outbox.failed24h > 0 ? 'var(--sk-bad)' : undefined}
+            hint="deliveries that ran out of retries or failed for good"
           />
         </div>
       </section>

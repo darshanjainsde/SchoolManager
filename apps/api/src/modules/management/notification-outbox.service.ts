@@ -11,7 +11,7 @@ import { PushChannel } from '../../common/notifications/push.channel';
 import { WhatsAppChannel } from '../../common/notifications/whatsapp.channel';
 import { ackPayload, actionKeys, leavePayload } from '../../common/notifications/whatsapp/actions';
 import { resolveRecipientUsers } from '../../common/notifications/recipients';
-import { isSchemaMissing } from '../../common/errors/prisma-errors';
+import { isDeliverySchemaMissing } from '../../common/errors/prisma-errors';
 import type {
   MessageReceivedOutboxPayload,
   AssignmentPostedOutboxPayload,
@@ -170,25 +170,6 @@ export const DELIVERY_CONCURRENCY = 5;
 export function channelsFor(kind: NotificationOutboxKind, payload: unknown): DeliveryChannelName[] {
   const email = OUTBOX_EMAIL[kind] && !(payload as { emailed?: boolean } | null)?.emailed;
   return email ? ['PUSH', 'WHATSAPP', 'EMAIL'] : ['PUSH', 'WHATSAPP'];
-}
-
-/** Postgres: undefined_table / undefined_column. */
-const SCHEMA_MISSING_SQLSTATES = new Set(['42P01', '42703']);
-
-/**
- * The database is behind the code: the NotificationDelivery table or the
- * `expandedAt` column is not there yet. Production deploys code BEFORE the
- * owner runs the migration, so this is an expected state, not a failure.
- * A delegate call reports it as P2021/P2022; a raw statement as P2010 with
- * the Postgres SQLSTATE in `meta.code`.
- */
-function isDeliverySchemaMissing(e: unknown): boolean {
-  if (isSchemaMissing(e)) return true;
-  if (!e || typeof e !== 'object') return false;
-  const err = e as { code?: unknown; meta?: { code?: unknown } | null; message?: unknown };
-  if (typeof err.code === 'string' && SCHEMA_MISSING_SQLSTATES.has(err.code)) return true;
-  if (typeof err.meta?.code === 'string' && SCHEMA_MISSING_SQLSTATES.has(err.meta.code)) return true;
-  return typeof err.message === 'string' && /\b(42P01|42703)\b/.test(err.message);
 }
 
 /** An error message as stored on a row: never undefined, never longer than 500. */
