@@ -5,6 +5,7 @@ import { ensureConnected, sharedRedis, type SharedRedis } from '../redis/redis.c
 import type { NotificationChannel, NotificationMessage } from './notification.types';
 import { toE164 } from './whatsapp/phone';
 import { WhatsAppApiError, sendTemplate, senderDisplayNumber, type SendResult, type WhatsAppConfig, whatsAppConfig, whatsAppConfigProblem } from './whatsapp/graph.client';
+import { TemplateApproval, chooseTemplate } from './whatsapp/template-approval';
 import { templateFor, type WhatsAppTemplate } from './whatsapp/templates';
 
 /**
@@ -65,6 +66,7 @@ export class WhatsAppChannel implements NotificationChannel {
     private readonly config: () => WhatsAppConfig | null = () => whatsAppConfig(),
     private readonly fetchImpl: typeof fetch = fetch,
     private readonly redis: () => SharedRedis = () => sharedRedis(),
+    private readonly approval: Pick<TemplateApproval, 'isApproved'> = new TemplateApproval(config, fetchImpl),
   ) {}
 
   /** The platform credentials, or null when the environment has none. */
@@ -169,7 +171,9 @@ export class WhatsAppChannel implements NotificationChannel {
     if (!address) return false;
     const { phone } = address;
 
-    const template = templateFor(message, { child: address.child });
+    // A new template waiting for Meta's review goes as its approved v1, or not at all.
+    const template = await chooseTemplate(templateFor(message, { child: address.child }), this.approval);
+    if (!template) return false;
     const release = await this.claim(phone, template);
     if (!release) return true;
     const ok = await this.deliver(cfg, schoolId, phone, message.kind, template, settings.phoneNumberId);

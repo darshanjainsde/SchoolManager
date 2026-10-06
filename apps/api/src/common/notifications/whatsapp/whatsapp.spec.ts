@@ -1,6 +1,6 @@
 import { toE164, forGraph } from './phone';
 import { whatsAppConfig, whatsAppConfigProblem } from './graph.client';
-import { EXTRA_SUBMISSIONS, HELLO_WORLD, SUBMISSIONS, TEMPLATE_NAMES, coverPendingTemplate, param, placeholderCount, templateFor, testNoticeTemplate, verifyCodeTemplate } from './templates';
+import { COVER_ASSIGNED_V2, EXTRA_SUBMISSIONS, HELLO_WORLD, SUBMISSIONS, TEMPLATE_NAMES, coverPendingTemplate, param, placeholderCount, templateFor, templateSubmissions, testNoticeTemplate, verifyCodeTemplate } from './templates';
 import type { NotificationKind, NotificationMessage } from '../notification.types';
 
 describe('toE164', () => {
@@ -232,5 +232,33 @@ describe('the announcement template', () => {
       { child: { name: 'Ravi', className: '9-A' } },
     );
     expect(t.params[3]).toContain('9-A');
+  });
+});
+
+describe('templateSubmissions — exactly what the submit script hands Meta', () => {
+  it('one entry per template name, each with as many samples as placeholders', () => {
+    const all = templateSubmissions();
+    expect(new Set(all.map((t) => t.name)).size).toBe(all.length);
+    for (const t of all) expect(t.samples).toHaveLength(placeholderCount(t.body));
+  });
+
+  it('carries the two Tier 1 templates, so they reach review before the code needs them', () => {
+    const byName = new Map(templateSubmissions().map((t) => [t.name, t]));
+    expect(byName.get('sckools_cover_assigned_v2')?.buttons).toEqual(['Got it', "Can't"]);
+    expect(byName.get('sckools_cover_cancelled')?.category).toBe('UTILITY');
+    // The narrow notice templates were invisible to the old regex parser.
+    expect(byName.has('sckools_holiday_notice')).toBe(true);
+  });
+
+  it('no Utility body starts or ends with a placeholder — Meta refuses both', () => {
+    for (const t of templateSubmissions().filter((x) => x.category === 'UTILITY')) {
+      expect(t.body).not.toMatch(/^\{\{\d+\}\}/);
+      expect(t.body).not.toMatch(/\{\{\d+\}\}[.!?"]?$/);
+    }
+  });
+
+  it('v2 of the cover card takes the same parameters as v1, so v1 is a true fallback', () => {
+    const byName = new Map(templateSubmissions().map((t) => [t.name, t]));
+    expect(placeholderCount(byName.get(COVER_ASSIGNED_V2)!.body)).toBe(placeholderCount(SUBMISSIONS.COVER_ASSIGNED.body));
   });
 });
