@@ -242,7 +242,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   // The school's resolved feature set drives which nav items are shown, and
   // `role` gates the console itself — see the redirect effect below.
-  const { data: me, isPending: meLoading } = useQuery({
+  const { data: me, isLoading: meLoading } = useQuery({
     queryKey: ['me', host],
     queryFn: () => api.get<{ features?: string[]; role?: string; staffRole?: string | null; name?: string | null; schoolMarkUrl?: string | null }>('/auth/me'),
     enabled: hydrated && isSchoolHost(host) && hasSession && audience === 'school',
@@ -253,10 +253,16 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   const features = me?.features;
   // A desk job (accounts, admissions) sees the one room it is admitted to;
-  // everybody else sees the school's menu. Until features load, show every
-  // item (avoids hiding things on a slow fetch).
+  // everybody else sees the school's menu. While /auth/me is IN FLIGHT the menu
+  // is empty — an officer must never glimpse the admin menu — but the page
+  // itself still renders, so its queries run in parallel with /auth/me rather
+  // than behind it. (`isLoading` = fetching and no data yet; a disabled query
+  // is not loading, so this can never hold the menu back forever. If /auth/me
+  // fails, the old behaviour stands: the full menu.) A desk job deep-linking
+  // to an admin page may briefly mount it: its queries 403 at the API, then
+  // the bounce effect below moves them.
   const desk = consoleDeskFor(me?.role, me?.staffRole);
-  const model = desk ? deskModel(desk) : visibleModel(features ?? null);
+  const model: NavEntry[] = meLoading ? [] : desk ? deskModel(desk) : visibleModel(features ?? null);
   const leaves = navLeaves(model);
   // /app/profile would bounce a desk job; the staff profile admits every STAFF.
   const profileHref = desk ? '/staff/profile' : '/app/profile';
@@ -373,14 +379,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   if (status === 'unknown' && !accessToken) return <ConsoleSkeleton chrome="side" label="School admin" />;
   if (!hasSession || audience !== 'school') return null;
-
-  // No admin chrome — menu or page — until we know WHO this is. A desk job (the
-  // admissions officer) would otherwise see the full admin menu for a moment,
-  // and a deep link to /app/students would mount a page that fires admin
-  // queries (403s) before the bounce effect runs. Only while the request is in
-  // flight: if /auth/me FAILS the old behaviour stands, so an admin is never
-  // left on a skeleton forever (the API's guards refuse the data regardless).
-  if (meLoading) return <ConsoleSkeleton chrome="side" label="School admin" />;
 
   function handleLogout() {
     clear();
