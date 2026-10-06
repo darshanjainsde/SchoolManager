@@ -52,6 +52,15 @@ describe('the admissions migrations', () => {
     }
   });
 
+  it('adds updatedAt NOT NULL with its DEFAULT in the ADD COLUMN itself, never by a later SET NOT NULL', () => {
+    // Enquiry is FORCE ROW LEVEL SECURITY: a migration role without BYPASSRLS
+    // sees no rows, so a back-fill UPDATE may touch none and a following
+    // SET NOT NULL would fail the run. The default fills old rows instead.
+    const sql = code(read(COLUMNS));
+    expect(sql).toMatch(/ADD COLUMN IF NOT EXISTS "updatedAt"\s+TIMESTAMP\(3\) NOT NULL DEFAULT CURRENT_TIMESTAMP/);
+    expect(sql).not.toMatch(/ALTER COLUMN[^;]*SET NOT NULL/);
+  });
+
   it('drops nothing and leaves row-level security alone', () => {
     const all = code(read(ENUMS)) + code(read(COLUMNS));
     expect(all).not.toMatch(/\bDROP\b/i);

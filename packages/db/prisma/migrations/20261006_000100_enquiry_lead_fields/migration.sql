@@ -15,22 +15,26 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
+-- "updatedAt" is added NOT NULL WITH a default in the one statement: Postgres
+-- fills every existing row from the default, so no UPDATE has to touch a row
+-- for the constraint to hold. Enquiry is FORCE ROW LEVEL SECURITY, and a
+-- migration role without BYPASSRLS sees zero rows through tenant_iso — a
+-- separate back-fill + SET NOT NULL would then fail the whole run.
 ALTER TABLE "Enquiry"
     ADD COLUMN IF NOT EXISTS "source"          "EnquirySource" NOT NULL DEFAULT 'WEBSITE',
     ADD COLUMN IF NOT EXISTS "childName"       TEXT,
     ADD COLUMN IF NOT EXISTS "whatsappOk"      BOOLEAN NOT NULL DEFAULT false,
     ADD COLUMN IF NOT EXISTS "lastContactedAt" TIMESTAMP(3),
-    ADD COLUMN IF NOT EXISTS "updatedAt"       TIMESTAMP(3);
+    ADD COLUMN IF NOT EXISTS "updatedAt"       TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
--- Back-fill before the NOT NULL, so an old lead says when it was made rather
--- than when this migration ran.
-UPDATE "Enquiry" SET "updatedAt" = "createdAt" WHERE "updatedAt" IS NULL;
-
-ALTER TABLE "Enquiry"
-    ALTER COLUMN "updatedAt" SET DEFAULT CURRENT_TIMESTAMP,
-    ALTER COLUMN "updatedAt" SET NOT NULL;
+-- BEST-EFFORT back-fill, so an old lead says when it was made rather than when
+-- this migration ran. Under FORCE RLS without BYPASSRLS it may touch no rows;
+-- old leads then show the migration time as their last update, which is
+-- harmless. Nothing after this statement depends on it.
+UPDATE "Enquiry" SET "updatedAt" = "createdAt";
 
 -- The homepage course card has always posted with this fixed parent name,
 -- because it asks for a phone number only. Those leads came from the card.
+-- Best-effort in the same way: if RLS hides the rows, they stay WEBSITE.
 UPDATE "Enquiry" SET "source" = 'COURSE_CARD'
  WHERE "parentName" = 'Course card lead' AND "source" = 'WEBSITE';

@@ -47,6 +47,9 @@ const STAFF_ROLE_LABEL: Record<string, string> = {
   HELPER: 'Helper',
   SECURITY: 'Security',
   LIBRARIAN: 'Librarian',
+  SPORTS: 'Sports teacher',
+  ACCOUNTS: 'Accounts officer',
+  ADMISSIONS: 'Admissions officer',
   OTHER: 'Staff',
 };
 
