@@ -12,6 +12,7 @@ const db = {
 };
 jest.mock('@skoolos/db', () => ({ ...jest.requireActual('@skoolos/db'), getPlatformPrisma: () => db }));
 
+import { NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { Prisma } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
 import { leavePayload, coverPayload, ackPayload, actionKeys, ACTION_TTL_MS } from '../../common/notifications/whatsapp/actions';
@@ -116,6 +117,19 @@ describe('WhatsAppActionsService', () => {
     expect(r).toMatch(/^error:/);
     expect(db.whatsAppInbound.delete).not.toHaveBeenCalled();
     expect(db.whatsAppInbound.update).toHaveBeenCalledWith({ where: { id: 'wamid.biz' }, data: expect.objectContaining({ result: expect.stringMatching(/^error:/) }) });
+  });
+
+  it("a Nest 4xx (LeaveService's NotFoundException) is a business answer: recorded as error:, row kept", async () => {
+    leave.approve.mockRejectedValueOnce(new NotFoundException('Leave application not found'));
+    const r = await svc().handleInbound(tap(leavePayload('approve', LEAVE, actionKeys()), 'wamid.nf'));
+    expect(r).toMatch(/^error:/);
+    expect(db.whatsAppInbound.delete).not.toHaveBeenCalled();
+  });
+
+  it('an HttpException with status >= 500 is infrastructure: row freed, rethrown', async () => {
+    leave.approve.mockRejectedValueOnce(new ServiceUnavailableException());
+    await expect(svc().handleInbound(tap(leavePayload('approve', LEAVE, actionKeys()), 'wamid.503'))).rejects.toThrow();
+    expect(db.whatsAppInbound.delete).toHaveBeenCalledWith({ where: { id: 'wamid.503' } });
   });
 
   it('a retry of the tap after an infrastructure failure approves exactly once', async () => {
