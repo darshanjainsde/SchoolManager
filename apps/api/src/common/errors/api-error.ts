@@ -85,6 +85,10 @@ export type ErrorCode =
   | 'INVITE_ALREADY_ACCEPTED'
   | 'CLASS_NOT_EMPTY'
   | 'TEACHER_CONFLICT'
+  /** The caller is not (or no longer) the substitute on this cover — pair with 403/409. */
+  | 'NOT_THE_SUBSTITUTE'
+  /** The leave this gap was opened for was withdrawn while a desk was filling it — the gap no longer needs a teacher (409). */
+  | 'COVER_GONE'
   /** Caller has no linked Teacher record — e.g. a SCHOOL_ADMIN hitting a teacher-only leave route. */
   | 'NOT_A_TEACHER'
   /** Caller has no linked Staff record — e.g. a STAFF-role JWT with no matching Staff.userId row. */
@@ -94,6 +98,14 @@ export type ErrorCode =
   | 'LEAVE_NOT_PENDING'
   /** The decider is the applicant — nobody approves or rejects their own leave. Pair with 403. */
   | 'LEAVE_OWN_DECISION'
+  /** A leave whose first day has already gone (IST) — pair with 400. */
+  | 'LEAVE_IN_PAST'
+  /** One request longer than MAX_LEAVE_DAYS — pair with 400. */
+  | 'LEAVE_TOO_LONG'
+  /** The same person already has PENDING/APPROVED leave on one of these dates — pair with 409. */
+  | 'LEAVE_OVERLAP'
+  /** The applicant has left the school — pair with 403. */
+  | 'LEAVE_INACTIVE'
   /** The LeaveApplication is REJECTED or already CANCELLED — nothing to cancel. */
   | 'LEAVE_NOT_CANCELLABLE'
   /** Caller is neither the owning teacher nor a SCHOOL_ADMIN — pair with 403. */

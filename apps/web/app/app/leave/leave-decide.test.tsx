@@ -28,7 +28,6 @@ function mockApi(pending: () => Promise<unknown>, post: ApiStub['post']): ApiStu
     if (path.includes('status=PENDING')) return pending();
     if (path.includes('status=APPROVED')) return Promise.resolve([]);
     if (path.startsWith('/manage/leave/coverage')) return Promise.resolve([]);
-    if (path.startsWith('/manage/availability')) return Promise.resolve({ teachers: [], busy: [], periods: [] });
     if (path.startsWith('/manage/leave-policy/pending-context')) return Promise.resolve({});
     return Promise.resolve([]);
   });

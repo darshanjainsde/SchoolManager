@@ -33,6 +33,8 @@ import { ExamsService } from './exams.service';
 import { ExamsController } from './exams.controller';
 import { ExamRemindersService } from './exam-reminders.service';
 import { ExamRemindersController } from './exam-reminders.controller';
+import { CoverNudgeService } from './cover-nudge.service';
+import { CoverNudgeController } from './cover-nudge.controller';
 import { NotificationOutboxService } from './notification-outbox.service';
 import { NotificationOutboxController } from './notification-outbox.controller';
 import { CronSecretGuard } from '../../common/auth/cron-secret.guard';
@@ -80,7 +82,7 @@ import { SeatingController } from './seating.controller';
 
 @Module({
   imports: [AuthModule, FeaturesModule, TenancyModule, PressModule, FeesModule, AlumniModule, LibraryModule],
-  providers: [LeaveDeskGuard, EmailSettingsService, CatalogService, TeachersService, StaffService, ClassesService, StudentsService, StudentLifecycleService, SessionsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, ExamRemindersService, NotificationOutboxService, CronSecretGuard, LoginInviteService, LeaveService, BellService, ConsoleSearchService, PulseService, StudentReportService, LeavePolicyService, HolidaysService, ClassNotesService, RegisterChangeService, AssignmentsService, MessagesService, NotificationsService, PhotoService, DiaryService, AttendanceBarService, RoomsService, SeatingService, OnboardingService, ClassTeachersService],
+  providers: [LeaveDeskGuard, EmailSettingsService, CatalogService, TeachersService, StaffService, ClassesService, StudentsService, StudentLifecycleService, SessionsService, TimetableService, TeacherDayService, AnnouncementsService, AttendanceService, StaffAttendanceService, ExamsService, ExamRemindersService, CoverNudgeService, NotificationOutboxService, CronSecretGuard, LoginInviteService, LeaveService, BellService, ConsoleSearchService, PulseService, StudentReportService, LeavePolicyService, HolidaysService, ClassNotesService, RegisterChangeService, AssignmentsService, MessagesService, NotificationsService, PhotoService, DiaryService, AttendanceBarService, RoomsService, SeatingService, OnboardingService, ClassTeachersService],
   controllers: [
     OnboardingController,
     ClassTeachersController,
@@ -100,6 +102,7 @@ import { SeatingController } from './seating.controller';
     StaffAttendanceController,
     ExamsController,
     ExamRemindersController,
+    CoverNudgeController,
     NotificationOutboxController,
     LeaveController,
     LeavePolicyController,

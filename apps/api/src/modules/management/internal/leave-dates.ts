@@ -82,3 +82,36 @@ export function monthSpan(month: string): { first: string; last: string } {
   const last = new Date(Date.UTC(y, m, 0));
   return { first: `${month}-01`, last: toDateStr(last) };
 }
+
+/**
+ * Minutes after midnight for "8:00", "08:00", "1:30 pm", "12:15 AM"; null when
+ * it is not a time a person wrote ("", "P3", "25:00", "after lunch").
+ */
+export function minutesOfDay(t: string | null | undefined): number | null {
+  const m = /^\s*(\d{1,2}):(\d{2})\s*(am|pm)?\s*$/i.exec(t ?? '');
+  if (!m) return null;
+  let h = Number(m[1]);
+  const min = Number(m[2]);
+  const ampm = m[3]?.toLowerCase();
+  if (ampm && (h < 1 || h > 12)) return null;
+  if (ampm === 'pm' && h < 12) h += 12;
+  if (ampm === 'am' && h === 12) h = 0;
+  if (h > 23 || min > 59) return null;
+  return h * 60 + min;
+}
+
+const NOON = 12 * 60;
+
+/**
+ * Does a half day leave THIS period empty? Morning = starts before 12:00,
+ * afternoon = from 12:00. A full day — or a half day from an older app that
+ * did not say which half — leaves every period empty, as before. A start time
+ * nobody can read is treated as empty too: a class with an extra teacher is a
+ * smaller problem than a class with none.
+ */
+export function inHalf(app: { halfDay?: boolean | null; halfDayPart?: string | null }, startTime: string | null | undefined): boolean {
+  if (!app.halfDay || (app.halfDayPart !== 'AM' && app.halfDayPart !== 'PM')) return true;
+  const m = minutesOfDay(startTime);
+  if (m === null) return true;
+  return app.halfDayPart === 'AM' ? m < NOON : m >= NOON;
+}

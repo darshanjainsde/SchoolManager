@@ -26,6 +26,19 @@ export interface SchoolCalendar {
 
 const WEEKDAY_NAME = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
+type CalendarDb = Pick<TenantTx, 'school' | 'holiday'>;
+
+/** Holiday rows overlapping [from, to] — a single-day holiday has a null endDate. */
+function holidaysOverlapping(tx: Pick<TenantTx, 'holiday'>, schoolId: string, from: Date, to: Date) {
+  return tx.holiday.findMany({
+    take: LIST_CEILING.STRUCTURE,
+    // A holiday overlaps the window when it starts on or before the end AND
+    // ends on or after the start.
+    where: { schoolId, startDate: { lte: to }, OR: [{ endDate: null }, { endDate: { gte: from } }] },
+    select: { name: true, startDate: true, endDate: true },
+  });
+}
+
 /**
  * The calendar for one date range. `from`/`to` are `YYYY-MM-DD`.
  *
@@ -33,24 +46,14 @@ const WEEKDAY_NAME = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'
  * about one date without knowing the range it belongs to.
  */
 export async function schoolCalendar(
-  tx: TenantTx,
+  tx: CalendarDb,
   schoolId: string,
   from: string,
   to: string,
 ): Promise<SchoolCalendar> {
   const [school, holidays] = await Promise.all([
     tx.school.findUnique({ where: { id: schoolId }, select: { workingDays: true } }),
-    tx.holiday.findMany({
-      take: LIST_CEILING.STRUCTURE,
-      // A holiday overlaps the window when it starts on or before the end AND
-      // ends on or after the start. A single-day holiday has a null endDate.
-      where: {
-        schoolId,
-        startDate: { lte: new Date(`${to}T00:00:00.000Z`) },
-        OR: [{ endDate: null }, { endDate: { gte: new Date(`${from}T00:00:00.000Z`) } }],
-      },
-      select: { name: true, startDate: true, endDate: true },
-    }),
+    holidaysOverlapping(tx, schoolId, new Date(`${from}T00:00:00.000Z`), new Date(`${to}T00:00:00.000Z`)),
   ]);
 
   const holidayByDate = new Map<string, string>();
@@ -67,6 +70,26 @@ export async function schoolCalendar(
     working: new Set(school?.workingDays ?? [1, 2, 3, 4, 5, 6]),
     holidayByDate,
   };
+}
+
+/** Every holiday date (`YYYY-MM-DD`) inside [from, to], ranges expanded. */
+export async function holidayDates(tx: Pick<TenantTx, 'holiday'>, schoolId: string, from: Date, to: Date): Promise<Set<string>> {
+  const out = new Set<string>();
+  for (const h of await holidaysOverlapping(tx, schoolId, from, to)) {
+    for (const d of dateRangeInclusive(toDateStr(h.startDate), toDateStr(h.endDate ?? h.startDate))) out.add(d);
+  }
+  return out;
+}
+
+/**
+ * The WORKING `YYYY-MM-DD` dates in [start, end], in order: inside
+ * `School.workingDays` and not on a `Holiday`. What a leave is counted on and
+ * what its cover is opened on — a Sunday or Diwali inside the span has no
+ * class to cover and no attendance to mark.
+ */
+export async function workingDates(tx: CalendarDb, schoolId: string, start: string, end: string): Promise<string[]> {
+  const cal = await schoolCalendar(tx, schoolId, start, end);
+  return dateRangeInclusive(start, end).filter((d) => cal.working.has(isoWeekdayOf(d)) && !cal.holidayByDate.has(d));
 }
 
 /**

@@ -93,6 +93,31 @@ describe('AdminRequestsPage', () => {
     expect(names).toEqual(['Asha Verma', 'Ravi Kumar']);
   });
 
+  it('a half day says which half — and an old one with no half says just "Half day"', async () => {
+    const api = mockApi({
+      get: mockGet([
+        ['/manage/leave', [() => Promise.resolve([
+          leaveApp({ id: 'am', teacherName: 'Asha Verma', startDate: '2026-08-01T00:00:00.000Z', endDate: '2026-08-01T00:00:00.000Z', halfDay: true, halfDayPart: 'AM' }),
+          leaveApp({ id: 'pm', teacherName: 'Kavya Rao', startDate: '2026-08-01T00:00:00.000Z', endDate: '2026-08-01T00:00:00.000Z', halfDay: true, halfDayPart: 'PM' }),
+          leaveApp({ id: 'old', teacherName: 'Mohan Das', startDate: '2026-08-01T00:00:00.000Z', endDate: '2026-08-01T00:00:00.000Z', halfDay: true, halfDayPart: null }),
+        ])]],
+        ['/manage/register-changes', [() => Promise.resolve([])]],
+      ]),
+    });
+    vi.mocked(useApi).mockReturnValue(api as never);
+
+    renderWithProviders(<AdminRequestsPage />);
+
+    const rowOf = async (name: string) => (await screen.findByText(name)).closest('.sk-row') as HTMLElement;
+    expect((await rowOf('Asha Verma')).textContent).toMatch(/Half day · morning/);
+    expect((await rowOf('Kavya Rao')).textContent).toMatch(/Half day · afternoon/);
+    const old = (await rowOf('Mohan Das')).textContent ?? '';
+    expect(old).toMatch(/Half day/);
+    expect(old).not.toMatch(/morning|afternoon/);
+    // A half day is one date, never a range.
+    expect(old).not.toMatch(/–/);
+  });
+
   it('approving a leave fires the right POST and the row disappears on refetch', async () => {
     const user = userEvent.setup();
     const getLeave = vi

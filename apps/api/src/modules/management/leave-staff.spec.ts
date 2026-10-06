@@ -1,14 +1,17 @@
 import 'reflect-metadata';
 
 const txMock = {
+  // The advisory lock apply() takes before its overlap read.
+  $queryRaw: jest.fn().mockResolvedValue([{}]),
   teacher: { findFirst: jest.fn() },
   staff: { findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
   leaveTypeDef: { findFirst: jest.fn() },
   leaveApplication: { create: jest.fn(), findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn(), updateMany: jest.fn(), count: jest.fn() },
-  timetableSlot: { groupBy: jest.fn().mockResolvedValue([]) },
-  substitution: { deleteMany: jest.fn() },
+  timetableSlot: { findMany: jest.fn().mockResolvedValue([]) },
+  substitution: { deleteMany: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
   staffAttendance: { findFirst: jest.fn(), delete: jest.fn() },
-  school: { findFirst: jest.fn().mockResolvedValue({ name: 'Raffles' }) },
+  school: { findFirst: jest.fn().mockResolvedValue({ name: 'Raffles' }), findUnique: jest.fn().mockResolvedValue({ workingDays: [1, 2, 3, 4, 5, 6] }) },
+  holiday: { findMany: jest.fn().mockResolvedValue([]) },
   user: { findMany: jest.fn().mockResolvedValue([]) },
   notification: { create: jest.fn() },
   notificationOutbox: { create: jest.fn() },
@@ -35,7 +38,10 @@ const created = (o: Record<string, unknown> = {}) => ({
   createdAt: new Date('2026-10-01T00:00:00.000Z'), ...o,
 });
 
+afterEach(() => jest.useRealTimers());
 beforeEach(() => {
+  jest.useFakeTimers().setSystemTime(new Date('2026-10-01T03:00:00.000Z'));
+  txMock.leaveApplication.findFirst.mockResolvedValue(null);
   jest.clearAllMocks();
   txMock.teacher.findFirst.mockResolvedValue(null);
   txMock.staff.findFirst.mockResolvedValue({ id: DRIVER, firstName: 'Ram', lastName: 'Singh' });
@@ -75,14 +81,14 @@ describe('a staff member applying', () => {
     txMock.user.findMany.mockResolvedValue([{ id: 'admin-user', email: 'head@raffles.test' }]);
     await svc.apply(SCHOOL, DRIVER_USER, dto);
     expect(txMock.notification.create).toHaveBeenCalled();
-    expect(txMock.timetableSlot.groupBy).not.toHaveBeenCalled();
+    expect(txMock.timetableSlot.findMany).not.toHaveBeenCalled();
   });
 
   it('DOES ask it for a teacher — the control for the test above', async () => {
     txMock.user.findMany.mockResolvedValue([{ id: 'admin-user', email: 'head@raffles.test' }]);
     txMock.teacher.findFirst.mockResolvedValue({ id: TEACHER, firstName: 'Asha', lastName: 'Rao' });
     await svc.apply(SCHOOL, DRIVER_USER, dto);
-    expect(txMock.timetableSlot.groupBy).toHaveBeenCalledWith(
+    expect(txMock.timetableSlot.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ teacherId: TEACHER }) }),
     );
   });
@@ -163,5 +169,23 @@ describe('cancelling', () => {
     txMock.leaveApplication.findFirst.mockResolvedValue(created({ status: 'APPROVED' }));
     await svc.cancel(SCHOOL, LEAVE, DRIVER_USER, 'STAFF');
     expect(txMock.substitution.deleteMany).not.toHaveBeenCalled();
+    expect(txMock.substitution.findMany).not.toHaveBeenCalled();
+  });
+
+  it('a staff member withdrawing leave is named to the desk, with no covers released', async () => {
+    txMock.leaveApplication.findFirst.mockResolvedValue(created({ status: 'APPROVED' }));
+    txMock.user.findMany.mockResolvedValue([{ id: 'admin-user', email: 'head@raffles.test' }]);
+    await svc.cancel(SCHOOL, LEAVE, DRIVER_USER, 'STAFF');
+    expect(txMock.notificationOutbox.create.mock.calls.map((c) => c[0].data)).toEqual([
+      expect.objectContaining({ kind: 'LEAVE_CANCELLED', targetUserId: 'admin-user', payload: expect.objectContaining({ teacherName: 'Ram Singh', releasedCovers: 0 }) }),
+    ]);
+  });
+});
+
+describe('a staff member who has left', () => {
+  it('cannot apply — the same rule as a teacher', async () => {
+    txMock.staff.findFirst.mockResolvedValue({ id: DRIVER, firstName: 'Ram', lastName: 'Singh', isActive: false });
+    await expect(svc.apply(SCHOOL, DRIVER_USER, { type: 'CASUAL', startDate: '2026-10-05', endDate: '2026-10-05' })).rejects.toMatchObject({ response: { code: 'LEAVE_INACTIVE' } });
+    expect(txMock.staff.findFirst.mock.calls[0][0].where).toEqual({ schoolId: SCHOOL, userId: DRIVER_USER });
   });
 });

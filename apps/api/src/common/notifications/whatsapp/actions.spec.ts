@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto';
-import { ACTION_TTL_MS, V1_ACCEPTED_UNTIL, ackPayload, actionKeys, coverPayload, leavePayload, parseAction } from './actions';
+import { ACTION_TTL_MS, V1_ACCEPTED_UNTIL, ackPayload, actionIdentity, actionKeys, cantPayload, coverPayload, leavePayload, parseAction } from './actions';
 
 const K = { sign: 'k-now', verify: ['k-now'], legacy: 'meta' } as const;
 const LEAVE = '11111111-1111-1111-1111-111111111111';
@@ -18,6 +18,9 @@ describe('button payloads v2', () => {
   });
   it("fits Meta's limits: under 256 for a quick reply and 200 for a list row", () => {
     expect(leavePayload('approve', LEAVE, K, NOW).length).toBeLessThan(256);
+    // The cover card's two quick replies — the Can't one carries a teacher id as well.
+    expect(ackPayload(SUB, K, NOW).length).toBeLessThan(256);
+    expect(cantPayload(SUB, T, K, NOW).length).toBeLessThan(256);
     expect(coverPayload(SUB, T, K, NOW).length).toBeLessThan(200);
   });
   it('expires after seven days — and says so only for a payload that was genuinely ours', () => {
@@ -69,5 +72,27 @@ describe('actionKeys', () => {
     expect(a.sign).toMatch(/^[0-9a-f]{64}$/);
     expect(a.sign).not.toBe('unset');
     expect(actionKeys({} as NodeJS.ProcessEnv).sign).toBe(a.sign); // stable within the process
+  });
+});
+
+describe("the Can't button", () => {
+  const keys = { sign: 'k', verify: ['k'], legacy: null };
+  it('round-trips as its own action, naming the teacher the card was sent to', () => {
+    expect(parseAction(cantPayload('sub-1', 't-kavya', keys), keys)).toEqual({ ok: true, action: { kind: 'cant', substitutionId: 'sub-1', teacherId: 't-kavya' } });
+  });
+  it('a card rendered from an older row (no substitute on it) acts for whoever covers it now', () => {
+    expect(parseAction(cantPayload('sub-1', null, keys), keys)).toEqual({ ok: true, action: { kind: 'cant', substitutionId: 'sub-1', teacherId: null } });
+  });
+  it('expires like every other button', () => {
+    const old = cantPayload('sub-1', 't-kavya', keys, Date.now() - ACTION_TTL_MS - 60_000);
+    expect(parseAction(old, keys)).toMatchObject({ ok: false, why: 'expired', action: { kind: 'cant' } });
+  });
+  it('is never mistaken for Got it, and Got it keeps its old shape', () => {
+    expect(actionIdentity(cantPayload('sub-1', 't-kavya', keys))).toBe('cn:sub-1:t-kavya');
+    expect(actionIdentity(ackPayload('sub-1', keys))).toBe('ca:sub-1');
+  });
+  it('a tampered or malformed Can\'t is foreign', () => {
+    const good = cantPayload('sub-1', 't-kavya', keys);
+    expect(parseAction(good.replace('t-kavya', 't-other'), keys)).toEqual({ ok: false, why: 'foreign' });
   });
 });

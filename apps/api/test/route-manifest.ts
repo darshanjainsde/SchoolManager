@@ -269,6 +269,12 @@ export const AUTHZ_REVIEWED: string[] = [
   "DELETE /manage/staff/:id",
   "DELETE /manage/timetable/:id",
   "GET /internal/cron/notification-outbox",
+  // Spine Tier 1b: the 18:00 IST cover nudge (CronSecretGuard, as every cron)
+  // and the cover picker's server-side "who is free" (LeaveDeskGuard: admin or
+  // an active accounts officer, the same door as every substitution route).
+  "GET /internal/cron/cover-nudge",
+  "POST /internal/cron/cover-nudge",
+  "GET /manage/substitution/:id/candidates",
   "GET /manage/announcements/mine",
   "GET /manage/assignments",
   "GET /manage/classes",

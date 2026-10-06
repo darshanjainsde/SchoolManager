@@ -1,13 +1,15 @@
 'use client';
-import { useMemo, useState, type CSSProperties, type FocusEvent } from 'react';
+import { useState, type CSSProperties, type FocusEvent } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { CalendarClock } from 'lucide-react';
 import type { LeavePendingContext } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
+import { ApiError } from '@/lib/api';
 import { useHost } from '@/components/use-host';
-import { OWN_LEAVE_HINT, isDecidedElsewhere, isOwnLeave, refreshLeaveDesk } from '@/lib/leave-desk';
+import { Cell, Row, RowList, RowTitle } from '@/components/ui/kit';
+import { OWN_LEAVE_HINT, isDecidedElsewhere, isOwnLeave, leaveSpan, refreshLeaveDesk } from '@/lib/leave-desk';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -24,6 +26,9 @@ interface LeaveApplication {
   type: LeaveType;
   startDate: string;
   endDate: string;
+  /** A half day is one date; its half ('AM' | 'PM') is null on an old application. */
+  halfDay?: boolean;
+  halfDayPart?: 'AM' | 'PM' | null;
   reason: string | null;
   status: LeaveStatus;
   createdAt: string;
@@ -39,22 +44,16 @@ interface CoverageGap {
   originalTeacherName: string;
   substituteTeacherId: string | null;
   substituteTeacherName: string | null;
+  /** When the substitute tapped "Got it" (ISO) — null until they do. */
+  acknowledgedAt: string | null;
 }
 
-interface AvailabilityTeacher {
+/** What `GET /manage/substitution/:id/candidates` returns — freeTeachersFor, ranked. */
+interface CoverCandidate {
   id: string;
-  firstName: string;
-  lastName: string;
-}
-interface BusyEntry {
-  teacherId: string;
-  dayOfWeek: number;
-  periodId: string;
-}
-interface AvailabilityResponse {
-  teachers: AvailabilityTeacher[];
-  periods: { id: string; order: number; label: string }[];
-  busy: BusyEntry[];
+  name: string;
+  teachesSubject: boolean;
+  coversThatDay: number;
 }
 
 const LEAVE_TYPE_LABEL: Record<LeaveType, string> = {
@@ -84,12 +83,6 @@ function toDateStr(iso: string): string {
   return iso.slice(0, 10);
 }
 
-/** ISO weekday (1=Mon…7=Sun) of an ISO date/datetime string, in UTC. */
-function isoWeekdayOf(iso: string): number {
-  const js = new Date(iso).getUTCDay(); // 0=Sun..6=Sat
-  return js === 0 ? 7 : js;
-}
-
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, {
     day: 'numeric',
@@ -97,6 +90,23 @@ function formatDate(iso: string): string {
     year: 'numeric',
     timeZone: 'UTC',
   });
+}
+
+/** "8:10 am", in the school's time. */
+function seenAt(iso: string): string {
+  return new Date(iso)
+    .toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' })
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
+
+/**
+ * A 409 on a cover means the server's picture moved under this one: someone
+ * else filled the gap, or the teacher stopped being free. The API's sentence
+ * says which; the page shows it as it is and fetches the picture again.
+ */
+function isConflict(e: unknown): boolean {
+  return e instanceof ApiError && e.status === 409;
 }
 
 // ── Themed field styles (mirrors classes/availability pages) ────────────────
@@ -120,6 +130,69 @@ function ringFocus(e: FocusEvent<HTMLElement>) {
 function ringBlur(e: FocusEvent<HTMLElement>) {
   e.currentTarget.style.borderColor = 'var(--sk-line-2)';
   e.currentTarget.style.boxShadow = 'none';
+}
+
+/* A select sizes itself to its LONGEST option ("Rajeshwari Balasubramanian ·
+   2 covers that day"), so in a grid track it must be told it may shrink. */
+const pickerStyle: CSSProperties = { ...fieldStyle, width: '100%', minWidth: 0, boxSizing: 'border-box', minHeight: 36 };
+
+/**
+ * One gap's picker. It asks the server who is free — freeTeachersFor, the
+ * same answer WhatsApp and assign() use — and only when somebody opens it, so
+ * a week with forty gaps costs nothing until a gap is being filled.
+ */
+function CoverPicker({ gap, disabled, onPick }: { gap: CoverageGap; disabled: boolean; onPick: (teacherId: string) => void }) {
+  const host = useHost();
+  const api = useApi({ audience: 'school', hostHeader: host });
+  const [open, setOpen] = useState(false);
+  const candidates = useQuery({
+    queryKey: ['a-cover-candidates', gap.id],
+    enabled: !!host && open,
+    queryFn: () => api.get<CoverCandidate[]>(`/manage/substitution/${gap.id}/candidates`),
+  });
+  const options = candidates.data ?? [];
+  const keepCurrent = !!gap.substituteTeacherId && !options.some((c) => c.id === gap.substituteTeacherId);
+  const opening = () => {
+    setOpen(true);
+    // A failed answer is asked again the next time the picker is opened.
+    if (candidates.isError) void candidates.refetch();
+  };
+  const placeholder = !open
+    ? 'Pick a free teacher…'
+    : candidates.isError
+      ? 'Could not load who is free — open again'
+      : candidates.isPending
+        ? 'Finding who is free…'
+        : options.length === 0
+          ? 'Nobody is free that period'
+          : 'Pick a free teacher…';
+  return (
+    <select
+      aria-label={`Substitute for ${gap.classSectionName}, ${gap.periodLabel}, ${formatDate(gap.date)}`}
+      style={pickerStyle}
+      onFocus={(e) => {
+        ringFocus(e);
+        opening();
+      }}
+      onMouseDown={opening}
+      onBlur={ringBlur}
+      value={gap.substituteTeacherId ?? ''}
+      disabled={disabled}
+      onChange={(e) => {
+        if (e.target.value) onPick(e.target.value);
+      }}
+    >
+      <option value="">{placeholder}</option>
+      {/* The current substitute stays selectable even if a later change made them busy. */}
+      {keepCurrent ? <option value={gap.substituteTeacherId!}>{gap.substituteTeacherName ?? 'Assigned teacher'}</option> : null}
+      {options.map((c) => (
+        <option key={c.id} value={c.id}>
+          {c.name}
+          {c.teachesSubject ? ' · teaches this subject' : c.coversThatDay > 0 ? ` · ${c.coversThatDay} cover${c.coversThatDay === 1 ? '' : 's'} that day` : ''}
+        </option>
+      ))}
+    </select>
+  );
 }
 
 /**
@@ -201,27 +274,6 @@ export default function AdminLeavePage() {
       ),
   });
 
-  // Shared across every gap row — the same "who is free per weekday+period"
-  // data the /app/availability page uses, reused here for the coverage
-  // dropdowns rather than duplicating the busy/free logic.
-  const availability = useQuery({
-    queryKey: ['a-leave-availability'],
-    enabled: !!host,
-    queryFn: () => api.get<AvailabilityResponse>('/manage/availability'),
-  });
-
-  const busySet = useMemo(() => {
-    const s = new Set<string>();
-    for (const b of availability.data?.busy ?? []) s.add(`${b.teacherId}-${b.dayOfWeek}-${b.periodId}`);
-    return s;
-  }, [availability.data]);
-
-  function freeTeachersFor(gap: CoverageGap): AvailabilityTeacher[] {
-    const weekday = isoWeekdayOf(gap.date);
-    const teachers = availability.data?.teachers ?? [];
-    return teachers.filter((t) => !busySet.has(`${t.id}-${weekday}-${gap.periodId}`));
-  }
-
   const approve = useMutation({
     mutationFn: (app: LeaveApplication) => api.post<{ gaps: number }>(`/manage/leave/${app.id}/approve`),
     onSuccess: (result, app) => {
@@ -264,9 +316,22 @@ export default function AdminLeavePage() {
       void qc.invalidateQueries({ queryKey: ['a-leave-pending'] });
       void qc.invalidateQueries({ queryKey: ['a-leave-approved'] });
       void qc.invalidateQueries({ queryKey: ['a-leave-coverage'] });
+      void qc.invalidateQueries({ queryKey: ['a-cover-candidates'] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  // A pick changes who is free for every other gap that period, so both the
+  // gaps and every picker's answer are asked again — after a success, and
+  // after a 409, so a stale picker never offers a teacher who is taken.
+  const refreshCover = () => {
+    void qc.invalidateQueries({ queryKey: ['a-leave-coverage'] });
+    void qc.invalidateQueries({ queryKey: ['a-cover-candidates'] });
+  };
+  const coverError = (e: Error) => {
+    toast.error(e.message);
+    if (isConflict(e)) refreshCover();
+  };
 
   function onCancel(app: LeaveApplication) {
     if (!window.confirm(`Cancel ${app.teacherName}'s leave? Their classes will be restored.`)) return;
@@ -278,17 +343,15 @@ export default function AdminLeavePage() {
       api.post(`/manage/substitution/${gapId}/assign`, { substituteTeacherId }),
     onSuccess: () => {
       toast.success('Substitute assigned.');
-      void qc.invalidateQueries({ queryKey: ['a-leave-coverage'] });
+      refreshCover();
     },
-    onError: (e: Error) => toast.error(e.message),
+    onError: coverError,
   });
 
   const clear = useMutation({
     mutationFn: (gapId: string) => api.post(`/manage/substitution/${gapId}/clear`),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['a-leave-coverage'] });
-    },
-    onError: (e: Error) => toast.error(e.message),
+    onSuccess: refreshCover,
+    onError: coverError,
   });
 
   const pendingApps = pending.data ?? [];
@@ -372,7 +435,7 @@ export default function AdminLeavePage() {
                   <div style={{ flex: 1, minWidth: 180 }}>
                     <div className="nm">{a.teacherName}</div>
                     <div className="meta">
-                      {LEAVE_TYPE_LABEL[a.type]} · {formatDate(a.startDate)} – {formatDate(a.endDate)}
+                      {LEAVE_TYPE_LABEL[a.type]} · {leaveSpan(a, formatDate)}
                       {a.reason ? ` · ${a.reason}` : ''}
                     </div>
                     {(() => {
@@ -473,7 +536,7 @@ export default function AdminLeavePage() {
                 <div style={{ flex: 1, minWidth: 180 }}>
                   <div className="nm">{a.teacherName}</div>
                   <div className="meta">
-                    {LEAVE_TYPE_LABEL[a.type]} · {formatDate(a.startDate)} – {formatDate(a.endDate)}
+                    {LEAVE_TYPE_LABEL[a.type]} · {leaveSpan(a, formatDate)}
                     {a.reason ? ` · ${a.reason}` : ''}
                   </div>
                 </div>
@@ -561,76 +624,59 @@ export default function AdminLeavePage() {
               </div>
             )}
 
-            {gaps.map((gap) => {
-              const covered = !!gap.substituteTeacherId;
-              const free = freeTeachersFor(gap);
-              const options = [...free];
-              if (gap.substituteTeacherId && !free.some((t) => t.id === gap.substituteTeacherId)) {
-                // Keep the currently-assigned teacher selectable even if a
-                // later schedule change made them busy — don't silently
-                // disappear the current assignment from its own dropdown.
-                options.unshift({
-                  id: gap.substituteTeacherId,
-                  firstName: gap.substituteTeacherName ?? 'Assigned',
-                  lastName: 'teacher',
-                });
-              }
-
-              return (
-                <div className="sk-row sk-covrow" key={gap.id}>
-                  <div className="cov-info">
-                    <div className="nm">
-                      {gap.classSectionName} · {gap.periodLabel}
-                    </div>
-                    <div className="meta">{formatDate(gap.date)}</div>
-                    <div className="meta">{gap.originalTeacherName} (on leave)</div>
-                  </div>
-
-                  <select
-                    aria-label={`Substitute for ${gap.classSectionName}, ${gap.periodLabel}, ${formatDate(gap.date)}`}
-                    style={fieldStyle}
-                    onFocus={ringFocus}
-                    onBlur={ringBlur}
-                    value={gap.substituteTeacherId ?? ''}
-                    disabled={assign.isPending}
-                    onChange={(e) => {
-                      const substituteTeacherId = e.target.value;
-                      if (!substituteTeacherId) return;
-                      assign.mutate({ gapId: gap.id, substituteTeacherId });
-                    }}
-                  >
-                    <option value="">
-                      {availability.isLoading ? 'Loading…' : 'Pick a free teacher…'}
-                    </option>
-                    {options.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.firstName} {t.lastName}
-                      </option>
-                    ))}
-                  </select>
-
-                  <Link href={`/app/timetable?classSectionId=${gap.classSectionId}`} className="sk-btn sk-press">
-                    Open class timetable
-                  </Link>
-
-                  <div className="cov-status">
-                    <span className="sk-pill" data-tone={covered ? 'good' : 'warn'}>
-                      {covered ? 'Covered' : 'Needs cover'}
-                    </span>
-                    {covered && (
-                      <button
-                        type="button"
-                        className="sk-btn sk-press"
-                        disabled={clear.isPending}
-                        onClick={() => clear.mutate(gap.id)}
-                      >
-                        Clear
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+            {/* THE LIST OWNS THE COLUMNS: every row's picker, link and status
+                start at the same x, whatever the class name or teacher. */}
+            {gaps.length > 0 && (
+              <RowList columns="minmax(0, 1.3fr) minmax(0, 1fr) auto auto" label="Classes to cover">
+                {gaps.map((gap) => {
+                  const covered = !!gap.substituteTeacherId;
+                  return (
+                    <Row key={gap.id} testId={`cover-${gap.id}`}>
+                      <Cell>
+                        <RowTitle
+                          title={`${gap.classSectionName} · ${gap.periodLabel}`}
+                          sub={`${formatDate(gap.date)} · ${gap.originalTeacherName} (on leave)`}
+                        />
+                        {covered ? (
+                          <span className="sk-rowsub">
+                            {gap.substituteTeacherName} · {gap.acknowledgedAt ? `seen ${seenAt(gap.acknowledgedAt)}` : 'not yet seen'}
+                          </span>
+                        ) : null}
+                      </Cell>
+                      <Cell>
+                        <CoverPicker
+                          gap={gap}
+                          disabled={assign.isPending}
+                          onPick={(substituteTeacherId) => assign.mutate({ gapId: gap.id, substituteTeacherId })}
+                        />
+                      </Cell>
+                      <Cell>
+                        <Link href={`/app/timetable?classSectionId=${gap.classSectionId}`} className="sk-btn sk-press">
+                          Open class timetable
+                        </Link>
+                      </Cell>
+                      <Cell align="end">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span className="sk-pill" data-tone={covered ? 'good' : 'warn'}>
+                            {covered ? 'Covered' : 'Needs cover'}
+                          </span>
+                          {covered && (
+                            <button
+                              type="button"
+                              className="sk-btn sk-press"
+                              disabled={clear.isPending}
+                              onClick={() => clear.mutate(gap.id)}
+                            >
+                              Clear
+                            </button>
+                          )}
+                        </div>
+                      </Cell>
+                    </Row>
+                  );
+                })}
+              </RowList>
+            )}
           </div>
         </div>
         </div>

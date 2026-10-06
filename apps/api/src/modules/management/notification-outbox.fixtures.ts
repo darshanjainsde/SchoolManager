@@ -22,4 +22,7 @@ export const FIXTURES: Record<NotificationOutboxKind, unknown> = {
   CONCERN_RAISED: { schoolName: S, ...fx },
   CONCERN_REPLIED: { schoolName: S, ...fx },
   CONCERN_RESOLVED: { schoolName: S, ...fx },
+  LEAVE_CANCELLED: { schoolName: S, leaveId: ID, teacherName: 'Priya Nair', dates: 'Mon 13 – Tue 14 Oct', releasedCovers: 2 },
+  COVER_CANCELLED: { schoolName: S, substitutionId: ID, when: 'Mon 13 Oct, P3', className: '9-A', why: 'CHANGED' },
+  COVER_UNFILLED: { schoolName: S, gaps: 3, forDate: '2026-10-13', forWhen: 'tomorrow, Mon 13 Oct 2026', note: null },
 };

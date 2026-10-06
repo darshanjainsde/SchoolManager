@@ -182,6 +182,9 @@ describe('shared portal contracts', () => {
       'CONCERN_RESOLVED',
       // A substitute told which class to cover.
       'COVER_ASSIGNED',
+      // A cover called off, and classes still uncovered (to the leave desk).
+      'COVER_CANCELLED',
+      'COVER_UNFILLED',
       'EXAM_SCHEDULED',
       // The fee desk: an instalment falling due, and the office's decision on a claim.
       'FEE_DUE',
@@ -189,6 +192,8 @@ describe('shared portal contracts', () => {
       'FEE_VERIFIED',
       // A teacher's leave: to every admin on apply, back to the teacher on the decision.
       'LEAVE_APPLIED',
+      // A leave withdrawn (to the leave desk).
+      'LEAVE_CANCELLED',
       'LEAVE_DECIDED',
       'LIBRARY_NOTICE',
       'MESSAGE_RECEIVED',

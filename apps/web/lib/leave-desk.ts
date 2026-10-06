@@ -30,3 +30,24 @@ export function refreshLeaveDesk(qc: QueryClient): void {
   void qc.invalidateQueries({ queryKey: ['a-leave-pending-context'] });
   void qc.invalidateQueries({ queryKey: ['a-leave-coverage'] });
 }
+
+/** The half of a half day, as an approver reads it. An old leave with no part says just "Half day". */
+export function halfDayLabel(a: { halfDay?: boolean | null; halfDayPart?: string | null }): string | null {
+  if (!a.halfDay) return null;
+  if (a.halfDayPart === 'AM') return 'Half day · morning';
+  if (a.halfDayPart === 'PM') return 'Half day · afternoon';
+  return 'Half day';
+}
+
+/**
+ * When a leave is, for the desks that decide it: "5 Oct 2026 – 6 Oct 2026",
+ * or "5 Oct 2026 · Half day · morning" — a half day is one date, and its half
+ * is what tells the desk which classes need a teacher.
+ */
+export function leaveSpan(
+  a: { startDate: string; endDate: string; halfDay?: boolean | null; halfDayPart?: string | null },
+  fmt: (iso: string) => string,
+): string {
+  const half = halfDayLabel(a);
+  return half ? `${fmt(a.startDate)} · ${half}` : `${fmt(a.startDate)} – ${fmt(a.endDate)}`;
+}

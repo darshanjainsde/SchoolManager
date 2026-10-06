@@ -1,6 +1,7 @@
+import { chooseTemplate } from './template-approval';
 import { toE164, forGraph } from './phone';
 import { whatsAppConfig, whatsAppConfigProblem } from './graph.client';
-import { COVER_ASSIGNED_V2, EXTRA_SUBMISSIONS, HELLO_WORLD, SUBMISSIONS, TEMPLATE_NAMES, coverPendingTemplate, param, placeholderCount, templateFor, templateSubmissions, testNoticeTemplate, verifyCodeTemplate } from './templates';
+import { COVER_ASSIGNED_V1, COVER_ASSIGNED_V2, EXTRA_SUBMISSIONS, GATED_TEMPLATES, HELLO_WORLD, SUBMISSIONS, TEMPLATE_NAMES, coverPendingTemplate, param, placeholderCount, templateFor, templateSubmissions, testNoticeTemplate, verifyCodeTemplate } from './templates';
 import type { NotificationKind, NotificationMessage } from '../notification.types';
 
 describe('toE164', () => {
@@ -39,7 +40,10 @@ const MESSAGES: { [K in NotificationKind]: NotificationMessage & { kind: K } } =
   LOW_ATTENDANCE: { kind: 'LOW_ATTENDANCE', payload: { schoolName: 'Raffles', studentName: 'Ravi', className: '5-B', percent: 68, threshold: 75, period: 'Jul–Sep' } },
   LEAVE_APPLIED: { kind: 'LEAVE_APPLIED', payload: { schoolName: 'Raffles', leaveId: 'l1', teacherName: 'Priya Nair', dates: 'Mon 22 – Tue 23 Sep 2026', days: 2, reason: null, periodsAffected: 5, approvePayload: 'lv:a:l1:sig', rejectPayload: 'lv:r:l1:sig' } },
   LEAVE_DECIDED: { kind: 'LEAVE_DECIDED', payload: { schoolName: 'Raffles', leaveId: 'l1', decision: 'REJECTED', dates: 'Mon 22 Sep 2026', byName: null } },
-  COVER_ASSIGNED: { kind: 'COVER_ASSIGNED', payload: { schoolName: 'Raffles', substitutionId: 's1', when: 'Mon 22 Sep, period 3 (10:15–11:00)', className: '9-A', subjectName: null, originalTeacherName: 'Priya Nair', ackPayload: 'ca:s1:sig' } },
+  COVER_ASSIGNED: { kind: 'COVER_ASSIGNED', payload: { schoolName: 'Raffles', substitutionId: 's1', when: 'Mon 22 Sep, period 3 (10:15–11:00)', className: '9-A', subjectName: null, originalTeacherName: 'Priya Nair', ackPayload: 'ca:s1:sig', cantPayload: 'cn:s1:sig' } },
+  LEAVE_CANCELLED: { kind: 'LEAVE_CANCELLED', payload: { schoolName: 'Raffles', leaveId: 'l1', teacherName: 'Priya Nair', dates: 'Mon 22 – Tue 23 Sep 2026', releasedCovers: 3 } },
+  COVER_CANCELLED: { kind: 'COVER_CANCELLED', payload: { schoolName: 'Raffles', substitutionId: 's1', when: 'Mon 22 Sep, period 3 (10:15–11:00)', className: '9-A', why: 'LEAVE_CANCELLED' } },
+  COVER_UNFILLED: { kind: 'COVER_UNFILLED', payload: { schoolName: 'Raffles', gaps: 4, forDate: '2026-09-22', forWhen: 'tomorrow, Tue 22 Sep 2026', note: null } },
 };
 
 describe('a missing template is a permanent refusal, not a blip', () => {
@@ -110,7 +114,11 @@ describe('templateFor ↔ SUBMISSIONS', () => {
     expect(t.buttons).toEqual([{ type: 'quick_reply', index: 0, payload: 'lv:a:l1:sig' }, { type: 'quick_reply', index: 1, payload: 'lv:r:l1:sig' }]);
     expect(SUBMISSIONS.LEAVE_APPLIED.buttons).toEqual(['Approve', 'Reject']);
     expect(t.params[4]).toBe('no reason given');
-    expect(templateFor(MESSAGES.COVER_ASSIGNED).buttons).toEqual([{ type: 'quick_reply', index: 0, payload: 'ca:s1:sig' }]);
+    const cover = templateFor(MESSAGES.COVER_ASSIGNED);
+    expect(cover.name).toBe('sckools_cover_assigned_v2');
+    expect(cover.buttons).toEqual([{ type: 'quick_reply', index: 0, payload: 'ca:s1:sig' }, { type: 'quick_reply', index: 1, payload: 'cn:s1:sig' }]);
+    // Until Meta approves v2, the approved v1 goes: same words, Got it only.
+    expect(cover.fallback).toEqual({ name: 'sckools_cover_assigned', language: 'en', params: cover.params, buttons: [{ type: 'quick_reply', index: 0, payload: 'ca:s1:sig' }] });
     expect(templateFor(MESSAGES.LEAVE_DECIDED).params).toEqual(['Raffles', 'not approved', 'Mon 22 Sep 2026', 'the office']);
   });
 
@@ -119,6 +127,30 @@ describe('templateFor ↔ SUBMISSIONS', () => {
     expect(EXTRA_SUBMISSIONS.sckools_verify_code.category).toBe('AUTHENTICATION');
     expect(coverPendingTemplate('Raffles', 3).params).toEqual(['Raffles', '3']);
     for (const [name, sub] of Object.entries(EXTRA_SUBMISSIONS)) expect(sub.samples).toHaveLength(placeholderCount(sub.body));
+  });
+
+  it('a withdrawn leave and a called-off cover share the one cover_cancelled card, with words for each reader', () => {
+    expect(templateFor(MESSAGES.LEAVE_CANCELLED)).toMatchObject({ name: 'sckools_cover_cancelled', params: ['Raffles', "Priya Nair's leave", 'Mon 22 – Tue 23 Sep 2026', 'it was withdrawn, so 3 covers were released'] });
+    expect(templateFor(MESSAGES.COVER_CANCELLED).params).toEqual(['Raffles', 'your cover of 9-A', 'Mon 22 Sep, period 3 (10:15–11:00)', 'the leave it was for was cancelled']);
+    expect(templateFor(MESSAGES.COVER_UNFILLED)).toEqual({ name: 'sckools_cover_pending', language: 'en', params: ['Raffles', '4'] });
+  });
+
+  it('every reason a cover is called off reads as plain English, and one released cover or none is said right', () => {
+    const cov = (why: 'LEAVE_CANCELLED' | 'CHANGED' | 'TEACHER_ON_LEAVE') => templateFor({ ...MESSAGES.COVER_CANCELLED, payload: { ...MESSAGES.COVER_CANCELLED.payload, why } }).params[3];
+    expect(cov('CHANGED')).toBe('the office has changed the cover');
+    expect(cov('TEACHER_ON_LEAVE')).toBe('you are on leave that day');
+    const left = (n: number) => templateFor({ ...MESSAGES.LEAVE_CANCELLED, payload: { ...MESSAGES.LEAVE_CANCELLED.payload, releasedCovers: n } }).params[3];
+    expect(left(1)).toBe('it was withdrawn, so 1 cover was released');
+    expect(left(0)).toBe('it was withdrawn');
+    const unreached = templateFor({ ...MESSAGES.LEAVE_CANCELLED, payload: { ...MESSAGES.LEAVE_CANCELLED.payload, releasedCovers: 1, unreached: 'Ramesh Kumar' } }).params[3];
+    expect(unreached).toBe('it was withdrawn, so 1 cover was released. Ramesh Kumar has no login, so tell them yourself');
+  });
+
+  it('the called-off card is gated until Meta approves it, and has no v1 to fall back to', () => {
+    expect(GATED_TEMPLATES.has(templateFor(MESSAGES.COVER_CANCELLED).name)).toBe(true);
+    expect(templateFor(MESSAGES.COVER_CANCELLED).fallback).toBeUndefined();
+    // The desk's "still need cover" is the APPROVED cover_pending — never held back.
+    expect(GATED_TEMPLATES.has(templateFor(MESSAGES.COVER_UNFILLED).name)).toBe(false);
   });
 });
 
@@ -259,17 +291,46 @@ describe('templateSubmissions — exactly what the submit script hands Meta', ()
 
   it('v2 of the cover card takes the same parameters as v1, so v1 is a true fallback', () => {
     const byName = new Map(templateSubmissions().map((t) => [t.name, t]));
-    expect(placeholderCount(byName.get(COVER_ASSIGNED_V2)!.body)).toBe(placeholderCount(SUBMISSIONS.COVER_ASSIGNED.body));
+    expect(placeholderCount(byName.get(COVER_ASSIGNED_V2)!.body)).toBe(placeholderCount(byName.get(COVER_ASSIGNED_V1)!.body));
+    // v1 stays registered word for word: it is still what goes until v2 is approved.
+    expect(byName.get(COVER_ASSIGNED_V1)?.buttons).toEqual(['Got it']);
+    expect(byName.get(COVER_ASSIGNED_V1)?.body).toMatch(/^A cover duty at \{\{1\}\}\./);
   });
 
   it('the same name with different buttons or samples is an error, not a silent first-wins', () => {
+    // COVER_ASSIGNED is sent as v2, which EXTRA_SUBMISSIONS also registers: the two must agree.
+    expect(TEMPLATE_NAMES.COVER_ASSIGNED).toBe(COVER_ASSIGNED_V2);
     const saved = EXTRA_SUBMISSIONS[COVER_ASSIGNED_V2];
     try {
-      EXTRA_SUBMISSIONS[TEMPLATE_NAMES.COVER_ASSIGNED] = { ...SUBMISSIONS.COVER_ASSIGNED, category: 'UTILITY', buttons: ['Different'] };
+      EXTRA_SUBMISSIONS[COVER_ASSIGNED_V2] = { ...saved, buttons: ['Different'] };
       expect(() => templateSubmissions()).toThrow(/Two different definitions/);
     } finally {
-      delete EXTRA_SUBMISSIONS[TEMPLATE_NAMES.COVER_ASSIGNED];
-      expect(EXTRA_SUBMISSIONS[COVER_ASSIGNED_V2]).toBe(saved);
+      EXTRA_SUBMISSIONS[COVER_ASSIGNED_V2] = saved;
     }
+    expect(() => templateSubmissions()).not.toThrow();
+  });
+
+  describe('the cover card while v2 waits for Meta, and after', () => {
+    it('unapproved: the approved v1 goes, with v1\'s one button — Got it', async () => {
+      const sent = await chooseTemplate(templateFor(MESSAGES.COVER_ASSIGNED), { isApproved: async (n: string) => !GATED_TEMPLATES.has(n) });
+      expect(sent).toEqual({ name: 'sckools_cover_assigned', language: 'en', params: ['Raffles', 'Mon 22 Sep, period 3 (10:15–11:00)', '9-A', 'the class', 'Priya Nair'], buttons: [{ type: 'quick_reply', index: 0, payload: 'ca:s1:sig' }] });
+      expect(sent!.buttons).toHaveLength(SUBMISSIONS.COVER_ASSIGNED.buttons!.length - 1);
+    });
+
+    it('approved: v2 goes with both buttons, Got it then Can\'t', async () => {
+      const sent = await chooseTemplate(templateFor(MESSAGES.COVER_ASSIGNED), { isApproved: async () => true });
+      expect(sent!.name).toBe('sckools_cover_assigned_v2');
+      expect(sent!.buttons).toEqual([{ type: 'quick_reply', index: 0, payload: 'ca:s1:sig' }, { type: 'quick_reply', index: 1, payload: 'cn:s1:sig' }]);
+    });
+
+    it('a Got it tap carries the same payload from either card', async () => {
+      const t = templateFor(MESSAGES.COVER_ASSIGNED);
+      expect(t.fallback!.buttons![0]).toEqual(t.buttons![0]);
+    });
+
+    it('v2 is gated and v1 is not, so v1 is never held back', () => {
+      expect(GATED_TEMPLATES.has(COVER_ASSIGNED_V2)).toBe(true);
+      expect(GATED_TEMPLATES.has(COVER_ASSIGNED_V1)).toBe(false);
+    });
   });
 });

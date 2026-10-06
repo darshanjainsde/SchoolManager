@@ -1,4 +1,4 @@
-import { HttpException, Injectable, Logger } from '@nestjs/common';
+import { HttpException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { getPlatformPrisma, type PrismaClient } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
 import { isP2002 } from '../../common/errors/prisma-errors';
@@ -7,7 +7,7 @@ import { actionKeys, coverPayload, parseAction, type Action } from '../../common
 import { toE164 } from '../../common/notifications/whatsapp/phone';
 import { sendList, sendTemplate, sendText } from '../../common/notifications/whatsapp/graph.client';
 import { coverPendingTemplate, COVER_PENDING } from '../../common/notifications/whatsapp/templates';
-import { isoWeekdayOf, LeaveService, toDateStr } from '../management';
+import { isoWeekdayOf, LeaveService, liveSlotWhere, toDateStr } from '../management';
 import { InboundIdentityService } from './inbound-identity.service';
 import type { InboundMessage } from './whatsapp-webhook.service';
 
@@ -32,12 +32,16 @@ import type { InboundMessage } from './whatsapp-webhook.service';
  * points at the console.
  */
 const OUT_OF_WINDOW = 131047;
-const NO_ROWS_CAP = 9; // Meta's list holds 10; the last row is "decide in the console".
+/** Meta's interactive list holds 10 rows (ids ≤ 200 chars); the last row is "decide in the console". */
+const NO_ROWS_CAP = 9;
 
 /** ApiError keeps its code in the HttpException body ({ code, message, field }). */
 const apiCode = (e: unknown): string | null => (e instanceof ApiError ? ((e.getResponse() as { code?: string }).code ?? null) : null);
 
 type Db = PrismaClient;
+
+/** The slot live on that IST date — the one rule (liveSlotWhere). */
+const liveOn = (date: Date) => liveSlotWhere(toDateStr(date));
 
 @Injectable()
 export class WhatsAppActionsService {
@@ -78,10 +82,9 @@ export class WhatsAppActionsService {
         if (!parsed.ok && parsed.why === 'foreign') result = 'unknown-payload';
         else if (!parsed.ok) {
           schoolId = await this.schoolOf(db, parsed.action);
-          // An expired "got it" is recorded and NOT answered: the live ack
-          // path is silent to anyone but the substitute, and a substitute has
-          // nothing to "decide in the console".
-          if (schoolId && parsed.action.kind !== 'ack') await this.text(schoolId, phone, 'This button has expired. Please decide in the console or the app.');
+          // An expired Got it / Can't is recorded and NOT answered: a
+          // substitute has nothing to decide in the console.
+          if (schoolId && parsed.action.kind !== 'ack' && parsed.action.kind !== 'cant') await this.text(schoolId, phone, 'This button has expired. Please decide in the console or the app.');
           result = 'expired';
         } else ({ result, schoolId } = await this.act(db, parsed.action, phone));
       }
@@ -116,6 +119,7 @@ export class WhatsAppActionsService {
   private async act(db: Db, action: Action, phone: string): Promise<{ result: string; schoolId: string | null }> {
     if (action.kind === 'leave') return this.onLeave(db, action, phone);
     if (action.kind === 'cover') return this.onCover(db, action, phone);
+    if (action.kind === 'cant') return this.onCant(db, action, phone);
     return this.onAck(db, action, phone);
   }
 
@@ -180,7 +184,20 @@ export class WhatsAppActionsService {
     try {
       await this.leave.assign(sub.schoolId, sub.id, { substituteTeacherId: a.teacherId });
     } catch (e) {
+      if (apiCode(e) === 'COVER_GONE') {
+        // The leave was withdrawn while this pick was on its way: the period needs nobody.
+        await this.text(sub.schoolId, phone, 'That leave was withdrawn a moment ago, so this period no longer needs a teacher. Nothing was changed.');
+        return { result: 'leave-withdrawn', schoolId: sub.schoolId };
+      }
       if (apiCode(e) === 'TEACHER_CONFLICT' || apiCode(e) === 'VALIDATION') {
+        // Lost a race with another desk (assign is compare-and-set): the period
+        // is covered now, so there is nothing to pick — say so and move on.
+        const now = await db.substitution.findUnique({ where: { id: sub.id }, select: { substituteTeacherId: true } });
+        if (now?.substituteTeacherId) {
+          await this.text(sub.schoolId, phone, 'Someone else covered that period a moment ago. Moving on.');
+          await this.nextGap(db, sub, phone);
+          return { result: 'already-covered', schoolId: sub.schoolId };
+        }
         await this.text(sub.schoolId, phone, 'That teacher is no longer free then — pick another.');
         await this.coverList(db, sub.schoolId, phone, sub.id);
         return { result: 'conflict', schoolId: sub.schoolId };
@@ -212,54 +229,101 @@ export class WhatsAppActionsService {
     // Silent to anyone but the substitute: a stranger has nothing to decide here.
     const who = await this.identity.actorFor(phone, sub.schoolId, { kind: 'SUBSTITUTE', substitutionId: a.substitutionId });
     if (!who.ok) return { result: 'ack-not-substitute', schoolId: sub.schoolId };
-    await this.text(sub.schoolId, phone, 'Noted — thank you.');
+    // A NOT_THE_SUBSTITUTE here (moved between the two reads) is a 4xx:
+    // handleInbound records it and answers nothing, as for any stranger.
+    await this.leave.acknowledge(sub.schoolId, a.substitutionId, who.profile.userId);
+    await this.text(sub.schoolId, phone, `${await this.schoolName(db, sub.schoolId)}: noted — thank you. The office can see you have it.`);
     return { result: 'acked', schoolId: sub.schoolId };
+  }
+
+  // ── can't: the substitute hands the period back ───────────────────────
+
+  /**
+   * "Can't" — answered only to the teacher the card was sent to (the
+   * payload names them; a stranger's tap is silent). If the period is still
+   * theirs it goes back to the desk, which LeaveService tells at once. If the
+   * desk has already moved, cleared or called it off, nothing changes and
+   * they are told so.
+   */
+  private async onCant(db: Db, a: Extract<Action, { kind: 'cant' }>, phone: string) {
+    const sub = await db.substitution.findUnique({ where: { id: a.substitutionId }, select: { schoolId: true, substituteTeacherId: true } });
+    // The card's teacher; a card from before the payload named one acts for whoever covers it now.
+    const addressee = a.teacherId ?? sub?.substituteTeacherId ?? null;
+    if (!addressee) return { result: 'gap-not-found', schoolId: sub?.schoolId ?? null };
+    // A gap called off with its leave is gone: the teacher's own row still names the school.
+    const schoolId = sub?.schoolId ?? (await db.teacher.findUnique({ where: { id: addressee }, select: { schoolId: true } }))?.schoolId ?? null;
+    if (!schoolId) return { result: 'gap-not-found', schoolId: null };
+    // Silent to anyone but the teacher the card was for.
+    const who = await this.identity.actorFor(phone, schoolId, { kind: 'TEACHER', teacherId: addressee });
+    if (!who.ok) return { result: 'cant-not-substitute', schoolId };
+    const school = await this.schoolName(db, schoolId);
+    const moved = async () => {
+      await this.text(schoolId, phone, `${school}: this cover has already changed, so nothing was done. Open the Sckools app to see your day as it stands.`);
+      return { result: 'cover-moved', schoolId };
+    };
+    if (sub?.substituteTeacherId !== addressee) return moved();
+    try {
+      await this.leave.decline(schoolId, a.substitutionId, who.profile.userId);
+    } catch (e) {
+      if (apiCode(e) === 'NOT_THE_SUBSTITUTE') return moved();
+      throw e;
+    }
+    await this.text(schoolId, phone, `${school}: okay — you are off this cover. The office has been told and will find someone else.`);
+    return { result: 'declined', schoolId };
+  }
+
+  private async schoolName(db: Db, schoolId: string): Promise<string> {
+    return (await db.school.findFirst({ where: { id: schoolId }, select: { name: true } }))?.name ?? 'Your school';
   }
 
   // ── the cover list ─────────────────────────────────────────────────────
 
   /**
-   * "Who covers this period?" — teachers of the school who are free: no
-   * timetable slot of their own then, not already covering another gap
-   * then, not the teacher on leave, not themselves on leave that day.
-   * Same-subject teachers first, then by name; nine rows and a way out.
+   * "Who covers this period?" — exactly the teachers LeaveService.candidates
+   * names (freeTeachersFor), in the same order: whoever teaches the subject,
+   * then the least loaded. Meta's list holds 10 rows, so nine teachers and a
+   * way out; anyone past the ninth is named as "and N more in the console".
    */
   async coverList(db: Db, schoolId: string, phone: string, substitutionId: string): Promise<void> {
     const sub = await db.substitution.findUnique({ where: { id: substitutionId }, select: { id: true, date: true, periodId: true, classSectionId: true, originalTeacherId: true } });
     if (!sub) return;
-    const weekday = isoWeekdayOf(toDateStr(sub.date));
-    const [slot, busy, covering, onLeave, teachers] = await Promise.all([
-      db.timetableSlot.findFirst({ where: { schoolId, classSectionId: sub.classSectionId, periodId: sub.periodId, dayOfWeek: weekday, effectiveTo: null }, select: { subjectId: true } }),
-      db.timetableSlot.findMany({ where: { schoolId, dayOfWeek: weekday, periodId: sub.periodId, effectiveTo: null }, select: { teacherId: true } }),
-      db.substitution.findMany({ where: { schoolId, date: sub.date, periodId: sub.periodId, substituteTeacherId: { not: null } }, select: { substituteTeacherId: true } }),
-      db.staffAttendance.findMany({ where: { schoolId, date: sub.date, status: 'ON_LEAVE' }, select: { teacherId: true } }),
-      db.teacher.findMany({ where: { schoolId, userId: { not: null } }, select: { id: true, firstName: true, lastName: true }, orderBy: [{ firstName: 'asc' }] }),
+    const [free, when, school] = await Promise.all([
+      // A gap removed between the approve and this read (a cancel in the
+      // console) is an answer, not a failure: say so rather than retry.
+      this.leave.candidates(schoolId, sub.id).catch((e: unknown) => {
+        if (e instanceof NotFoundException) return null;
+        throw e;
+      }),
+      this.whenOf(db, schoolId, sub.date, sub.periodId, sub.classSectionId),
+      db.school.findFirst({ where: { id: schoolId }, select: { name: true } }),
     ]);
-    const out = new Set<string>([sub.originalTeacherId, ...busy.map((b) => b.teacherId), ...covering.map((c) => c.substituteTeacherId), ...onLeave.map((o) => o.teacherId)].filter((x): x is string => !!x));
-    const free = teachers.filter((t) => !out.has(t.id));
-    const teachesSubject = new Set<string>();
-    if (slot?.subjectId) {
-      const rows = await db.timetableSlot.findMany({ where: { schoolId, subjectId: slot.subjectId, effectiveTo: null, teacherId: { in: free.map((t) => t.id) } }, select: { teacherId: true }, distinct: ['teacherId'] });
-      for (const r of rows) teachesSubject.add(r.teacherId);
-    }
-    free.sort((a, b) => Number(teachesSubject.has(b.id)) - Number(teachesSubject.has(a.id)) || a.firstName.localeCompare(b.firstName));
-    const when = await this.whenOf(db, schoolId, sub.date, sub.periodId, sub.classSectionId);
-    const keys = this.keys();
-    if (free.length === 0) {
-      await this.text(schoolId, phone, `Nobody is free for ${when.className} on ${when.when}. Decide in the console.`);
+    const schoolName = school?.name ?? 'Your school';
+    if (free === null) {
+      await this.text(schoolId, phone, `${schoolName}: that period no longer needs cover. Nothing to pick.`);
       return;
     }
-    const rows = free.slice(0, NO_ROWS_CAP).map((t) => ({
+    if (free.length === 0) {
+      await this.text(schoolId, phone, `${schoolName}: nobody is free to cover ${when.className} on ${when.when}. Every teacher is teaching, covering or on leave then. Please decide in the console.`);
+      return;
+    }
+    const keys = this.keys();
+    const shown = free.slice(0, NO_ROWS_CAP);
+    const more = free.length - shown.length;
+    const rows = shown.map((t) => ({
       id: coverPayload(sub.id, t.id, keys),
-      title: `${t.firstName} ${t.lastName ?? ''}`.trim(),
-      description: teachesSubject.has(t.id) ? `teaches ${when.subjectName ?? 'this subject'}` : 'free this period',
+      title: t.name,
+      description: t.teachesSubject
+        ? `teaches ${when.subjectName ?? 'this subject'}`
+        : t.coversThatDay > 0
+          ? `${t.coversThatDay} cover${t.coversThatDay === 1 ? '' : 's'} already that day`
+          : 'free this period',
     }));
     rows.push({ id: coverPayload(sub.id, 'skip', keys), title: 'Decide in the console', description: 'leave this one for later' });
+    const body = `${schoolName}: ${when.className}${when.subjectName ? ` · ${when.subjectName}` : ''}\n${when.when}${more > 0 ? `\n\n${shown.length} shown here, and ${more} more in the console.` : ''}`;
     const sent = await this.channel.deliverWith(schoolId, phone, 'COVER_LIST', 'interactive:list', (cfg, pnid, f) =>
-      sendList(cfg, phone, { header: 'Who covers?', body: `${when.className}${when.subjectName ? ` · ${when.subjectName}` : ''}\n${when.when}`, button: 'Pick a teacher', rows, footer: `${free.length} free` }, { phoneNumberId: pnid, fetchImpl: f }),
+      sendList(cfg, phone, { header: 'Who covers?', body, button: 'Pick a teacher', rows, footer: `${free.length} free` }, { phoneNumberId: pnid, fetchImpl: f }),
     );
     if (!sent.ok && sent.code === OUT_OF_WINDOW) {
-      const school = await db.school.findFirst({ where: { id: schoolId }, select: { name: true } });
       const open = await db.substitution.count({ where: { schoolId, originalTeacherId: sub.originalTeacherId, substituteTeacherId: null, date: { gte: sub.date } } });
       await this.channel.deliverWith(schoolId, phone, 'COVER_PENDING', COVER_PENDING, (cfg, pnid, f) => sendTemplate(cfg, phone, coverPendingTemplate(school?.name ?? 'The school', open), { phoneNumberId: pnid, fetchImpl: f }));
     }
@@ -293,13 +357,16 @@ export class WhatsAppActionsService {
   async whenOf(db: Db, schoolId: string, date: Date, periodId: string, classSectionId: string) {
     const [period, section, slot] = await Promise.all([
       db.period.findFirst({ where: { id: periodId, schoolId }, select: { label: true, order: true, startTime: true, endTime: true } }),
-      db.classSection.findFirst({ where: { id: classSectionId, schoolId }, select: { name: true } }),
-      db.timetableSlot.findFirst({ where: { schoolId, classSectionId, periodId, dayOfWeek: isoWeekdayOf(toDateStr(date)), effectiveTo: null }, select: { subject: { select: { name: true } } } }),
+      db.classSection.findFirst({ where: { id: classSectionId, schoolId }, select: { name: true, grade: { select: { name: true } } } }),
+      // The subject of the slot LIVE that date — the same timetable version freeTeachersFor reads.
+      db.timetableSlot.findFirst({ where: { schoolId, classSectionId, periodId, dayOfWeek: isoWeekdayOf(toDateStr(date)), ...liveOn(date) }, select: { subject: { select: { name: true } } } }),
     ]);
     const d = new Date(`${toDateStr(date)}T00:00:00Z`);
     const day = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getUTCDay()];
     const mon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getUTCMonth()];
     const when = `${day} ${d.getUTCDate()} ${mon}, ${period ? `${period.label} (${period.startTime}–${period.endTime})` : 'a period'}`;
-    return { when, className: section?.name ?? 'a class', subjectName: slot?.subject?.name ?? null };
+    // "9-A": the section's own name ("A") names nothing on its own.
+    const className = section ? (section.grade?.name ? `${section.grade.name}-${section.name}` : section.name) : 'a class';
+    return { when, className, subjectName: slot?.subject?.name ?? null };
   }
 }

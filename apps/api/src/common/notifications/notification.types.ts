@@ -293,6 +293,55 @@ export interface CoverAssignedPayload {
   subjectName: string | null;
   originalTeacherName: string;
   ackPayload: string;
+  /** The signed "Can't" button (v2 card only — the approved v1 has Got it alone). */
+  cantPayload: string;
+}
+
+/** Payload for LEAVE_CANCELLED — to the leave desk: a request (or an approved leave) was withdrawn. */
+export interface LeaveCancelledPayload {
+  schoolName: string;
+  leaveId: string;
+  teacherName: string;
+  dates: string;
+  /**
+   * Released covers whose substitute HAS been told (0 for a pending request).
+   * A substitute with no login is not counted here — they are in `unreached`.
+   */
+  releasedCovers: number;
+  /**
+   * Substitutes whose cover was released but who could not be told (no
+   * login), joined for reading: "Ramesh Rao", "Ramesh Rao and Sunita Iyer".
+   * Null/absent when everyone was told (rows written before this field too).
+   */
+  unreached?: string | null;
+}
+
+/** Payload for COVER_CANCELLED — to ONE substitute: a cover they were given is off. */
+export interface CoverCancelledPayload {
+  schoolName: string;
+  substitutionId: string;
+  when: string;
+  className: string;
+  /** LEAVE_CANCELLED: the leave was withdrawn · CHANGED: the desk cleared or reassigned it · TEACHER_ON_LEAVE: the substitute is on leave that day. */
+  why: 'LEAVE_CANCELLED' | 'CHANGED' | 'TEACHER_ON_LEAVE';
+}
+
+/** Payload for COVER_UNFILLED — to the leave desk: classes with nobody in front of them. */
+export interface CoverUnfilledPayload {
+  schoolName: string;
+  gaps: number;
+  /** YYYY-MM-DD the gaps fall on. */
+  forDate: string;
+  /** "tomorrow, Tue 14 Oct 2026" / "Mon 13 Oct 2026". */
+  forWhen: string;
+  /** Why now, when it is not the evening nudge: "Ramesh Kumar can't take 9-A, …". */
+  note: string | null;
+  /**
+   * Set ONLY by the 18:00 nudge, to the date it is for — its once-per-school-
+   * per-date key. A "Can't" or a reopened cover for the same date is not a
+   * nudge and must never stop the evening one.
+   */
+  nudgeFor?: string;
 }
 
 /** The single source of truth mapping each event to its payload shape. */
@@ -307,6 +356,9 @@ export interface NotificationPayloadMap {
   LEAVE_APPLIED: LeaveAppliedPayload;
   LEAVE_DECIDED: LeaveDecidedPayload;
   COVER_ASSIGNED: CoverAssignedPayload;
+  LEAVE_CANCELLED: LeaveCancelledPayload;
+  COVER_CANCELLED: CoverCancelledPayload;
+  COVER_UNFILLED: CoverUnfilledPayload;
 }
 
 /**

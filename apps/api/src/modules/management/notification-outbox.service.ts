@@ -9,17 +9,20 @@ import { assertNotificationOutboxKind, type NotificationOutboxKind } from '@skoo
 import { EmailChannel } from '../../common/notifications/email.channel';
 import { PushChannel } from '../../common/notifications/push.channel';
 import { WhatsAppChannel } from '../../common/notifications/whatsapp.channel';
-import { ackPayload, actionKeys, leavePayload } from '../../common/notifications/whatsapp/actions';
+import { ackPayload, actionKeys, cantPayload, leavePayload } from '../../common/notifications/whatsapp/actions';
 import { resolveRecipientUsers } from '../../common/notifications/recipients';
 import { isDeliverySchemaMissing } from '../../common/errors/prisma-errors';
 import type {
   MessageReceivedOutboxPayload,
   AssignmentPostedOutboxPayload,
+  CoverCancelledPayload,
+  CoverUnfilledPayload,
   DeliveryChannel,
   DeliveryOutcome,
   ExamScheduledOutboxPayload,
   LibraryNoticeOutboxPayload,
   FeeDecisionOutboxPayload,
+  LeaveCancelledPayload,
   NotificationMessage,
   ResultPublishedOutboxPayload,
   SessionStartedOutboxPayload,
@@ -123,6 +126,9 @@ export const OUTBOX_EMAIL: Record<NotificationOutboxKind, boolean> = {
   CONCERN_RAISED: true,
   CONCERN_REPLIED: true,
   CONCERN_RESOLVED: true,
+  LEAVE_CANCELLED: true,
+  COVER_CANCELLED: true,
+  COVER_UNFILLED: true,
 };
 
 /**
@@ -268,10 +274,19 @@ export function toNotificationMessage(kind: NotificationOutboxKind, payload: unk
       return { kind: 'LEAVE_DECIDED', payload: { schoolName: p.schoolName, leaveId: p.leaveId, decision: p.decision, dates: p.dates, byName: p.byName ?? null } };
     }
     case 'COVER_ASSIGNED': {
-      const p = payload as { schoolName: string; substitutionId: string; when: string; className: string; subjectName: string | null; originalTeacherName: string };
+      const { substituteTeacherId, ...p } = payload as { schoolName: string; substitutionId: string; when: string; className: string; subjectName: string | null; originalTeacherName: string; substituteTeacherId?: string };
       const keys = actionKeys();
-      return { kind: 'COVER_ASSIGNED', payload: { ...p, ackPayload: ackPayload(p.substitutionId, keys) } };
+      // Can't names the teacher the card is for, so a tap after the desk moved
+      // the period can be answered to them (a row from before it carried one: null).
+      return { kind: 'COVER_ASSIGNED', payload: { ...p, ackPayload: ackPayload(p.substitutionId, keys), cantPayload: cantPayload(p.substitutionId, substituteTeacherId ?? null, keys) } };
     }
+    // The leave desk's own notices: their kind and words, never an ANNOUNCEMENT.
+    case 'LEAVE_CANCELLED':
+      return { kind: 'LEAVE_CANCELLED', payload: payload as LeaveCancelledPayload };
+    case 'COVER_CANCELLED':
+      return { kind: 'COVER_CANCELLED', payload: payload as CoverCancelledPayload };
+    case 'COVER_UNFILLED':
+      return { kind: 'COVER_UNFILLED', payload: payload as CoverUnfilledPayload };
     case 'FEE_VERIFIED':
     case 'FEE_REJECTED':
     case 'FEE_DUE': {

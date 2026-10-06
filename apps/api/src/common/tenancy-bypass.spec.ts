@@ -98,6 +98,8 @@ const ALLOWED: Record<string, string> = {
 
   // ── Crons: no JWT, and the rows span every school ─────────────────────────
   'modules/management/exam-reminders.service.ts': 'daily cron across all schools',
+  'modules/management/cover-nudge.service.ts':
+    'the 18:00 IST cron FINDS the schools with an open gap tomorrow (one groupBy on schoolId); the count, the check and every write then run per school inside withTenant',
   'modules/management/notification-outbox.service.ts': 'outbox drain across all schools',
   'modules/mail-webhooks/resend-webhook.service.ts':
     'Resend posts delivery receipts for every school to one URL; each is matched to its ledger row by provider id and updated under that row\'s own schoolId; suppression is platform-wide by address',

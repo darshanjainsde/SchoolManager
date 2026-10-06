@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import type { RegisterChangeRow } from '@skoolos/types';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
-import { OWN_LEAVE_HINT, isDecidedElsewhere, isOwnLeave } from '@/lib/leave-desk';
+import { OWN_LEAVE_HINT, isDecidedElsewhere, isOwnLeave, leaveSpan } from '@/lib/leave-desk';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -25,6 +25,9 @@ interface PendingLeave {
   type: LeaveType;
   startDate: string;
   endDate: string;
+  /** A half day is one date; its half ('AM' | 'PM') is null on an old application. */
+  halfDay?: boolean;
+  halfDayPart?: 'AM' | 'PM' | null;
   reason: string | null;
   status: string;
   createdAt: string;
@@ -71,7 +74,7 @@ function toLeaveItem(a: PendingLeave): DeskItem {
     kind: 'leave',
     id: a.id,
     teacher: a.teacherName,
-    detail: `${LEAVE_TYPE_LABEL[a.type] ?? a.type} · ${formatDate(a.startDate)} – ${formatDate(a.endDate)}`,
+    detail: `${LEAVE_TYPE_LABEL[a.type] ?? a.type} · ${leaveSpan(a, formatDate)}`,
     reason: a.reason,
     createdAt: a.createdAt,
     personUserId: a.personUserId ?? null,

@@ -1404,19 +1404,28 @@ model Attendance {
 }
 
 model Substitution {
-  id                  String   @id @default(uuid()) @db.Uuid
-  schoolId            String   @db.Uuid
-  classSectionId      String   @db.Uuid
-  periodId            String   @db.Uuid
-  date                DateTime @db.Date
-  originalTeacherId   String   @db.Uuid
-  substituteTeacherId String?  @db.Uuid // null = uncovered gap
+  id                  String            @id @default(uuid()) @db.Uuid
+  schoolId            String            @db.Uuid
+  classSectionId      String            @db.Uuid
+  periodId            String            @db.Uuid
+  date                DateTime          @db.Date
+  originalTeacherId   String            @db.Uuid
+  substituteTeacherId String?           @db.Uuid // null = uncovered gap
   reason              String? // e.g. "leave"
-  createdAt           DateTime @default(now())
-  school              School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  /// The leave this gap was opened for. A cancel removes exactly these rows,
+  /// so a second leave overlapping the same dates is never touched.
+  leaveApplicationId  String?           @db.Uuid
+  /// When the substitute tapped "Got it". Cleared whenever the substitute changes.
+  acknowledgedAt      DateTime?
+  createdAt           DateTime          @default(now())
+  school              School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  leaveApplication    LeaveApplication? @relation(fields: [leaveApplicationId], references: [id], onDelete: SetNull)
 
   @@unique([classSectionId, periodId, date], name: "one_sub_per_slot_date")
   @@index([schoolId, date])
+  @@index([leaveApplicationId])
+  /// A teacher's own covers on a date — "their covers reopen when they go on leave".
+  @@index([schoolId, substituteTeacherId, date])
 }
 
 model Staff {
@@ -1484,6 +1493,9 @@ model LeaveApplication {
   /// when startDate = endDate; the service refuses it otherwise, because
   /// "half of a five-day leave" is not a thing a school means.
   halfDay      Boolean       @default(false)
+  /// Which half of a half day: AM | PM. Null on a full day, and on a half day
+  /// sent by an older client (every period of that day is then covered).
+  halfDayPart  String?
   type         LeaveType
   /// The school's own leave-type row this application counts against.
   /// Null on rows from before the policy feature (and on types the school
@@ -1499,6 +1511,7 @@ model LeaveApplication {
   school       School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   typeDef      LeaveTypeDef? @relation(fields: [typeDefId], references: [id], onDelete: SetNull)
   staff        Staff?        @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  substitutions Substitution[]
 
   @@index([schoolId, status])
   @@index([schoolId, teacherId])
