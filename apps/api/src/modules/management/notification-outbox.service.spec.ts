@@ -32,6 +32,7 @@ import {
 } from './notification-outbox.service';
 import { FIXTURES } from './notification-outbox.fixtures';
 import { OUTBOX_DRAIN_DELAY_MS, requestOutboxDrain, resetOutboxSignal } from '../../common/notifications/outbox-signal';
+import { runInvocation } from '../../common/notifications/invocation-clock';
 
 const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const OTHER_SCHOOL = 'bbbbbbbb-0000-0000-0000-bbbbbbbbbbbb';
@@ -42,11 +43,18 @@ let outboxClaim: unknown[] = [];
 let deliveryClaim: unknown[] = [];
 const sqlOf = (call: unknown[]) => (call[0] as string[]).join('?');
 
+// The stamp the delivery claim wrote and read back (RETURNING "claimedAt").
+const CLAIMED_AT = new Date('2026-10-06T09:00:00.000Z');
+type UpdateManyArg = { where: { id: string | { in: string[] }; claimedAt?: Date } };
+// Status writes carry the claim stamp; releases are by id list.
+const recorded = () => dbMock.notificationDelivery.updateMany.mock.calls.filter((c) => (c[0] as UpdateManyArg).where.claimedAt !== undefined);
+const released = () => dbMock.notificationDelivery.updateMany.mock.calls.filter((c) => (c[0] as UpdateManyArg).where.claimedAt === undefined);
+
 const outboxRow = (o: Partial<{ id: string; kind: string; payload: unknown; classSectionId: string | null; targetUserId: string | null }> = {}) => ({
   id: 'r1', schoolId: SCHOOL, kind: 'ASSIGNMENT_POSTED', payload: FIXTURES.ASSIGNMENT_POSTED, classSectionId: CLASS_SECTION, targetUserId: null, ...o,
 });
 const delivery = (id: string, channel: 'EMAIL' | 'PUSH' | 'WHATSAPP', o: Partial<{ attempts: number; userId: string; outboxId: string; schoolId: string }> = {}) => ({
-  id, schoolId: SCHOOL, outboxId: 'r1', userId: 'u-1', channel, attempts: 0, ...o,
+  id, schoolId: SCHOOL, outboxId: 'r1', userId: 'u-1', channel, attempts: 0, claimedAt: CLAIMED_AT, ...o,
 });
 const summary = (o: Partial<{ id: string; kind: string; payload: unknown; schoolId: string }> = {}) => ({
   id: 'r1', schoolId: SCHOOL, kind: 'ASSIGNMENT_POSTED', payload: FIXTURES.ASSIGNMENT_POSTED, ...o,
@@ -69,8 +77,7 @@ describe('NotificationOutboxService.drain', () => {
     dbMock.notificationOutbox.deleteMany.mockResolvedValue({ count: 0 });
     dbMock.notificationOutbox.findMany.mockResolvedValue([summary()]);
     dbMock.notificationDelivery.createMany.mockImplementation(async ({ data }: { data: unknown[] }) => ({ count: data.length }));
-    dbMock.notificationDelivery.update.mockResolvedValue({});
-    dbMock.notificationDelivery.updateMany.mockResolvedValue({ count: 0 });
+    dbMock.notificationDelivery.updateMany.mockResolvedValue({ count: 1 });
     dbMock.student.findMany.mockResolvedValue([{ userId: 'u-1' }, { userId: 'u-2' }]);
     dbMock.user.findMany.mockImplementation(async (a: { where: { id: { in: string[] }; schoolId: string } }) =>
       a.where.schoolId === SCHOOL ? a.where.id.in.filter((id) => USERS[id]).map((id) => ({ id, email: USERS[id] })) : [],
@@ -227,9 +234,18 @@ describe('NotificationOutboxService.drain', () => {
       dbMock.notificationOutbox.findMany.mockRejectedValue(new Error('pooler timeout'));
       const r = await svc.drain({ purge: false });
       expect(dbMock.notificationDelivery.updateMany).toHaveBeenCalledWith({ where: { id: { in: ['d1', 'd2'] } }, data: { claimedAt: null } });
-      expect(dbMock.notificationDelivery.update).not.toHaveBeenCalled();
+      expect(recorded()).toHaveLength(0);
       expect(push.attempt).not.toHaveBeenCalled();
       expect(r).toMatchObject({ sent: 0, failed: 0, retried: 0, more: false });
+    });
+
+    it('a failed lookup after a FULL claim releases it and says more: false, so the workflow does not hammer an outage', async () => {
+      deliveryClaim = Array.from({ length: DELIVERY_BATCH_CAP }, (_, i) => delivery(`d${i}`, 'PUSH'));
+      dbMock.notificationOutbox.findMany.mockRejectedValue(new Error('pooler timeout'));
+      const r = await svc.drain({ purge: false });
+      expect(released()).toHaveLength(1);
+      expect(push.attempt).not.toHaveBeenCalled();
+      expect(r.more).toBe(false);
     });
 
     it('sends each delivery through its own channel and records SENT with the provider id', async () => {
@@ -237,8 +253,8 @@ describe('NotificationOutboxService.drain', () => {
       whatsapp.attempt.mockResolvedValue({ status: 'SENT', providerId: 'wamid.1' });
       const r = await svc.drain({ purge: false });
       expect(push.attempt).toHaveBeenCalledWith('p1@raffles.test', expect.objectContaining({ kind: 'ANNOUNCEMENT' }), SCHOOL);
-      expect(dbMock.notificationDelivery.update).toHaveBeenCalledWith({
-        where: { id: 'd2', schoolId: SCHOOL },
+      expect(dbMock.notificationDelivery.updateMany).toHaveBeenCalledWith({
+        where: { id: 'd2', schoolId: SCHOOL, claimedAt: CLAIMED_AT },
         data: { status: 'SENT', sentAt: expect.any(Date), providerId: 'wamid.1', attempts: 1, error: null, claimedAt: null },
       });
       expect(r).toMatchObject({ sent: 3, failed: 0, retried: 0 });
@@ -250,19 +266,19 @@ describe('NotificationOutboxService.drain', () => {
       try {
         whatsapp.attempt.mockResolvedValue({ status: 'RETRY', error: 'rate limited (code 130429)' });
         for (let failures = 0; failures < DELIVERY_BACKOFF_MS.length; failures += 1) {
-          dbMock.notificationDelivery.update.mockClear();
+          dbMock.notificationDelivery.updateMany.mockClear();
           deliveryClaim = [delivery('d1', 'WHATSAPP', { attempts: failures })];
           await svc.drain({ purge: false });
-          expect(dbMock.notificationDelivery.update).toHaveBeenCalledWith({
-            where: { id: 'd1', schoolId: SCHOOL },
+          expect(dbMock.notificationDelivery.updateMany).toHaveBeenCalledWith({
+            where: { id: 'd1', schoolId: SCHOOL, claimedAt: CLAIMED_AT },
             data: { status: 'QUEUED', attempts: failures + 1, error: 'rate limited (code 130429)', nextAttemptAt: new Date(t0 + DELIVERY_BACKOFF_MS[failures]), claimedAt: null },
           });
         }
         expect(DELIVERY_BACKOFF_MS).toEqual([60_000, 300_000, 1_800_000, 7_200_000, 43_200_000]);
-        dbMock.notificationDelivery.update.mockClear();
+        dbMock.notificationDelivery.updateMany.mockClear();
         deliveryClaim = [delivery('d1', 'WHATSAPP', { attempts: 5 })];
         await svc.drain({ purge: false });
-        expect(dbMock.notificationDelivery.update).toHaveBeenCalledWith({ where: { id: 'd1', schoolId: SCHOOL }, data: { status: 'FAILED', attempts: 6, error: 'rate limited (code 130429)', claimedAt: null } });
+        expect(dbMock.notificationDelivery.updateMany).toHaveBeenCalledWith({ where: { id: 'd1', schoolId: SCHOOL, claimedAt: CLAIMED_AT }, data: { status: 'FAILED', attempts: 6, error: 'rate limited (code 130429)', claimedAt: null } });
         // Push and email for the same parent were never part of this: one row, not five.
         expect(push.attempt).not.toHaveBeenCalled();
         expect(email.attempt).not.toHaveBeenCalled();
@@ -275,7 +291,7 @@ describe('NotificationOutboxService.drain', () => {
       deliveryClaim = [delivery('d1', 'WHATSAPP')];
       whatsapp.attempt.mockResolvedValue({ status: 'FAILED', error: 'not on WhatsApp (code 131026)' });
       const r = await svc.drain({ purge: false });
-      expect(dbMock.notificationDelivery.update).toHaveBeenCalledWith({ where: { id: 'd1', schoolId: SCHOOL }, data: { status: 'FAILED', attempts: 1, error: 'not on WhatsApp (code 131026)', claimedAt: null } });
+      expect(dbMock.notificationDelivery.updateMany).toHaveBeenCalledWith({ where: { id: 'd1', schoolId: SCHOOL, claimedAt: CLAIMED_AT }, data: { status: 'FAILED', attempts: 1, error: 'not on WhatsApp (code 131026)', claimedAt: null } });
       expect(r.failed).toBe(1);
     });
 
@@ -284,8 +300,8 @@ describe('NotificationOutboxService.drain', () => {
       whatsapp.attempt.mockResolvedValue({ status: 'SKIPPED', reason: 'channel-off' });
       email.attempt.mockResolvedValue({ status: 'SUPPRESSED', reason: 'BOUNCE: hard' });
       const r = await svc.drain({ purge: false });
-      expect(dbMock.notificationDelivery.update).toHaveBeenCalledWith({ where: { id: 'd1', schoolId: SCHOOL }, data: { status: 'SKIPPED', reason: 'channel-off', claimedAt: null } });
-      expect(dbMock.notificationDelivery.update).toHaveBeenCalledWith({ where: { id: 'd2', schoolId: SCHOOL }, data: { status: 'SUPPRESSED', reason: 'BOUNCE: hard', claimedAt: null } });
+      expect(dbMock.notificationDelivery.updateMany).toHaveBeenCalledWith({ where: { id: 'd1', schoolId: SCHOOL, claimedAt: CLAIMED_AT }, data: { status: 'SKIPPED', reason: 'channel-off', claimedAt: null } });
+      expect(dbMock.notificationDelivery.updateMany).toHaveBeenCalledWith({ where: { id: 'd2', schoolId: SCHOOL, claimedAt: CLAIMED_AT }, data: { status: 'SUPPRESSED', reason: 'BOUNCE: hard', claimedAt: null } });
       expect(r.skipped).toBe(2);
     });
 
@@ -298,8 +314,8 @@ describe('NotificationOutboxService.drain', () => {
         const r = await svc.drain({ purge: false });
         expect(r).toMatchObject({ sent: 1, retried: 1, failed: 0 });
         // Scheduled exactly like a RETRY outcome: first backoff, one attempt counted.
-        expect(dbMock.notificationDelivery.update).toHaveBeenCalledWith({
-          where: { id: 'd1', schoolId: SCHOOL },
+        expect(dbMock.notificationDelivery.updateMany).toHaveBeenCalledWith({
+          where: { id: 'd1', schoolId: SCHOOL, claimedAt: CLAIMED_AT },
           data: { status: 'QUEUED', attempts: 1, error: 'pooler timeout', nextAttemptAt: new Date(t0 + DELIVERY_BACKOFF_MS[0]), claimedAt: null },
         });
         expect(push.attempt).toHaveBeenCalledTimes(2);
@@ -312,8 +328,8 @@ describe('NotificationOutboxService.drain', () => {
       deliveryClaim = [delivery('d1', 'WHATSAPP'), delivery('d2', 'PUSH'), delivery('d3', 'EMAIL')];
       whatsapp.attempt.mockResolvedValue({ status: 'SKIPPED', reason: 'template-pending' });
       const r = await svc.drain({ purge: false });
-      expect(dbMock.notificationDelivery.update).toHaveBeenCalledWith({
-        where: { id: 'd1', schoolId: SCHOOL },
+      expect(dbMock.notificationDelivery.updateMany).toHaveBeenCalledWith({
+        where: { id: 'd1', schoolId: SCHOOL, claimedAt: CLAIMED_AT },
         data: { status: 'SKIPPED', reason: 'template-pending', claimedAt: null },
       });
       expect(r).toMatchObject({ sent: 2, skipped: 1, failed: 0, retried: 0 });
@@ -325,7 +341,7 @@ describe('NotificationOutboxService.drain', () => {
       deliveryClaim = [delivery('d1', 'PUSH', { userId: 'u-gone' })];
       await svc.drain({ purge: false });
       expect(push.attempt).not.toHaveBeenCalled();
-      expect(dbMock.notificationDelivery.update).toHaveBeenCalledWith({ where: { id: 'd1', schoolId: SCHOOL }, data: { status: 'SKIPPED', reason: 'no-address', claimedAt: null } });
+      expect(dbMock.notificationDelivery.updateMany).toHaveBeenCalledWith({ where: { id: 'd1', schoolId: SCHOOL, claimedAt: CLAIMED_AT }, data: { status: 'SKIPPED', reason: 'no-address', claimedAt: null } });
     });
 
     it('never sends a delivery whose outbox row belongs to another school', async () => {
@@ -333,7 +349,7 @@ describe('NotificationOutboxService.drain', () => {
       dbMock.notificationOutbox.findMany.mockResolvedValue([summary({ schoolId: OTHER_SCHOOL })]);
       await svc.drain({ purge: false });
       expect(push.attempt).not.toHaveBeenCalled();
-      expect(dbMock.notificationDelivery.update.mock.calls[0][0].data.status).toBe('FAILED');
+      expect(dbMock.notificationDelivery.updateMany.mock.calls[0][0].data.status).toBe('FAILED');
     });
 
     it('looks logins up with the school in the where — the platform client bypasses RLS', async () => {
@@ -388,10 +404,33 @@ describe('NotificationOutboxService.drain', () => {
 
     it('a failed status write leaves only THAT delivery to the 5-minute claim TTL; the batch carries on', async () => {
       deliveryClaim = [delivery('d1', 'PUSH'), delivery('d2', 'PUSH', { userId: 'u-2' })];
-      dbMock.notificationDelivery.update.mockRejectedValueOnce(new Error('pooler timeout')).mockResolvedValueOnce({});
+      dbMock.notificationDelivery.updateMany.mockRejectedValueOnce(new Error('pooler timeout')).mockResolvedValueOnce({ count: 1 });
       await expect(svc.drain({ purge: false })).resolves.toMatchObject({ sent: 2 });
       expect(push.attempt).toHaveBeenCalledTimes(2);
-      expect(dbMock.notificationDelivery.updateMany).not.toHaveBeenCalled();
+      expect(released()).toHaveLength(0);
+    });
+  });
+
+  describe('a late-finishing send cannot overwrite a newer drain', () => {
+    it('the status write matches the claimedAt this drain stamped, read back from the claim', async () => {
+      deliveryClaim = [delivery('d1', 'PUSH')];
+      await svc.drain({ purge: false });
+      expect(recorded()).toHaveLength(1);
+      expect((recorded()[0][0] as UpdateManyArg).where).toEqual({ id: 'd1', schoolId: SCHOOL, claimedAt: CLAIMED_AT });
+      expect(sqlOf(dbMock.$queryRaw.mock.calls.find((c) => sqlOf(c).includes('UPDATE "NotificationDelivery"'))!)).toContain('"claimedAt"\n');
+    });
+
+    it('when a newer drain has re-claimed the row the write matches nothing: it is logged and skipped, the batch carries on', async () => {
+      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      try {
+        deliveryClaim = [delivery('d1', 'PUSH'), delivery('d2', 'PUSH', { userId: 'u-2' })];
+        dbMock.notificationDelivery.updateMany.mockResolvedValueOnce({ count: 0 }).mockResolvedValue({ count: 1 });
+        await expect(svc.drain({ purge: false })).resolves.toMatchObject({ sent: 2 });
+        expect(recorded()).toHaveLength(2);
+        expect(warn).toHaveBeenCalledWith(expect.stringContaining('Delivery d1'));
+      } finally {
+        warn.mockRestore();
+      }
     });
   });
 
@@ -471,6 +510,28 @@ describe('NotificationOutboxService.drain', () => {
       expect(requestOutboxDrain).not.toHaveBeenCalled();
     });
 
+    it('the 60 s counts from the INVOCATION: a drain begun 30 s into one abandons a hung send 30 s sooner', async () => {
+      jest.useFakeTimers();
+      try {
+        deliveryClaim = Array.from({ length: DELIVERY_CONCURRENCY + 2 }, (_, i) => delivery(`d${i}`, 'PUSH'));
+        push.attempt.mockImplementation(() => new Promise(() => undefined));
+        let settled = false;
+        const run = runInvocation(() => svc.drain({ purge: false, deadline: Date.now() + 10 * 60_000 }), Date.now() - 30_000).then((r) => {
+          settled = true;
+          return r;
+        });
+        await jest.advanceTimersByTimeAsync(30_000 - HARD_STOP_MARGIN_MS - 1_000);
+        expect(settled).toBe(false);
+        await jest.advanceTimersByTimeAsync(1_000);
+        const r = await run;
+        expect(settled).toBe(true);
+        expect(r.more).toBe(true);
+        expect(released()).toHaveLength(1);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
     it('a hung send is abandoned at the hard stop: unstarted deliveries are released, the hung ones keep their claim', async () => {
       jest.useFakeTimers();
       try {
@@ -488,7 +549,7 @@ describe('NotificationOutboxService.drain', () => {
         expect(push.attempt).toHaveBeenCalledTimes(DELIVERY_CONCURRENCY);
         expect(dbMock.notificationDelivery.updateMany).toHaveBeenCalledTimes(1);
         expect(dbMock.notificationDelivery.updateMany).toHaveBeenCalledWith({ where: { id: { in: ['d5', 'd6'] } }, data: { claimedAt: null } });
-        expect(dbMock.notificationDelivery.update).not.toHaveBeenCalled();
+        expect(recorded()).toHaveLength(0);
         expect(r.more).toBe(true);
       } finally {
         jest.useRealTimers();

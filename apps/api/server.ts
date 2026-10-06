@@ -40,6 +40,9 @@ async function bootstrap(): Promise<void> {
 }
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  // When this invocation began — before the cold-start await, because boot
+  // time counts against the 60 s too (see common/notifications/invocation-clock.ts).
+  (req as IncomingMessage & { skInvokedAt?: number }).skInvokedAt = Date.now();
   if (!ready) ready = bootstrap();
   await ready;
   expressApp(req as express.Request, res as express.Response);

@@ -1,6 +1,9 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { readableIstDate } from '../../common/dates/timetable-date';
-import { registerOutboxDrainer, requestOutboxDrain } from '../../common/notifications/outbox-signal';
+import { INVOCATION_CEILING_MS, ROW_START_RESERVE_MS, registerOutboxDrainer, requestOutboxDrain } from '../../common/notifications/outbox-signal';
+import { invocationStartedAt } from '../../common/notifications/invocation-clock';
+
+export { ROW_START_RESERVE_MS } from '../../common/notifications/outbox-signal';
 import { getPlatformPrisma, type Prisma } from '@skoolos/db';
 import { assertNotificationOutboxKind, type NotificationOutboxKind } from '@skoolos/types';
 import { EmailChannel } from '../../common/notifications/email.channel';
@@ -131,17 +134,6 @@ export const OUTBOX_EMAIL: Record<NotificationOutboxKind, boolean> = {
  * plus the close step and the purge.
  */
 export const DRAIN_TIME_BUDGET_MS = 40_000;
-
-/** The function's hard ceiling (`maxDuration: 60` in apps/api/vercel.json). */
-const INVOCATION_CEILING_MS = 60_000;
-
-/**
- * No send STARTS with less than this left of the 60 s ceiling, measured from
- * when the drain began — whatever `deadline` a caller passes. A delivery
- * killed mid-send keeps its claim, so after CLAIM_TTL_MS that one delivery is
- * tried again; not starting it is always the safer side.
- */
-export const ROW_START_RESERVE_MS = 15_000;
 
 export type DeliveryChannelName = 'EMAIL' | 'PUSH' | 'WHATSAPP';
 
@@ -423,6 +415,8 @@ interface ClaimedDelivery {
   userId: string;
   channel: string;
   attempts: number;
+  /** The exact stamp this drain's claim wrote; the status write only lands while the row still carries it. */
+  claimedAt: Date;
 }
 
 interface OutboxSummary {
@@ -450,7 +444,7 @@ export class NotificationOutboxService implements OnModuleInit, OnModuleDestroy 
   ) {}
 
   onModuleInit(): void {
-    registerOutboxDrainer(() => this.drain({ purge: false }));
+    registerOutboxDrainer((o) => this.drain({ purge: false, deadline: o.deadline }));
   }
 
   onModuleDestroy(): void {
@@ -496,10 +490,15 @@ export class NotificationOutboxService implements OnModuleInit, OnModuleDestroy 
     // `deadline` is the epoch-ms time after which this drain must not START a
     // send. Whatever the caller asks for, never start one with fewer than
     // ROW_START_RESERVE_MS left of the invocation's 60 s ceiling.
+    //
+    // The 60 s counts from when the INVOCATION began (see invocation-clock.ts),
+    // not from when this drain did; with no invocation known (a script, a
+    // test) it counts from here.
     const started = Date.now();
-    const deadline = Math.min(opts.deadline ?? started + DRAIN_TIME_BUDGET_MS, started + INVOCATION_CEILING_MS - ROW_START_RESERVE_MS);
+    const anchor = invocationStartedAt() ?? started;
+    const deadline = Math.min(opts.deadline ?? started + DRAIN_TIME_BUDGET_MS, anchor + INVOCATION_CEILING_MS - ROW_START_RESERVE_MS);
     // Past this, a chunk still in flight is no longer waited for.
-    const hardStop = started + INVOCATION_CEILING_MS - HARD_STOP_MARGIN_MS;
+    const hardStop = anchor + INVOCATION_CEILING_MS - HARD_STOP_MARGIN_MS;
     const db = getPlatformPrisma();
     const result: NotificationOutboxDrainResult = { processed: 0, expanded: 0, sent: 0, failed: 0, retried: 0, skipped: 0, closed: 0, purged: 0, more: false };
 
@@ -660,7 +659,7 @@ export class NotificationOutboxService implements OnModuleInit, OnModuleDestroy 
           AND ("claimedAt" IS NULL OR "claimedAt" < (${staleBefore}::timestamptz AT TIME ZONE 'UTC'))
         FOR UPDATE SKIP LOCKED
       )
-      RETURNING id, "schoolId", "outboxId", "userId", channel, attempts
+      RETURNING id, "schoolId", "outboxId", "userId", channel, attempts, "claimedAt"
     `;
     if (due.length === DELIVERY_BATCH_CAP || [...groupBySchool(due, (d) => d.id).values()].some((ids) => ids.size >= DELIVERY_PER_SCHOOL_CAP)) {
       result.more = true;
@@ -685,6 +684,10 @@ export class NotificationOutboxService implements OnModuleInit, OnModuleDestroy 
       // (no attempt counted) and let the next drain try the batch.
       this.logger.error(`Delivery lookups failed; ${due.length} deliveries released: ${(e as Error)?.message}`);
       await this.release(db, due.map((d) => d.id));
+      // Nothing was worked, and the lookups are failing: a workflow that chained
+      // on `more` would hammer the API through an outage. The next scheduled run
+      // retries the released rows.
+      result.more = false;
       return;
     }
     const messageFor = this.messageCache(db);
@@ -794,7 +797,11 @@ export class NotificationOutboxService implements OnModuleInit, OnModuleDestroy 
       }
     }
     try {
-      await db.notificationDelivery.update({ where: { id: d.id, schoolId: d.schoolId }, data });
+      // Only while the row still carries THIS drain's claim. A send that hung
+      // past CLAIM_TTL_MS and finishes late must not overwrite the claim or the
+      // status a newer drain has since written.
+      const { count } = await db.notificationDelivery.updateMany({ where: { id: d.id, schoolId: d.schoolId, claimedAt: d.claimedAt }, data });
+      if (count === 0) this.logger.warn(`Delivery ${d.id} (${d.channel}) ended ${o.status} after its claim had been taken over; the newer drain's record stands.`);
     } catch (e) {
       this.logger.error(`Delivery ${d.id} (${d.channel}) ended ${o.status} but could not be recorded: ${(e as Error).message}`);
     }

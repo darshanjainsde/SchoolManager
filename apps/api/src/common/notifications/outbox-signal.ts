@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { runInBackground } from './run-in-background';
+import { invocationStartedAt } from './invocation-clock';
 
 /**
  * ASK FOR A DRAIN, FROM ANYWHERE.
@@ -20,7 +21,16 @@ import { runInBackground } from './run-in-background';
  */
 export const OUTBOX_DRAIN_DELAY_MS = 750;
 
-type Drainer = () => Promise<unknown>;
+/** The function's hard ceiling (`maxDuration: 60` in apps/api/vercel.json). */
+export const INVOCATION_CEILING_MS = 60_000;
+
+/**
+ * No send STARTS with less than this left of the 60 s ceiling. A send killed
+ * mid-flight repeats after the claim TTL; not starting it is the safer side.
+ */
+export const ROW_START_RESERVE_MS = 15_000;
+
+type Drainer = (opts: { deadline?: number }) => Promise<unknown>;
 const logger = new Logger('OutboxSignal');
 let drainer: Drainer | null = null;
 let scheduled = false;
@@ -31,6 +41,10 @@ export function registerOutboxDrainer(fn: Drainer | null): void {
 
 export function requestOutboxDrain(): void {
   if (!drainer || scheduled) return;
+  // The drain runs inside THIS caller's invocation, so it inherits this
+  // caller's deadline — measured from when the invocation began.
+  const started = invocationStartedAt();
+  const deadline = started === undefined ? undefined : started + INVOCATION_CEILING_MS - ROW_START_RESERVE_MS;
   scheduled = true;
   const fn = drainer;
   runInBackground(
@@ -39,7 +53,7 @@ export function requestOutboxDrain(): void {
         // Cleared BEFORE the drain runs: a row written while this drain is
         // working must be able to schedule the next one.
         scheduled = false;
-        return fn();
+        return fn({ deadline });
       }),
     (e) => {
       scheduled = false;
