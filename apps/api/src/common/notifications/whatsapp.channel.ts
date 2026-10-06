@@ -191,10 +191,12 @@ export class WhatsAppChannel implements NotificationChannel {
     const cfg = this.config();
     if (!cfg) return { ok: false, code: null };
     const settings = await this.settingsFor(schoolId);
+    // Only the provider call decides success. The ledger write has its own try:
+    // a message Meta accepted must never be reported as failed because the
+    // bookkeeping threw — callers react to `ok: false` by sending something else.
+    let messageId: string;
     try {
-      const { messageId } = await fn(cfg, settings.phoneNumberId, this.fetchImpl);
-      await this.prisma.whatsAppDelivery.create({ data: { schoolId, phone, kind, templateName: label, waMessageId: messageId, status: 'SENT', sentAt: new Date() } });
-      return { ok: true, code: null };
+      ({ messageId } = await fn(cfg, settings.phoneNumberId, this.fetchImpl));
     } catch (e) {
       const code = e instanceof WhatsAppApiError ? e.code : null;
       const reason = e instanceof WhatsAppApiError ? `${e.message} (code ${e.code ?? '?'})` : (e as Error).message;
@@ -206,6 +208,13 @@ export class WhatsAppChannel implements NotificationChannel {
       }
       return { ok: false, code };
     }
+    try {
+      await this.prisma.whatsAppDelivery.create({ data: { schoolId, phone, kind, templateName: label, waMessageId: messageId, status: 'SENT', sentAt: new Date() } });
+    } catch (ledgerErr) {
+      // Meta has the message. Not recording it must never turn into "failed".
+      this.logger.error(`WhatsApp ${label} to ${phone} was sent (${messageId}) but could not be recorded: ${(ledgerErr as Error).message}`);
+    }
+    return { ok: true, code: null };
   }
 
   /**
@@ -221,12 +230,13 @@ export class WhatsAppChannel implements NotificationChannel {
     template: WhatsAppTemplate,
     phoneNumberId: string | null,
   ): Promise<boolean> {
+    // Only the provider call decides success. The ledger write has its own try:
+    // if Meta accepted the message but the ledger threw, returning false would
+    // make send() release the dedup claim and a sibling login on this phone
+    // would send a second copy.
+    let messageId: string;
     try {
-      const { messageId } = await sendTemplate(cfg, phone, template, { phoneNumberId, fetchImpl: this.fetchImpl });
-      await this.prisma.whatsAppDelivery.create({
-        data: { schoolId, phone, kind, templateName: template.name, waMessageId: messageId, status: 'SENT', sentAt: new Date() },
-      });
-      return true;
+      ({ messageId } = await sendTemplate(cfg, phone, template, { phoneNumberId, fetchImpl: this.fetchImpl }));
     } catch (e) {
       const err = e as Error;
       const reason = e instanceof WhatsAppApiError ? `${err.message} (code ${e.code ?? '?'})` : err.message;
@@ -240,6 +250,17 @@ export class WhatsAppChannel implements NotificationChannel {
       }
       return false;
     }
+    try {
+      await this.prisma.whatsAppDelivery.create({
+        data: { schoolId, phone, kind, templateName: template.name, waMessageId: messageId, status: 'SENT', sentAt: new Date() },
+      });
+    } catch (ledgerErr) {
+      // Meta has the message. Not recording it must never turn into "failed" —
+      // that would release the sibling dedup claim and resend. Log loudly with
+      // the waMessageId so the row can be reconciled.
+      this.logger.error(`WhatsApp ${kind} to ${phone} was sent (${messageId}) but could not be recorded: ${(ledgerErr as Error).message}`);
+    }
+    return true;
   }
 
   async settingsFor(schoolId: string): Promise<SchoolSettings> {

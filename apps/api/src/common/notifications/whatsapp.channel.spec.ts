@@ -1,5 +1,6 @@
 import { DEDUP_REDIS_TIMEOUT_MS, WhatsAppChannel } from './whatsapp.channel';
 import type { NotificationMessage } from './notification.types';
+import { WhatsAppApiError } from './whatsapp/graph.client';
 
 const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const CFG = { token: 't', phoneNumberId: '1357286177463978', wabaId: null, graphVersion: 'v21.0' };
@@ -277,6 +278,62 @@ describe('WhatsAppChannel', () => {
       await c.send('p@x', { ...NOTICE, payload: { ...NOTICE.payload, date: 'Fri 19 Sep' } } as NotificationMessage, SCHOOL);
       expect(warn).toHaveBeenCalledTimes(1);
       expect(warn.mock.calls[0][0]).toContain('unreachable');
+    });
+  });
+
+  describe('a message Meta accepted is never reported as failed', () => {
+    // The provider call alone decides success. If Meta took the message but the
+    // ledger write threw (pool timeout), reporting "failed" would release the
+    // sibling dedup claim and a second login on the phone would send a SECOND copy.
+    const ledgerDown = () => jest.fn().mockRejectedValue(new Error('pool timeout'));
+    const quiet = (c: WhatsAppChannel) => jest.spyOn((c as unknown as { logger: { warn: (m: string) => void; error: (m: string) => void } }).logger, 'error').mockImplementation(() => undefined);
+
+    it('deliver: SENT ledger write fails after Meta accepted -> still true, no FAILED row, a sibling send is deduped', async () => {
+      const create = ledgerDown();
+      const d = db({ whatsAppDelivery: { create } });
+      const f = okFetch();
+      const c = new WhatsAppChannel(d as never, () => CFG, f, () => null);
+      const err = quiet(c);
+      await expect(c.send('p@x', MSG, SCHOOL)).resolves.toBe(true);
+      expect(create).toHaveBeenCalledTimes(1);
+      expect(create.mock.calls[0][0].data.status).toBe('SENT');
+      expect(create.mock.calls.some((a: [{ data: { status: string } }]) => a[0].data.status === 'FAILED')).toBe(false);
+      expect(err.mock.calls[0][0]).toContain('wamid.1');
+      await expect(c.send('p@x', MSG, SCHOOL)).resolves.toBe(true);
+      expect(f).toHaveBeenCalledTimes(1);
+    });
+
+    it('deliver: Meta refuses -> unchanged: false, a FAILED row, and the claim is released so a retry sends', async () => {
+      const d = db();
+      const f = jest
+        .fn()
+        .mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({ error: { message: 'boom', code: 1 } }) })
+        .mockResolvedValue({ ok: true, status: 200, json: async () => ({ messages: [{ id: 'wamid.2' }] }) });
+      const c = new WhatsAppChannel(d as never, () => CFG, f, () => null);
+      await expect(c.send('p@x', MSG, SCHOOL)).resolves.toBe(false);
+      expect(d.whatsAppDelivery.create.mock.calls[0][0].data).toMatchObject({ status: 'FAILED' });
+      await expect(c.send('p@x', MSG, SCHOOL)).resolves.toBe(true);
+      expect(f).toHaveBeenCalledTimes(2);
+    });
+
+    it('deliverWith: SENT ledger write fails after fn resolved -> { ok: true, code: null }, no FAILED row', async () => {
+      const create = ledgerDown();
+      const c = new WhatsAppChannel(db({ whatsAppDelivery: { create } }) as never, () => CFG, okFetch(), () => null);
+      const err = quiet(c);
+      const fn = jest.fn().mockResolvedValue({ messageId: 'wamid.9' });
+      await expect(c.deliverWith(SCHOOL, '+919876543210', 'OTP', 'otp', fn)).resolves.toEqual({ ok: true, code: null });
+      expect(create).toHaveBeenCalledTimes(1);
+      expect(create.mock.calls[0][0].data.status).toBe('SENT');
+      expect(err.mock.calls[0][0]).toContain('wamid.9');
+    });
+
+    it('deliverWith: fn rejects with a WhatsAppApiError -> unchanged { ok: false, code } and a FAILED row', async () => {
+      const d = db();
+      const c = new WhatsAppChannel(d as never, () => CFG, okFetch(), () => null);
+      const fn = jest.fn().mockRejectedValue(new WhatsAppApiError('Re-engagement message', 131047, null, 400));
+      await expect(c.deliverWith(SCHOOL, '+919876543210', 'OTP', 'otp', fn)).resolves.toEqual({ ok: false, code: 131047 });
+      expect(d.whatsAppDelivery.create).toHaveBeenCalledTimes(1);
+      expect(d.whatsAppDelivery.create.mock.calls[0][0].data).toMatchObject({ status: 'FAILED', error: 'Re-engagement message (code 131047)' });
     });
   });
 });
