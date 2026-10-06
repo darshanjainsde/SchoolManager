@@ -115,7 +115,14 @@ export class PushChannel implements DeliveryChannel {
     }
 
     if (dead.length > 0) {
-      await this.prisma.pushToken.deleteMany({ where: { token: { in: dead } } });
+      // Pruning dead tokens is bookkeeping: if it throws after another device
+      // was reached, rejecting would make the drain retry and push that device
+      // a second time. The tokens are pruned on the next send instead.
+      try {
+        await this.prisma.pushToken.deleteMany({ where: { token: { in: dead } } });
+      } catch (e) {
+        this.logger.error(`Could not prune ${dead.length} dead push token(s): ${(e as Error).message}`);
+      }
     }
 
     if (delivered) return { status: 'SENT' };

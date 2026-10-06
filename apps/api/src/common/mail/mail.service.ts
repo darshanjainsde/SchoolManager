@@ -87,11 +87,18 @@ export class MailService {
         html,
         text,
       });
-      await this.ledger({ schoolId, to: address, kind, provider: id.provider, status: 'SENT', providerId: id.provider === 'resend' ? (info?.messageId ?? null) : null });
-      if (out) out.outcome = { status: 'SENT', providerId: id.provider === 'resend' ? (info?.messageId ?? null) : null };
+      const providerId = id.provider === 'resend' ? (info?.messageId ?? null) : null;
+      await this.ledger({ schoolId, to: address, kind, provider: id.provider, status: 'SENT', providerId });
+      if (out) out.outcome = { status: 'SENT', providerId };
       return true;
     } catch (e) {
-      if (out) out.outcome = mailFailure(e);
+      if (out) {
+        const outcome = mailFailure(e);
+        // The school's OWN sender failing is the sender's problem, not this
+        // recipient's: recordSenderFailure (below) drops the school back to
+        // the platform mailbox, so a retry goes out from there.
+        out.outcome = id.usingCustomSender && outcome.status === 'FAILED' ? { status: 'RETRY', error: outcome.error } : outcome;
+      }
       await this.ledger({ schoolId, to: address, kind, provider: id.provider, status: 'FAILED', error: (e as Error).message });
       this.logger.error(`Mail to ${to} failed: ${(e as Error).message}`);
       // Launch-gate #2/#4: a transport failure must be VISIBLE — a school

@@ -1,4 +1,4 @@
-import { codeFromError, failureAdvice, failureBlame } from './failure';
+import { codeFromError, failureAdvice, failureBlame, isTransientWhatsAppFailure } from './failure';
 
 /**
  * The card counted every failed message as a "number to fix". On staging that
@@ -50,5 +50,26 @@ describe('whose problem a WhatsApp failure is', () => {
     const real = [190, 190, 190, 190, 190, 190, 131030, 100];
     const blames = real.map(failureBlame);
     expect(blames.every((b) => b === 'SETUP')).toBe(true);
+  });
+});
+
+describe('isTransientWhatsAppFailure — is it worth trying again?', () => {
+  it.each([
+    [130429, 'cloud API throughput'],
+    [131056, 'pair rate limit — too many to one phone'],
+    [131048, 'spam rate limit'],
+    [80007, 'WABA rate limit'],
+    [4, 'app call throughput'],
+  ])('Meta %i (%s) is a rate limit: retry, even on a 400', (code) => {
+    expect(isTransientWhatsAppFailure(code, 400)).toBe(true);
+  });
+
+  it.each([131026, 131031, 132001, 132005, 132007, 100, 190])('Meta %i on a 400 is final', (code) => {
+    expect(isTransientWhatsAppFailure(code, 400)).toBe(false);
+  });
+
+  it('no answer at all, or a 5xx, is worth another go', () => {
+    expect(isTransientWhatsAppFailure(null, null)).toBe(true);
+    expect(isTransientWhatsAppFailure(2, 503)).toBe(true);
   });
 });

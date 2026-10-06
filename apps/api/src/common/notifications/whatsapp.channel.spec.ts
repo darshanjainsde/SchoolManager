@@ -370,6 +370,17 @@ describe('WhatsAppChannel', () => {
       expect((await new WhatsAppChannel(db() as never, () => CFG, jest.fn().mockRejectedValue(new Error('ECONNRESET')), () => null).attempt('p@x', MSG, SCHOOL)).status).toBe('RETRY');
     });
 
+    it('a ledger write that fails after Meta accepted is still SENT with the waMessageId, and the claim is kept', async () => {
+      const store = new Set<string>();
+      const redis = { status: 'ready', set: jest.fn(async (k: string) => (store.has(k) ? null : (store.add(k), 'OK'))), del: jest.fn(async (k: string) => (store.delete(k) ? 1 : 0)) };
+      const d = db({ whatsAppDelivery: { create: jest.fn().mockRejectedValue(new Error('pool timeout')) } });
+      const c = new WhatsAppChannel(d as never, () => CFG, okFetch(), () => redis as never);
+      jest.spyOn((c as unknown as { logger: { error: (m: string) => void } }).logger, 'error').mockImplementation(() => undefined);
+      expect(await c.attempt('p@x', MSG, SCHOOL)).toEqual({ status: 'SENT', providerId: 'wamid.1' });
+      expect(store.size).toBe(1);
+      expect(redis.del).not.toHaveBeenCalled();
+    });
+
     it('the same words to the same phone within a minute are SKIPPED duplicate; send() still calls that true', async () => {
       const c = new WhatsAppChannel(db() as never, () => CFG, okFetch(), () => null);
       await c.attempt('p@x', MSG, SCHOOL);
