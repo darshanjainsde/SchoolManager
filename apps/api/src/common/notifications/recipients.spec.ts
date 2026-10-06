@@ -1,4 +1,4 @@
-import { resolveSchoolRecipients, resolveSectionRecipients, resolveStudentRecipients } from './recipients';
+import { resolveRecipientUsers, resolveSchoolRecipients, resolveSectionRecipients, resolveStudentRecipients } from './recipients';
 
 const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 
@@ -126,5 +126,28 @@ describe('resolveStudentRecipients', () => {
 
     expect(recipients).toEqual([]);
     expect(db.student.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('resolveRecipientUsers — who an outbox row is for, by login id', () => {
+  it('a single-reader row is that one login, if it has an email at this school', async () => {
+    const db = fakeDb();
+    db.user.findMany.mockResolvedValue([{ id: 'u-1', email: 'a@x.com' }]);
+    expect(await resolveRecipientUsers(db as never, SCHOOL, { targetUserId: 'u-1', classSectionId: null })).toEqual(['u-1']);
+    expect(db.user.findMany).toHaveBeenCalledWith({ where: { id: { in: ['u-1'] }, schoolId: SCHOOL }, select: { id: true, email: true } });
+    expect(db.student.findMany).not.toHaveBeenCalled();
+  });
+
+  it('a class row is every active linked student login of the section, once each', async () => {
+    const db = fakeDb();
+    db.student.findMany.mockResolvedValue([{ userId: 'u-1' }, { userId: 'u-2' }, { userId: 'u-1' }]);
+    db.user.findMany.mockResolvedValue([{ id: 'u-1', email: 'a@x.com' }]);
+    expect(await resolveRecipientUsers(db as never, SCHOOL, { targetUserId: null, classSectionId: 'cs-1' })).toEqual(['u-1']);
+    expect(db.student.findMany.mock.calls[0][0].where).toMatchObject({ schoolId: SCHOOL, classSectionId: 'cs-1' });
+  });
+
+  it('a row with neither is nobody', async () => {
+    const db = fakeDb();
+    expect(await resolveRecipientUsers(db as never, SCHOOL, { targetUserId: null, classSectionId: null })).toEqual([]);
   });
 });

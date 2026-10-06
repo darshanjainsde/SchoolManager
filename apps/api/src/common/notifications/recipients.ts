@@ -137,3 +137,30 @@ export async function resolveAdminRecipients(db: TenantTx, schoolId: string): Pr
   });
   return admins.filter((a) => a.email).map((a) => ({ userId: a.id, email: a.email }));
 }
+
+/**
+ * The logins an outbox row is for, by id — what a NotificationDelivery row is
+ * keyed on. A login with no email is left out: every channel addresses a
+ * person by their login email within the school.
+ */
+export async function resolveRecipientUsers(
+  db: TenantTx,
+  schoolId: string,
+  target: { targetUserId: string | null; classSectionId: string | null },
+): Promise<string[]> {
+  let ids: string[];
+  if (target.targetUserId) {
+    ids = [target.targetUserId];
+  } else if (target.classSectionId) {
+    const students = await db.student.findMany({
+      where: activeStudentsWhere(schoolId, { classSectionId: target.classSectionId, userId: { not: null } }),
+      select: { userId: true },
+    });
+    ids = students.map((s) => s.userId).filter((id): id is string => Boolean(id));
+  } else {
+    return [];
+  }
+  const unique = [...new Set(ids)];
+  const byId = await emailsByUserId(db, schoolId, unique);
+  return unique.filter((id) => byId.has(id));
+}
