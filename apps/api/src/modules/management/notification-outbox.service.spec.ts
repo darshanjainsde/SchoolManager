@@ -417,7 +417,7 @@ describe('NotificationOutboxService.drain', () => {
       await svc.drain({ purge: false });
       expect(recorded()).toHaveLength(1);
       expect((recorded()[0][0] as UpdateManyArg).where).toEqual({ id: 'd1', schoolId: SCHOOL, claimedAt: CLAIMED_AT });
-      expect(sqlOf(dbMock.$queryRaw.mock.calls.find((c) => sqlOf(c).includes('UPDATE "NotificationDelivery"'))!)).toContain('"claimedAt"\n');
+      expect(sqlOf(dbMock.$queryRaw.mock.calls.find((c) => sqlOf(c).includes('UPDATE "NotificationDelivery"'))!)).toMatch(/RETURNING[^;]*"claimedAt"/);
     });
 
     it('when a newer drain has re-claimed the row the write matches nothing: it is logged and skipped, the batch carries on', async () => {

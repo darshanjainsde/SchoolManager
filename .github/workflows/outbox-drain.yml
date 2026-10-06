@@ -16,13 +16,19 @@
 # Remove this workflow once the project moves to Vercel Pro and a native
 # `*/5` cron replaces it (checkpoint-1 item).
 #
-# Two caveats that live in the RUNBOOK too:
+# Caveats that live in the RUNBOOK too:
 # - Scheduled workflows run from the DEFAULT branch only — inert until this
 #   file is on main — and GitHub pauses schedules after 60 days of repo
 #   inactivity (Actions shows "This scheduled workflow is disabled").
-# - The minute offset (3,13,…,53) is deliberate: the outbox drain has no
-#   row-claiming, so this must never fire at the same minute as the API's
-#   own 02:00 UTC Vercel cron — simultaneous drains would double-send.
+# - So scheduled runs come from main and hit the PRODUCTION API (the
+#   CRON_API_BASE default). Staging is never drained from here: it relies on
+#   the drain each notifying write asks for, and on its own 02:00 UTC cron.
+# - Overlap is safe. The drain claims outbox rows and deliveries with
+#   FOR UPDATE SKIP LOCKED plus a claimedAt stamp, so a run that overlaps
+#   another, a write's own drain or the 02:00 UTC Vercel cron never takes the
+#   same delivery twice. The minute offset (3,13,…,53) only spreads load.
+#   `concurrency` below still keeps one run of this workflow at a time, so a
+#   slow run's call loop is never doubled by the next tick.
 
 name: Drain notification outbox
 
@@ -32,6 +38,11 @@ on:
   workflow_dispatch: {}
 
 permissions: {}
+
+# One run at a time; the next tick waits rather than cancelling a run mid-drain.
+concurrency:
+  group: outbox-drain
+  cancel-in-progress: false
 
 jobs:
   drain:
