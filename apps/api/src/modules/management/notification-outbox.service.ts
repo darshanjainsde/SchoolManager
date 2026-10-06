@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { readableIstDate } from '../../common/dates/timetable-date';
 import { runInBackground } from '../../common/notifications/run-in-background';
+import { registerOutboxDrainer, requestOutboxDrain } from '../../common/notifications/outbox-signal';
 import { getPlatformPrisma } from '@skoolos/db';
 import { assertNotificationOutboxKind, type NotificationOutboxKind } from '@skoolos/types';
 import { PushChannel } from '../../common/notifications/push.channel';
@@ -241,7 +242,7 @@ interface OutboxRow {
 }
 
 @Injectable()
-export class NotificationOutboxService {
+export class NotificationOutboxService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(NotificationOutboxService.name);
 
   // WhatsApp rides the outbox for the same reason push does: these kinds are
@@ -251,6 +252,14 @@ export class NotificationOutboxService {
     private readonly push: PushChannel,
     private readonly whatsapp: WhatsAppChannel,
   ) {}
+
+  onModuleInit(): void {
+    registerOutboxDrainer(() => this.drain({ purge: false }));
+  }
+
+  onModuleDestroy(): void {
+    registerOutboxDrainer(null);
+  }
 
   /**
    * Drain shortly, without blocking the caller.
@@ -267,12 +276,11 @@ export class NotificationOutboxService {
    *
    * Safe to call concurrently with the cron — the drain claims its batch with
    * FOR UPDATE SKIP LOCKED, so two runs never take the same row.
+   *
+   * Kept for callers that already hold the service; prefer `requestOutboxDrain()`.
    */
   drainSoon(): void {
-    runInBackground(
-      () => this.drain({ purge: false }),
-      (e) => this.logger.warn(`opportunistic outbox drain failed: ${(e as Error)?.message}`),
-    );
+    requestOutboxDrain();
   }
 
   /**
