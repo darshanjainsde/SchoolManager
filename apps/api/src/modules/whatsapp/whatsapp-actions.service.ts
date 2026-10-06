@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { getPlatformPrisma, type PrismaClient } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
 import { WhatsAppChannel } from '../../common/notifications/whatsapp.channel';
-import { coverPayload, parseAction, type Action } from '../../common/notifications/whatsapp/actions';
+import { actionKeys, coverPayload, parseAction, type Action } from '../../common/notifications/whatsapp/actions';
 import { sendList, sendTemplate, sendText } from '../../common/notifications/whatsapp/graph.client';
 import { coverPendingTemplate, COVER_PENDING } from '../../common/notifications/whatsapp/templates';
 import { isoWeekdayOf, LeaveService, toDateStr } from '../management';
@@ -45,8 +45,8 @@ export class WhatsAppActionsService {
     private readonly channel: WhatsAppChannel,
   ) {}
 
-  private secret(): string {
-    return process.env.META_APP_SECRET?.trim() || 'unset';
+  private keys() {
+    return actionKeys();
   }
 
   async handleInbound(m: InboundMessage): Promise<string> {
@@ -66,9 +66,13 @@ export class WhatsAppActionsService {
       if (!payload) {
         result = 'text'; // a reply in words — the Messages inbox is the next phase
       } else {
-        const action = parseAction(payload, this.secret());
-        if (!action) result = 'unknown-payload';
-        else ({ result, schoolId } = await this.act(db, action, phone));
+        const parsed = parseAction(payload, this.keys());
+        if (!parsed.ok && parsed.why === 'foreign') result = 'unknown-payload';
+        else if (!parsed.ok) {
+          schoolId = await this.schoolOf(db, parsed.action);
+          if (schoolId) await this.text(schoolId, phone, 'This button has expired. Please decide in the console or the app.');
+          result = 'expired';
+        } else ({ result, schoolId } = await this.act(db, parsed.action, phone));
       }
     } catch (e) {
       result = `error: ${(e as Error).message}`.slice(0, 200);
@@ -76,6 +80,11 @@ export class WhatsAppActionsService {
     }
     await db.whatsAppInbound.update({ where: { id: m.id }, data: { result, schoolId } }).catch(() => undefined);
     return result;
+  }
+
+  private async schoolOf(db: Db, a: Action): Promise<string | null> {
+    if (a.kind === 'leave') return (await db.leaveApplication.findUnique({ where: { id: a.leaveId }, select: { schoolId: true } }))?.schoolId ?? null;
+    return (await db.substitution.findUnique({ where: { id: a.substitutionId }, select: { schoolId: true } }))?.schoolId ?? null;
   }
 
   private async act(db: Db, action: Action, phone: string): Promise<{ result: string; schoolId: string | null }> {
@@ -211,17 +220,17 @@ export class WhatsAppActionsService {
     }
     free.sort((a, b) => Number(teachesSubject.has(b.id)) - Number(teachesSubject.has(a.id)) || a.firstName.localeCompare(b.firstName));
     const when = await this.whenOf(db, schoolId, sub.date, sub.periodId, sub.classSectionId);
-    const secret = this.secret();
+    const keys = this.keys();
     if (free.length === 0) {
       await this.text(schoolId, phone, `Nobody is free for ${when.className} on ${when.when}. Decide in the console.`);
       return;
     }
     const rows = free.slice(0, NO_ROWS_CAP).map((t) => ({
-      id: coverPayload(sub.id, t.id, secret),
+      id: coverPayload(sub.id, t.id, keys),
       title: `${t.firstName} ${t.lastName ?? ''}`.trim(),
       description: teachesSubject.has(t.id) ? `teaches ${when.subjectName ?? 'this subject'}` : 'free this period',
     }));
-    rows.push({ id: coverPayload(sub.id, 'skip', secret), title: 'Decide in the console', description: 'leave this one for later' });
+    rows.push({ id: coverPayload(sub.id, 'skip', keys), title: 'Decide in the console', description: 'leave this one for later' });
     const sent = await this.channel.deliverWith(schoolId, phone, 'COVER_LIST', 'interactive:list', (cfg, pnid, f) =>
       sendList(cfg, phone, { header: 'Who covers?', body: `${when.className}${when.subjectName ? ` · ${when.subjectName}` : ''}\n${when.when}`, button: 'Pick a teacher', rows, footer: `${free.length} free` }, { phoneNumberId: pnid, fetchImpl: f }),
     );

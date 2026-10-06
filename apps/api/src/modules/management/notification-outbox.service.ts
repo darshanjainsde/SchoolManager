@@ -6,7 +6,7 @@ import { assertNotificationOutboxKind, type NotificationOutboxKind } from '@skoo
 import { EmailChannel } from '../../common/notifications/email.channel';
 import { PushChannel } from '../../common/notifications/push.channel';
 import { WhatsAppChannel } from '../../common/notifications/whatsapp.channel';
-import { ackPayload, leavePayload } from '../../common/notifications/whatsapp/actions';
+import { ackPayload, actionKeys, leavePayload } from '../../common/notifications/whatsapp/actions';
 import { resolveSectionRecipients, resolveUserRecipients } from '../../common/notifications/recipients';
 import type {
   MessageReceivedOutboxPayload,
@@ -164,11 +164,11 @@ export function toNotificationMessage(kind: NotificationOutboxKind, payload: unk
       };
     }
     case 'LEAVE_APPLIED': {
-      // The button payloads are signed HERE, at send time, with the app secret
+      // The button payloads are signed HERE, at send time, with the action key
       // — never stored on the row.
       const p = payload as { schoolName: string; leaveId: string; teacherName: string; dates: string; days: number; reason: string | null; periodsAffected: number };
-      const secret = process.env.META_APP_SECRET?.trim() || 'unset';
-      return { kind: 'LEAVE_APPLIED', payload: { ...p, approvePayload: leavePayload('approve', p.leaveId, secret), rejectPayload: leavePayload('reject', p.leaveId, secret) } };
+      const keys = actionKeys();
+      return { kind: 'LEAVE_APPLIED', payload: { ...p, approvePayload: leavePayload('approve', p.leaveId, keys), rejectPayload: leavePayload('reject', p.leaveId, keys) } };
     }
     case 'LEAVE_DECIDED': {
       const p = payload as { schoolName: string; leaveId: string; decision: 'APPROVED' | 'REJECTED'; dates: string; byName: string | null };
@@ -176,8 +176,8 @@ export function toNotificationMessage(kind: NotificationOutboxKind, payload: unk
     }
     case 'COVER_ASSIGNED': {
       const p = payload as { schoolName: string; substitutionId: string; when: string; className: string; subjectName: string | null; originalTeacherName: string };
-      const secret = process.env.META_APP_SECRET?.trim() || 'unset';
-      return { kind: 'COVER_ASSIGNED', payload: { ...p, ackPayload: ackPayload(p.substitutionId, secret) } };
+      const keys = actionKeys();
+      return { kind: 'COVER_ASSIGNED', payload: { ...p, ackPayload: ackPayload(p.substitutionId, keys) } };
     }
     case 'FEE_VERIFIED':
     case 'FEE_REJECTED':
