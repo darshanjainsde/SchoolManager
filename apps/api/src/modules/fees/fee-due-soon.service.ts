@@ -62,12 +62,15 @@ export class FeeDueSoonService {
 
       const dueISO = inv.dueDate.toISOString().slice(0, 10);
       const onTheDay = dueISO === today;
+      // One date wording everywhere ("Tue 15 Sep 2026"): toLocaleDateString
+      // with month 'short' prints "Sept" for September in en-IN.
+      const dueOn = shortDayDate(new Date(`${dueISO}T00:00:00Z`));
       const title = onTheDay
         ? `${inv.term.name} fees due today — ${formatRupees(outstanding)}`
         : `${inv.term.name} fees due in a week — ${formatRupees(outstanding)}`;
       const body = onTheDay
         ? 'Pay by bank transfer from the Fees page, or at the office.'
-        : `Due ${new Date(dueISO).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' })}. Pay from the Fees page whenever suits.`;
+        : `Due ${dueOn}. Pay from the Fees page whenever suits.`;
 
       await db.notification.create({
         data: { schoolId: inv.schoolId, userId, kind: 'FEE_DUE', title, body, linkType: 'fees', linkId: inv.id },
@@ -77,7 +80,7 @@ export class FeeDueSoonService {
           schoolId: inv.schoolId,
           kind: 'FEE_DUE',
           targetUserId: userId,
-          payload: { schoolName: school.name, title, body, termName: inv.term.name, dueOn: shortDayDate(new Date(`${dueISO}T00:00:00Z`)) } satisfies FeeDecisionOutboxPayload as unknown as Prisma.InputJsonValue,
+          payload: { schoolName: school.name, title, body, termName: inv.term.name, dueOn } satisfies FeeDecisionOutboxPayload as unknown as Prisma.InputJsonValue,
         },
       });
       notices++;
