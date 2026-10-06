@@ -37,6 +37,13 @@ export interface NotificationOutboxDrainResult {
   closed: number;
   /** Delivered rows removed by the retention sweep — see `purgeDelivered()`. */
   purged: number;
+  /**
+   * Work is probably left: a claim came back full (the outbox batch cap, the
+   * delivery batch cap, or one school's per-drain cap) or the deadline / hard
+   * stop ended the run. The 10-minute workflow calls the endpoint again while
+   * this is true — each call its own invocation, so never a chained drain.
+   */
+  more: boolean;
 }
 
 /**
@@ -148,6 +155,22 @@ export const DELIVERY_BACKOFF_MS = [60_000, 5 * 60_000, 30 * 60_000, 2 * 60 * 60
 /** Deliveries claimed per drain. Each is one send, so the batch is bounded by time, not by size. */
 export const DELIVERY_BATCH_CAP = 300;
 
+/**
+ * No school takes more than this many deliveries of one drain, and the
+ * schools are interleaved (each school's 1st due, then each school's 2nd, …).
+ * Without it one school's notice to 1,800 children (5,400 deliveries) holds
+ * every other school's leave and cover messages behind it for hours.
+ */
+export const DELIVERY_PER_SCHOOL_CAP = 60;
+
+/**
+ * A chunk of sends still in flight this close to the 60 s ceiling is
+ * abandoned: the drain stops waiting, releases every delivery it has not
+ * started, and returns while it still can. The hung sends keep their claims,
+ * so CLAIM_TTL_MS protects them from a second send.
+ */
+export const HARD_STOP_MARGIN_MS = 5_000;
+
 /** Sends in flight at once. SMTP is the slow leg; five keeps a class inside one drain. */
 export const DELIVERY_CONCURRENCY = 5;
 
@@ -179,6 +202,22 @@ function isDeliverySchemaMissing(e: unknown): boolean {
 /** An error message as stored on a row: never undefined, never longer than 500. */
 function clip(message: unknown): string {
   return String(message ?? 'unknown error').slice(0, 500);
+}
+
+/**
+ * Resolves true when `work` settles before the epoch-ms `hardStop`, false when
+ * the stop comes first. The timer is always cleared, so nothing is left pending.
+ */
+async function finishesBefore(work: Promise<unknown>, hardStop: number): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const stop = new Promise<false>((resolve) => {
+    timer = setTimeout(() => resolve(false), Math.max(0, hardStop - Date.now()));
+  });
+  try {
+    return await Promise.race([work.then(() => true as const), stop]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** `ids` of a batch grouped by the school they belong to, so every lookup carries its schoolId. */
@@ -459,12 +498,20 @@ export class NotificationOutboxService implements OnModuleInit, OnModuleDestroy 
     // ROW_START_RESERVE_MS left of the invocation's 60 s ceiling.
     const started = Date.now();
     const deadline = Math.min(opts.deadline ?? started + DRAIN_TIME_BUDGET_MS, started + INVOCATION_CEILING_MS - ROW_START_RESERVE_MS);
+    // Past this, a chunk still in flight is no longer waited for.
+    const hardStop = started + INVOCATION_CEILING_MS - HARD_STOP_MARGIN_MS;
     const db = getPlatformPrisma();
-    const result: NotificationOutboxDrainResult = { processed: 0, expanded: 0, sent: 0, failed: 0, retried: 0, skipped: 0, closed: 0, purged: 0 };
+    const result: NotificationOutboxDrainResult = { processed: 0, expanded: 0, sent: 0, failed: 0, retried: 0, skipped: 0, closed: 0, purged: 0, more: false };
 
     try {
       await this.expand(db, deadline, result);
-      await this.sendDue(db, deadline, result);
+      // Expansion may have used the whole budget; then no delivery is claimed
+      // (a claim this drain cannot work would only sit out the TTL).
+      if (Date.now() >= deadline) {
+        result.more = true;
+      } else {
+        await this.sendDue(db, deadline, hardStop, result);
+      }
     } catch (e) {
       if (!isDeliverySchemaMissing(e)) throw e;
       // Deploy before migrate: the code is live, the NotificationDelivery
@@ -474,7 +521,7 @@ export class NotificationOutboxService implements OnModuleInit, OnModuleDestroy 
         this.schemaMissingLogged = true;
         this.logger.warn(`Notification delivery migration not applied yet — outbox rows wait untouched until it is (${(e as Error)?.message ?? 'schema missing'}).`);
       }
-      return result;
+      return { ...result, more: false };
     }
     result.closed = await this.closeFinished(db);
     result.purged = purge ? await this.purgeDelivered(db) : 0;
@@ -495,15 +542,22 @@ export class NotificationOutboxService implements OnModuleInit, OnModuleDestroy 
     // Prisma cannot express SKIP LOCKED; every interpolation is a bound
     // parameter. CROSS-TENANT ON PURPOSE: the queue spans every school, so
     // this claim cannot carry one schoolId — everything after it does.
-    const staleBefore = new Date(Date.now() - CLAIM_TTL_MS);
+    // JS time, never the database's now(). The columns are `timestamp`
+    // WITHOUT time zone holding UTC wall-clock (what Prisma writes), and
+    // Prisma binds a Date as `timestamptz` — so every bound time is cast
+    // `::timestamptz AT TIME ZONE 'UTC'`. Without the cast Postgres compares
+    // (and assigns) in the SESSION time zone: on an IST session that moved
+    // every TTL and backoff by 5 h 30 m (measured on a scratch database).
+    const now = new Date(Date.now());
+    const staleBefore = new Date(now.getTime() - CLAIM_TTL_MS);
     const rows = await db.$queryRaw<OutboxRow[]>`
-      UPDATE "NotificationOutbox" SET "claimedAt" = now()
+      UPDATE "NotificationOutbox" SET "claimedAt" = (${now}::timestamptz AT TIME ZONE 'UTC')
       WHERE id IN (
         SELECT id FROM "NotificationOutbox"
         WHERE "sentAt" IS NULL
           AND "expandedAt" IS NULL
           AND attempts < ${MAX_ATTEMPTS}
-          AND ("claimedAt" IS NULL OR "claimedAt" < ${staleBefore})
+          AND ("claimedAt" IS NULL OR "claimedAt" < (${staleBefore}::timestamptz AT TIME ZONE 'UTC'))
         ORDER BY "createdAt" ASC
         LIMIT ${DRAIN_BATCH_CAP}
         FOR UPDATE SKIP LOCKED
@@ -512,6 +566,7 @@ export class NotificationOutboxService implements OnModuleInit, OnModuleDestroy 
     `;
     result.processed = rows.length;
     if (rows.length === DRAIN_BATCH_CAP) {
+      result.more = true;
       this.logger.warn(`Outbox expansion hit the ${DRAIN_BATCH_CAP}-row cap — the rest wait for the next drain.`);
     }
 
@@ -519,6 +574,7 @@ export class NotificationOutboxService implements OnModuleInit, OnModuleDestroy 
       if (Date.now() >= deadline) {
         const rest = rows.slice(i).map((r) => r.id);
         // By id list across schools, like the claim that produced it.
+        result.more = true;
         await db.notificationOutbox.updateMany({ where: { id: { in: rest } }, data: { claimedAt: null } });
         this.logger.warn(`Outbox expansion stopped at its deadline; ${rest.length} rows released for the next run.`);
         return;
@@ -563,25 +619,52 @@ export class NotificationOutboxService implements OnModuleInit, OnModuleDestroy 
     }
   }
 
-  /** Step 2: claim due deliveries and send each through its own channel. */
-  private async sendDue(db: Db, deadline: number, result: NotificationOutboxDrainResult): Promise<void> {
+  /**
+   * Step 2: claim due deliveries and send each through its own channel.
+   *
+   * FAIR ACROSS SCHOOLS. `due` numbers each school's due rows by
+   * nextAttemptAt; `picked` keeps each school's first DELIVERY_PER_SCHOOL_CAP
+   * and interleaves the schools (every school's 1st, then every 2nd, …) up to
+   * DELIVERY_BATCH_CAP. The lock is taken on a plain table SELECT — Postgres
+   * refuses FOR UPDATE beside a window function — and re-checks status and
+   * claimedAt, so a row another drain claimed since `due` was read is skipped
+   * (locked) or filtered out (committed), never claimed twice.
+   */
+  private async sendDue(db: Db, deadline: number, hardStop: number, result: NotificationOutboxDrainResult): Promise<void> {
     // CROSS-TENANT ON PURPOSE, like the outbox claim: due deliveries of every
     // school, by id. Each returned row carries its schoolId, and every query
-    // and write after this one is scoped by it.
-    const staleBefore = new Date(Date.now() - CLAIM_TTL_MS);
+    // and write after this one is scoped by it. JS time throughout, cast to
+    // UTC wall-clock, never the database's now() (see expand()).
+    const now = new Date(Date.now());
+    const staleBefore = new Date(now.getTime() - CLAIM_TTL_MS);
     const due = await db.$queryRaw<ClaimedDelivery[]>`
-      UPDATE "NotificationDelivery" SET "claimedAt" = now()
+      WITH due AS (
+        SELECT id, "nextAttemptAt",
+               ROW_NUMBER() OVER (PARTITION BY "schoolId" ORDER BY "nextAttemptAt" ASC, id ASC) AS rn
+        FROM "NotificationDelivery"
+        WHERE status IN ('QUEUED', 'HELD')
+          AND "nextAttemptAt" <= (${now}::timestamptz AT TIME ZONE 'UTC')
+          AND ("claimedAt" IS NULL OR "claimedAt" < (${staleBefore}::timestamptz AT TIME ZONE 'UTC'))
+      ),
+      picked AS (
+        SELECT id FROM due
+        WHERE rn <= ${DELIVERY_PER_SCHOOL_CAP}
+        ORDER BY rn ASC, "nextAttemptAt" ASC
+        LIMIT ${DELIVERY_BATCH_CAP}
+      )
+      UPDATE "NotificationDelivery" SET "claimedAt" = (${now}::timestamptz AT TIME ZONE 'UTC')
       WHERE id IN (
         SELECT id FROM "NotificationDelivery"
-        WHERE status IN ('QUEUED', 'HELD')
-          AND "nextAttemptAt" <= now()
-          AND ("claimedAt" IS NULL OR "claimedAt" < ${staleBefore})
-        ORDER BY "nextAttemptAt" ASC
-        LIMIT ${DELIVERY_BATCH_CAP}
+        WHERE id IN (SELECT id FROM picked)
+          AND status IN ('QUEUED', 'HELD')
+          AND ("claimedAt" IS NULL OR "claimedAt" < (${staleBefore}::timestamptz AT TIME ZONE 'UTC'))
         FOR UPDATE SKIP LOCKED
       )
       RETURNING id, "schoolId", "outboxId", "userId", channel, attempts
     `;
+    if (due.length === DELIVERY_BATCH_CAP || [...groupBySchool(due, (d) => d.id).values()].some((ids) => ids.size >= DELIVERY_PER_SCHOOL_CAP)) {
+      result.more = true;
+    }
     if (due.length === 0) return;
 
     let outboxes: Map<string, OutboxSummary>;
@@ -612,16 +695,27 @@ export class NotificationOutboxService implements OnModuleInit, OnModuleDestroy 
       // drain, the 10-minute workflow or the cron picks the released rows up.
       if (Date.now() >= deadline) {
         const rest = due.slice(i).map((d) => d.id);
+        result.more = true;
         await this.release(db, rest);
         this.logger.warn(`Delivery drain stopped at its deadline; ${rest.length} deliveries released for the next run.`);
         return;
       }
-      await Promise.all(
+      const chunk = Promise.all(
         due.slice(i, i + DELIVERY_CONCURRENCY).map(async (d) => {
           const outcome = await this.attemptOne(d, outboxes.get(d.outboxId), emails.get(`${d.schoolId}:${d.userId}`), messageFor);
           await this.record(db, d, outcome, result);
         }),
       );
+      if (!(await finishesBefore(chunk, hardStop))) {
+        // A send has hung. Stop waiting before the function is killed: the
+        // unstarted deliveries go back to the queue now; the hung ones keep
+        // their claims, so the TTL stands between them and a second send.
+        const rest = due.slice(i + DELIVERY_CONCURRENCY).map((d) => d.id);
+        result.more = true;
+        if (rest.length > 0) await this.release(db, rest);
+        this.logger.error(`A delivery chunk was still in flight at the hard stop; ${rest.length} unstarted deliveries released.`);
+        return;
+      }
     }
   }
 
@@ -757,16 +851,29 @@ export class NotificationOutboxService implements OnModuleInit, OnModuleDestroy 
    * QUEUED or HELD. A failure here is logged and costs nothing — the next
    * drain runs the same statement. Cross-tenant on purpose: it closes every
    * school's finished rows, so it cannot carry one schoolId.
+   *
+   * A row is closable once expanded — or once PARKED (attempts at
+   * MAX_ATTEMPTS) with deliveries already written: its createMany went
+   * through but the expandedAt write kept failing, so its people were told
+   * and only the bookkeeping is stuck. Closing stamps sentAt, which is what
+   * lets the retention sweep remove it in time. A parked row with NO
+   * deliveries is a real failure and stays for an operator.
    */
   private async closeFinished(db: Db): Promise<number> {
     try {
       return await db.$executeRaw`
-        UPDATE "NotificationOutbox" o SET "sentAt" = now(), "claimedAt" = NULL
+        UPDATE "NotificationOutbox" o SET "sentAt" = (${new Date(Date.now())}::timestamptz AT TIME ZONE 'UTC'), "claimedAt" = NULL
         WHERE o."sentAt" IS NULL
-          AND o."expandedAt" IS NOT NULL
+          AND (
+            o."expandedAt" IS NOT NULL
+            OR (
+              o.attempts >= ${MAX_ATTEMPTS}
+              AND EXISTS (SELECT 1 FROM "NotificationDelivery" e WHERE e."outboxId" = o.id AND e."schoolId" = o."schoolId")
+            )
+          )
           AND NOT EXISTS (
             SELECT 1 FROM "NotificationDelivery" d
-            WHERE d."outboxId" = o.id AND d.status IN ('QUEUED', 'HELD')
+            WHERE d."outboxId" = o.id AND d."schoolId" = o."schoolId" AND d.status IN ('QUEUED', 'HELD')
           )
       `;
     } catch (e) {

@@ -22,7 +22,10 @@ import { Prisma } from '@skoolos/db';
 import { NOTIFICATION_OUTBOX_KINDS } from '@skoolos/types';
 import {
   DELIVERY_BACKOFF_MS,
+  DELIVERY_BATCH_CAP,
   DELIVERY_CONCURRENCY,
+  DELIVERY_PER_SCHOOL_CAP,
+  HARD_STOP_MARGIN_MS,
   NotificationOutboxService,
   OUTBOX_EMAIL,
   ROW_START_RESERVE_MS,
@@ -83,7 +86,30 @@ describe('NotificationOutboxService.drain', () => {
       const sql = sqlOf(call);
       expect(sql).toMatch(/"expandedAt" IS NULL/);
       expect(sql).toMatch(/FOR UPDATE SKIP LOCKED/);
-      expect(call.slice(1)).toEqual([5, expect.any(Date), 200]);
+      expect(call.slice(1)).toEqual([expect.any(Date), 5, expect.any(Date), 200]);
+    });
+
+    it('a full outbox claim says there is more', async () => {
+      outboxClaim = Array.from({ length: 200 }, (_, i) => outboxRow({ id: `r${i}`, classSectionId: null, targetUserId: null }));
+      await expect(svc.drain({ purge: false })).resolves.toMatchObject({ processed: 200, more: true });
+    });
+
+    it('expansion stopped by the deadline releases the rows it did not reach, says more, and claims no delivery', async () => {
+      const t0 = 1_000_000;
+      const now = jest.spyOn(Date, 'now').mockReturnValue(t0);
+      try {
+        outboxClaim = [outboxRow({ id: 'r1' }), outboxRow({ id: 'r2' }), outboxRow({ id: 'r3' })];
+        dbMock.notificationDelivery.createMany.mockImplementation(async ({ data }: { data: unknown[] }) => {
+          now.mockReturnValue(t0 + 60_000);
+          return { count: data.length };
+        });
+        const r = await svc.drain({ purge: false });
+        expect(dbMock.notificationOutbox.updateMany).toHaveBeenCalledWith({ where: { id: { in: ['r2', 'r3'] } }, data: { claimedAt: null } });
+        expect(dbMock.$queryRaw.mock.calls.some((c) => sqlOf(c).includes('UPDATE "NotificationDelivery"'))).toBe(false);
+        expect(r).toMatchObject({ processed: 3, more: true });
+      } finally {
+        now.mockRestore();
+      }
     });
 
     it('a class row becomes one delivery per person per channel, email included where the writer does not email', async () => {
@@ -122,10 +148,23 @@ describe('NotificationOutboxService.drain', () => {
       const r = await svc.drain({ purge: false });
       expect(dbMock.notificationDelivery.createMany).not.toHaveBeenCalled();
       const close = sqlOf(dbMock.$executeRaw.mock.calls[0]);
-      expect(close).toMatch(/SET "sentAt" = now\(\)/);
+      expect(close).toMatch(/SET "sentAt" = \(\?::timestamptz AT TIME ZONE 'UTC'\)/);
       expect(close).toMatch(/"expandedAt" IS NOT NULL/);
-      expect(close).toMatch(/NOT EXISTS[\s\S]*status IN \('QUEUED', 'HELD'\)/);
+      expect(close).toMatch(/NOT EXISTS[\s\S]*d\."schoolId" = o\."schoolId"[\s\S]*status IN \('QUEUED', 'HELD'\)/);
       expect(r.closed).toBe(1);
+    });
+
+    it('a row parked at MAX_ATTEMPTS with its deliveries written is still closed once they end (its expandedAt write kept failing)', async () => {
+      await svc.drain({ purge: false });
+      const call = dbMock.$executeRaw.mock.calls[0];
+      const close = sqlOf(call);
+      expect(close).toMatch(/"expandedAt" IS NOT NULL\s+OR \(\s+o\.attempts >= \?\s+AND EXISTS \(SELECT 1 FROM "NotificationDelivery" e WHERE e\."outboxId" = o\.id AND e\."schoolId" = o\."schoolId"\)/);
+      expect(call.slice(1)).toEqual([expect.any(Date), 5]);
+      // Closing stamps sentAt — the one column the retention sweep reads — so
+      // the parked row is purged on the ordinary 30-day rule.
+      dbMock.notificationOutbox.deleteMany.mockResolvedValue({ count: 1 });
+      await expect(svc.drain()).resolves.toMatchObject({ purged: 1 });
+      expect(Object.keys(dbMock.notificationOutbox.deleteMany.mock.calls[0][0].where)).toEqual(['sentAt']);
     });
   });
 
@@ -134,9 +173,63 @@ describe('NotificationOutboxService.drain', () => {
       await svc.drain({ purge: false });
       const sql = sqlOf(dbMock.$queryRaw.mock.calls.find((c) => sqlOf(c).includes('UPDATE "NotificationDelivery"'))!);
       expect(sql).toMatch(/status IN \('QUEUED', 'HELD'\)/);
-      expect(sql).toMatch(/"nextAttemptAt" <= now\(\)/);
+      expect(sql).toMatch(/"nextAttemptAt" <= \(\?::timestamptz AT TIME ZONE 'UTC'\)/);
       expect(sql).toMatch(/ORDER BY "nextAttemptAt" ASC/);
       expect(sql).toMatch(/FOR UPDATE SKIP LOCKED/);
+    });
+
+    it('is fair across schools: each school is numbered by due time, capped per drain, and the schools interleaved', async () => {
+      await svc.drain({ purge: false });
+      const call = dbMock.$queryRaw.mock.calls.find((c) => sqlOf(c).includes('UPDATE "NotificationDelivery"'))!;
+      const sql = sqlOf(call);
+      expect(sql).toMatch(/ROW_NUMBER\(\) OVER \(PARTITION BY "schoolId" ORDER BY "nextAttemptAt" ASC, id ASC\) AS rn/);
+      expect(sql).toMatch(/WHERE rn <= \?\s+ORDER BY rn ASC, "nextAttemptAt" ASC\s+LIMIT \?/);
+      // The lock is on a plain table SELECT, never beside the window function.
+      expect(sql).toMatch(/SELECT id FROM "NotificationDelivery"\s+WHERE id IN \(SELECT id FROM picked\)[\s\S]*FOR UPDATE SKIP LOCKED/);
+      expect(call.slice(1)).toEqual([expect.any(Date), expect.any(Date), DELIVERY_PER_SCHOOL_CAP, DELIVERY_BATCH_CAP, expect.any(Date), expect.any(Date)]);
+      expect(DELIVERY_PER_SCHOOL_CAP).toBe(60);
+    });
+
+    it("compares claim and due times in JS time, never the database's now()", async () => {
+      outboxClaim = [outboxRow()];
+      await svc.drain({ purge: false });
+      const calls = [...dbMock.$queryRaw.mock.calls, ...dbMock.$executeRaw.mock.calls];
+      expect(calls.length).toBeGreaterThanOrEqual(3);
+      let dates = 0;
+      for (const call of calls) {
+        expect(sqlOf(call)).not.toMatch(/now\(\)/i);
+        // Prisma binds a Date as timestamptz and the columns are timestamp
+        // (UTC wall-clock): every bound time must be cast, or the session
+        // time zone shifts it.
+        const strings = call[0] as string[];
+        call.slice(1).forEach((v: unknown, k: number) => {
+          if (v instanceof Date) {
+            dates += 1;
+            expect(strings[k + 1].startsWith("::timestamptz AT TIME ZONE 'UTC')")).toBe(true);
+          }
+        });
+      }
+      expect(dates).toBe(7);
+    });
+
+    it('one school at its per-drain cap says there is more', async () => {
+      deliveryClaim = Array.from({ length: DELIVERY_PER_SCHOOL_CAP }, (_, i) => delivery(`d${i}`, 'PUSH'));
+      await expect(svc.drain({ purge: false })).resolves.toMatchObject({ sent: DELIVERY_PER_SCHOOL_CAP, more: true });
+    });
+
+    it('a claim below every cap says there is no more', async () => {
+      deliveryClaim = [delivery('d1', 'PUSH'), delivery('d2', 'PUSH', { schoolId: OTHER_SCHOOL })];
+      await expect(svc.drain({ purge: false })).resolves.toMatchObject({ more: false });
+    });
+
+    it('a failed lookup after the claim releases the whole batch and counts no attempt', async () => {
+      deliveryClaim = [delivery('d1', 'PUSH'), delivery('d2', 'EMAIL')];
+      dbMock.notificationOutbox.findMany.mockRejectedValue(new Error('pooler timeout'));
+      const r = await svc.drain({ purge: false });
+      expect(dbMock.notificationDelivery.updateMany).toHaveBeenCalledWith({ where: { id: { in: ['d1', 'd2'] } }, data: { claimedAt: null } });
+      expect(dbMock.notificationDelivery.update).not.toHaveBeenCalled();
+      expect(push.attempt).not.toHaveBeenCalled();
+      expect(r).toMatchObject({ sent: 0, failed: 0, retried: 0, more: false });
     });
 
     it('sends each delivery through its own channel and records SENT with the provider id', async () => {
@@ -317,7 +410,7 @@ describe('NotificationOutboxService.drain', () => {
         dbMock.$queryRaw.mockRejectedValue(missing('42703', 'column "expandedAt"'));
         const first = await fresh.drain();
         const second = await fresh.drain();
-        expect(first).toEqual({ processed: 0, expanded: 0, sent: 0, failed: 0, retried: 0, skipped: 0, closed: 0, purged: 0 });
+        expect(first).toEqual({ processed: 0, expanded: 0, sent: 0, failed: 0, retried: 0, skipped: 0, closed: 0, purged: 0, more: false });
         expect(second).toEqual(first);
         expect(warn.mock.calls.filter((c) => String(c[0]).includes('migration'))).toHaveLength(1);
         expect(dbMock.notificationOutbox.update).not.toHaveBeenCalled();
@@ -368,12 +461,38 @@ describe('NotificationOutboxService.drain', () => {
   });
 
   describe('the time budget', () => {
-    it('a drain whose deadline has passed starts no delivery, releases every claim, and does not chain a drain', async () => {
+    it('a drain whose deadline has passed claims no delivery at all, says more, and does not chain a drain', async () => {
       deliveryClaim = [delivery('d1', 'PUSH'), delivery('d2', 'EMAIL')];
-      await svc.drain({ purge: false, deadline: Date.now() - 1 });
+      const r = await svc.drain({ purge: false, deadline: Date.now() - 1 });
       expect(push.attempt).not.toHaveBeenCalled();
-      expect(dbMock.notificationDelivery.updateMany).toHaveBeenCalledWith({ where: { id: { in: ['d1', 'd2'] } }, data: { claimedAt: null } });
+      expect(dbMock.$queryRaw.mock.calls.some((c) => sqlOf(c).includes('UPDATE "NotificationDelivery"'))).toBe(false);
+      expect(dbMock.notificationDelivery.updateMany).not.toHaveBeenCalled();
+      expect(r.more).toBe(true);
       expect(requestOutboxDrain).not.toHaveBeenCalled();
+    });
+
+    it('a hung send is abandoned at the hard stop: unstarted deliveries are released, the hung ones keep their claim', async () => {
+      jest.useFakeTimers();
+      try {
+        deliveryClaim = Array.from({ length: DELIVERY_CONCURRENCY + 2 }, (_, i) => delivery(`d${i}`, 'PUSH'));
+        push.attempt.mockImplementation(() => new Promise(() => undefined)); // never settles
+        let settled = false;
+        const run = svc.drain({ purge: false }).then((r) => {
+          settled = true;
+          return r;
+        });
+        await jest.advanceTimersByTimeAsync(60_000 - HARD_STOP_MARGIN_MS - 1_000);
+        expect(settled).toBe(false);
+        await jest.advanceTimersByTimeAsync(1_000);
+        const r = await run;
+        expect(push.attempt).toHaveBeenCalledTimes(DELIVERY_CONCURRENCY);
+        expect(dbMock.notificationDelivery.updateMany).toHaveBeenCalledTimes(1);
+        expect(dbMock.notificationDelivery.updateMany).toHaveBeenCalledWith({ where: { id: { in: ['d5', 'd6'] } }, data: { claimedAt: null } });
+        expect(dbMock.notificationDelivery.update).not.toHaveBeenCalled();
+        expect(r.more).toBe(true);
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     it('never starts a chunk once fewer than ROW_START_RESERVE_MS remain of the 60 s invocation, whatever deadline is passed', async () => {
@@ -385,9 +504,11 @@ describe('NotificationOutboxService.drain', () => {
           now.mockReturnValue(t0 + 60_000 - ROW_START_RESERVE_MS);
           return { status: 'SENT' };
         });
-        await svc.drain({ purge: false, deadline: t0 + 10 * 60_000 });
+        const r = await svc.drain({ purge: false, deadline: t0 + 10 * 60_000 });
         expect(push.attempt).toHaveBeenCalledTimes(DELIVERY_CONCURRENCY);
         expect(dbMock.notificationDelivery.updateMany).toHaveBeenCalledWith({ where: { id: { in: ['d5', 'd6'] } }, data: { claimedAt: null } });
+        // ...and the run says there is more, so the workflow calls again.
+        expect(r.more).toBe(true);
       } finally {
         now.mockRestore();
       }
