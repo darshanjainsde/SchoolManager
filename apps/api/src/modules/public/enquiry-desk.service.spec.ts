@@ -498,11 +498,11 @@ describe('the retired CLOSED and an unnamed actor', () => {
 const writtenNotes = () =>
   txMock.enquiryNote.create.mock.calls.map(([a]) => (a as { data: Record<string, unknown> }).data);
 /**
- * What the lead row was told to become. A stage move is a compare-and-set
- * (updateMany); a contact that moves nothing is a plain update.
+ * What the lead row was told to become. Both paths are updateMany scoped by
+ * schoolId; a stage move also carries the stage it read (compare-and-set).
  */
 const updateData = () => {
-  const call = txMock.enquiry.updateMany.mock.calls[0] ?? txMock.enquiry.update.mock.calls[0];
+  const call = txMock.enquiry.updateMany.mock.calls[0];
   return (call[0] as { data: Record<string, unknown> }).data;
 };
 
@@ -587,10 +587,11 @@ describe('logging a call, a WhatsApp or a visit', () => {
     expect(txMock.enquiryNote.create).not.toHaveBeenCalled();
   });
 
-  it('a contact that moves no stage is a plain update that never writes the stage', async () => {
+  it('a contact that moves no stage never writes the stage, and its write still carries schoolId', async () => {
     at('CONTACTED');
     await service().logContact(SCHOOL, LEAD, 'VISIT');
-    expect(txMock.enquiry.updateMany).not.toHaveBeenCalled();
+    expect(txMock.enquiry.update).not.toHaveBeenCalled();
+    expect(txMock.enquiry.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { id: LEAD, schoolId: SCHOOL } }));
     expect(updateData()).not.toHaveProperty('status');
   });
 
@@ -656,6 +657,11 @@ describe('the website form', () => {
     await new EnquiryService(site, withEnquiry).submit({ parentName: 'Sneha Kulkarni', phone: '98123 00011', gradeInterest: 'Nursery' });
     expect(txMock.enquiry.create).toHaveBeenCalledWith({ data: expect.objectContaining({ source: 'WEBSITE', status: 'NEW' }) });
     expect(writtenNotes()[0]).toEqual(expect.objectContaining({ kind: 'SYSTEM', body: 'Enquiry received from the website — asked about Nursery' }));
+  });
+
+  it('trims the name and the phone, as the desk does', async () => {
+    await new EnquiryService(site, withEnquiry).submit({ parentName: '  Sneha Kulkarni ', phone: ' 98123 00011  ' });
+    expect(txMock.enquiry.create).toHaveBeenCalledWith({ data: expect.objectContaining({ parentName: 'Sneha Kulkarni', phone: '98123 00011' }) });
   });
 
   it('records COURSE_CARD for a call-back asked for on a course card', async () => {

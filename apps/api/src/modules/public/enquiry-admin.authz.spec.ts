@@ -35,4 +35,35 @@ describe('/site/enquiries authorization', () => {
     expect(order.indexOf('owners')).toBeGreaterThan(-1);
     expect(order.indexOf('owners')).toBeLessThan(order.indexOf('detail'));
   });
+
+  describe('POST enquiries/:id/notes', () => {
+    const ID = '00000000-0000-4000-8000-000000000001';
+    const make = () => {
+      const enquiry = { addNote: jest.fn(), logContact: jest.fn() };
+      const tenant = { requireTenant: () => ({ schoolId: 'school-1' }) };
+      return { enquiry, controller: new EnquiryAdminController(enquiry as never, tenant as never) };
+    };
+
+    it.each([
+      [{ outcome: 'LOST' }],
+      [{ kind: 'NOTE', outcome: 'INTERESTED', body: 'x' }],
+      [{ lostReason: 'Fees too high', body: 'x' }],
+    ])('refuses 400 VALIDATION a note that carries an outcome or a reason (%j), and writes nothing', (dto) => {
+      const { enquiry, controller } = make();
+      let caught: { getStatus(): number; getResponse(): { code?: string } } | undefined;
+      try { controller.addNote(ID, dto as never); } catch (e) { caught = e as never; }
+      expect(caught?.getStatus()).toBe(400);
+      expect(caught?.getResponse().code).toBe('VALIDATION');
+      expect(enquiry.addNote).not.toHaveBeenCalled();
+      expect(enquiry.logContact).not.toHaveBeenCalled();
+    });
+
+    it('a plain note still goes to addNote, and a call to logContact', () => {
+      const { enquiry, controller } = make();
+      controller.addNote(ID, { body: 'Asked about the bus' } as never);
+      expect(enquiry.addNote).toHaveBeenCalled();
+      controller.addNote(ID, { kind: 'CALL', outcome: 'LOST', lostReason: 'x' } as never);
+      expect(enquiry.logContact).toHaveBeenCalled();
+    });
+  });
 });

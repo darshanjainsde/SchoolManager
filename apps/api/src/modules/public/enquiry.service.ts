@@ -120,8 +120,8 @@ export class EnquiryService {
       tx.enquiry.create({
         data: {
           schoolId,
-          parentName: dto.parentName,
-          phone: dto.phone,
+          parentName: dto.parentName.trim(),
+          phone: dto.phone.trim(),
           email: dto.email,
           gradeInterest: dto.gradeInterest,
           message: dto.message,
@@ -378,7 +378,7 @@ export class EnquiryService {
           throw new ApiError('ENQUIRY_CHANGED', 'Someone else just moved this lead. Refresh and try again.', 409, 'status');
         }
       } else {
-        await tx.enquiry.update({ where: { id }, data });
+        await tx.enquiry.updateMany({ where: { id, schoolId }, data });
       }
 
       const by = await this.author(tx, schoolId, actor);

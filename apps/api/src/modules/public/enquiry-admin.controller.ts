@@ -5,6 +5,7 @@ import { Roles } from '../../common/auth/roles.decorator';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import type { AnyJwtPayload } from '../../common/auth/jwt-payload';
 import { TenantContextService } from '../tenancy';
+import { ApiError } from '../../common/errors/api-error';
 import { EnquiryService } from './enquiry.service';
 import { AdmissionsDeskGuard } from './internal/admissions-desk.guard';
 import { AddEnquiryNoteDto, CreateDeskEnquiryDto, SetEnquiryStatusDto } from './public.dto';
@@ -76,7 +77,14 @@ export class EnquiryAdminController {
     @CurrentUser() user?: AnyJwtPayload,
   ) {
     const kind = dto.kind ?? 'NOTE';
-    if (kind === 'NOTE') return this.enquiry.addNote(this.sid(), id, dto.body ?? '', this.actor(user));
+    if (kind === 'NOTE') {
+      // A note has no outcome. Dropping one silently would let an officer believe
+      // a lead was marked lost when nothing was written.
+      if (dto.outcome !== undefined || dto.lostReason !== undefined) {
+        throw new ApiError('VALIDATION', 'An outcome belongs to a call, a WhatsApp or a visit — not to a note.', 400, 'outcome');
+      }
+      return this.enquiry.addNote(this.sid(), id, dto.body ?? '', this.actor(user));
+    }
     return this.enquiry.logContact(
       this.sid(), id, kind,
       { outcome: dto.outcome, lostReason: dto.lostReason, body: dto.body },

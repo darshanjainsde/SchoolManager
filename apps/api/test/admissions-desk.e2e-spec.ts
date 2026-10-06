@@ -87,6 +87,12 @@ describe('the admissions desk', () => {
     expect(res.status).toBe(403);
   });
 
+  it('refuses a driver at the walk-in door — the job, not the login', async () => {
+    const res = await send('post', '/site/enquiries', driver).send({ parentName: 'X', phone: '98290 11223', source: 'WALK_IN' });
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('NOT_ADMISSIONS_DESK');
+  });
+
   it('refuses a walk-in that claims to come from the website', async () => {
     const res = await send('post', '/site/enquiries', officer).send({ parentName: 'X', phone: '98290 11223', source: 'WEBSITE' });
     expect(res.status).toBe(400);
