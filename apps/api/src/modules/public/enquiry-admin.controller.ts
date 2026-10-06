@@ -30,7 +30,11 @@ export class EnquiryAdminController {
 
   /** Who is acting. The service signs the history line with their name (Actor.name left out on purpose). */
   private actor(user?: AnyJwtPayload) {
-    return { userId: user && 'sub' in user ? user.sub : undefined };
+    return {
+      userId: user && 'sub' in user ? user.sub : undefined,
+      // create() decides ownership by it: an admissions officer (STAFF, past AdmissionsDeskGuard) owns what they type, a school admin does not.
+      role: user?.role,
+    };
   }
 
   @Get('enquiries')
@@ -48,7 +52,7 @@ export class EnquiryAdminController {
     return this.enquiry.owners(this.sid());
   }
 
-  /** A walk-in or a phone enquiry, owned by the caller. The website form stays on /public/enquiry. */
+  /** A walk-in or a phone enquiry: owned by an officer who types it, unowned when an admin does. The website form stays on /public/enquiry. */
   @Post('enquiries')
   @HttpCode(201)
   create(@Body() dto: CreateDeskEnquiryDto, @CurrentUser() user?: AnyJwtPayload) {

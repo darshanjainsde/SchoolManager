@@ -17,6 +17,7 @@ describe('the admissions desk', () => {
   let adminId: string;
   let driverId: string;
   let officer: string;
+  let admin: string;
   let driver: string;
   let student: string;
 
@@ -34,6 +35,7 @@ describe('the admissions desk', () => {
     });
     officerId = user.id;
     officer = signSchoolToken({ sub: officerId, schoolId: seeded.schoolId, role: 'STAFF' });
+    admin = signSchoolToken({ sub: adminId, schoolId: seeded.schoolId, role: 'SCHOOL_ADMIN' });
     driver = signSchoolToken({ sub: driverId, schoolId: seeded.schoolId, role: 'STAFF' });
     student = signSchoolToken({ sub: seeded.studentUserId, schoolId: seeded.schoolId, role: 'STUDENT' });
 
@@ -82,6 +84,15 @@ describe('the admissions desk', () => {
     expect(row).toEqual(expect.objectContaining({ ownerUserId: officerId, source: 'WALK_IN', status: 'NEW' }));
   });
 
+  it('a walk-in typed by a school admin is unowned, so it lands in the officers’ Unowned view', async () => {
+    const res = await send('post', '/site/enquiries', admin)
+      .send({ parentName: 'Meera Purohit', phone: '98290 11223', source: 'WALK_IN' });
+    expect(res.status).toBe(201);
+    expect(res.body.ownerUserId).toBeNull();
+    const detail = await send('get', `/site/enquiries/${res.body.id}`, officer);
+    expect(detail.body.ownerUserId).toBeNull();
+  });
+
   it('refuses a student at the walk-in door', async () => {
     const res = await send('post', '/site/enquiries', student).send({ parentName: 'X', phone: '98290 11223', source: 'WALK_IN' });
     expect(res.status).toBe(403);
@@ -111,6 +122,23 @@ describe('the admissions desk', () => {
     const res = await send('patch', `/site/enquiries/${row.id}`, officer).send({ ownerUserId: driverId });
     expect(res.status).toBe(400);
     expect(res.body.code).toBe('ENQUIRY_OWNER_NOT_DESK');
+  });
+
+  it('a stage move and a typed note each bump updatedAt, so the lead reads as recently touched', async () => {
+    const updatedAt = async (id: string) =>
+      new Date((await send('get', `/site/enquiries/${id}`, officer)).body.updatedAt).getTime();
+    const tick = () => new Promise((r) => setTimeout(r, 20));
+    const row = await walkIn();
+    const t0 = await updatedAt(row.id);
+
+    await tick();
+    expect((await send('patch', `/site/enquiries/${row.id}`, officer).send({ status: 'INTERESTED' })).status).toBe(200);
+    const t1 = await updatedAt(row.id);
+    expect(t1).toBeGreaterThan(t0);
+
+    await tick();
+    expect((await send('post', `/site/enquiries/${row.id}/notes`, officer).send({ body: 'Asked about the bus' })).status).toBe(201);
+    expect(await updatedAt(row.id)).toBeGreaterThan(t1);
   });
 
   it('a logged call moves a new lead to Contacted, stamps it, and is signed', async () => {

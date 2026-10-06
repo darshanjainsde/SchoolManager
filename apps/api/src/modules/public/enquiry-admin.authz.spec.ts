@@ -36,6 +36,20 @@ describe('/site/enquiries authorization', () => {
     expect(order.indexOf('owners')).toBeLessThan(order.indexOf('detail'));
   });
 
+  describe('POST enquiries (the walk-in door)', () => {
+    const make = () => {
+      const enquiry = { create: jest.fn() };
+      const tenant = { requireTenant: () => ({ schoolId: 'school-1' }) };
+      return { enquiry, controller: new EnquiryAdminController(enquiry as never, tenant as never) };
+    };
+
+    it.each(['STAFF', 'SCHOOL_ADMIN'])('hands the service the caller’s role (%s), which is what decides who owns the lead', (role) => {
+      const { enquiry, controller } = make();
+      controller.create({ parentName: 'X', phone: '98290 11223', source: 'WALK_IN' } as never, { sub: 'u1', role } as never);
+      expect(enquiry.create).toHaveBeenCalledWith('school-1', expect.anything(), { userId: 'u1', role });
+    });
+  });
+
   describe('POST enquiries/:id/notes', () => {
     const ID = '00000000-0000-4000-8000-000000000001';
     const make = () => {

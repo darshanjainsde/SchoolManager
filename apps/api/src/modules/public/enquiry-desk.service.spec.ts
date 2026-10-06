@@ -160,6 +160,21 @@ describe('a lead from another school', () => {
     expect(txMock.enquiry.update).not.toHaveBeenCalled();
   });
 
+  it('a typed note bumps the lead itself, scoped to the school, in the same transaction', async () => {
+    const before = Date.now();
+    await service().addNote(SCHOOL, LEAD, 'Asked about the bus', { userId: USER });
+    expect(txMock.enquiry.updateMany).toHaveBeenCalledTimes(1);
+    const arg = txMock.enquiry.updateMany.mock.calls[0][0] as { where: unknown; data: { updatedAt: Date } };
+    expect(arg.where).toEqual({ id: LEAD, schoolId: SCHOOL });
+    expect(arg.data.updatedAt.getTime()).toBeGreaterThanOrEqual(before);
+    expect(withTenantMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('a refused (blank) note does not touch the lead', async () => {
+    await refusal(service().addNote(SCHOOL, LEAD, '  '));
+    expect(txMock.enquiry.updateMany).not.toHaveBeenCalled();
+  });
+
   it('cannot have a note attached to it', async () => {
     txMock.enquiry.findFirst.mockResolvedValue(null);
     await expect(service().addNote(SCHOOL, LEAD, 'hello')).rejects.toBeInstanceOf(NotFoundException);
@@ -761,7 +776,7 @@ describe('a walk-in typed at the desk', () => {
     await service().create(
       SCHOOL,
       { parentName: ' Meera Purohit ', phone: '98290 11223', source: 'WALK_IN', childName: 'Aarav', gradeInterest: 'Class III', whatsappOk: true },
-      { userId: USER, name: 'Sunita Kale' },
+      { userId: USER, name: 'Sunita Kale', role: 'STAFF' },
     );
     expect(txMock.enquiry.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -774,8 +789,19 @@ describe('a walk-in typed at the desk', () => {
     ]);
   });
 
+  it('is left unowned when a school admin types it, so it shows in the officers’ Unowned view', async () => {
+    await service().create(
+      SCHOOL,
+      { parentName: 'Meera Purohit', phone: '98290 11223', source: 'WALK_IN' },
+      { userId: ADMIN, name: 'Principal Rathore', role: 'SCHOOL_ADMIN' },
+    );
+    expect(txMock.enquiry.create).toHaveBeenCalledWith({ data: expect.objectContaining({ ownerUserId: null }) });
+    // The history still says who took it.
+    expect(writtenNotes()[0]).toEqual(expect.objectContaining({ body: 'Walk-in enquiry taken by Principal Rathore', authorUserId: ADMIN }));
+  });
+
   it('a phone enquiry says so, and an unticked WhatsApp box stays false', async () => {
-    await service().create(SCHOOL, { parentName: 'Imran Shaikh', phone: '98290 44556', source: 'PHONE' }, { userId: USER, name: 'Sunita Kale' });
+    await service().create(SCHOOL, { parentName: 'Imran Shaikh', phone: '98290 44556', source: 'PHONE' }, { userId: USER, name: 'Sunita Kale', role: 'STAFF' });
     expect(txMock.enquiry.create).toHaveBeenCalledWith({ data: expect.objectContaining({ source: 'PHONE', whatsappOk: false, childName: null }) });
     expect(writtenNotes()[0]).toEqual(expect.objectContaining({ body: 'Phone enquiry taken by Sunita Kale' }));
   });

@@ -19,7 +19,12 @@ const STAGE_LABEL: Record<string, string> = {
 };
 
 /** Who did something. `name` absent = the service looks it up; present (even null) = use it. */
-type Actor = { userId?: string; name?: string | null };
+/**
+ * `role` is the caller's login role. Only `create` reads it: AdmissionsDeskGuard
+ * lets a STAFF login through only when it is an active admissions officer, so
+ * STAFF here means "an officer" and SCHOOL_ADMIN means "the office, not a desk".
+ */
+type Actor = { userId?: string; name?: string | null; role?: string };
 
 /** The first words of a contact's history line. */
 const CONTACT_WORD: Record<ContactKind, string> = {
@@ -332,9 +337,13 @@ export class EnquiryService {
       if (!existing) throw new NotFoundException('Enquiry not found');
       if (!body.trim()) throw new ApiError('VALIDATION', 'Write something in the note first.', 400, 'body');
       const by = await this.author(tx, schoolId, actor);
-      return tx.enquiryNote.create({
+      const note = await tx.enquiryNote.create({
         data: { schoolId, enquiryId: id, kind: 'NOTE', body, authorUserId: by.userId, authorName: by.name },
       });
+      // A typed note is work on the lead: "recently touched" must say so. The
+      // note row is not on the lead, so bump the lead itself, schoolId-scoped.
+      await tx.enquiry.updateMany({ where: { id, schoolId }, data: { updatedAt: new Date() } });
+      return note;
     });
   }
 
@@ -417,9 +426,11 @@ export class EnquiryService {
   }
 
   /**
-   * A walk-in or a phone enquiry typed at the desk. Owned by whoever typed it —
-   * they are the one who met the family — and never throttled: the 5-a-minute
-   * limit exists for strangers on the internet, and the office is not one.
+   * A walk-in or a phone enquiry typed at the desk. An admissions officer owns
+   * what they type — they are the one who met the family. A school admin typing
+   * one in is the office, not a desk: it is left unowned and shows in the
+   * officers' Unowned view for one of them to take. Never throttled: the
+   * 5-a-minute limit exists for strangers on the internet, and the office is not one.
    */
   async create(schoolId: string, dto: CreateDeskEnquiryDto, actor?: Actor) {
     return withTenant(schoolId, async (tx) => {
@@ -437,7 +448,7 @@ export class EnquiryService {
           source: dto.source,
           whatsappOk: dto.whatsappOk ?? false,
           status: 'NEW',
-          ownerUserId: by.userId,
+          ownerUserId: actor?.role === 'STAFF' ? by.userId : null,
         },
       });
       await tx.enquiryNote.create({
