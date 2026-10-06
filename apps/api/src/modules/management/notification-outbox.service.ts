@@ -54,6 +54,9 @@ const MAX_ATTEMPTS = 5;
  * comfortably longer than a full DRAIN_BATCH_CAP run (sequential push sends,
  * bounded by the function's maxDuration of 60s) and short enough that a genuine
  * crash costs one cron cycle, not a day.
+ *
+ * It is also the back-off between attempts: a failed row keeps a fresh
+ * `claimedAt`, so it is not retried for five minutes.
  */
 const CLAIM_TTL_MS = 5 * 60_000;
 
@@ -100,8 +103,27 @@ export const OUTBOX_EMAIL: Record<NotificationOutboxKind, boolean> = {
   CONCERN_RESOLVED: true,
 };
 
-/** Leaves 20 s of the function's 60 s for the bookkeeping and the purge. */
+/**
+ * How long after it begins a drain may still START a row (the default
+ * `deadline`). It bounds when a row may START, not when the drain ends: the
+ * row in flight always finishes, and one row can overrun on its own — a
+ * class-wide row is ~3 sends per recipient (push, WhatsApp, email). Bounding a
+ * single row needs per-recipient delivery rows, which is Tier 1
+ * (NotificationDelivery). The 20 s left of the function's 60 s is that row's
+ * room plus the bookkeeping and the purge.
+ */
 export const DRAIN_TIME_BUDGET_MS = 40_000;
+
+/** The function's hard ceiling (`maxDuration: 60` in apps/api/vercel.json). */
+const INVOCATION_CEILING_MS = 60_000;
+
+/**
+ * No row STARTS with less than this left of the 60 s ceiling, measured from
+ * when the drain began — whatever `deadline` a caller passes. A row killed
+ * mid-send has no `sentAt`, so after CLAIM_TTL_MS its whole audience is sent
+ * to again; not starting it is always the safer side.
+ */
+export const ROW_START_RESERVE_MS = 15_000;
 
 /**
  * Emails one row's recipients this many at a time. SMTP is the slow leg, and a
@@ -357,8 +379,14 @@ export class NotificationOutboxService implements OnModuleInit, OnModuleDestroy 
    * request, to reclaim rows that are thirty days old. Delivery is urgent and
    * retention is not, so only the cron sweeps.
    */
-  async drain(opts: { purge?: boolean } = {}): Promise<NotificationOutboxDrainResult> {
+  async drain(opts: { purge?: boolean; deadline?: number } = {}): Promise<NotificationOutboxDrainResult> {
     const { purge = true } = opts;
+    // `deadline` is the epoch-ms time after which this drain must not START a
+    // row. Whatever the caller asks for, never start one with fewer than
+    // ROW_START_RESERVE_MS left of the invocation's 60 s ceiling, measured
+    // from when this drain began.
+    const started = Date.now();
+    const deadline = Math.min(opts.deadline ?? started + DRAIN_TIME_BUDGET_MS, started + INVOCATION_CEILING_MS - ROW_START_RESERVE_MS);
     const db = getPlatformPrisma();
 
     // Claim the batch in ONE statement. `FOR UPDATE SKIP LOCKED` makes a second
@@ -395,9 +423,20 @@ export class NotificationOutboxService implements OnModuleInit, OnModuleDestroy 
     // Some writers do not carry the school's name on the row (see
     // SportsNoticeOutboxPayload); fill it once per school per run.
     const schoolNames = new Map<string, string>();
+    // A FAILED lookup (pooler timeout) is not a reason to fail the row — that
+    // would retry push + WhatsApp for the whole row. The row goes out as
+    // 'Your school' and the miss is NOT cached, so the next row asks again.
     const schoolNameOf = async (id: string) => {
-      if (!schoolNames.has(id)) schoolNames.set(id, (await db.school.findFirst({ where: { id }, select: { name: true } }))?.name ?? 'Your school');
-      return schoolNames.get(id)!;
+      const known = schoolNames.get(id);
+      if (known !== undefined) return known;
+      try {
+        const name = (await db.school.findFirst({ where: { id }, select: { name: true } }))?.name ?? 'Your school';
+        schoolNames.set(id, name);
+        return name;
+      } catch (e) {
+        this.logger.warn(`school name lookup for ${id} failed, sending as 'Your school': ${(e as Error)?.message}`);
+        return 'Your school';
+      }
     };
 
     // Sequential, not `Promise.allSettled` batches like ExamRemindersService:
@@ -405,16 +444,21 @@ export class NotificationOutboxService implements OnModuleInit, OnModuleDestroy 
     // per run than the daily reminder scan), so a simple loop stays well
     // inside maxDuration without the added complexity of chunking. One bad
     // row's `catch` below still can never block the rest of the batch.
-    const started = Date.now();
     for (let i = 0; i < rows.length; i += 1) {
       const row = rows[i];
-      // The budget is checked BEFORE a row starts; the row in flight finishes.
-      // Rows not started are released in one statement and another drain is asked for.
-      if (Date.now() - started > DRAIN_TIME_BUDGET_MS) {
+      // The deadline is checked BEFORE a row starts; the row in flight finishes.
+      // Rows not started are released in one statement and the drain simply
+      // stops. It does NOT ask for another drain: requestOutboxDrain() runs the
+      // next drain via waitUntil inside THIS invocation, which is already near
+      // its 60 s ceiling — a chained drain would start a fresh budget with
+      // ~15 s of real time left and be killed mid-row, and a killed row (some
+      // of the class pushed/WhatsApped, no sentAt) is sent to the whole class
+      // again after CLAIM_TTL_MS. The next write's requestOutboxDrain() (a new
+      // invocation) or the cron picks the released rows up.
+      if (Date.now() >= deadline) {
         const rest = rows.slice(i).map((r) => r.id);
         await db.notificationOutbox.updateMany({ where: { id: { in: rest } }, data: { claimedAt: null } });
-        this.logger.warn(`Outbox drain stopped at its time budget; ${rest.length} rows released for the next run.`);
-        requestOutboxDrain();
+        this.logger.warn(`Outbox drain stopped at its deadline; ${rest.length} rows released for the next run.`);
         break;
       }
       try {
@@ -431,8 +475,17 @@ export class NotificationOutboxService implements OnModuleInit, OnModuleDestroy 
 
         const emailIt = OUTBOX_EMAIL[row.kind] && !(row.payload as { emailed?: boolean } | null)?.emailed;
         for (const to of recipients) {
+          // Push is first: if it throws the row legitimately retries.
           await this.push.send(to, message, row.schoolId);
-          await this.whatsapp.send(to, message, row.schoolId);
+          // WhatsApp must NOT throw out of this loop: recipients 1..k have
+          // already been pushed, so failing the row here would push them
+          // again on every retry. A WhatsApp-side failure is logged and the
+          // row carries on.
+          try {
+            await this.whatsapp.send(to, message, row.schoolId);
+          } catch (e) {
+            this.logger.warn(`outbox WhatsApp to ${to} failed for row ${row.id}: ${(e as Error)?.message}`);
+          }
         }
         if (emailIt) {
           // After push + WhatsApp, in parallel chunks. An email failure is logged,
@@ -459,11 +512,15 @@ export class NotificationOutboxService implements OnModuleInit, OnModuleDestroy 
         try {
           await db.notificationOutbox.update({
             where: { id: row.id },
-            // claimedAt back to null: this row is released for the next run.
+            // claimedAt is re-stamped NOW, not cleared: every write asks for a
+            // drain within 750 ms, so a cleared claim let a row failing on a
+            // pooler timeout burn all MAX_ATTEMPTS inside a minute and park
+            // for good. Holding the claim makes CLAIM_TTL_MS (5 min) the
+            // back-off between attempts — five attempts span ~25 minutes.
             data: {
               attempts: { increment: 1 },
               lastError: errorMessage.slice(0, 500),
-              claimedAt: null,
+              claimedAt: new Date(),
             },
           });
         } catch (updateError) {
