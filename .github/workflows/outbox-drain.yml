@@ -36,7 +36,8 @@ permissions: {}
 jobs:
   drain:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    # Up to 8 calls of at most 55 s each (see the loop below).
+    timeout-minutes: 9
     steps:
       - name: Call the drain endpoint
         env:
@@ -54,8 +55,20 @@ jobs:
             echo "::notice title=Outbox drain skipped::CRON_SECRET is not configured, so the outbox is not being drained. Set it in repo Settings → Secrets → Actions (it must equal the API's CRON_SECRET on Vercel)."
             exit 0
           fi
-          code=$(curl -sS -o /tmp/body -w '%{http_code}' --max-time 55 \
-            -X POST "${API_BASE}/internal/cron/notification-outbox" \
-            -H "Authorization: Bearer ${CRON_SECRET}")
-          echo "HTTP ${code}"; cat /tmp/body; echo
-          [ "${code}" = "200" ] || [ "${code}" = "201" ]
+          # Call again while the drain says `more` (a claim came back full, or
+          # the deadline ended the run), at most 8 calls per run. Each call is
+          # its own serverless invocation with its own 60 s, so this is not a
+          # chained drain; no sleep is needed between calls.
+          for call in 1 2 3 4 5 6 7 8; do
+            code=$(curl -sS -o /tmp/body -w '%{http_code}' --max-time 55 \
+              -X POST "${API_BASE}/internal/cron/notification-outbox" \
+              -H "Authorization: Bearer ${CRON_SECRET}")
+            echo "Call ${call}: HTTP ${code}"; cat /tmp/body; echo
+            if [ "${code}" != "200" ] && [ "${code}" != "201" ]; then
+              exit 1
+            fi
+            more=$(jq -r '.more // false' /tmp/body 2>/dev/null || echo false)
+            if [ "${more}" != "true" ]; then
+              break
+            fi
+          done
