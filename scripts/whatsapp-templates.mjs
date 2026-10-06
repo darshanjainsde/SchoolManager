@@ -3,7 +3,7 @@
  * Submit our message templates to a WhatsApp Business Account.
  *
  *   WHATSAPP_WABA_ID=… pnpm --filter @skoolos/api exec tsx ../../scripts/whatsapp-templates.mjs --dry
- *   WHATSAPP_WABA_ID=… pnpm --filter @skoolos/api exec tsx ../../scripts/whatsapp-templates.mjs
+ *   WHATSAPP_WABA_ID=… pnpm --filter @skoolos/api exec tsx ../../scripts/whatsapp-templates.mjs [--only=name,name]
  *
  * The bodies, sample values and buttons come from the API's own
  * `templates.ts` (templateSubmissions()), not from the docs, so a
@@ -25,6 +25,11 @@ const token = (process.env.WHATSAPP_TOKEN || (() => {
 })()).trim();
 const waba = process.env.WHATSAPP_WABA_ID;
 const dry = process.argv.includes('--dry');
+// --only=a,b submits just those names (e.g. a new tier's templates) and leaves
+// the rest alone — useful while a category such as AUTHENTICATION is blocked.
+const only = new Set(
+  (process.argv.find((a) => a.startsWith('--only=')) ?? '').slice('--only='.length).split(',').filter(Boolean),
+);
 
 if (!token.startsWith('EAA')) { console.error('No usable token in ~/.sckools-whatsapp-token.'); process.exit(2); }
 if (!waba) { console.error('Need WHATSAPP_WABA_ID in the environment.'); process.exit(2); }
@@ -33,7 +38,10 @@ if (!waba) { console.error('Need WHATSAPP_WABA_ID in the environment.'); process
 // registry is read as code: every template, by the NAME the code sends,
 // including the narrow notice templates the old regex never saw.
 import { templateSubmissions } from '../apps/api/src/common/notifications/whatsapp/templates.ts';
-const ALL = templateSubmissions();
+const ALL = templateSubmissions().filter((t) => only.size === 0 || only.has(t.name));
+for (const name of only) {
+  if (!ALL.some((t) => t.name === name)) { console.error(`No template named ${name} in templates.ts.`); process.exit(2); }
+}
 
 const g = async (path, init) => {
   const r = await fetch(`${G}/${path}`, { ...init, headers: { Authorization: `Bearer ${token}`, ...(init?.headers ?? {}) } });
