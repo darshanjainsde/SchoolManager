@@ -42,10 +42,12 @@ describe('AnnouncementsService — the kind of notice (topic)', () => {
     jest.clearAllMocks();
     notifications.notify.mockResolvedValue({ sent: 0, failed: 0 });
     txMock.school.findFirst.mockResolvedValue({ name: 'Green Valley School' });
-    txMock.classSection.findMany.mockResolvedValue([
+    const sections = [
       { id: CLASS_A, name: 'A', grade: { name: '5' } },
       { id: CLASS_B, name: 'B', grade: { name: '5' } },
-    ]);
+    ];
+    txMock.classSection.findMany.mockImplementation(async ({ where }: { where: { id: { in: string[] } } }) =>
+      sections.filter((c) => where.id.in.includes(c.id)));
     txMock.announcement.create.mockImplementation(({ data }: { data: Record<string, unknown> }) => Promise.resolve({ id: `ann-${data.classSectionId}`, ...data }));
     recipientsMock.resolveSectionRecipients.mockImplementation(async (_tx: unknown, _s: string, id: string) => [`parent-${id === CLASS_A ? 'a' : 'b'}@x.test`]);
     recipientsMock.resolveSchoolRecipients.mockResolvedValue(['all@x.test']);
@@ -93,5 +95,46 @@ describe('AnnouncementsService — the kind of notice (topic)', () => {
     await expect(svc.create(SCHOOL, ADMIN, 'SCHOOL_ADMIN', dto)).rejects.toMatchObject({ response: { code: 'VALIDATION', field: 'topic.on' } });
     expect(txMock.announcement.create).not.toHaveBeenCalled();
     expect(notifications.notify).not.toHaveBeenCalled();
+  });
+  describe('who may send which kind', () => {
+    const TEACHER = 'user-teacher-1';
+    const mine = [{ classSectionId: CLASS_A, name: '5-A', studentCount: 2, covering: false }];
+    beforeEach(() => attendance.myClassSections.mockResolvedValue(mine));
+
+    it.each([
+      ['HOLIDAY', { kind: 'HOLIDAY' as const, closedOn: addDays(istTodayISO(), 3), occasion: 'Diwali', resumesOn: addDays(istTodayISO(), 6) }],
+      ['TIMING', { kind: 'TIMING' as const, on: addDays(istTodayISO(), 3), from: '08:00', to: '12:30' }],
+    ])('a teacher cannot send a %s notice, and nothing is written or sent', async (_k, topic) => {
+      await expect(svc.create(SCHOOL, TEACHER, 'TEACHER', { title: 't', body: 'b', classSectionIds: [CLASS_A], topic }))
+        .rejects.toMatchObject({ status: 403, response: { code: 'TOPIC_ADMIN_ONLY', field: 'topic.kind' } });
+      expect(txMock.announcement.create).not.toHaveBeenCalled();
+      expect(notifications.notify).not.toHaveBeenCalled();
+    });
+
+    it('a teacher may still send a parents\' meeting to their own class', async () => {
+      await svc.create(SCHOOL, TEACHER, 'TEACHER', {
+        title: 'PTM', body: 'Come.', classSectionIds: [CLASS_A], topic: { kind: 'PTM', on: addDays(istTodayISO(), 1), at: '10:00' },
+      });
+      await flushBackgroundWork();
+      expect(txMock.announcement.create).toHaveBeenCalledTimes(1);
+      const recipients = notifications.notify.mock.calls[0][1] as Array<{ payload: Record<string, unknown> }>;
+      expect(recipients[0].payload).toMatchObject({ className: '5-A', topic: { kind: 'PTM', at: '10:00 am' } });
+    });
+  });
+
+  describe('the school day is the IST day', () => {
+    // 20:00 UTC on 6 Oct is 01:30 IST on 7 Oct. A UTC "today" would let the
+    // 6th through and refuse nothing the admin means; IST says the 6th is gone.
+    beforeEach(() => { jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick'] }); jest.setSystemTime(new Date('2026-10-06T20:00:00Z')); });
+    afterEach(() => jest.useRealTimers());
+
+    it('accepts the IST today (7 Oct) and refuses the IST yesterday (6 Oct)', async () => {
+      await expect(svc.create(SCHOOL, ADMIN, 'SCHOOL_ADMIN', {
+        title: 'PTM', body: 'Come.', classSectionIds: [CLASS_A], topic: { kind: 'PTM', on: '2026-10-07', at: '10:00' },
+      })).resolves.toBeDefined();
+      await expect(svc.create(SCHOOL, ADMIN, 'SCHOOL_ADMIN', {
+        title: 'PTM', body: 'Come.', classSectionIds: [CLASS_A], topic: { kind: 'PTM', on: '2026-10-06', at: '10:00' },
+      })).rejects.toMatchObject({ response: { code: 'VALIDATION', field: 'topic.on' } });
+    });
   });
 });

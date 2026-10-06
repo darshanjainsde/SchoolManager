@@ -115,6 +115,11 @@ export class AnnouncementsService {
     role: UserRole,
     dto: CreateAnnouncementDto,
   ): Promise<Announcement[]> {
+    // A holiday or a change of timings speaks for the whole school. A teacher
+    // may announce a parents' meeting for their own class, not close the school.
+    if (role === 'TEACHER' && (dto.topic?.kind === 'HOLIDAY' || dto.topic?.kind === 'TIMING')) {
+      throw new ApiError('TOPIC_ADMIN_ONLY', 'Only the school office can announce a holiday or a change of timings.', 403, 'topic.kind');
+    }
     const requestedIds = [
       ...new Set([...(dto.classSectionId ? [dto.classSectionId] : []), ...(dto.classSectionIds ?? [])]),
     ];
