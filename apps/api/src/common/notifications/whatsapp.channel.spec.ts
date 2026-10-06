@@ -1,4 +1,4 @@
-import { WhatsAppChannel } from './whatsapp.channel';
+import { DEDUP_REDIS_TIMEOUT_MS, WhatsAppChannel } from './whatsapp.channel';
 import type { NotificationMessage } from './notification.types';
 
 const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
@@ -175,6 +175,98 @@ describe('WhatsAppChannel', () => {
       await c.send('c1@x', results, SCHOOL);
       await c.send('c2@x', results, SCHOOL);
       expect(f).toHaveBeenCalledTimes(2);
+    });
+
+    const fakeRedis = () => {
+      const store = new Set<string>();
+      return {
+        store,
+        status: 'ready',
+        set: jest.fn(async (k: string) => (store.has(k) ? null : (store.add(k), 'OK'))),
+        del: jest.fn(async (k: string) => (store.delete(k) ? 1 : 0)),
+      };
+    };
+    const siblings = () =>
+      db({
+        user: { findFirst: jest.fn(async (a: { where: { email: string } }) => ({ id: a.where.email })) },
+        student: { findFirst: jest.fn(async (a: { where: { userId: string } }) => ({ guardianPhone: '98765 43210', firstName: a.where.userId, lastName: 'Sharma', classSection: null })) },
+      });
+    const absenceFor = (studentName: string): NotificationMessage => ({ kind: 'ABSENCE_NOTICE', payload: { schoolName: 'Raffles', studentName, date: 'Thu 18 Sep' } });
+
+    it('two children on one guardian phone get two absence notices (memory path)', async () => {
+      const f = okFetch();
+      const c = channel({ redis: () => null, d: siblings(), f });
+      await c.send('Ravi', absenceFor('Ravi'), SCHOOL);
+      await c.send('Anaya', absenceFor('Anaya'), SCHOOL);
+      expect(f).toHaveBeenCalledTimes(2);
+    });
+
+    it('two children on one guardian phone get two absence notices (Redis path, two distinct keys)', async () => {
+      const redis = fakeRedis();
+      const f = okFetch();
+      const c = channel({ redis: () => redis as never, d: siblings(), f });
+      await c.send('Ravi', absenceFor('Ravi'), SCHOOL);
+      await c.send('Anaya', absenceFor('Anaya'), SCHOOL);
+      expect(f).toHaveBeenCalledTimes(2);
+      expect(redis.store.size).toBe(2);
+      for (const k of redis.store) expect(k).toMatch(/^wa:dedup:[0-9a-f]{32}$/);
+    });
+
+    describe('a stalled Redis', () => {
+      beforeEach(() => jest.useFakeTimers());
+      afterEach(() => jest.useRealTimers());
+
+      it('is abandoned after DEDUP_REDIS_TIMEOUT_MS: the send goes out once and memory dedupes the next', async () => {
+        const redis = { status: 'ready', set: jest.fn(() => new Promise(() => undefined)) };
+        const f = okFetch();
+        const c = channel({ redis: () => redis as never, f });
+        const first = c.send('p@x', NOTICE, SCHOOL);
+        await jest.advanceTimersByTimeAsync(DEDUP_REDIS_TIMEOUT_MS);
+        await expect(first).resolves.toBe(true);
+        expect(f).toHaveBeenCalledTimes(1);
+        const second = c.send('p@x', NOTICE, SCHOOL);
+        await jest.advanceTimersByTimeAsync(DEDUP_REDIS_TIMEOUT_MS);
+        await expect(second).resolves.toBe(true);
+        expect(f).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    describe('a failed delivery gives the claim back', () => {
+      const failing = () => jest.fn().mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({ error: { message: 'boom', code: 1 } }) }).mockResolvedValue({ ok: true, status: 200, json: async () => ({ messages: [{ id: 'wamid.2' }] }) });
+
+      it('Redis path: an identical send right after a failure is attempted', async () => {
+        const redis = fakeRedis();
+        const f = failing();
+        const c = channel({ redis: () => redis as never, f });
+        await expect(c.send('p@x', NOTICE, SCHOOL)).resolves.toBe(false);
+        expect(redis.del).toHaveBeenCalledTimes(1);
+        await expect(c.send('p@x', NOTICE, SCHOOL)).resolves.toBe(true);
+        expect(f).toHaveBeenCalledTimes(2);
+      });
+
+      it('memory path: an identical send right after a failure is attempted', async () => {
+        const f = failing();
+        const c = channel({ redis: () => null, f });
+        await expect(c.send('p@x', NOTICE, SCHOOL)).resolves.toBe(false);
+        await expect(c.send('p@x', NOTICE, SCHOOL)).resolves.toBe(true);
+        expect(f).toHaveBeenCalledTimes(2);
+      });
+
+      it('a Redis that fails on release does not throw', async () => {
+        const redis = { ...fakeRedis(), del: jest.fn().mockRejectedValue(new Error('down')) };
+        const c = channel({ redis: () => redis as never, f: failing() });
+        await expect(c.send('p@x', NOTICE, SCHOOL)).resolves.toBe(false);
+      });
+    });
+
+    it('warns once when Redis is configured but unreachable', async () => {
+      const redis = { status: 'end', connect: jest.fn().mockRejectedValue(new Error('down')), set: jest.fn() };
+      const c = channel({ redis: () => redis as never });
+      const warn = jest.spyOn((c as unknown as { logger: { warn: (m: string) => void } }).logger, 'warn').mockImplementation(() => undefined);
+      await c.send('p@x', NOTICE, SCHOOL);
+      await c.send('p@x', { ...NOTICE, payload: { ...NOTICE.payload, date: 'Fri 19 Sep' } } as NotificationMessage, SCHOOL);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toContain('unreachable');
     });
   });
 });
