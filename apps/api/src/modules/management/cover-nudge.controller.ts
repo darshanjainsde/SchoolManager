@@ -4,9 +4,11 @@ import { CronSecretGuard } from '../../common/auth/cron-secret.guard';
 import { CoverNudgeService } from './cover-nudge.service';
 
 /**
- * Vercel Cron issues a GET at 12:30 UTC (18:00 IST) — see apps/api/vercel.json;
- * POST is the operator's manual trigger. No JWT on a cron call, so `@Public()`
- * and `CronSecretGuard` on both verbs.
+ * Vercel Cron issues a GET at 12:30 UTC (18:00 IST) and again at 12:45 UTC —
+ * the second is a resume for schools a run cut short at its deadline (a school
+ * already nudged is skipped) — see apps/api/vercel.json; POST is the
+ * operator's manual trigger. No JWT on a cron call, so `@Public()` and
+ * `CronSecretGuard` on both verbs.
  */
 @Controller('internal/cron')
 @Public()
