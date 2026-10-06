@@ -360,7 +360,9 @@ export function templateSubmissions(): TemplateSubmission[] {
   const out = new Map<string, TemplateSubmission>();
   const put = (s: TemplateSubmission) => {
     const had = out.get(s.name);
-    if (had && had.body !== s.body) throw new Error(`Two different bodies are registered for ${s.name}`);
+    if (had && (had.body !== s.body || JSON.stringify(had.buttons) !== JSON.stringify(s.buttons) || JSON.stringify(had.samples) !== JSON.stringify(s.samples))) {
+      throw new Error(`Two different definitions (body, samples or buttons) are registered for ${s.name}`);
+    }
     if (!had) out.set(s.name, s);
   };
   for (const kind of Object.keys(SUBMISSIONS) as NotificationKind[]) {

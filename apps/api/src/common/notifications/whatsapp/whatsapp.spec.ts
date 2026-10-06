@@ -261,4 +261,15 @@ describe('templateSubmissions — exactly what the submit script hands Meta', ()
     const byName = new Map(templateSubmissions().map((t) => [t.name, t]));
     expect(placeholderCount(byName.get(COVER_ASSIGNED_V2)!.body)).toBe(placeholderCount(SUBMISSIONS.COVER_ASSIGNED.body));
   });
+
+  it('the same name with different buttons or samples is an error, not a silent first-wins', () => {
+    const saved = EXTRA_SUBMISSIONS[COVER_ASSIGNED_V2];
+    try {
+      EXTRA_SUBMISSIONS[TEMPLATE_NAMES.COVER_ASSIGNED] = { ...SUBMISSIONS.COVER_ASSIGNED, category: 'UTILITY', buttons: ['Different'] };
+      expect(() => templateSubmissions()).toThrow(/Two different definitions/);
+    } finally {
+      delete EXTRA_SUBMISSIONS[TEMPLATE_NAMES.COVER_ASSIGNED];
+      expect(EXTRA_SUBMISSIONS[COVER_ASSIGNED_V2]).toBe(saved);
+    }
+  });
 });

@@ -61,4 +61,20 @@ describe('WhatsAppChannel — a template Meta has not approved yet', () => {
     expect(f).not.toHaveBeenCalled();
     expect(d.whatsAppDelivery.create).not.toHaveBeenCalled();
   });
+
+  it('claims on the requested name: an instance that sends v1 and one that sends v2 do not both message the phone', async () => {
+    const d = db();
+    const f = okFetch();
+    // One shared claim store stands in for Redis.
+    const store = new Set<string>();
+    const redis = () => ({ status: 'ready', set: async (k: string) => (store.has(k) ? null : (store.add(k), 'OK')), del: async (k: string) => void store.delete(k) }) as never;
+    (templateFor as jest.Mock).mockReturnValueOnce(V2).mockReturnValueOnce(V2);
+    const a = new WhatsAppChannel(d as never, () => CFG, f, redis, { isApproved: async () => false });
+    const b = new WhatsAppChannel(d as never, () => CFG, f, redis, { isApproved: async () => true });
+    expect(await a.send('t@x', MSG, SCHOOL)).toBe(true);
+    expect(await b.send('t@x', MSG, SCHOOL)).toBe(true);
+    expect(f).toHaveBeenCalledTimes(1);
+    // The ledger names what was actually sent.
+    expect(d.whatsAppDelivery.create.mock.calls[0][0].data.templateName).toBe('sckools_cover_assigned');
+  });
 });

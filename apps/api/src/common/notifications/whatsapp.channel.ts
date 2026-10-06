@@ -171,11 +171,19 @@ export class WhatsAppChannel implements NotificationChannel {
     if (!address) return false;
     const { phone } = address;
 
-    // A new template waiting for Meta's review goes as its approved v1, or not at all.
-    const template = await chooseTemplate(templateFor(message, { child: address.child }), this.approval);
-    if (!template) return false;
-    const release = await this.claim(phone, template);
+    // The dedup claim is on the template REQUESTED, not the one chosen: two
+    // instances whose approval caches disagree could otherwise send v1 and v2 of
+    // the same card to one phone within the minute. The ledger records the name
+    // actually sent.
+    const requested = templateFor(message, { child: address.child });
+    const release = await this.claim(phone, requested);
     if (!release) return true;
+    // A new template waiting for Meta's review goes as its approved v1, or not at all.
+    const template = await chooseTemplate(requested, this.approval);
+    if (!template) {
+      await release();
+      return false;
+    }
     const ok = await this.deliver(cfg, schoolId, phone, message.kind, template, settings.phoneNumberId);
     if (!ok) await release();
     return ok;

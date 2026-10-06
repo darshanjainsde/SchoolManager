@@ -1,4 +1,4 @@
-import { APPROVAL_RETRY_MS, APPROVAL_TTL_MS, TemplateApproval, chooseTemplate } from './template-approval';
+import { APPROVAL_MAX_PAGES, APPROVAL_RETRY_MS, APPROVAL_TTL_MS, TemplateApproval, chooseTemplate } from './template-approval';
 import type { WhatsAppTemplate } from './templates';
 
 const CFG = { token: 't', phoneNumberId: '1357286177463978', wabaId: '1615000000000000', graphVersion: 'v21.0' };
@@ -21,7 +21,7 @@ describe('TemplateApproval — is a NEW template approved yet?', () => {
     expect(await a.isApproved('sckools_cover_assigned_v2')).toBe(false);
     expect(await a.isApproved('sckools_cover_cancelled')).toBe(false);
     expect(f.mock.calls[0][0]).toBe('https://graph.facebook.com/v21.0/1615000000000000/message_templates?fields=name,status,language&limit=200');
-    expect(f.mock.calls[0][1]).toEqual({ headers: { Authorization: 'Bearer t' } });
+    expect(f.mock.calls[0][1].headers).toEqual({ Authorization: 'Bearer t' });
   });
 
   it('asks Meta at most once per ten minutes, then sees the approval without a deploy', async () => {
@@ -55,6 +55,79 @@ describe('TemplateApproval — is a NEW template approved yet?', () => {
     now += APPROVAL_RETRY_MS;
     await a.isApproved('sckools_cover_assigned_v2');
     expect(f).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('TemplateApproval — lookups that go wrong or span pages', () => {
+  const NAME = 'sckools_cover_assigned_v2';
+  const ok = (rows: object[], next?: string) => ({ ok: true, status: 200, json: async () => ({ data: rows, ...(next ? { paging: { next } } : {}) }) });
+  // Approve once, then expire the cache, so each case starts from a known previous set.
+  async function primed(f: jest.Mock) {
+    let now = 1_000_000;
+    const a = new TemplateApproval(() => CFG, f, () => now);
+    expect(await a.isApproved(NAME)).toBe(true);
+    now += APPROVAL_TTL_MS;
+    return { a, tick: (ms: number) => (now += ms) };
+  }
+  const approvedRow = { name: NAME, status: 'APPROVED', language: 'en' };
+
+  it('passes an abort signal, and a timeout keeps the previous set', async () => {
+    const f = listing([approvedRow]);
+    const { a } = await primed(f);
+    expect(f.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+    f.mockRejectedValueOnce(Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' }));
+    expect(await a.isApproved(NAME)).toBe(true);
+  });
+
+  it('a non-200 keeps the previous set', async () => {
+    const f = listing([approvedRow]);
+    const { a } = await primed(f);
+    f.mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) });
+    expect(await a.isApproved(NAME)).toBe(true);
+  });
+
+  it('a malformed body keeps the previous set', async () => {
+    const f = listing([approvedRow]);
+    const { a } = await primed(f);
+    f.mockResolvedValueOnce({ ok: true, status: 200, json: async () => { throw new SyntaxError('Unexpected token <'); } });
+    expect(await a.isApproved(NAME)).toBe(true);
+  });
+
+  it('a failure is cached: no fetch just before the retry time, one at it', async () => {
+    const f = listing([approvedRow]);
+    const { a, tick } = await primed(f);
+    f.mockRejectedValue(new Error('down'));
+    await a.isApproved(NAME);
+    expect(f).toHaveBeenCalledTimes(2);
+    tick(APPROVAL_RETRY_MS - 1);
+    await a.isApproved(NAME);
+    expect(f).toHaveBeenCalledTimes(2);
+    tick(1);
+    await a.isApproved(NAME);
+    expect(f).toHaveBeenCalledTimes(3);
+  });
+
+  it('concurrent calls share exactly one fetch', async () => {
+    const f = listing([approvedRow]);
+    const a = new TemplateApproval(() => CFG, f);
+    const r = await Promise.all([a.isApproved(NAME), a.isApproved(NAME), a.isApproved('sckools_cover_cancelled')]);
+    expect(r).toEqual([true, true, false]);
+    expect(f).toHaveBeenCalledTimes(1);
+  });
+
+  it('follows paging.next, so a name on page 2 is found', async () => {
+    const f = jest.fn()
+      .mockResolvedValueOnce(ok([{ name: 'other', status: 'APPROVED', language: 'en' }], 'https://graph.facebook.com/page2'))
+      .mockResolvedValueOnce(ok([approvedRow]));
+    expect(await new TemplateApproval(() => CFG, f).isApproved(NAME)).toBe(true);
+    expect(f).toHaveBeenCalledTimes(2);
+    expect(f.mock.calls[1][0]).toBe('https://graph.facebook.com/page2');
+  });
+
+  it('stops after 5 pages', async () => {
+    const f = jest.fn().mockImplementation(async () => ok([], 'https://graph.facebook.com/more'));
+    expect(await new TemplateApproval(() => CFG, f).isApproved(NAME)).toBe(false);
+    expect(f).toHaveBeenCalledTimes(APPROVAL_MAX_PAGES);
   });
 });
 

@@ -22,6 +22,10 @@ import { GATED_TEMPLATES, TEMPLATE_LANGUAGE, type WhatsAppTemplate } from './tem
 export const APPROVAL_TTL_MS = 10 * 60_000;
 /** After a failed lookup: ask again sooner, keep the last answer meanwhile. */
 export const APPROVAL_RETRY_MS = 60_000;
+/** One Graph call may take at most this long. */
+export const APPROVAL_FETCH_TIMEOUT_MS = 5_000;
+/** Pages of the template list followed per lookup (200 templates a page). */
+export const APPROVAL_MAX_PAGES = 5;
 
 interface Known {
   at: number;
@@ -33,6 +37,7 @@ export class TemplateApproval {
   private readonly logger = new Logger(TemplateApproval.name);
   private known: Known | null = null;
   private inflight: Promise<Set<string>> | null = null;
+  private warnedPageCap = false;
 
   constructor(
     private readonly config: () => WhatsAppConfig | null = () => whatsAppConfig(),
@@ -64,17 +69,26 @@ export class TemplateApproval {
       return previous;
     }
     try {
-      const res = await this.fetchImpl(
-        `https://graph.facebook.com/${cfg.graphVersion}/${cfg.wabaId}/message_templates?fields=name,status,language&limit=200`,
-        { headers: { Authorization: `Bearer ${cfg.token}` } },
-      );
-      if (!res.ok) throw new Error(`Graph API ${res.status}`);
-      const body = (await res.json()) as { data?: { name?: string; status?: string; language?: string }[] };
-      const approved = new Set(
-        (body.data ?? [])
-          .filter((t) => t.status === 'APPROVED' && t.language === TEMPLATE_LANGUAGE && !!t.name)
-          .map((t) => t.name as string),
-      );
+      const approved = new Set<string>();
+      let url: string | undefined =
+        `https://graph.facebook.com/${cfg.graphVersion}/${cfg.wabaId}/message_templates?fields=name,status,language&limit=200`;
+      for (let page = 1; url; page++) {
+        // A hung Graph call must not hold every gated send behind the shared in-flight promise.
+        const res = await this.fetchImpl(url, { headers: { Authorization: `Bearer ${cfg.token}` }, signal: AbortSignal.timeout(APPROVAL_FETCH_TIMEOUT_MS) });
+        if (!res.ok) throw new Error(`Graph API ${res.status}`);
+        const body = (await res.json()) as { data?: { name?: string; status?: string; language?: string }[]; paging?: { next?: string } };
+        for (const t of body.data ?? []) {
+          if (t.status === 'APPROVED' && t.language === TEMPLATE_LANGUAGE && t.name) approved.add(t.name);
+        }
+        url = body.paging?.next;
+        if (url && page >= APPROVAL_MAX_PAGES) {
+          if (!this.warnedPageCap) {
+            this.warnedPageCap = true;
+            this.logger.warn(`Template list has more than ${APPROVAL_MAX_PAGES} pages; later templates are not looked at.`);
+          }
+          break;
+        }
+      }
       this.known = { at: this.now(), ttl: APPROVAL_TTL_MS, approved };
       return approved;
     } catch (e) {
