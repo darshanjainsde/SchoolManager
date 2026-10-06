@@ -1,5 +1,8 @@
-import { IsDateString, IsEmail, IsIn, IsOptional, IsString, IsUUID, Length, ValidateIf } from 'class-validator';
-import { ENQUIRY_STAGES, type EnquiryStageValue } from '@skoolos/types';
+import { IsBoolean, IsDateString, IsEmail, IsIn, IsOptional, IsString, IsUUID, Length, Matches, ValidateIf } from 'class-validator';
+import {
+  CONTACT_KINDS, CONTACT_OUTCOMES, DESK_SOURCES, ENQUIRY_STAGES, PUBLIC_SOURCES,
+  type ContactKind, type ContactOutcome, type DeskSource, type EnquiryStageValue, type PublicSource,
+} from '@skoolos/types';
 import type { PublicEvent } from '../community';
 
 export class SubmitEnquiryDto {
@@ -23,6 +26,43 @@ export class SubmitEnquiryDto {
   @IsString()
   @Length(0, 2000)
   message?: string;
+
+  /**
+   * Which public door it came through. Only the two website doors may be
+   * claimed here; a walk-in is typed at the desk, behind a login. Missing =
+   * WEBSITE, so every existing form keeps working untouched.
+   */
+  @IsOptional()
+  @IsIn(PUBLIC_SOURCES)
+  source?: PublicSource;
+}
+
+/** A family who walked in or rang — typed at the desk, owned by whoever typed it. */
+export class CreateDeskEnquiryDto {
+  @IsString() @Length(1, 120) @Matches(/\S/, { message: 'parentName must not be blank' })
+  parentName!: string;
+
+  @IsString() @Length(1, 40) @Matches(/\d/, { message: 'phone must contain a number' })
+  phone!: string;
+
+  @IsOptional() @IsEmail()
+  email?: string;
+
+  @IsOptional() @IsString() @Length(0, 120)
+  childName?: string;
+
+  @IsOptional() @IsString() @Length(0, 120)
+  gradeInterest?: string;
+
+  @IsOptional() @IsString() @Length(0, 2000)
+  message?: string;
+
+  @IsIn(DESK_SOURCES)
+  source!: DeskSource;
+
+  /** They said the school may WhatsApp them. Nothing sends on it in Tier A. */
+  @IsOptional() @IsBoolean()
+  whatsappOk?: boolean;
 }
 
 export class SetEnquiryStatusDto {
@@ -50,8 +90,24 @@ export class SetEnquiryStatusDto {
   lostReason?: string | null;
 }
 
+/**
+ * A typed note (kind NOTE, the default), or a contact — a call, a WhatsApp or a
+ * visit — with what came of it. A contact's body is optional: the history line
+ * is written from the kind and the outcome. A LOST outcome needs lostReason;
+ * the service refuses it with 400 ENQUIRY_LOST_REASON_REQUIRED.
+ */
 export class AddEnquiryNoteDto {
-  @IsString() @Length(1, 2000) body!: string;
+  @IsOptional() @IsIn(['NOTE', ...CONTACT_KINDS])
+  kind?: 'NOTE' | ContactKind;
+
+  @IsOptional() @IsString() @Length(0, 2000)
+  body?: string;
+
+  @IsOptional() @IsIn(CONTACT_OUTCOMES)
+  outcome?: ContactOutcome;
+
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsString() @Length(0, 200)
+  lostReason?: string | null;
 }
 
 export interface PublicSiteData {

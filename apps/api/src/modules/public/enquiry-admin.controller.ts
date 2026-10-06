@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, UseGuards } from '@nestjs/common';
 import { SchoolJwtGuard } from '../../common/auth/school-jwt.guard';
 import { RolesGuard } from '../../common/auth/roles.guard';
 import { Roles } from '../../common/auth/roles.decorator';
@@ -7,7 +7,7 @@ import type { AnyJwtPayload } from '../../common/auth/jwt-payload';
 import { TenantContextService } from '../tenancy';
 import { EnquiryService } from './enquiry.service';
 import { AdmissionsDeskGuard } from './internal/admissions-desk.guard';
-import { AddEnquiryNoteDto, SetEnquiryStatusDto } from './public.dto';
+import { AddEnquiryNoteDto, CreateDeskEnquiryDto, SetEnquiryStatusDto } from './public.dto';
 
 @Controller('site')
 // SchoolJwtGuard establishes WHICH school you belong to and reads no role.
@@ -47,6 +47,13 @@ export class EnquiryAdminController {
     return this.enquiry.owners(this.sid());
   }
 
+  /** A walk-in or a phone enquiry, owned by the caller. The website form stays on /public/enquiry. */
+  @Post('enquiries')
+  @HttpCode(201)
+  create(@Body() dto: CreateDeskEnquiryDto, @CurrentUser() user?: AnyJwtPayload) {
+    return this.enquiry.create(this.sid(), dto, this.actor(user));
+  }
+
   @Get('enquiries/:id')
   detail(@Param('id', ParseUUIDPipe) id: string) {
     return this.enquiry.detail(this.sid(), id);
@@ -61,12 +68,19 @@ export class EnquiryAdminController {
     return this.enquiry.update(this.sid(), id, dto, this.actor(user));
   }
 
+  /** A typed note, or a call / WhatsApp / visit with its outcome. */
   @Post('enquiries/:id/notes')
   addNote(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: AddEnquiryNoteDto,
     @CurrentUser() user?: AnyJwtPayload,
   ) {
-    return this.enquiry.addNote(this.sid(), id, dto.body, this.actor(user));
+    const kind = dto.kind ?? 'NOTE';
+    if (kind === 'NOTE') return this.enquiry.addNote(this.sid(), id, dto.body ?? '', this.actor(user));
+    return this.enquiry.logContact(
+      this.sid(), id, kind,
+      { outcome: dto.outcome, lostReason: dto.lostReason, body: dto.body },
+      this.actor(user),
+    );
   }
 }

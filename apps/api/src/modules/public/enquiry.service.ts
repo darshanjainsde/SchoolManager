@@ -2,10 +2,13 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { withTenant } from '@skoolos/db';
 import { TenantContextService } from '../tenancy';
 import { FeatureResolverService } from '../features';
-import type { SubmitEnquiryDto } from './public.dto';
+import type { CreateDeskEnquiryDto, SubmitEnquiryDto } from './public.dto';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
 import type { TenantTx } from '@skoolos/db';
-import { stageMove, type EnquiryDeskMember, type EnquiryStageValue } from '@skoolos/types';
+import {
+  ENQUIRY_SOURCE_LABEL, contactTarget, stageMove,
+  type ContactKind, type ContactOutcome, type EnquiryDeskMember, type EnquiryStageValue,
+} from '@skoolos/types';
 import { ApiError } from '../../common/errors/api-error';
 import { isAdmissionsDesk } from './internal/admissions-desk.guard';
 
@@ -17,6 +20,20 @@ const STAGE_LABEL: Record<string, string> = {
 
 /** Who did something. `name` absent = the service looks it up; present (even null) = use it. */
 type Actor = { userId?: string; name?: string | null };
+
+/** The first words of a contact's history line. */
+const CONTACT_WORD: Record<ContactKind, string> = {
+  CALL: 'Called',
+  WHATSAPP: 'Messaged on WhatsApp',
+  VISIT: 'Visited the school',
+};
+/** What came of it, appended. CONTACTED needs no words — "Called" already says it. */
+const OUTCOME_WORD: Record<ContactOutcome, string> = {
+  CONTACTED: '',
+  INTERESTED: ' — interested',
+  NO_ANSWER: ' — no answer',
+  LOST: ' — not going ahead',
+};
 
 /**
  * Display names for lead owners, from the same sources the desk picker uses:
@@ -108,20 +125,22 @@ export class EnquiryService {
           email: dto.email,
           gradeInterest: dto.gradeInterest,
           message: dto.message,
+          source: dto.source ?? 'WEBSITE',
           status: 'NEW',
         },
       }).then(async (row) => {
         // The history starts where the lead did. Without this the timeline of a
         // brand-new enquiry is empty, which reads as "nothing has happened
         // here" rather than "this has just arrived".
+        const opening = dto.source === 'COURSE_CARD'
+          ? 'Call-back requested from a course card'
+          : 'Enquiry received from the website';
         await tx.enquiryNote.create({
           data: {
             schoolId,
             enquiryId: row.id,
             kind: 'SYSTEM',
-            body: dto.gradeInterest
-              ? `Enquiry received from the website — asked about ${dto.gradeInterest}`
-              : 'Enquiry received from the website',
+            body: dto.gradeInterest ? `${opening} — asked about ${dto.gradeInterest}` : opening,
           },
         });
         return row;
@@ -304,10 +323,127 @@ export class EnquiryService {
     return withTenant(schoolId, async (tx) => {
       const existing = await tx.enquiry.findFirst({ where: { id, schoolId } });
       if (!existing) throw new NotFoundException('Enquiry not found');
+      if (!body.trim()) throw new ApiError('VALIDATION', 'Write something in the note first.', 400, 'body');
       const by = await this.author(tx, schoolId, actor);
       return tx.enquiryNote.create({
         data: { schoolId, enquiryId: id, kind: 'NOTE', body, authorUserId: by.userId, authorName: by.name },
       });
+    });
+  }
+
+  /**
+   * Somebody reached the family — or tried to.
+   *
+   * The contact line, the stamp and the stage move share one transaction, the
+   * same rule as `update`'s STAGE note. `contactTarget` decides the stage: a
+   * first contact moves NEW → CONTACTED, Interested moves forward to
+   * INTERESTED, Lost loses it, and "no answer" moves nothing — a call that rang
+   * out did not contact anybody. Any attempt stamps `lastContactedAt`.
+   *
+   * A stage move is a compare-and-set on the stage we judged against, exactly
+   * as in `update`: a contact logged against a lead another officer has just
+   * moved is refused 409 ENQUIRY_CHANGED rather than overwriting that move.
+   * Losing a lead needs a reason here too (400 ENQUIRY_LOST_REASON_REQUIRED),
+   * checked before anything is written.
+   *
+   * Tier B's WhatsApp buttons ("Contacted", "Interested", "Not interested")
+   * call exactly this, so the desk and the phone agree.
+   */
+  async logContact(
+    schoolId: string,
+    id: string,
+    kind: ContactKind,
+    opts: { outcome?: ContactOutcome; lostReason?: string | null; body?: string } = {},
+    actor?: Actor,
+  ) {
+    return withTenant(schoolId, async (tx) => {
+      const existing = await tx.enquiry.findFirst({ where: { id, schoolId } });
+      if (!existing) throw new NotFoundException('Enquiry not found');
+
+      const target = contactTarget(existing.status as EnquiryStageValue, opts.outcome);
+      const reason = opts.lostReason?.trim() || null;
+      if (target === 'LOST' && !reason) {
+        throw new ApiError('ENQUIRY_LOST_REASON_REQUIRED', 'Say why this lead was lost.', 400, 'lostReason');
+      }
+
+      const data: Record<string, unknown> = { lastContactedAt: new Date() };
+      if (target) data.status = target;
+      if (target === 'LOST') {
+        data.lostReason = reason;
+        data.followUpAt = null;
+      }
+      if (target) {
+        const { count } = await tx.enquiry.updateMany({ where: { id, schoolId, status: existing.status }, data });
+        if (count === 0) {
+          throw new ApiError('ENQUIRY_CHANGED', 'Someone else just moved this lead. Refresh and try again.', 409, 'status');
+        }
+      } else {
+        await tx.enquiry.update({ where: { id }, data });
+      }
+
+      const by = await this.author(tx, schoolId, actor);
+      const extra = opts.body?.trim();
+      const note = await tx.enquiryNote.create({
+        data: {
+          schoolId,
+          enquiryId: id,
+          kind,
+          body: `${CONTACT_WORD[kind]}${opts.outcome ? OUTCOME_WORD[opts.outcome] : ''}${extra ? `: ${extra}` : ''}`,
+          authorUserId: by.userId,
+          authorName: by.name,
+        },
+      });
+      if (target) {
+        await tx.enquiryNote.create({
+          data: {
+            schoolId,
+            enquiryId: id,
+            kind: 'STAGE',
+            body: target === 'LOST' ? `Marked Lost — ${reason}` : `Moved to ${STAGE_LABEL[target] ?? target}`,
+            authorUserId: by.userId,
+            authorName: by.name,
+          },
+        });
+      }
+      return note;
+    });
+  }
+
+  /**
+   * A walk-in or a phone enquiry typed at the desk. Owned by whoever typed it —
+   * they are the one who met the family — and never throttled: the 5-a-minute
+   * limit exists for strangers on the internet, and the office is not one.
+   */
+  async create(schoolId: string, dto: CreateDeskEnquiryDto, actor?: Actor) {
+    return withTenant(schoolId, async (tx) => {
+      const by = await this.author(tx, schoolId, actor);
+      const grade = dto.gradeInterest?.trim() || null;
+      const row = await tx.enquiry.create({
+        data: {
+          schoolId,
+          parentName: dto.parentName.trim(),
+          phone: dto.phone.trim(),
+          email: dto.email ?? null,
+          childName: dto.childName?.trim() || null,
+          gradeInterest: grade,
+          message: dto.message?.trim() || null,
+          source: dto.source,
+          whatsappOk: dto.whatsappOk ?? false,
+          status: 'NEW',
+          ownerUserId: by.userId,
+        },
+      });
+      await tx.enquiryNote.create({
+        data: {
+          schoolId,
+          enquiryId: row.id,
+          kind: 'SYSTEM',
+          body: `${ENQUIRY_SOURCE_LABEL[dto.source]} enquiry taken by ${by.name ?? 'the office'}${grade ? ` — asked about ${grade}` : ''}`,
+          authorUserId: by.userId,
+          authorName: by.name,
+        },
+      });
+      return row;
     });
   }
 

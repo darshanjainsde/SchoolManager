@@ -494,3 +494,173 @@ describe('the retired CLOSED and an unnamed actor', () => {
     }));
   });
 });
+
+const writtenNotes = () =>
+  txMock.enquiryNote.create.mock.calls.map(([a]) => (a as { data: Record<string, unknown> }).data);
+/**
+ * What the lead row was told to become. A stage move is a compare-and-set
+ * (updateMany); a contact that moves nothing is a plain update.
+ */
+const updateData = () => {
+  const call = txMock.enquiry.updateMany.mock.calls[0] ?? txMock.enquiry.update.mock.calls[0];
+  return (call[0] as { data: Record<string, unknown> }).data;
+};
+
+describe('logging a call, a WhatsApp or a visit', () => {
+  it('stamps lastContactedAt and moves a NEW lead to Contacted', async () => {
+    at('NEW');
+    await service().logContact(SCHOOL, LEAD, 'CALL', { outcome: 'CONTACTED' }, { userId: USER, name: 'Sunita Kale' });
+    expect(writtenNotes()).toEqual([
+      expect.objectContaining({ kind: 'CALL', body: 'Called', authorUserId: USER, authorName: 'Sunita Kale' }),
+      expect.objectContaining({ kind: 'STAGE', body: 'Moved to Contacted', authorName: 'Sunita Kale' }),
+    ]);
+    expect(updateData().status).toBe('CONTACTED');
+    expect(updateData().lastContactedAt).toBeInstanceOf(Date);
+  });
+
+  it('a call nobody answered is logged and stamped, and does NOT mark the family contacted', async () => {
+    at('NEW');
+    await service().logContact(SCHOOL, LEAD, 'CALL', { outcome: 'NO_ANSWER' });
+    expect(updateData()).not.toHaveProperty('status');
+    expect(updateData().lastContactedAt).toBeInstanceOf(Date);
+    expect(writtenNotes()).toEqual([expect.objectContaining({ kind: 'CALL', body: 'Called — no answer' })]);
+  });
+
+  it('Interested on WhatsApp moves Contacted forward to Interested', async () => {
+    at('CONTACTED');
+    await service().logContact(SCHOOL, LEAD, 'WHATSAPP', { outcome: 'INTERESTED' });
+    expect(updateData().status).toBe('INTERESTED');
+    expect(writtenNotes()[0]).toEqual(expect.objectContaining({ kind: 'WHATSAPP', body: 'Messaged on WhatsApp — interested' }));
+  });
+
+  it('never drags a lead backwards — Interested on a Visited lead changes no stage', async () => {
+    at('VISITED');
+    await service().logContact(SCHOOL, LEAD, 'CALL', { outcome: 'INTERESTED' });
+    expect(updateData()).not.toHaveProperty('status');
+    expect(writtenNotes()).toHaveLength(1);
+  });
+
+  it('Lost from a call carries the reason and clears the callback', async () => {
+    at('INTERESTED');
+    await service().logContact(SCHOOL, LEAD, 'CALL', { outcome: 'LOST', lostReason: 'Fees too high' });
+    expect(updateData()).toEqual(expect.objectContaining({ status: 'LOST', lostReason: 'Fees too high', followUpAt: null }));
+    expect(writtenNotes()[1]).toEqual(expect.objectContaining({ kind: 'STAGE', body: 'Marked Lost — Fees too high' }));
+  });
+
+  it.each([undefined, null, '', '   '])('Lost with reason %p is refused 400 ENQUIRY_LOST_REASON_REQUIRED and writes nothing', async (lostReason) => {
+    at('INTERESTED');
+    expect(await refusal(service().logContact(SCHOOL, LEAD, 'CALL', { outcome: 'LOST', lostReason })))
+      .toEqual({ code: 'ENQUIRY_LOST_REASON_REQUIRED', status: 400 });
+    expect(txMock.enquiryNote.create).not.toHaveBeenCalled();
+    expect(txMock.enquiry.update).not.toHaveBeenCalled();
+    expect(txMock.enquiry.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('names the field on the lost-reason refusal', async () => {
+    at('INTERESTED');
+    await expect(service().logContact(SCHOOL, LEAD, 'CALL', { outcome: 'LOST' })).rejects.toMatchObject({
+      response: expect.objectContaining({ field: 'lostReason' }),
+    });
+  });
+
+  it('Lost on a lead that is already lost needs no new reason and moves nothing', async () => {
+    at('LOST', { lostReason: 'Too far' });
+    await service().logContact(SCHOOL, LEAD, 'CALL', { outcome: 'LOST' });
+    expect(updateData()).not.toHaveProperty('status');
+    expect(writtenNotes()).toHaveLength(1);
+  });
+
+  it('the stage move is a compare-and-set on the stage it read', async () => {
+    at('NEW');
+    await service().logContact(SCHOOL, LEAD, 'CALL', { outcome: 'CONTACTED' });
+    expect(txMock.enquiry.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: LEAD, schoolId: SCHOOL, status: 'NEW' },
+    }));
+    expect(txMock.enquiry.update).not.toHaveBeenCalled();
+  });
+
+  it('a contact logged against a lead another officer just moved is 409 ENQUIRY_CHANGED, with no history line', async () => {
+    at('NEW');
+    txMock.enquiry.updateMany.mockResolvedValue({ count: 0 });
+    expect(await refusal(service().logContact(SCHOOL, LEAD, 'CALL', { outcome: 'CONTACTED' })))
+      .toEqual({ code: 'ENQUIRY_CHANGED', status: 409 });
+    expect(txMock.enquiryNote.create).not.toHaveBeenCalled();
+  });
+
+  it('a contact that moves no stage is a plain update that never writes the stage', async () => {
+    at('CONTACTED');
+    await service().logContact(SCHOOL, LEAD, 'VISIT');
+    expect(txMock.enquiry.updateMany).not.toHaveBeenCalled();
+    expect(updateData()).not.toHaveProperty('status');
+  });
+
+  it('adds what the officer typed to the history line', async () => {
+    at('CONTACTED');
+    await service().logContact(SCHOOL, LEAD, 'VISIT', { body: ' saw the labs ' });
+    expect(writtenNotes()[0]).toEqual(expect.objectContaining({ kind: 'VISIT', body: 'Visited the school: saw the labs' }));
+  });
+
+  it('a lead from another school is not found, and nothing is written', async () => {
+    txMock.enquiry.findFirst.mockResolvedValue(null);
+    await expect(service().logContact(SCHOOL, LEAD, 'CALL')).rejects.toBeInstanceOf(NotFoundException);
+    expect(txMock.enquiryNote.create).not.toHaveBeenCalled();
+    expect(txMock.enquiry.update).not.toHaveBeenCalled();
+    expect(txMock.enquiry.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('a typed note cannot be blank', async () => {
+    at('NEW');
+    expect(await refusal(service().addNote(SCHOOL, LEAD, '   '))).toEqual({ code: 'VALIDATION', status: 400 });
+    expect(txMock.enquiryNote.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('a walk-in typed at the desk', () => {
+  beforeEach(() => {
+    txMock.enquiry.create.mockImplementation(({ data }: { data: Record<string, unknown> }) => Promise.resolve({ id: LEAD, ...data }));
+  });
+
+  it('is owned by whoever typed it, carries its source, and opens its own history', async () => {
+    await service().create(
+      SCHOOL,
+      { parentName: ' Meera Purohit ', phone: '98290 11223', source: 'WALK_IN', childName: 'Aarav', gradeInterest: 'Class III', whatsappOk: true },
+      { userId: USER, name: 'Sunita Kale' },
+    );
+    expect(txMock.enquiry.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        schoolId: SCHOOL, parentName: 'Meera Purohit', phone: '98290 11223', source: 'WALK_IN',
+        childName: 'Aarav', gradeInterest: 'Class III', whatsappOk: true, ownerUserId: USER, status: 'NEW',
+      }),
+    });
+    expect(writtenNotes()).toEqual([
+      expect.objectContaining({ kind: 'SYSTEM', body: 'Walk-in enquiry taken by Sunita Kale — asked about Class III', authorUserId: USER }),
+    ]);
+  });
+
+  it('a phone enquiry says so, and an unticked WhatsApp box stays false', async () => {
+    await service().create(SCHOOL, { parentName: 'Imran Shaikh', phone: '98290 44556', source: 'PHONE' }, { userId: USER, name: 'Sunita Kale' });
+    expect(txMock.enquiry.create).toHaveBeenCalledWith({ data: expect.objectContaining({ source: 'PHONE', whatsappOk: false, childName: null }) });
+    expect(writtenNotes()[0]).toEqual(expect.objectContaining({ body: 'Phone enquiry taken by Sunita Kale' }));
+  });
+});
+
+describe('the website form', () => {
+  const site = { get: () => ({ kind: 'tenant', schoolId: SCHOOL }), requireTenant: () => ({ schoolId: SCHOOL }) } as never;
+  const withEnquiry = { getFeatures: jest.fn().mockResolvedValue(new Set(['ENQUIRY'])) } as never;
+
+  beforeEach(() => {
+    txMock.enquiry.create.mockImplementation(({ data }: { data: Record<string, unknown> }) => Promise.resolve({ id: LEAD, ...data }));
+  });
+
+  it('records WEBSITE when the form says nothing — unchanged for every existing caller', async () => {
+    await new EnquiryService(site, withEnquiry).submit({ parentName: 'Sneha Kulkarni', phone: '98123 00011', gradeInterest: 'Nursery' });
+    expect(txMock.enquiry.create).toHaveBeenCalledWith({ data: expect.objectContaining({ source: 'WEBSITE', status: 'NEW' }) });
+    expect(writtenNotes()[0]).toEqual(expect.objectContaining({ kind: 'SYSTEM', body: 'Enquiry received from the website — asked about Nursery' }));
+  });
+
+  it('records COURSE_CARD for a call-back asked for on a course card', async () => {
+    await new EnquiryService(site, withEnquiry).submit({ parentName: 'Course card lead', phone: '98123 00011', gradeInterest: 'Nursery', source: 'COURSE_CARD' });
+    expect(txMock.enquiry.create).toHaveBeenCalledWith({ data: expect.objectContaining({ source: 'COURSE_CARD' }) });
+    expect(writtenNotes()[0]).toEqual(expect.objectContaining({ body: 'Call-back requested from a course card — asked about Nursery' }));
+  });
+});

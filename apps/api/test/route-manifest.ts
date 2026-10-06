@@ -463,6 +463,7 @@ export const AUTHZ_REVIEWED: string[] = [
   // chain and the declaration order; admissions-desk.e2e-spec.ts proves a
   // driver is refused and an officer reads the list.
   "GET /site/enquiries/owners",
+  "POST /site/enquiries",
   // School backups — backups-authz.e2e-spec.ts: every owner route proven four
   // ways (anonymous, school token on owner host, platform token on school
   // host, operator); the engine room refuses any caller without the cron
