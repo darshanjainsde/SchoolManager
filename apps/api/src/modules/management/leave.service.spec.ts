@@ -41,7 +41,10 @@ jest.mock('@skoolos/db', () => ({
   withTenant: (schoolId: string, fn: (tx: unknown) => unknown) => withTenantMock(schoolId, fn),
 }));
 
+jest.mock('./internal/free-teachers', () => ({ freeTeachersFor: jest.fn() }));
+
 import { LeaveService } from './leave.service';
+import { freeTeachersFor } from './internal/free-teachers';
 import { ApiError } from '../../common/errors/api-error';
 import { CreateLeaveDto as CreateLeaveDtoClass } from './management.dto';
 import type { AssignSubstitutionDto, CreateLeaveDto } from './management.dto';
@@ -880,57 +883,61 @@ describe('LeaveService', () => {
 
   describe('assign', () => {
     const dto: AssignSubstitutionDto = { substituteTeacherId: OTHER_TEACHER };
-
-    function mockGap() {
-      txMock.substitution.findFirst.mockResolvedValue({
-        id: SUB_ID,
-        schoolId: SCHOOL,
-        date: new Date('2026-07-20'), // Monday -> dayOfWeek 1
-        periodId: PERIOD,
-      });
-    }
-
-    it('sets the substitute when the teacher is free', async () => {
-      // First `substitution.findFirst` call looks up the gap itself; the
-      // second is the "already covering another gap" clash check.
-      txMock.substitution.findFirst
-        .mockResolvedValueOnce({ id: SUB_ID, schoolId: SCHOOL, date: new Date('2026-07-20'), periodId: PERIOD })
-        .mockResolvedValueOnce(null);
-      txMock.teacher.findFirst.mockResolvedValue({ id: OTHER_TEACHER });
-      txMock.timetableSlot.findFirst.mockResolvedValue(null); // no regular clash
+    const gap = { id: SUB_ID, schoolId: SCHOOL, date: new Date('2026-07-20'), periodId: PERIOD, classSectionId: CLASS_SECTION, originalTeacherId: TEACHER, substituteTeacherId: null };
+    beforeEach(() => {
+      txMock.substitution.findFirst.mockResolvedValue(gap);
       txMock.substitution.update.mockResolvedValue({ id: SUB_ID, substituteTeacherId: OTHER_TEACHER });
+    });
 
+    it('sets a substitute freeTeachersFor offers, and clears any earlier "seen"', async () => {
+      (freeTeachersFor as jest.Mock).mockResolvedValue([{ id: OTHER_TEACHER, name: 'Kavya Rao', teachesSubject: true, coversThatDay: 0 }]);
       const result = await svc.assign(SCHOOL, SUB_ID, dto);
-
-      expect(txMock.substitution.update).toHaveBeenCalledWith({
-        where: { id: SUB_ID },
-        data: { substituteTeacherId: OTHER_TEACHER },
-      });
+      expect(freeTeachersFor).toHaveBeenCalledWith(txMock, SCHOOL, gap);
+      expect(txMock.substitution.update).toHaveBeenCalledWith({ where: { id: SUB_ID }, data: { substituteTeacherId: OTHER_TEACHER, acknowledgedAt: null } });
       expect(result).toEqual({ id: SUB_ID, substituteTeacherId: OTHER_TEACHER });
     });
 
-    it('throws TEACHER_CONFLICT when the substitute already has a regular class in that period', async () => {
-      mockGap();
-      txMock.teacher.findFirst.mockResolvedValue({ id: OTHER_TEACHER });
-      txMock.timetableSlot.findFirst.mockResolvedValue({ id: 'busy-slot' });
+    it('refuses anyone freeTeachersFor would not offer — the console, WhatsApp and the API agree', async () => {
+      (freeTeachersFor as jest.Mock).mockResolvedValue([{ id: 'someone-else', name: 'X', teachesSubject: false, coversThatDay: 0 }]);
+      await expect(svc.assign(SCHOOL, SUB_ID, dto)).rejects.toMatchObject({ response: { code: 'TEACHER_CONFLICT', field: 'substituteTeacherId' }, status: 409 });
+      expect(txMock.substitution.update).not.toHaveBeenCalled();
+      expect(txMock.notificationOutbox.create).not.toHaveBeenCalled();
+    });
 
-      await expect(svc.assign(SCHOOL, SUB_ID, dto)).rejects.toMatchObject({
-        response: { code: 'TEACHER_CONFLICT' },
-      });
+    it('nobody free: every pick is refused', async () => {
+      (freeTeachersFor as jest.Mock).mockResolvedValue([]);
+      await expect(svc.assign(SCHOOL, SUB_ID, dto)).rejects.toMatchObject({ response: { code: 'TEACHER_CONFLICT' } });
       expect(txMock.substitution.update).not.toHaveBeenCalled();
     });
 
-    it('throws TEACHER_CONFLICT when the substitute is already covering another gap at that date+period', async () => {
-      txMock.substitution.findFirst
-        .mockResolvedValueOnce({ id: SUB_ID, schoolId: SCHOOL, date: new Date('2026-07-20'), periodId: PERIOD })
-        .mockResolvedValueOnce({ id: 'other-gap' });
-      txMock.teacher.findFirst.mockResolvedValue({ id: OTHER_TEACHER });
-      txMock.timetableSlot.findFirst.mockResolvedValue(null);
+    it('the teacher on leave cannot be put on their own gap (freeTeachersFor never offers them)', async () => {
+      (freeTeachersFor as jest.Mock).mockResolvedValue([{ id: OTHER_TEACHER, name: 'Kavya Rao', teachesSubject: false, coversThatDay: 0 }]);
+      await expect(svc.assign(SCHOOL, SUB_ID, { substituteTeacherId: TEACHER })).rejects.toMatchObject({ response: { code: 'TEACHER_CONFLICT' } });
+    });
 
-      await expect(svc.assign(SCHOOL, SUB_ID, dto)).rejects.toMatchObject({
-        response: { code: 'TEACHER_CONFLICT' },
-      });
-      expect(txMock.substitution.update).not.toHaveBeenCalled();
+    it('a gap of another school is not found', async () => {
+      txMock.substitution.findFirst.mockResolvedValue(null);
+      await expect(svc.assign(SCHOOL, SUB_ID, dto)).rejects.toThrow('Substitution not found');
+      expect(txMock.substitution.findFirst).toHaveBeenCalledWith({ where: { id: SUB_ID, schoolId: SCHOOL } });
+      expect(freeTeachersFor).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('candidates', () => {
+    it('asks freeTeachersFor about the school\'s own gap', async () => {
+      const gap = { id: SUB_ID, schoolId: SCHOOL, date: new Date('2026-07-20'), periodId: PERIOD, classSectionId: CLASS_SECTION, originalTeacherId: TEACHER };
+      txMock.substitution.findFirst.mockResolvedValue(gap);
+      const list = [{ id: OTHER_TEACHER, name: 'Kavya Rao', teachesSubject: true, coversThatDay: 0 }];
+      (freeTeachersFor as jest.Mock).mockResolvedValue(list);
+      expect(await svc.candidates(SCHOOL, SUB_ID)).toBe(list);
+      expect(txMock.substitution.findFirst).toHaveBeenCalledWith({ where: { id: SUB_ID, schoolId: SCHOOL } });
+      expect(freeTeachersFor).toHaveBeenCalledWith(txMock, SCHOOL, gap);
+    });
+
+    it('a gap of another school is not found', async () => {
+      txMock.substitution.findFirst.mockResolvedValue(null);
+      await expect(svc.candidates(SCHOOL, SUB_ID)).rejects.toThrow('Substitution not found');
+      expect(freeTeachersFor).not.toHaveBeenCalled();
     });
   });
 

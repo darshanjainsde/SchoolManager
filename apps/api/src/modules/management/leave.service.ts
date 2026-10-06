@@ -4,6 +4,7 @@ import { LEAVE_STATUSES, type LeaveApplication, type LeaveStatusValue } from '@s
 import { ApiError } from '../../common/errors/api-error';
 import { dateRangeInclusive, inHalf, isValidDateStr, isoWeekdayOf, toDateStr, todayIstDateStr } from './internal/leave-dates';
 import { workingDates } from './internal/school-calendar';
+import { freeTeachersFor, type CoverCandidate } from './internal/free-teachers';
 import { resolveAsOfDate } from './internal/timetable-date';
 import type { AssignSubstitutionDto, CreateLeaveDto } from './management.dto';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
@@ -645,64 +646,36 @@ export class LeaveService {
     });
   }
 
+  /** Who is free for this gap — the same answer the dropdown, WhatsApp and assign() use. */
+  async candidates(schoolId: string, substitutionId: string): Promise<CoverCandidate[]> {
+    return withTenant(schoolId, async (tx) => {
+      const sub = await tx.substitution.findFirst({ where: { id: substitutionId, schoolId } });
+      if (!sub) throw new NotFoundException('Substitution not found');
+      return freeTeachersFor(tx, schoolId, sub);
+    });
+  }
+
   /**
-   * Assigns a substitute to a coverage gap. The substitute must actually be
-   * free at that date+period: no ACTIVE timetable slot of their own in the
-   * same weekday+period (reusing the same "busy" definition as
-   * `TimetableService.availability`), and not already covering a different
-   * gap at that exact date+period.
+   * Assigns a substitute to a coverage gap. The substitute must be one
+   * `freeTeachersFor()` offers for this gap — so the console, WhatsApp and the
+   * API agree on "free" by construction. A new substitute has not seen it
+   * yet, so any earlier "seen" is cleared.
    */
   async assign(schoolId: string, id: string, dto: AssignSubstitutionDto) {
     const out = await withTenant(schoolId, async (tx) => {
       const sub = await tx.substitution.findFirst({ where: { id, schoolId } });
       if (!sub) throw new NotFoundException('Substitution not found');
 
-      const teacher = await tx.teacher.findFirst({ where: { id: dto.substituteTeacherId, schoolId } });
-      if (!teacher) {
-        throw new ApiError('VALIDATION', 'substituteTeacherId not found in this school', 400, 'substituteTeacherId');
-      }
-
-      const weekday = isoWeekdayOf(toDateStr(sub.date));
-
-      const regularClash = await tx.timetableSlot.findFirst({
-        where: {
-          schoolId,
-          teacherId: dto.substituteTeacherId,
-          dayOfWeek: weekday,
-          periodId: sub.periodId,
-          effectiveTo: null,
-        },
-      });
-      if (regularClash) {
-        throw new ApiError(
-          'TEACHER_CONFLICT',
-          'That teacher already has a class in that period',
-          409,
-          'substituteTeacherId',
-        );
-      }
-
-      const substitutionClash = await tx.substitution.findFirst({
-        where: {
-          schoolId,
-          date: sub.date,
-          periodId: sub.periodId,
-          substituteTeacherId: dto.substituteTeacherId,
-          NOT: { id: sub.id },
-        },
-      });
-      if (substitutionClash) {
-        throw new ApiError(
-          'TEACHER_CONFLICT',
-          'That teacher is already covering another class in that period',
-          409,
-          'substituteTeacherId',
-        );
+      // ONE definition of "free": whoever freeTeachersFor would not offer is refused.
+      const free = await freeTeachersFor(tx, schoolId, sub);
+      if (!free.some((c) => c.id === dto.substituteTeacherId)) {
+        throw new ApiError('TEACHER_CONFLICT', 'That teacher is not free then — they teach, cover or are on leave in that period.', 409, 'substituteTeacherId');
       }
 
       const updated = await tx.substitution.update({
         where: { id },
-        data: { substituteTeacherId: dto.substituteTeacherId },
+        // A new substitute has not seen it yet.
+        data: { substituteTeacherId: dto.substituteTeacherId, acknowledgedAt: null },
       });
       await this.tellSubstituteAssigned(tx, schoolId, sub, dto.substituteTeacherId);
       return updated;
