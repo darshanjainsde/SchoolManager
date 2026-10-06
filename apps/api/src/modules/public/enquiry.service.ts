@@ -223,11 +223,21 @@ export class EnquiryService {
       if (move === 'BACKWARDS') {
         throw new ApiError(
           'ENQUIRY_STAGE_BACKWARDS',
-          `A lead only moves forward — this one is at ${STAGE_LABEL[existing.status] ?? existing.status}. Mark it lost, or reopen a lost one.`,
+          dto.status === 'CLOSED'
+            ? 'Closed is no longer used — mark the lead Lost instead.'
+            : `A lead only moves forward — this one is at ${STAGE_LABEL[existing.status] ?? existing.status}. Mark it lost, or reopen a lost one.`,
           409,
           'status',
         );
       }
+
+      // Lost needs a reason, here as well as in the UI. Checked before any write.
+      const lostNow = (dto.status ?? existing.status) === 'LOST';
+      const reason = typeof dto.lostReason === 'string' ? dto.lostReason.trim() : dto.lostReason;
+      if (lostNow && ((move === 'LOSE' && !reason) || (dto.lostReason !== undefined && !reason))) {
+        throw new ApiError('ENQUIRY_LOST_REASON_REQUIRED', 'Say why this lead was lost.', 400, 'lostReason');
+      }
+
       // A client-supplied id: FK checks bypass RLS, and this is not even an FK.
       // Checked only when it CHANGES, so a lead whose owner has left can still
       // have its callback moved.
@@ -241,9 +251,9 @@ export class EnquiryService {
         data.followUpAt = dto.followUpAt ? new Date(dto.followUpAt) : null;
       }
       if (dto.ownerUserId !== undefined) data.ownerUserId = dto.ownerUserId;
-      if (dto.lostReason !== undefined) data.lostReason = dto.lostReason;
+      if (dto.lostReason !== undefined) data.lostReason = reason;
 
-      const terminal = dto.status === 'ENROLLED' || dto.status === 'LOST' || dto.status === 'CLOSED';
+      const terminal = dto.status === 'ENROLLED' || dto.status === 'LOST';
       if (terminal) data.followUpAt = null;
       // A reason belongs to being lost. Moving back out of LOST drops it rather
       // than leaving a stale explanation attached to a live lead.
@@ -251,24 +261,34 @@ export class EnquiryService {
         data.lostReason = null;
       }
 
-      const updated = await tx.enquiry.update({ where: { id }, data });
+      const stageChanges = dto.status !== undefined && move !== 'SAME';
+      const reasonChanged = lostNow && !stageChanges && !!reason && reason !== (existing.lostReason ?? '').trim();
 
-      if (dto.status !== undefined && move !== 'SAME') {
+      let updated: Awaited<ReturnType<typeof tx.enquiry.update>>;
+      if (stageChanges) {
+        // Compare-and-set on the stage we judged the move against. Under READ
+        // COMMITTED two desks could both pass "forward" from the same stage and
+        // the last commit would win, moving the lead backwards.
+        const { count } = await tx.enquiry.updateMany({ where: { id, schoolId, status: existing.status }, data });
+        if (count === 0) {
+          throw new ApiError('ENQUIRY_CHANGED', 'Someone else just moved this lead. Refresh and try again.', 409, 'status');
+        }
+        updated = (await tx.enquiry.findFirst({ where: { id, schoolId } })) ?? ({ ...existing, ...data } as typeof existing);
+      } else {
+        updated = await tx.enquiry.update({ where: { id }, data });
+      }
+
+      if (stageChanges || reasonChanged) {
         const by = await this.author(tx, schoolId, actor);
+        const body = reasonChanged
+          ? `Lost reason changed — ${reason}`
+          : dto.status === 'LOST'
+            ? `Marked Lost — ${reason}`
+            : move === 'REOPEN'
+              ? 'Reopened — back to Contacted'
+              : `Moved to ${STAGE_LABEL[dto.status as string] ?? dto.status}`;
         await tx.enquiryNote.create({
-          data: {
-            schoolId,
-            enquiryId: id,
-            kind: 'STAGE',
-            body:
-              dto.status === 'LOST' && updated.lostReason
-                ? `Marked Lost — ${updated.lostReason}`
-                : move === 'REOPEN'
-                  ? 'Reopened — back to Contacted'
-                  : `Moved to ${STAGE_LABEL[dto.status] ?? dto.status}`,
-            authorUserId: by.userId,
-            authorName: by.name,
-          },
+          data: { schoolId, enquiryId: id, kind: 'STAGE', body, authorUserId: by.userId, authorName: by.name },
         });
       }
 

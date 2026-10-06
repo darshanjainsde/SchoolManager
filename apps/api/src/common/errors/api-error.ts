@@ -292,6 +292,10 @@ export type ErrorCode =
   | 'ENQUIRY_STAGE_BACKWARDS'
   /** A lead given to somebody who is not an admissions officer or an admin here. 400. */
   | 'ENQUIRY_OWNER_NOT_DESK'
+  /** The lead's stage moved between reading it and writing it (two desks at once). 409. */
+  | 'ENQUIRY_CHANGED'
+  /** A lead marked lost with no reason. 400. */
+  | 'ENQUIRY_LOST_REASON_REQUIRED'
   /** The sports teacher's permission list does not include this action. 403. */
   | 'SPORTS_PERM'
   /** Bands overlap, are empty or malformed. 400. */

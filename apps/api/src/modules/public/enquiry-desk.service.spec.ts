@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 
 const txMock = {
-  enquiry: { findFirst: jest.fn(), update: jest.fn(), findMany: jest.fn(), create: jest.fn() },
+  enquiry: { findFirst: jest.fn(), update: jest.fn(), updateMany: jest.fn(), findMany: jest.fn(), create: jest.fn() },
   enquiryNote: { create: jest.fn(), findMany: jest.fn(), groupBy: jest.fn() },
   staff: { findMany: jest.fn(), findFirst: jest.fn() },
   user: { findMany: jest.fn(), findFirst: jest.fn() },
@@ -60,6 +60,7 @@ beforeEach(() => {
   txMock.enquiry.update.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
     Promise.resolve({ id: LEAD, schoolId: SCHOOL, status: 'NEW', lostReason: null, ...data }),
   );
+  txMock.enquiry.updateMany.mockResolvedValue({ count: 1 });
   txMock.enquiryNote.create.mockResolvedValue({ id: 'n1' });
   txMock.staff.findFirst.mockResolvedValue(null);
   txMock.staff.findMany.mockResolvedValue([]);
@@ -89,7 +90,7 @@ describe('moving a lead through the pipeline', () => {
   it('writes the note inside the same transaction as the update', async () => {
     await service().update(SCHOOL, LEAD, { status: 'VISITED' });
     expect(withTenantMock).toHaveBeenCalledTimes(1);
-    expect(txMock.enquiry.update).toHaveBeenCalled();
+    expect(txMock.enquiry.updateMany).toHaveBeenCalled();
     expect(txMock.enquiryNote.create).toHaveBeenCalled();
   });
 
@@ -100,7 +101,6 @@ describe('moving a lead through the pipeline', () => {
   });
 
   it('records the reason on the history line when a lead is lost', async () => {
-    txMock.enquiry.update.mockResolvedValue({ id: LEAD, status: 'LOST', lostReason: 'Chose another school' });
     await service().update(SCHOOL, LEAD, { status: 'LOST', lostReason: 'Chose another school' });
 
     expect(txMock.enquiryNote.create).toHaveBeenCalledWith(
@@ -115,15 +115,15 @@ describe('a finished lead has no next step', () => {
    * nothing — and it would sit in the overdue count forever.
    */
   it.each(['ENROLLED', 'LOST'] as const)('clears the callback when the lead reaches %s', async (status) => {
-    await service().update(SCHOOL, LEAD, { status });
-    expect(txMock.enquiry.update).toHaveBeenCalledWith(
+    await service().update(SCHOOL, LEAD, { status, lostReason: 'Chose another school' });
+    expect(txMock.enquiry.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ followUpAt: null }) }),
     );
   });
 
   it('leaves the callback alone for a stage that is still open', async () => {
     await service().update(SCHOOL, LEAD, { status: 'CONTACTED' });
-    const { data } = txMock.enquiry.update.mock.calls[0][0] as { data: Record<string, unknown> };
+    const { data } = txMock.enquiry.updateMany.mock.calls[0][0] as { data: Record<string, unknown> };
     expect(data).not.toHaveProperty('followUpAt');
   });
 });
@@ -132,7 +132,7 @@ describe('the reason belongs to being lost', () => {
   it('drops a stale reason when the lead is revived', async () => {
     txMock.enquiry.findFirst.mockResolvedValue({ id: LEAD, schoolId: SCHOOL, status: 'LOST', lostReason: 'Too far' });
     await service().update(SCHOOL, LEAD, { status: 'CONTACTED' });
-    expect(txMock.enquiry.update).toHaveBeenCalledWith(
+    expect(txMock.enquiry.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ lostReason: null }) }),
     );
   });
@@ -220,6 +220,7 @@ describe('a lead only moves forward', () => {
     at('VISITED');
     expect(await refusal(service().update(SCHOOL, LEAD, { status: 'CONTACTED' }))).toEqual({ code: 'ENQUIRY_STAGE_BACKWARDS', status: 409 });
     expect(txMock.enquiry.update).not.toHaveBeenCalled();
+    expect(txMock.enquiry.updateMany).not.toHaveBeenCalled();
     expect(txMock.enquiryNote.create).not.toHaveBeenCalled();
   });
 
@@ -234,13 +235,13 @@ describe('a lead only moves forward', () => {
   it('lets an enrolled family be marked lost — a family can still withdraw', async () => {
     at('ENROLLED');
     await service().update(SCHOOL, LEAD, { status: 'LOST', lostReason: 'Moved city' });
-    expect(txMock.enquiry.update).toHaveBeenCalled();
+    expect(txMock.enquiry.updateMany).toHaveBeenCalled();
   });
 
   it('reopens a lost lead to Contacted, clears the reason, and says who', async () => {
     at('LOST', { lostReason: 'Too far' });
     await service().update(SCHOOL, LEAD, { status: 'CONTACTED' }, { userId: USER, name: 'Sunita Kale' });
-    expect(txMock.enquiry.update).toHaveBeenCalledWith(expect.objectContaining({
+    expect(txMock.enquiry.updateMany).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ status: 'CONTACTED', lostReason: null }),
     }));
     expect(txMock.enquiryNote.create).toHaveBeenCalledWith(expect.objectContaining({
@@ -379,5 +380,88 @@ describe('an admin who owns a lead has a name on it', () => {
     txMock.enquiryNote.groupBy.mockResolvedValue([]);
     const rows = await service().list(SCHOOL);
     expect(rows[0].ownerName).toBe('Mrs Rathore');
+  });
+});
+
+describe('two desks moving the same lead at once', () => {
+  it('writes the stage only if the lead is still where we read it', async () => {
+    at('CONTACTED');
+    await service().update(SCHOOL, LEAD, { status: 'VISITED' });
+    expect(txMock.enquiry.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: LEAD, schoolId: SCHOOL, status: 'CONTACTED' },
+    }));
+    expect(txMock.enquiryNote.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses with 409 ENQUIRY_CHANGED and writes no history line when somebody got there first', async () => {
+    at('CONTACTED');
+    txMock.enquiry.updateMany.mockResolvedValue({ count: 0 });
+    expect(await refusal(service().update(SCHOOL, LEAD, { status: 'INTERESTED' }))).toEqual({ code: 'ENQUIRY_CHANGED', status: 409 });
+    expect(txMock.enquiryNote.create).not.toHaveBeenCalled();
+  });
+
+  it('keeps a plain update when the stage is not changing', async () => {
+    at('CONTACTED');
+    await service().update(SCHOOL, LEAD, { followUpAt: '2026-10-09' });
+    expect(txMock.enquiry.update).toHaveBeenCalled();
+    expect(txMock.enquiry.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('lost needs a reason', () => {
+  it.each([undefined, null, '', '   '])('refuses LOST with reason %p, 400, before any write', async (lostReason) => {
+    at('CONTACTED');
+    expect(await refusal(service().update(SCHOOL, LEAD, { status: 'LOST', lostReason }))).toEqual({ code: 'ENQUIRY_LOST_REASON_REQUIRED', status: 400 });
+    expect(txMock.enquiry.updateMany).not.toHaveBeenCalled();
+    expect(txMock.enquiryNote.create).not.toHaveBeenCalled();
+  });
+
+  it('stores the trimmed reason', async () => {
+    at('CONTACTED');
+    await service().update(SCHOOL, LEAD, { status: 'LOST', lostReason: '  Too far  ' });
+    expect(txMock.enquiryNote.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ body: 'Marked Lost — Too far' }),
+    }));
+  });
+
+  it('does not wipe the reason of a lost lead with a blank one', async () => {
+    at('LOST', { lostReason: 'Too far' });
+    expect((await refusal(service().update(SCHOOL, LEAD, { lostReason: '  ' }))).code).toBe('ENQUIRY_LOST_REASON_REQUIRED');
+  });
+
+  it('writes a history line when a lost lead gets a different reason, signed', async () => {
+    at('LOST', { lostReason: 'Too far' });
+    await service().update(SCHOOL, LEAD, { status: 'LOST', lostReason: 'Chose another school' }, { userId: USER, name: 'Sunita Kale' });
+    expect(txMock.enquiry.updateMany).not.toHaveBeenCalled();
+    expect(txMock.enquiryNote.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ kind: 'STAGE', body: 'Lost reason changed — Chose another school', authorName: 'Sunita Kale' }),
+    }));
+  });
+
+  it('says nothing when the reason is unchanged', async () => {
+    at('LOST', { lostReason: 'Too far' });
+    await service().update(SCHOOL, LEAD, { status: 'LOST', lostReason: 'Too far' });
+    expect(txMock.enquiryNote.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('the retired CLOSED and an unnamed actor', () => {
+  it('says CLOSED is retired, not that the lead only moves forward', async () => {
+    at('NEW');
+    await expect(service().update(SCHOOL, LEAD, { status: 'CLOSED' })).rejects.toMatchObject({
+      response: expect.objectContaining({
+        code: 'ENQUIRY_STAGE_BACKWARDS',
+        message: 'Closed is no longer used — mark the lead Lost instead.',
+        field: 'status',
+      }),
+    });
+  });
+
+  it('signs nobody, without crashing, when the actor has no user id', async () => {
+    await service().addNote(SCHOOL, LEAD, 'Walk-in', {});
+    expect(txMock.staff.findFirst).not.toHaveBeenCalled();
+    expect(txMock.enquiryNote.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ authorUserId: null, authorName: null }),
+    }));
   });
 });
