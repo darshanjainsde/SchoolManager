@@ -1,6 +1,5 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { readableIstDate } from '../../common/dates/timetable-date';
-import { runInBackground } from '../../common/notifications/run-in-background';
 import { registerOutboxDrainer, requestOutboxDrain } from '../../common/notifications/outbox-signal';
 import { getPlatformPrisma } from '@skoolos/db';
 import { assertNotificationOutboxKind, type NotificationOutboxKind } from '@skoolos/types';
@@ -269,10 +268,11 @@ export class NotificationOutboxService implements OnModuleInit, OnModuleDestroy 
    * daily at deploy time, and fires it anywhere within the scheduled hour. A
    * notification enqueued at 09:00 would wait until the small hours.
    *
-   * `runInBackground` wraps Vercel's `waitUntil`, so the work survives the
-   * response being sent instead of being frozen with the instance. Failures are
-   * swallowed: the row is still in the outbox and the cron will retry it, so a
-   * failed opportunistic drain costs latency, never delivery.
+   * The delay (750ms), coalescing, and Vercel's `waitUntil` wrapping now live in
+   * `common/notifications/outbox-signal.ts` — the work survives the response
+   * being sent instead of being frozen with the instance. Failures are swallowed:
+   * the row is still in the outbox and the cron will retry it, so a failed
+   * opportunistic drain costs latency, never delivery.
    *
    * Safe to call concurrently with the cron — the drain claims its batch with
    * FOR UPDATE SKIP LOCKED, so two runs never take the same row.

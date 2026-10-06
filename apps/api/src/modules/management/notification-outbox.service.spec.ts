@@ -11,6 +11,7 @@ jest.mock('@skoolos/db', () => ({
 
 import { NotificationOutboxService } from './notification-outbox.service';
 import type { PushChannel } from '../../common/notifications/push.channel';
+import { OUTBOX_DRAIN_DELAY_MS, resetOutboxSignal, requestOutboxDrain } from '../../common/notifications/outbox-signal';
 
 const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const CLASS_SECTION = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
@@ -278,9 +279,46 @@ describe('NotificationOutboxService', () => {
     });
 
     it('drainSoon never sweeps — it runs on the hot path of an ordinary request', async () => {
-      svc.drainSoon();
-      await new Promise((r) => setTimeout(r, 0));
-      expect(dbMock.notificationOutbox.deleteMany).not.toHaveBeenCalled();
+      jest.useFakeTimers();
+      try {
+        svc.onModuleInit();
+        svc.drainSoon();
+        // The claim query should not have been called yet (waiting for delay)
+        expect(dbMock.$queryRaw).not.toHaveBeenCalled();
+        await jest.advanceTimersByTimeAsync(OUTBOX_DRAIN_DELAY_MS);
+        // After delay, drain runs and makes the claim query
+        expect(dbMock.$queryRaw).toHaveBeenCalled();
+        // But purge must NOT run (purge: false)
+        expect(dbMock.notificationOutbox.deleteMany).not.toHaveBeenCalled();
+      } finally {
+        resetOutboxSignal();
+        jest.useRealTimers();
+      }
+    });
+
+    it('onModuleInit registers the drainer, onModuleDestroy unregisters it', async () => {
+      jest.useFakeTimers();
+      try {
+        const drainSpy = jest.spyOn(svc, 'drain').mockResolvedValue({ processed: 0, sent: 0, failed: 0, purged: 0 });
+
+        // After init, requestOutboxDrain should schedule the drain
+        svc.onModuleInit();
+        requestOutboxDrain();
+        await jest.advanceTimersByTimeAsync(OUTBOX_DRAIN_DELAY_MS);
+        expect(drainSpy).toHaveBeenCalledWith({ purge: false });
+
+        // After destroy, requestOutboxDrain should do nothing
+        drainSpy.mockClear();
+        svc.onModuleDestroy();
+        requestOutboxDrain();
+        await jest.advanceTimersByTimeAsync(OUTBOX_DRAIN_DELAY_MS);
+        expect(drainSpy).not.toHaveBeenCalled();
+
+        drainSpy.mockRestore();
+      } finally {
+        resetOutboxSignal();
+        jest.useRealTimers();
+      }
     });
 
     it('only ever deletes rows that were actually delivered', async () => {
