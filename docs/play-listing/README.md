@@ -16,13 +16,26 @@ So the text lives here, is reviewed with the code that changes it, and
 |---|---|---|
 | `short-description.txt` | Grow users → Store listings → Default → Short description | 80 |
 | `full-description.txt` | … → Full description | 4000 |
-| `reviewer-note-teacher.txt` | Policy and programs → App content → Sign in details → **Teacher** (username `anjali.desai@raffles.edu`) → Any other information | 500 |
-| `reviewer-note-family.txt` | … → Sign in details → **Parent / student** (username `RPS-00021`) → Any other information | 500 |
+| `reviewer-note-teacher.txt` | Policy and programs → App content → Sign in details → **Teacher** (username `kavya.chatterjee@sample.school`) → Any other information | 500 |
+| `reviewer-note-family.txt` | … → Sign in details → **Parent / student** (username `SPS-00539`) → Any other information | 500 |
 | `release-notes.txt` | Test and release → the release → Release notes (en-US) | 500 |
 
-Both reviewer logins are on the Raffles demo school in **production**, which
-uses the shared demo password. That password goes only in the console's
-Password field, never in these files.
+Both reviewer logins are on **Sckools Demo School** (`demo.sckools.com`) in
+production, loaded from the sample pack built with
+`scripts/sample-pack/index.ts --no-phones --password-file ~/.sckools-prod-backup-password`.
+They use the shared demo password, which goes only in the console's Password
+field, never in these files.
+
+**Demo school rules:**
+- **Never switch WhatsApp on** for the demo school. Its people are invented, and
+  even with numbers blanked, a later edit could add one.
+- **Reload the pack on the day you submit** (owner console → school → Load a
+  sample pack). Loads shift dates by whole weeks since the pack's as-of date,
+  so the newest records land in the last six days.
+- The accounts were chosen because their screens are full: Aryan Pillai (V-B)
+  has a message thread, a complaint, 16 results, homework and diary; his class
+  teacher Kavya Chatterjee has 8 periods and 2 parent threads. Re-check with the
+  API before changing them.
 
 ## When you must update this folder
 

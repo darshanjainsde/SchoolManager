@@ -1,2 +1,2 @@
 No school code is needed. The app opens on a sign-in screen: type the student code in "Student code or email", type the password, tap "Log in".
-This is a parent/student account at our demo school (Raffles Primary, sample data): attendance calendar, diary, homework, results, report cards, fees, holidays, notices, library, sports, messages.
+This is Aryan Pillai of class V-B at our demo school (sample data only). Try the tabs: Attendance (pick September for a full month), Fees, Results. From Home: Diary, Homework, Messages, Notices, Holidays, Timetable, Library, Sports, Complaint box.
