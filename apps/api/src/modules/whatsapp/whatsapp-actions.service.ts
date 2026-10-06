@@ -8,6 +8,7 @@ import { toE164 } from '../../common/notifications/whatsapp/phone';
 import { sendList, sendTemplate, sendText } from '../../common/notifications/whatsapp/graph.client';
 import { coverPendingTemplate, COVER_PENDING } from '../../common/notifications/whatsapp/templates';
 import { isoWeekdayOf, LeaveService, toDateStr } from '../management';
+import { InboundIdentityService } from './inbound-identity.service';
 import type { InboundMessage } from './whatsapp-webhook.service';
 
 /**
@@ -17,10 +18,10 @@ import type { InboundMessage } from './whatsapp-webhook.service';
  * `reject()` / `assign()` — so the Requests tab, the app and the ledger all
  * see one truth, and nothing here is a second implementation of leave.
  *
- * Who may tap: only a login of THAT school whose verified WhatsApp number
- * is the number that tapped — an admin for leave and cover, the substitute
- * themself for an acknowledgement. Everything else is answered in words and
- * recorded, never acted on.
+ * Who may tap: the ONE person `InboundIdentityService` resolves for that
+ * school — an admin or the accounts officer for leave and cover (the web's
+ * rule), the substitute themself for an acknowledgement. Everything else is
+ * answered in words and recorded, never acted on.
  *
  * Idempotent: Meta retries webhooks; every inbound is keyed by Meta's
  * message id in WhatsAppInbound, and a repeat is a no-op.
@@ -45,6 +46,7 @@ export class WhatsAppActionsService {
   constructor(
     private readonly leave: LeaveService,
     private readonly channel: WhatsAppChannel,
+    private readonly identity: InboundIdentityService,
   ) {}
 
   private keys() {
@@ -122,11 +124,8 @@ export class WhatsAppActionsService {
   private async onLeave(db: Db, a: Extract<Action, { kind: 'leave' }>, phone: string) {
     const app = await db.leaveApplication.findUnique({ where: { id: a.leaveId }, select: { id: true, schoolId: true, status: true, teacherId: true, staffId: true, reviewedById: true, reviewedAt: true } });
     if (!app) return { result: 'leave-not-found', schoolId: null };
-    const admin = await this.adminByPhone(db, app.schoolId, phone);
-    if (!admin) {
-      await this.text(app.schoolId, phone, 'This number is not a verified admin of the school, so nothing was changed. Verify it under Settings → My WhatsApp number, or decide in the console.');
-      return { result: 'not-admin', schoolId: app.schoolId };
-    }
+    const actor = await this.deskActor(db, app.schoolId, phone);
+    if ('refused' in actor) return { result: actor.refused, schoolId: app.schoolId };
     // A leave row belongs to a teacher or to a staff member; this reply says
     // whose it is either way rather than calling a driver "the teacher".
     const teacher = app.teacherId
@@ -135,7 +134,7 @@ export class WhatsAppActionsService {
     const teacherName = teacher ? `${teacher.firstName} ${teacher.lastName ?? ''}`.trim() : 'The person';
     try {
       if (a.decision === 'approve') {
-        const { gaps, gapIds } = await this.leave.approve(app.schoolId, app.id, admin.id);
+        const { gaps, gapIds } = await this.leave.approve(app.schoolId, app.id, actor.userId);
         if (gaps === 0) {
           await this.text(app.schoolId, phone, `Approved. ${teacherName} has been told. No classes need cover.`);
           return { result: 'approved', schoolId: app.schoolId };
@@ -144,7 +143,7 @@ export class WhatsAppActionsService {
         await this.coverList(db, app.schoolId, phone, gapIds[0]);
         return { result: `approved:${gaps}`, schoolId: app.schoolId };
       }
-      await this.leave.reject(app.schoolId, app.id, admin.id);
+      await this.leave.reject(app.schoolId, app.id, actor.userId);
       await this.text(app.schoolId, phone, `Not approved. ${teacherName} has been told.`);
       return { result: 'rejected', schoolId: app.schoolId };
     } catch (e) {
@@ -163,11 +162,8 @@ export class WhatsAppActionsService {
   private async onCover(db: Db, a: Extract<Action, { kind: 'cover' }>, phone: string) {
     const sub = await db.substitution.findUnique({ where: { id: a.substitutionId }, select: { id: true, schoolId: true, date: true, periodId: true, classSectionId: true, originalTeacherId: true, substituteTeacherId: true } });
     if (!sub) return { result: 'gap-not-found', schoolId: null };
-    const admin = await this.adminByPhone(db, sub.schoolId, phone);
-    if (!admin) {
-      await this.text(sub.schoolId, phone, 'This number is not a verified admin of the school, so nothing was changed.');
-      return { result: 'not-admin', schoolId: sub.schoolId };
-    }
+    const actor = await this.deskActor(db, sub.schoolId, phone);
+    if ('refused' in actor) return { result: actor.refused, schoolId: sub.schoolId };
     if (a.teacherId === 'skip') {
       await this.text(sub.schoolId, phone, 'Left for the console. The remaining gaps are under Requests → Coverage.');
       return { result: 'skipped', schoolId: sub.schoolId };
@@ -209,9 +205,9 @@ export class WhatsAppActionsService {
   private async onAck(db: Db, a: Extract<Action, { kind: 'ack' }>, phone: string) {
     const sub = await db.substitution.findUnique({ where: { id: a.substitutionId }, select: { schoolId: true, substituteTeacherId: true } });
     if (!sub?.substituteTeacherId) return { result: 'gap-not-found', schoolId: sub?.schoolId ?? null };
-    const teacher = await db.teacher.findFirst({ where: { id: sub.substituteTeacherId, schoolId: sub.schoolId }, select: { userId: true } });
-    const user = teacher?.userId ? await db.user.findFirst({ where: { id: teacher.userId, schoolId: sub.schoolId, phone, phoneVerifiedAt: { not: null } }, select: { id: true } }) : null;
-    if (!user) return { result: 'ack-not-substitute', schoolId: sub.schoolId };
+    // Silent to anyone but the substitute: a stranger has nothing to decide here.
+    const who = await this.identity.actorFor(phone, sub.schoolId, { kind: 'SUBSTITUTE', substitutionId: a.substitutionId });
+    if (!who.ok) return { result: 'ack-not-substitute', schoolId: sub.schoolId };
     await this.text(sub.schoolId, phone, 'Noted — thank you.');
     return { result: 'acked', schoolId: sub.schoolId };
   }
@@ -267,8 +263,22 @@ export class WhatsAppActionsService {
 
   // ── helpers ────────────────────────────────────────────────────────────
 
-  private adminByPhone(db: Db, schoolId: string, phone: string) {
-    return db.user.findFirst({ where: { schoolId, phone, phoneVerifiedAt: { not: null }, role: 'SCHOOL_ADMIN', isActive: true }, select: { id: true } });
+  /**
+   * The leave desk's door for a tap: exactly one admin or accounts officer of
+   * the school the payload names. Anything else is answered in words that name
+   * the school and never the request.
+   */
+  private async deskActor(db: Db, schoolId: string, phone: string): Promise<{ userId: string } | { refused: string }> {
+    const who = await this.identity.actorFor(phone, schoolId, { kind: 'LEAVE_DESK' });
+    if (who.ok) return { userId: who.profile.userId };
+    const school = await db.school.findFirst({ where: { id: schoolId }, select: { name: true } });
+    const name = school?.name ?? 'this school';
+    if (who.why === 'AMBIGUOUS') {
+      await this.text(schoolId, phone, `This number belongs to more than one person at ${name}, so nothing was done. Please decide in the console.`);
+      return { refused: 'ambiguous' };
+    }
+    await this.text(schoolId, phone, `This number cannot do that at ${name}. Decide in the console.`);
+    return { refused: 'not-allowed' };
   }
 
   private text(schoolId: string, phone: string, body: string) {
