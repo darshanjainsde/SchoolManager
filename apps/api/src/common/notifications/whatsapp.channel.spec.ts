@@ -1,6 +1,7 @@
 import { DEDUP_REDIS_TIMEOUT_MS, WhatsAppChannel } from './whatsapp.channel';
 import type { NotificationMessage } from './notification.types';
 import { WhatsAppApiError } from './whatsapp/graph.client';
+import { leavePayload } from './whatsapp/actions';
 
 const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const CFG = { token: 't', phoneNumberId: '1357286177463978', wabaId: null, graphVersion: 'v21.0' };
@@ -186,6 +187,44 @@ describe('WhatsAppChannel', () => {
       await c.send('c1@x', results, SCHOOL);
       await c.send('c2@x', results, SCHOOL);
       expect(f).toHaveBeenCalledTimes(2);
+    });
+
+    describe('cards with buttons', () => {
+      // Same teacher, same dates, same words — only the leave the buttons act on differs.
+      const KEYS = { sign: 'test-action-secret' };
+      const leaveCard = (leaveId: string, now = Date.parse('2026-10-06T09:00:00Z')) =>
+        ({
+          kind: 'LEAVE_APPLIED',
+          payload: {
+            schoolName: 'Raffles', leaveId, teacherName: 'Priya Nair', dates: 'Mon 13 Oct', days: 1, reason: 'Fever', periodsAffected: 4,
+            approvePayload: leavePayload('approve', leaveId, KEYS, now),
+            rejectPayload: leavePayload('reject', leaveId, KEYS, now),
+          },
+        }) as unknown as NotificationMessage;
+      const desk = (f: jest.Mock, redis: () => never | null) =>
+        new WhatsAppChannel(db() as never, () => CFG, f, redis as never, { isApproved: async () => true });
+      const sentBody = (f: jest.Mock, call: number): string => f.mock.calls[call][1].body;
+
+      it.each([
+        ['memory', () => null],
+        ['Redis', () => fakeRedis() as never],
+      ])('a re-application within the minute gets its own Approve card (%s)', async (_path, makeRedis) => {
+        const redis = makeRedis();
+        const f = okFetch();
+        const c = desk(f, () => redis as never);
+        expect(await c.attempt('desk@x', leaveCard('leave-withdrawn'), SCHOOL)).toEqual(expect.objectContaining({ status: 'SENT' }));
+        expect(await c.attempt('desk@x', leaveCard('leave-new'), SCHOOL)).toEqual(expect.objectContaining({ status: 'SENT' }));
+        expect(f).toHaveBeenCalledTimes(2);
+        expect(sentBody(f, 1)).toContain('lv:a:leave-new');
+      });
+
+      it('the same card rendered a minute apart (new expiry, new signature) is still one card', async () => {
+        const f = okFetch();
+        const c = desk(f, () => null);
+        await c.attempt('desk@x', leaveCard('leave-1', Date.parse('2026-10-06T09:00:00Z')), SCHOOL);
+        expect(await c.attempt('desk@x', leaveCard('leave-1', Date.parse('2026-10-06T09:01:00Z')), SCHOOL)).toEqual({ status: 'SKIPPED', reason: 'duplicate' });
+        expect(f).toHaveBeenCalledTimes(1);
+      });
     });
 
     const fakeRedis = () => {

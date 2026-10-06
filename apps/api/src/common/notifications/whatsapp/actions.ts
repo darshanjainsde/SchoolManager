@@ -60,6 +60,18 @@ export const coverPayload = (substitutionId: string, teacherId: string | 'skip',
   seal(`cv:${substitutionId}:${teacherId}`, keys, now);
 export const ackPayload = (substitutionId: string, keys: Pick<ActionKeys, 'sign'>, now = Date.now()) => seal(`ca:${substitutionId}`, keys, now);
 
+/**
+ * What a payload ACTS ON, without when it expires or how it was signed:
+ * `v2:lv:a:<leaveId>:<exp>:<sig>` → `lv:a:<leaveId>`. The same card rendered a
+ * minute later carries a new exp and sig but the same action; a card for a
+ * different leave does not. Anything else is returned unchanged.
+ */
+export function actionIdentity(payload: string): string {
+  if (!payload.startsWith('v2:')) return payload;
+  const parts = payload.split(':');
+  return parts.length > 3 ? parts.slice(1, -2).join(':') : payload;
+}
+
 function shape(parts: string[]): Action | null {
   if (parts[0] === 'lv' && parts.length === 3 && (parts[1] === 'a' || parts[1] === 'r') && parts[2]) {
     return { kind: 'leave', decision: parts[1] === 'a' ? 'approve' : 'reject', leaveId: parts[2] };

@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import type { PrismaClient } from '@skoolos/db';
 import { ensureConnected, sharedRedis, type SharedRedis } from '../redis/redis.client';
 import type { DeliveryChannel, DeliveryOutcome, NotificationMessage } from './notification.types';
+import { actionIdentity } from './whatsapp/actions';
 import { isTransientWhatsAppFailure } from './whatsapp/failure';
 import { toE164 } from './whatsapp/phone';
 import { WhatsAppApiError, sendTemplate, senderDisplayNumber, type SendResult, type WhatsAppConfig, whatsAppConfig, whatsAppConfigProblem } from './whatsapp/graph.client';
@@ -85,7 +86,12 @@ export class WhatsAppChannel implements DeliveryChannel {
    * The same words to the same phone within a minute are one message. A
    * family with three children at the school gets ONE "PTM on Saturday",
    * not three; the per-child kinds (absence, remark) differ in their
-   * parameters and pass. Keyed on phone + template + parameters.
+   * parameters and pass. Keyed on phone + template + parameters + what each
+   * button does: a teacher who withdraws and re-applies for the same dates
+   * within the minute gets the same words, but the new Approve card acts on
+   * the NEW leave and must not be dropped as a copy of the withdrawn one.
+   * (A button is keyed on its action, not its expiry or signature, so the
+   * same card rendered a minute apart is still one card.)
    *
    * One copy per phone across every serverless instance, through Redis
    * (SET NX with a 60 s expiry); memory decides only when Redis is
@@ -105,7 +111,8 @@ export class WhatsAppChannel implements DeliveryChannel {
    * a retry or an identical sibling send is not counted as sent.
    */
   private async claim(phone: string, template: WhatsAppTemplate): Promise<null | (() => Promise<void>)> {
-    const raw = `${phone}|${template.name}|${template.params.join('\u0001')}`;
+    const buttons = (template.buttons ?? []).map((b) => `${b.index}:${b.type === 'quick_reply' ? actionIdentity(b.payload) : b.text}`);
+    const raw = `${phone}|${template.name}|${template.params.join('\u0001')}|${buttons.join('\u0001')}`;
     try {
       const r = this.redis();
       if (r) {
