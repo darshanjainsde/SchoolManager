@@ -130,7 +130,7 @@ export function BellCard({ bell }: { bell: MorningBell }) {
         )}
         {bell.waiting.enquiries > 0 && (
           <Row href="/app/enquiries" icon={<Inbox size={16} />}>
-            <b>{bell.waiting.enquiries} new {bell.waiting.enquiries === 1 ? 'enquiry' : 'enquiries'}</b> from the website
+            <b>{bell.waiting.enquiries} new {bell.waiting.enquiries === 1 ? 'enquiry' : 'enquiries'}</b>
           </Row>
         )}
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  OUTCOMES, daysUntil, deskCounts, deskOrder, dialable, dueLabel, initials, isOpen, leadsCsv,
+  OUTCOMES, daysUntil, deskCounts, deskOrder, dialable, dueLabel, initials, isOpen, leadsCsv, waNumber,
   matchesFilter, matchesQuery, sourceLabel, stageButtons, stageTone, STAGE_LABEL,
   type Lead,
 } from './lead';
@@ -162,6 +162,14 @@ describe('reaching them', () => {
   it('strips a display number down to something dialable', () => {
     expect(dialable('+91 98123 00011')).toBe('+919812300011');
     expect(dialable('(020) 2612-3400')).toBe('02026123400');
+  });
+
+  it('gives wa.me a country code — a bare Indian mobile is not read as country 98', () => {
+    expect(waNumber('98290 11223')).toBe('919829011223');
+    expect(waNumber('098290 11223')).toBe('919829011223');
+    expect(waNumber('+91 98290 11223')).toBe('919829011223');
+    expect(waNumber('+44 20 7946 0958')).toBe('442079460958');
+    expect(waNumber('123')).toBeNull();
   });
 
   it('makes initials from a name', () => {

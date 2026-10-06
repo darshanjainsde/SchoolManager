@@ -166,6 +166,18 @@ export function dialable(phone: string): string {
   return phone.replace(/[^\d+]/g, '');
 }
 
+/**
+ * The digits wa.me wants — country code first, no plus. wa.me reads `9829011223`
+ * as country code 98, so a bare Indian mobile gets 91 in front. Null when what
+ * was typed cannot be a number at all (the button is then hidden).
+ */
+export function waNumber(phone: string): string | null {
+  const digits = phone.replace(/\D/g, '').replace(/^0+/, '');
+  if (/^[6-9]\d{9}$/.test(digits)) return `91${digits}`;
+  if (/^91\d{10}$/.test(digits)) return digits;
+  return digits.length >= 8 ? digits : null;
+}
+
 export function initials(name: string): string {
   return name.split(/\s+/).filter(Boolean).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
 }

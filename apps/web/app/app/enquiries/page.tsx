@@ -1,5 +1,5 @@
-// apps/web/app/app/enquiries/page.tsx
 'use client';
+// apps/web/app/app/enquiries/page.tsx
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useApi } from '@/lib/use-api';
@@ -111,6 +111,7 @@ export default function EnquiriesPage() {
   useEffect(() => {
     if (pendingId) {
       if (rows.some((r) => r.id === pendingId)) setPendingId(null);
+      else if (leads.isError) setPendingId(null);
       else if (leads.isFetching || leads.dataUpdatedAt < savedAt.current) return;
       else setPendingId(null);
     }
@@ -119,7 +120,7 @@ export default function EnquiriesPage() {
       return;
     }
     if (!selected || !rows.some((r) => r.id === selected)) setSelected(rows[0].id);
-  }, [rows, selected, pendingId, leads.isFetching, leads.dataUpdatedAt]);
+  }, [rows, selected, pendingId, leads.isFetching, leads.isError, leads.dataUpdatedAt]);
 
   function exportCsv() {
     const day = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
@@ -160,7 +161,7 @@ export default function EnquiriesPage() {
             className="sk-kpi"
             data-tone={t.tone}
             aria-pressed={filter === t.key}
-            onClick={() => setPicked(filter === t.key ? home : t.key)}
+            onClick={() => { setPicked(filter === t.key ? home : t.key); setLimit(PAGE); }}
           >
             <span className="lab">{t.lab}</span>
             <span className="n">{t.n}</span>

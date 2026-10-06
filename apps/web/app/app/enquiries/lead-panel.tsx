@@ -1,5 +1,5 @@
-// apps/web/app/app/enquiries/lead-panel.tsx
 'use client';
+// apps/web/app/app/enquiries/lead-panel.tsx
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ContactKind, ContactOutcome, EnquiryDeskMember } from '@skoolos/types';
@@ -7,7 +7,7 @@ import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { ApiError } from '@/lib/api';
 import {
-  OUTCOMES, STAGE_LABEL, dialable, dueLabel, sourceLabel, stageButtons, stageTone,
+  OUTCOMES, STAGE_LABEL, dialable, dueLabel, sourceLabel, stageButtons, stageTone, waNumber,
   type EnquiryNote, type EnquiryStage, type Lead,
 } from './lead';
 
@@ -96,13 +96,14 @@ export function LeadPanel({ id }: { id: string }) {
     setContactWhy('');
   };
 
-  // A write can lose a race to a colleague (409 ENQUIRY_CHANGED). Say so, and
+  // A write can lose a race to a colleague (409 ENQUIRY_CHANGED), or ask for a
+  // stage that is now behind the lead (ENQUIRY_STAGE_BACKWARDS). Say so, and
   // refetch: the stage the officer is looking at is already out of date, and so
   // is any half-answered question built on it.
   const fail = (e: unknown) => {
     setError(e instanceof Error ? e.message : 'That did not save. Check your connection and try again.');
     const code = e instanceof ApiError ? (e.body as { code?: string } | null)?.code : undefined;
-    if (code === 'ENQUIRY_CHANGED') {
+    if (code === 'ENQUIRY_CHANGED' || code === 'ENQUIRY_STAGE_BACKWARDS') {
       setAskingWhy(false);
       setLostWhy('');
       closeSheet();
@@ -146,6 +147,7 @@ export function LeadPanel({ id }: { id: string }) {
 
   const l = detail.data;
   const tel = dialable(l.phone);
+  const wa = waNumber(l.phone);
   const due = dueLabel(l);
   const lost = l.status === 'LOST' || l.status === 'CLOSED';
   const members = owners.data ?? [];
@@ -196,15 +198,17 @@ export function LeadPanel({ id }: { id: string }) {
           <a className="sk-btn" data-variant="primary" href={`tel:${tel}`} onClick={() => setContact('CALL')}>
             Call <span style={{ whiteSpace: 'nowrap' }}>{l.phone}</span>
           </a>
-          <a
-            className="sk-btn"
-            href={`https://wa.me/${tel.replace(/^\+/, '')}`}
-            target="_blank"
-            rel="noreferrer"
-            onClick={() => setContact('WHATSAPP')}
-          >
-            WhatsApp
-          </a>
+          {wa ? (
+            <a
+              className="sk-btn"
+              href={`https://wa.me/${wa}`}
+              target="_blank"
+              rel="noreferrer"
+              onClick={() => setContact('WHATSAPP')}
+            >
+              WhatsApp
+            </a>
+          ) : null}
           {l.email ? (
             <a className="sk-btn" href={`mailto:${l.email}`}>Email</a>
           ) : (

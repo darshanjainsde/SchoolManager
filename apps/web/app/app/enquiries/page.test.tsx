@@ -137,6 +137,28 @@ describe('the admissions desk', () => {
     expect(screen.getByRole('heading', { name: 'Brand New Parent' })).toBeInTheDocument();
   });
 
+  it('a failed refetch while a new lead is pending lets go of it, rather than holding it open forever', async () => {
+    const created = lead('L9', { parentName: 'Brand New Parent', ownerUserId: 'u-off', ownerName: 'Sunita Kale', ownerOnDesk: true, source: 'WALK_IN' });
+    const listed = [MINE, FREE];
+    const listGate: { current: Promise<void> | null } = { current: null };
+    const post = vi.fn(async () => {
+      listed.push(created);
+      // The refetch that would show it fails — after the new lead has had time to open.
+      listGate.current = new Promise<void>((_, reject) => setTimeout(() => reject(new Error('offline')), 150));
+      listGate.current.catch(() => {});
+      return { id: 'L9' };
+    });
+    mount({ userId: 'u-off', role: 'STAFF', staffRole: 'ADMISSIONS' }, { leads: listed, post, listGate });
+    await waitFor(() => expect(rows()).toHaveLength(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Add enquiry' }));
+    fireEvent.change(await screen.findByLabelText(/Parent/), { target: { value: 'Brand New Parent' } });
+    fireEvent.change(screen.getByLabelText('Phone number'), { target: { value: '98290 11223' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save enquiry' }));
+    expect(await screen.findByRole('heading', { name: 'Brand New Parent' })).toBeInTheDocument();
+    // The pending lead is let go once the refetch has failed: the desk is back on a lead it can see.
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Mine Parent' })).toBeInTheDocument(), { timeout: 4000 });
+  });
+
   it('a late answer to a write on one lead cannot reach the lead now open', async () => {
     let release!: (v: unknown) => void;
     const post = vi.fn(() => new Promise((r) => { release = r; }));
@@ -169,6 +191,17 @@ describe('the admissions desk', () => {
     await waitFor(() => expect(rows()).toHaveLength(1));
     expect(rows()[0]).toHaveTextContent('Mine Parent');
     expect(api.get).not.toHaveBeenCalledWith('/site/enquiries/L2');
+  });
+
+  it('switching summary tile starts the list from the first page again', async () => {
+    const many = Array.from({ length: 250 }, (_, i) => lead(`M${i}`, { parentName: `Family ${i}`, createdAt: `2026-09-01T05:00:${String(i % 60).padStart(2, '0')}.000Z` }));
+    mount({ userId: 'u-adm', role: 'SCHOOL_ADMIN', staffRole: null }, { leads: many });
+    await waitFor(() => expect(rows()).toHaveLength(200));
+    fireEvent.click(screen.getByRole('button', { name: 'Show 50 more' }));
+    await waitFor(() => expect(rows()).toHaveLength(250));
+    fireEvent.click(screen.getByRole('button', { name: /^Never contacted/ })); // all 250 are NEW
+    await waitFor(() => expect(rows()).toHaveLength(200));
+    expect(screen.getByRole('button', { name: 'Show 50 more' })).toBeInTheDocument();
   });
 
   it('draws 200 rows of 250 and a button for the rest', async () => {

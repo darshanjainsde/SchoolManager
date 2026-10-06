@@ -164,6 +164,31 @@ describe('the lead panel', () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['site-enquiries'] });
   });
 
+  it('on ENQUIRY_STAGE_BACKWARDS the lead is refetched and the list refreshed, as for ENQUIRY_CHANGED', async () => {
+    const invalidate = vi.spyOn(QueryClient.prototype, 'invalidateQueries');
+    const api = mount();
+    const msg = 'A lead cannot move back to an earlier stage.';
+    (api.patch as ReturnType<typeof vi.fn>).mockRejectedValue(new ApiError(400, msg, { code: 'ENQUIRY_STAGE_BACKWARDS', message: msg }));
+    const stages = within(await screen.findByRole('group', { name: 'Admissions stage' }));
+    const detailReads = () => (api.get as ReturnType<typeof vi.fn>).mock.calls.filter((c) => c[0] === '/site/enquiries/L1').length;
+    expect(detailReads()).toBe(1);
+    fireEvent.click(stages.getByRole('button', { name: 'Interested' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(msg);
+    await waitFor(() => expect(detailReads()).toBe(2));
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['site-enquiries'] });
+  });
+
+  it('offers WhatsApp on a country-coded number, and none on a number that cannot be one', async () => {
+    mount({ phone: '98290 11223' });
+    expect(await screen.findByRole('link', { name: 'WhatsApp' })).toHaveAttribute('href', 'https://wa.me/919829011223');
+  });
+
+  it('hides WhatsApp when the phone cannot be a number', async () => {
+    mount({ phone: '123' });
+    await screen.findByRole('heading', { name: 'Meera Purohit' });
+    expect(screen.queryByRole('link', { name: 'WhatsApp' })).not.toBeInTheDocument();
+  });
+
   it('a contact that loses the race also says so and refreshes', async () => {
     const api = mount();
     const msg = 'Someone else just moved this lead. Refresh and try again.';
