@@ -8,6 +8,14 @@ describe('push text for the leave desk notices', () => {
     expect(formatNotification({ kind: 'LEAVE_CANCELLED', payload: { ...p, releasedCovers: 0 } }).body).toBe('Mon 13 Oct 2026');
   });
 
+  it('a substitute who could not be told is named, and the desk is asked to tell them', () => {
+    const p = { schoolName: 'Raffles', leaveId: 'l1', teacherName: 'Priya Nair', dates: 'Mon 13 Oct 2026' };
+    expect(formatNotification({ kind: 'LEAVE_CANCELLED', payload: { ...p, releasedCovers: 1, unreached: 'Ramesh Kumar' } }).body).toBe('Mon 13 Oct 2026 · 1 cover released · Ramesh Kumar has no login, so tell them yourself');
+    expect(formatNotification({ kind: 'LEAVE_CANCELLED', payload: { ...p, releasedCovers: 0, unreached: 'Ramesh Kumar and Sunita Iyer' } }).body).toBe('Mon 13 Oct 2026 · Ramesh Kumar and Sunita Iyer have no login, so tell them yourself');
+    // A row written before the field existed reads as before.
+    expect(formatNotification({ kind: 'LEAVE_CANCELLED', payload: { ...p, releasedCovers: 1, unreached: null } }).body).toBe('Mon 13 Oct 2026 · 1 cover released');
+  });
+
   it('a called-off cover says why, in words', () => {
     expect(formatNotification({ kind: 'COVER_CANCELLED', payload: { schoolName: 'R', substitutionId: 's1', when: 'Mon 13 Oct 2026, Period 3', className: '9-A', why: 'CHANGED' } }))
       .toEqual({ title: 'Cover called off: 9-A', body: 'Mon 13 Oct 2026, Period 3 — the office has changed the cover.' });

@@ -1,5 +1,5 @@
 import type { NoticeTopic, NotificationKind, NotificationMessage, PayloadFor } from '../notification.types';
-import { coverCancelledReason } from '../format';
+import { coverCancelledReason, unreachedSentence } from '../format';
 
 /**
  * The WhatsApp template registry — ONE place that says, for each
@@ -229,7 +229,9 @@ export function templateFor(message: NotificationMessage, ctx: TemplateContext =
     case 'LEAVE_CANCELLED': {
       const p = message.payload;
       const n = p.releasedCovers;
-      const why = n > 0 ? `it was withdrawn, so ${n} cover${n === 1 ? ' was' : 's were'} released` : 'it was withdrawn';
+      const released = n > 0 ? `it was withdrawn, so ${n} cover${n === 1 ? ' was' : 's were'} released` : 'it was withdrawn';
+      // Someone whose cover was released but who could not be told is named here too.
+      const why = p.unreached ? `${released}. ${unreachedSentence(p.unreached)}` : released;
       return { name, language, params: [param(p.schoolName), param(`${p.teacherName}'s leave`), param(p.dates), param(why)] };
     }
     case 'COVER_CANCELLED': {

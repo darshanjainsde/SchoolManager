@@ -303,8 +303,17 @@ export interface LeaveCancelledPayload {
   leaveId: string;
   teacherName: string;
   dates: string;
-  /** Covers that were given to substitutes and are now released (0 for a pending request). */
+  /**
+   * Released covers whose substitute HAS been told (0 for a pending request).
+   * A substitute with no login is not counted here — they are in `unreached`.
+   */
   releasedCovers: number;
+  /**
+   * Substitutes whose cover was released but who could not be told (no
+   * login), joined for reading: "Ramesh Rao", "Ramesh Rao and Sunita Iyer".
+   * Null/absent when everyone was told (rows written before this field too).
+   */
+  unreached?: string | null;
 }
 
 /** Payload for COVER_CANCELLED — to ONE substitute: a cover they were given is off. */

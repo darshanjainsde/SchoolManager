@@ -89,6 +89,15 @@ export function coverCancelledReason(why: 'LEAVE_CANCELLED' | 'CHANGED' | 'TEACH
   return 'the office has changed the cover';
 }
 
+/**
+ * "Ramesh Rao has no login, so tell them yourself" — for substitutes a
+ * withdrawn leave released who have no inbox to reach. `names` is the joined
+ * list the leave service writes ("A", "A and B", "A, B and C").
+ */
+export function unreachedSentence(names: string): string {
+  return `${names} ${/ and /.test(names) ? 'have' : 'has'} no login, so tell them yourself`;
+}
+
 export function formatNotification(message: NotificationMessage): NotificationText {
   switch (message.kind) {
     case 'TEST_SCHEDULED':
@@ -145,9 +154,10 @@ export function formatNotification(message: NotificationMessage): NotificationTe
       };
     case 'LEAVE_CANCELLED': {
       const n = message.payload.releasedCovers;
+      const u = message.payload.unreached;
       return {
         title: `Leave withdrawn: ${message.payload.teacherName}`,
-        body: `${message.payload.dates}${n ? ` · ${n} cover${n === 1 ? '' : 's'} released` : ''}`,
+        body: `${message.payload.dates}${n ? ` · ${n} cover${n === 1 ? '' : 's'} released` : ''}${u ? ` · ${unreachedSentence(u)}` : ''}`,
       };
     }
     case 'COVER_CANCELLED':

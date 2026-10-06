@@ -142,6 +142,8 @@ describe('templateFor ↔ SUBMISSIONS', () => {
     const left = (n: number) => templateFor({ ...MESSAGES.LEAVE_CANCELLED, payload: { ...MESSAGES.LEAVE_CANCELLED.payload, releasedCovers: n } }).params[3];
     expect(left(1)).toBe('it was withdrawn, so 1 cover was released');
     expect(left(0)).toBe('it was withdrawn');
+    const unreached = templateFor({ ...MESSAGES.LEAVE_CANCELLED, payload: { ...MESSAGES.LEAVE_CANCELLED.payload, releasedCovers: 1, unreached: 'Ramesh Kumar' } }).params[3];
+    expect(unreached).toBe('it was withdrawn, so 1 cover was released. Ramesh Kumar has no login, so tell them yourself');
   });
 
   it('the called-off card is gated until Meta approves it, and has no v1 to fall back to', () => {

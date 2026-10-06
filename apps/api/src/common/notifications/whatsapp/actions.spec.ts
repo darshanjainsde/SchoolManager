@@ -18,6 +18,9 @@ describe('button payloads v2', () => {
   });
   it("fits Meta's limits: under 256 for a quick reply and 200 for a list row", () => {
     expect(leavePayload('approve', LEAVE, K, NOW).length).toBeLessThan(256);
+    // The cover card's two quick replies — the Can't one carries a teacher id as well.
+    expect(ackPayload(SUB, K, NOW).length).toBeLessThan(256);
+    expect(cantPayload(SUB, T, K, NOW).length).toBeLessThan(256);
     expect(coverPayload(SUB, T, K, NOW).length).toBeLessThan(200);
   });
   it('expires after seven days — and says so only for a payload that was genuinely ours', () => {

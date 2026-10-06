@@ -19,7 +19,7 @@ import type {
   TestReminderPayload,
   TestScheduledPayload,
 } from '../notifications/notification.types';
-import { coverCancelledReason } from '../notifications/format';
+import { coverCancelledReason, unreachedSentence } from '../notifications/format';
 
 /**
  * The notification payload interfaces live in `notification.types.ts` (the
@@ -378,10 +378,13 @@ export class MailService {
 
   async sendLeaveCancelled(to: string, p: LeaveCancelledPayload, schoolId: string | null = null, out?: MailOutcomeSink): Promise<boolean> {
     const n = p.releasedCovers;
+    // n counts only covers whose substitute WAS told; anyone who could not be
+    // (no login) is named, so the desk never reads "told" about someone who wasn't.
+    const u = p.unreached ? ` ${unreachedSentence(p.unreached)}.` : '';
     return this.sendLetter(to, schoolId, `${p.teacherName} withdrew their leave for ${p.dates}`, {
       title: 'Leave withdrawn',
-      intro: `${p.teacherName} has withdrawn their leave for ${p.dates}.${n ? ` ${n} cover${n === 1 ? ' was' : 's were'} released and the substitute${n === 1 ? ' has' : 's have'} been told.` : ''}`,
-      rows: [{ label: 'Dates', value: p.dates }, { label: 'Covers released', value: String(n) }],
+      intro: `${p.teacherName} has withdrawn their leave for ${p.dates}.${n ? ` ${n} cover${n === 1 ? ' was' : 's were'} released and the substitute${n === 1 ? ' has' : 's have'} been told.` : ''}${u}`,
+      rows: [{ label: 'Dates', value: p.dates }, { label: 'Covers released', value: String(n) }, ...(p.unreached ? [{ label: 'Not told', value: p.unreached }] : [])],
     }, 'LEAVE_CANCELLED', out);
   }
 
@@ -396,7 +399,8 @@ export class MailService {
   async sendCoverUnfilled(to: string, p: CoverUnfilledPayload, schoolId: string | null = null, out?: MailOutcomeSink): Promise<boolean> {
     const s = p.gaps === 1 ? '' : 's';
     return this.sendLetter(to, schoolId, `${p.gaps} period${s} still ${p.gaps === 1 ? 'needs' : 'need'} cover — ${p.forWhen}`, {
-      title: 'Classes still need a teacher',
+      // Periods, as the subject and the intro count them — one class can have several empty periods.
+      title: p.gaps === 1 ? 'A period still needs a teacher' : 'Periods still need a teacher',
       tone: 'alert',
       intro: `${p.gaps} period${s} on ${p.forWhen} ${p.gaps === 1 ? 'has' : 'have'} nobody to take ${p.gaps === 1 ? 'it' : 'them'} yet.${p.note ? ` ${p.note}` : ''}`,
       note: 'Open the console → Leave → Coverage (or the Leave tab in the app) to pick a teacher for each.',
