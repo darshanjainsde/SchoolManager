@@ -179,11 +179,25 @@ enum PaymentStatus {
 enum EnquiryStatus {
   NEW
   CONTACTED
+  /// The family said yes on the phone and has not come in yet.
+  INTERESTED
   VISITED
   APPLIED
   ENROLLED
   CLOSED
   LOST
+}
+
+/// Where a lead came from. WEBSITE and COURSE_CARD arrive through the public
+/// form; WALK_IN and PHONE are typed at the desk; WHATSAPP and REFERRAL are
+/// reserved for the Messages inbox and a referral field that do not exist yet.
+enum EnquirySource {
+  WEBSITE
+  COURSE_CARD
+  WALK_IN
+  PHONE
+  WHATSAPP
+  REFERRAL
 }
 
 enum AttendanceStatus {
@@ -222,6 +236,10 @@ enum StaffRole {
   /// It does NOT by itself grant sight of a salary: `User.canSeeSalary` still
   /// has to be granted to them by name, exactly as for an admin.
   ACCOUNTS
+  /// Runs admissions (/app/enquiries) — the same door pattern as ACCOUNTS.
+  /// The login stays STAFF; /auth/me's staffRole lands it on the enquiries
+  /// desk and AdmissionsDeskGuard lets it through /site/enquiries/*.
+  ADMISSIONS
   OTHER
 }
 
@@ -2146,7 +2164,18 @@ model Enquiry {
   /// records ("chose another school", "moved city") do not fit an enum, and a
   /// wrong enum teaches people to pick the nearest lie.
   lostReason    String?
-  createdAt     DateTime      @default(now())
+  /// Who the family is asking FOR. Optional free text — a walk-in often gives
+  /// the parent's name before the child's.
+  childName       String?
+  source          EnquirySource @default(WEBSITE)
+  /// The family agreed the school may WhatsApp them. Nothing sends on it in
+  /// Tier A; the acknowledgement in Tier B reads it.
+  whatsappOk      Boolean       @default(false)
+  /// The last CALL / WHATSAPP / VISIT note's time. An attempt counts: a call
+  /// nobody answered still stamps this, and still does not move the stage.
+  lastContactedAt DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @default(now()) @updatedAt
   school        School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   notes         EnquiryNote[]
 
@@ -2164,6 +2193,7 @@ model EnquiryNote {
   schoolId     String   @db.Uuid
   enquiryId    String   @db.Uuid
   /// NOTE (a person wrote it) | STAGE (the pipeline moved) | SYSTEM (we did it)
+  /// | CALL | WHATSAPP | VISIT (somebody reached the family — sets lastContactedAt)
   kind         String   @default("NOTE")
   body         String
   authorUserId String?  @db.Uuid

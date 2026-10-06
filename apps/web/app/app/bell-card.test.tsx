@@ -61,6 +61,8 @@ describe('BellCard', () => {
     expect(screen.getByText(/2 leave requests/).closest('a')).toHaveAttribute('href', '/app/leave');
     expect(screen.getByText(/1 register change/).closest('a')).toHaveAttribute('href', '/app/requests');
     expect(screen.getByText(/4 new enquiries/).closest('a')).toHaveAttribute('href', '/app/enquiries');
+    // Walk-ins and phone leads count too, so it does not say where they came from.
+    expect(screen.getByText(/4 new enquiries/).closest('a')).not.toHaveTextContent(/from the website/);
     // And no quiet line.
     expect(screen.queryByText(/All quiet/)).not.toBeInTheDocument();
   });

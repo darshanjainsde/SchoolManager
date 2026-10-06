@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import Link from 'next/link';
 import { createPortal } from 'react-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -13,6 +13,7 @@ import { ApiError } from '@/lib/api';
 import { rupees, type StudentFees } from '@/lib/fees';
 import { RecordPaymentDialog } from '@/components/fees/record-payment-dialog';
 import { Z } from '@/lib/z-layers';
+import { AddEnquiryDrawer } from './enquiries/add-enquiry';
 
 /**
  * The dock — the office's most-repeated actions as one-tap drawers, no
@@ -144,48 +145,6 @@ function AnnounceDrawer({ onClose }: { onClose: () => void }) {
   );
 }
 
-function EnquiryDrawer({ onClose }: { onClose: () => void }) {
-  const host = useHost();
-  const api = useApi({ audience: 'school', hostHeader: host });
-  const [parentName, setParentName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [gradeInterest, setGradeInterest] = useState('');
-  const [message, setMessage] = useState('');
-
-  const post = useMutation({
-    // The same public endpoint the website's form uses — a walk-in IS an
-    // enquiry, and one path means one queue and one NEW badge.
-    mutationFn: () => api.post('/public/enquiry', {
-      parentName: parentName.trim(), phone: phone.trim(),
-      ...(gradeInterest.trim() ? { gradeInterest: gradeInterest.trim() } : {}),
-      ...(message.trim() ? { message: message.trim() } : {}),
-    }),
-    onSuccess: () => { onClose(); toast.success('Enquiry saved — it is in the Admissions queue.'); },
-    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'It did not save.'),
-  });
-
-  return (
-    <Drawer title="New enquiry (walk-in / phone)" onClose={onClose}>
-      <label style={field}>Parent&rsquo;s name
-        <input className="sk-input" autoFocus maxLength={120} value={parentName} onChange={(e) => setParentName(e.target.value)} />
-      </label>
-      <label style={field}>Phone
-        <input className="sk-input" maxLength={20} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="98xxx xxxxx" />
-      </label>
-      <label style={field}>Class interested (optional)
-        <input className="sk-input" maxLength={40} value={gradeInterest} onChange={(e) => setGradeInterest(e.target.value)} placeholder="Nursery / Class VI" />
-      </label>
-      <label style={field}>Notes (optional)
-        <textarea className="sk-input" rows={3} maxLength={1000} value={message} onChange={(e) => setMessage(e.target.value)} style={{ resize: 'vertical' }} />
-      </label>
-      <button className="sk-btn" data-variant="primary" disabled={post.isPending || !parentName.trim() || !phone.trim()}
-        onClick={() => post.mutate()}>
-        {post.isPending ? 'Saving…' : 'Save enquiry'}
-      </button>
-    </Drawer>
-  );
-}
-
 export type DockDrawerKind = 'pay' | 'announce' | 'enquiry';
 
 export function Dock({ hasFees, open, setOpen }: {
@@ -194,6 +153,9 @@ export function Dock({ hasFees, open, setOpen }: {
   setOpen: (k: DockDrawerKind | null) => void;
 }) {
   const hydrated = useHydrated();
+  // One handler for all three drawers; the focus trap no longer depends on it
+  // being stable, but a stable one stops needless re-renders of the drawer.
+  const closeDrawer = useCallback(() => setOpen(null), [setOpen]);
 
   const buttons = [
     ...(hasFees ? [{ key: 'pay', label: 'Record payment', icon: Wallet, run: () => setOpen('pay') }] : []),
@@ -238,9 +200,9 @@ export function Dock({ hasFees, open, setOpen }: {
         })}
       </div>
 
-      {hydrated && open === 'pay' && <PaymentPicker onClose={() => setOpen(null)} />}
-      {hydrated && open === 'announce' && <AnnounceDrawer onClose={() => setOpen(null)} />}
-      {hydrated && open === 'enquiry' && <EnquiryDrawer onClose={() => setOpen(null)} />}
+      {hydrated && open === 'pay' && <PaymentPicker onClose={closeDrawer} />}
+      {hydrated && open === 'announce' && <AnnounceDrawer onClose={closeDrawer} />}
+      {hydrated && open === 'enquiry' && <AddEnquiryDrawer onClose={closeDrawer} />}
     </>
   );
 }

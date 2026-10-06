@@ -4,11 +4,11 @@ import { useSchoolMark } from '@/components/use-school-mark';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ChevronDown, ChevronsLeft, ChevronsRight, LayoutDashboard, LogOut, Menu, X,
 } from 'lucide-react';
-import { NAV_MODEL, groupOf, leafActive, navLeaves, visibleModel, type NavEntry, type NavLeaf } from './nav-model';
+import { NAV_MODEL, deskModel, groupOf, leafActive, navLeaves, visibleModel, type NavEntry, type NavLeaf } from './nav-model';
 import { cn } from '@/lib/cn';
 import { useAuthStore } from '@/lib/auth-store';
 import { useHydrated } from '@/lib/use-hydrated';
@@ -16,7 +16,7 @@ import { useSessionProbe } from '@/lib/use-session-probe';
 import { useHost } from '@/components/use-host';
 import { useApi } from '@/lib/use-api';
 import { isSchoolHost, exampleSchoolHost, platformHref } from '@/lib/hosts';
-import { homeForRole } from '@/lib/role-routes';
+import { consoleBounce, consoleDeskFor } from '@/lib/role-routes';
 import { Z } from '@/lib/z-layers';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -160,12 +160,12 @@ function GroupedNav({
  * /app/profile. Sits above the theme toggle in both sidebars so it is where
  * the eye already goes for "me" things (log out lives just below).
  */
-function ProfileDoor({ name, pathname, collapsed = false, onNavigate }: { name: string | null; pathname: string; collapsed?: boolean; onNavigate?: () => void }) {
+function ProfileDoor({ name, pathname, collapsed = false, onNavigate, href = '/app/profile' }: { name: string | null; pathname: string; collapsed?: boolean; onNavigate?: () => void; href?: string }) {
   const initials = (name ?? '').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('') || 'ME';
-  const active = pathname === '/app/profile';
+  const active = pathname === href;
   return (
     <Link
-      href="/app/profile"
+      href={href}
       onClick={onNavigate}
       title={collapsed ? (name ?? 'My profile') : undefined}
       aria-label={collapsed ? 'My profile' : undefined}
@@ -212,6 +212,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const accessToken = useAuthStore((s) => s.accessToken);
   const audience = useAuthStore((s) => s.audience);
   const clear = useAuthStore((s) => s.clear);
+  const qc = useQueryClient();
   const api = useApi({ audience: 'school', hostHeader: host });
   useSessionProbe(api, 'school', !!host, host);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -241,7 +242,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   // The school's resolved feature set drives which nav items are shown, and
   // `role` gates the console itself — see the redirect effect below.
-  const { data: me } = useQuery({
+  const { data: me, isLoading: meLoading } = useQuery({
     queryKey: ['me', host],
     queryFn: () => api.get<{ features?: string[]; role?: string; staffRole?: string | null; name?: string | null; schoolMarkUrl?: string | null }>('/auth/me'),
     enabled: hydrated && isSchoolHost(host) && hasSession && audience === 'school',
@@ -251,9 +252,20 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   useSchoolMark(me?.schoolMarkUrl);
 
   const features = me?.features;
-  // Until features load, show every item (avoids hiding things on a slow fetch).
-  const model = visibleModel(features ?? null);
+  // A desk job (accounts, admissions) sees the one room it is admitted to;
+  // everybody else sees the school's menu. While /auth/me is IN FLIGHT the menu
+  // is empty — an officer must never glimpse the admin menu — but the page
+  // itself still renders, so its queries run in parallel with /auth/me rather
+  // than behind it. (`isLoading` = fetching and no data yet; a disabled query
+  // is not loading, so this can never hold the menu back forever. If /auth/me
+  // fails, the old behaviour stands: the full menu.) A desk job deep-linking
+  // to an admin page may briefly mount it: its queries 403 at the API, then
+  // the bounce effect below moves them.
+  const desk = consoleDeskFor(me?.role, me?.staffRole);
+  const model: NavEntry[] = meLoading ? [] : desk ? deskModel(desk) : visibleModel(features ?? null);
   const leaves = navLeaves(model);
+  // /app/profile would bounce a desk job; the staff profile admits every STAFF.
+  const profileHref = desk ? '/staff/profile' : '/app/profile';
 
   /**
    * The accordion follows the route: the group that owns the current page is
@@ -293,15 +305,16 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   // `SchoolJwtGuard + RolesGuard` on the API; this only stops a non-admin
   // being shown a console that will refuse everything they touch.
   useEffect(() => {
-    if (me?.role && me.role !== 'SCHOOL_ADMIN') {
-      // BOTH arguments. `homeForRole` needs the staff kind to send an ACCOUNTS
-      // officer to /app/pay; called with the role alone it answered /staff,
-      // whose own layout knows the kind and sent them straight back here —
-      // an accounts officer bounced between the two shells forever and could
-      // reach nothing but their profile. The API had been ready for them all
-      // along; the chrome was the lock.
-      router.replace(homeForRole(me.role, me.staffRole));
-    }
+    // BOTH role arguments. `homeForRole` needs the staff kind to send an
+    // ACCOUNTS officer to /app/pay; called with the role alone it answered
+    // /staff, whose own layout knows the kind and sent them straight back here —
+    // an accounts officer bounced between the two shells forever.
+    //
+    // And the desk's own sub-paths are inside the desk: replacing every
+    // non-admin to the desk's front page on every path threw an accounts
+    // officer out of Pay → This month the moment they opened it.
+    const to = consoleBounce(me?.role, me?.staffRole, pathname);
+    if (to) router.replace(to);
   }, [me?.role, me?.staffRole, pathname, router]);
 
   // Close the mobile drawer whenever navigation happens (Link clicks already
@@ -369,6 +382,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   function handleLogout() {
     clear();
+    // Drop the cached `me` (and everything else) with the session, so the next
+    // login on this tab never starts from the previous person's role.
+    qc.clear();
     router.replace('/login');
   }
 
@@ -450,7 +466,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             </nav>
 
             <div className="border-t border-white/10 p-4">
-              <ProfileDoor name={me?.name ?? null} pathname={pathname} onNavigate={() => setDrawerOpen(false)} />
+              <ProfileDoor name={me?.name ?? null} pathname={pathname} href={profileHref} onNavigate={() => setDrawerOpen(false)} />
               <div className="skosx mb-2"><SwitchProfile onDone={() => setDrawerOpen(false)} /></div>
               <div className="skosx mb-3">
                 <ThemeToggle />
@@ -529,7 +545,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
         {/* Logout */}
         <div className={cn('border-t border-white/10', collapsed ? 'p-2' : 'p-4')}>
-          <ProfileDoor name={me?.name ?? null} pathname={pathname} collapsed={collapsed} />
+          <ProfileDoor name={me?.name ?? null} pathname={pathname} href={profileHref} collapsed={collapsed} />
           {!collapsed && <div className="skosx mb-2"><SwitchProfile /></div>}
           {!collapsed && <div className="skosx mb-3"><ThemeToggle /></div>}
           <button

@@ -48,6 +48,7 @@ function FlipCard({ course, delay }: { course: PublicCourse; delay: number }) {
       phone: p,
       gradeInterest: course.name,
       message: `Requested a call back about ${course.name} from the homepage.`,
+      source: 'COURSE_CARD',
     });
     setStatus(result);
   }

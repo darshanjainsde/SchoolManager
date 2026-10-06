@@ -614,6 +614,7 @@ export * from './sports/maths';
 export * from './sports/perms';
 export * from './payroll';
 export * from './fees/receipt';
+export * from './admissions/pipeline';
 
 export const NOTIFICATION_KINDS = [
   'MESSAGE',
