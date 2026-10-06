@@ -58,6 +58,8 @@ describe('site authoring authorization', () => {
     // identical defect, and the enquiries pair is the sharpest: those hand back
     // other families' names, phone numbers and email addresses.
     ['read admission enquiries', 'get', '/site/enquiries'],
+    ['add a walk-in enquiry', 'post', '/site/enquiries'],
+    ['list who can own a lead', 'get', '/site/enquiries/owners'],
     ['read the site content', 'get', '/site/content'],
     ['rewrite the homepage', 'put', '/site/homepage'],
     ['list site media', 'get', '/site/media'],

@@ -24,7 +24,8 @@ const NEXT: Record<Status, Status[]> = {
 
 const STAFF_LABEL: Record<string, string> = {
   OFFICE: 'Office staff', SUPPORT: 'Support staff', DRIVER: 'Driver', HELPER: 'Helper',
-  SECURITY: 'Security', LIBRARIAN: 'Librarian', SPORTS: 'Sports teacher', OTHER: 'Staff',
+  SECURITY: 'Security', LIBRARIAN: 'Librarian', SPORTS: 'Sports teacher',
+  ACCOUNTS: 'Accounts officer', ADMISSIONS: 'Admissions officer', OTHER: 'Staff',
 };
 
 /**

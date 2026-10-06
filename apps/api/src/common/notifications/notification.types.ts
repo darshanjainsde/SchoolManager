@@ -50,6 +50,17 @@ export interface AbsenceNoticePayload {
 }
 
 /**
+ * Structured facts that let WhatsApp use a narrow Utility template. Email and
+ * push still use title and body. Every string is already human-readable
+ * ("Thu 2 Oct 2026", "10:30 am").
+ */
+export type NoticeTopic =
+  | { kind: 'HOLIDAY'; closedOn: string; occasion: string; resumesOn: string }
+  | { kind: 'PTM'; on: string; at: string }
+  | { kind: 'TIMING'; on: string; from: string; to: string }
+  | { kind: 'FEE'; term: string; dueOn: string };
+
+/**
  * Payload for ANNOUNCEMENT — mirrors `MailService.sendAnnouncement` (fired
  * by `AnnouncementsService.create` for both SCHOOL_ADMIN and TEACHER
  * callers). `className` is `null` for a whole-school announcement and the
@@ -71,6 +82,28 @@ export interface AnnouncementPayload {
    * "undefined" in a parent's chat.
    */
   postedOn: string;
+  /**
+   * Set when the notice is really a holiday, a parents meeting, a timing change
+   * or a fee due date: WhatsApp then uses the narrow template for that topic
+   * instead of the general pointer. Email and push ignore it.
+   */
+  topic?: NoticeTopic | null;
+}
+
+/**
+ * Payload STORED in a `NotificationOutbox` row for kind `SPORTS_NOTICE`
+ * (result, record, tournament and similar notices from the Sports desk).
+ * Three of the four writers do not carry the school name, so `schoolName` is
+ * optional here and the outbox drain fills it from the row's `schoolId`.
+ * Rendered through the ANNOUNCEMENT shape under the "Sports" desk.
+ */
+export interface SportsNoticeOutboxPayload {
+  schoolName?: string;
+  title: string;
+  body: string;
+  tournamentId?: string;
+  recordId?: string;
+  emailed?: boolean;
 }
 
 /**
@@ -161,6 +194,9 @@ export interface FeeDecisionOutboxPayload {
   schoolName: string;
   title: string;
   body: string;
+  /** FEE_DUE only: the instalment's term and due date ("Mon 13 Oct 2026"), for the WhatsApp fee template. */
+  termName?: string;
+  dueOn?: string;
 }
 
 /**
@@ -257,6 +293,55 @@ export interface CoverAssignedPayload {
   subjectName: string | null;
   originalTeacherName: string;
   ackPayload: string;
+  /** The signed "Can't" button (v2 card only — the approved v1 has Got it alone). */
+  cantPayload: string;
+}
+
+/** Payload for LEAVE_CANCELLED — to the leave desk: a request (or an approved leave) was withdrawn. */
+export interface LeaveCancelledPayload {
+  schoolName: string;
+  leaveId: string;
+  teacherName: string;
+  dates: string;
+  /**
+   * Released covers whose substitute HAS been told (0 for a pending request).
+   * A substitute with no login is not counted here — they are in `unreached`.
+   */
+  releasedCovers: number;
+  /**
+   * Substitutes whose cover was released but who could not be told (no
+   * login), joined for reading: "Ramesh Rao", "Ramesh Rao and Sunita Iyer".
+   * Null/absent when everyone was told (rows written before this field too).
+   */
+  unreached?: string | null;
+}
+
+/** Payload for COVER_CANCELLED — to ONE substitute: a cover they were given is off. */
+export interface CoverCancelledPayload {
+  schoolName: string;
+  substitutionId: string;
+  when: string;
+  className: string;
+  /** LEAVE_CANCELLED: the leave was withdrawn · CHANGED: the desk cleared or reassigned it · TEACHER_ON_LEAVE: the substitute is on leave that day. */
+  why: 'LEAVE_CANCELLED' | 'CHANGED' | 'TEACHER_ON_LEAVE';
+}
+
+/** Payload for COVER_UNFILLED — to the leave desk: classes with nobody in front of them. */
+export interface CoverUnfilledPayload {
+  schoolName: string;
+  gaps: number;
+  /** YYYY-MM-DD the gaps fall on. */
+  forDate: string;
+  /** "tomorrow, Tue 14 Oct 2026" / "Mon 13 Oct 2026". */
+  forWhen: string;
+  /** Why now, when it is not the evening nudge: "Ramesh Kumar can't take 9-A, …". */
+  note: string | null;
+  /**
+   * Set ONLY by the 18:00 nudge, to the date it is for — its once-per-school-
+   * per-date key. A "Can't" or a reopened cover for the same date is not a
+   * nudge and must never stop the evening one.
+   */
+  nudgeFor?: string;
 }
 
 /** The single source of truth mapping each event to its payload shape. */
@@ -271,6 +356,9 @@ export interface NotificationPayloadMap {
   LEAVE_APPLIED: LeaveAppliedPayload;
   LEAVE_DECIDED: LeaveDecidedPayload;
   COVER_ASSIGNED: CoverAssignedPayload;
+  LEAVE_CANCELLED: LeaveCancelledPayload;
+  COVER_CANCELLED: CoverCancelledPayload;
+  COVER_UNFILLED: CoverUnfilledPayload;
 }
 
 /**
@@ -335,4 +423,26 @@ export interface NotificationChannel {
 export interface NotifySummary {
   sent: number;
   failed: number;
+}
+
+/**
+ * Why a delivery ended without sending. The spine records it on the
+ * NotificationDelivery row so "why did this parent not get it" has an answer.
+ */
+export type SkipReason = 'no-address' | 'channel-off' | 'duplicate' | 'template-pending';
+
+/**
+ * What one attempt on one channel came to. RETRY is for failures worth trying
+ * again (network, 5xx, Meta 130429, SMTP 4xx); FAILED is final.
+ */
+export type DeliveryOutcome =
+  | { status: 'SENT'; providerId?: string | null }
+  | { status: 'SKIPPED'; reason: SkipReason }
+  | { status: 'SUPPRESSED'; reason: string }
+  | { status: 'RETRY'; error: string }
+  | { status: 'FAILED'; error: string };
+
+/** A channel the outbox drain can deliver through, one person at a time. */
+export interface DeliveryChannel extends NotificationChannel {
+  attempt(to: string, message: NotificationMessage, schoolId: string): Promise<DeliveryOutcome>;
 }

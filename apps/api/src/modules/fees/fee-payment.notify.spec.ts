@@ -56,6 +56,7 @@ describe('the family hears the decision', () => {
     });
     expect(txMock.notificationOutbox.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ kind: 'FEE_VERIFIED', targetUserId: 'usr-9', payload: expect.objectContaining({ schoolName: 'Saraswati Public School', title: 'Payment confirmed — ₹24,500' }) }),
+      select: { id: true },
     });
   });
 
@@ -65,7 +66,7 @@ describe('the family hears the decision', () => {
     expect(txMock.notification.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ kind: 'FEE_REJECTED', title: 'Payment not accepted — ₹24,500', body: 'Amount does not match the bill.' }),
     });
-    expect(txMock.notificationOutbox.create).toHaveBeenCalledWith({ data: expect.objectContaining({ kind: 'FEE_REJECTED', targetUserId: 'usr-9' }) });
+    expect(txMock.notificationOutbox.create).toHaveBeenCalledWith({ data: expect.objectContaining({ kind: 'FEE_REJECTED', targetUserId: 'usr-9' }), select: { id: true } });
   });
 
   it('a student with no login gets no row — and the verification still succeeds', async () => {

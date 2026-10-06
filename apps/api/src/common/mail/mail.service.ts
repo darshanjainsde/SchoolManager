@@ -3,11 +3,15 @@ import { loadEnv } from '@skoolos/config';
 import { captureError } from '../observability/sentry-lite';
 import { MailIdentityService } from './mail-identity.service';
 import { escapeHtml, renderLetter, type Letter } from './letterhead';
+import { mailFailure, type MailOutcomeSink } from './mail-outcome';
 import type {
   AbsenceNoticePayload,
   AnnouncementPayload,
   CoverAssignedPayload,
+  CoverCancelledPayload,
+  CoverUnfilledPayload,
   LeaveAppliedPayload,
+  LeaveCancelledPayload,
   LeaveDecidedPayload,
   DiaryRemarkPayload,
   LowAttendancePayload,
@@ -15,6 +19,7 @@ import type {
   TestReminderPayload,
   TestScheduledPayload,
 } from '../notifications/notification.types';
+import { coverCancelledReason, unreachedSentence } from '../notifications/format';
 
 /**
  * The notification payload interfaces live in `notification.types.ts` (the
@@ -63,6 +68,7 @@ export class MailService {
     subject: string,
     letter: Letter,
     kind = 'LETTER',
+    out?: MailOutcomeSink,
   ): Promise<boolean> {
     const address = to.trim().toLowerCase();
     // An address that bounced for good, or complained, is never written to
@@ -70,6 +76,7 @@ export class MailService {
     // sees it in the Email card's "addresses to fix" and clears it there.
     const suppressed = await this.suppressionFor(address);
     if (suppressed) {
+      if (out) out.outcome = { status: 'SUPPRESSED', reason: suppressed };
       await this.ledger({ schoolId, to: address, kind, provider: 'none', status: 'SUPPRESSED', error: suppressed });
       return false;
     }
@@ -84,9 +91,18 @@ export class MailService {
         html,
         text,
       });
-      await this.ledger({ schoolId, to: address, kind, provider: id.provider, status: 'SENT', providerId: id.provider === 'resend' ? (info?.messageId ?? null) : null });
+      const providerId = id.provider === 'resend' ? (info?.messageId ?? null) : null;
+      await this.ledger({ schoolId, to: address, kind, provider: id.provider, status: 'SENT', providerId });
+      if (out) out.outcome = { status: 'SENT', providerId };
       return true;
     } catch (e) {
+      if (out) {
+        const outcome = mailFailure(e);
+        // The school's OWN sender failing is the sender's problem, not this
+        // recipient's: recordSenderFailure (below) drops the school back to
+        // the platform mailbox, so a retry goes out from there.
+        out.outcome = id.usingCustomSender && outcome.status === 'FAILED' ? { status: 'RETRY', error: outcome.error } : outcome;
+      }
       await this.ledger({ schoolId, to: address, kind, provider: id.provider, status: 'FAILED', error: (e as Error).message });
       this.logger.error(`Mail to ${to} failed: ${(e as Error).message}`);
       // Launch-gate #2/#4: a transport failure must be VISIBLE — a school
@@ -254,7 +270,7 @@ export class MailService {
 
   // ── School notifications ────────────────────────────────
 
-  async sendTestScheduled(to: string, info: TestScheduledInfo, schoolId: string | null = null): Promise<boolean> {
+  async sendTestScheduled(to: string, info: TestScheduledInfo, schoolId: string | null = null, out?: MailOutcomeSink): Promise<boolean> {
     return this.sendLetter(to, schoolId, `New test scheduled: ${info.examTitle}`, {
       title: 'New test scheduled',
       intro: `${info.schoolName} has scheduled a new test.`,
@@ -264,10 +280,10 @@ export class MailService {
         { label: 'Date', value: info.scheduledAt },
       ],
       note: 'Check the school portal for more details.',
-    }, 'TEST_SCHEDULED');
+    }, 'TEST_SCHEDULED', out);
   }
 
-  async sendTestReminder(to: string, info: TestReminderInfo, schoolId: string | null = null): Promise<boolean> {
+  async sendTestReminder(to: string, info: TestReminderInfo, schoolId: string | null = null, out?: MailOutcomeSink): Promise<boolean> {
     const days = `${info.daysUntil} day${info.daysUntil === 1 ? '' : 's'}`;
     return this.sendLetter(to, schoolId, `Reminder: ${info.examTitle} in ${days}`, {
       title: 'Upcoming test',
@@ -277,24 +293,24 @@ export class MailService {
         { label: 'Test', value: info.examTitle },
         { label: 'Date', value: info.scheduledAt },
       ],
-    }, 'TEST_REMINDER');
+    }, 'TEST_REMINDER', out);
   }
 
-  async sendResultsPublished(to: string, info: ResultsPublishedInfo, schoolId: string | null = null): Promise<boolean> {
+  async sendResultsPublished(to: string, info: ResultsPublishedInfo, schoolId: string | null = null, out?: MailOutcomeSink): Promise<boolean> {
     return this.sendLetter(to, schoolId, `Results published: ${info.examTitle}`, {
       title: 'Results published',
       intro: `${info.schoolName} has published results for ${info.examTitle} (${info.subjectName}).`,
       note: 'Check the school portal to view them.',
-    }, 'RESULTS_PUBLISHED');
+    }, 'RESULTS_PUBLISHED', out);
   }
 
-  async sendAbsenceNotice(to: string, info: AbsenceNoticeInfo, schoolId: string | null = null): Promise<boolean> {
+  async sendAbsenceNotice(to: string, info: AbsenceNoticeInfo, schoolId: string | null = null, out?: MailOutcomeSink): Promise<boolean> {
     return this.sendLetter(to, schoolId, `Absence notice: ${info.studentName}`, {
       title: 'Absence notice',
       tone: 'alert',
       intro: `${info.schoolName} marked ${info.studentName} absent on ${info.date}.`,
       note: 'If this is unexpected, please contact the school office.',
-    }, 'ABSENCE_NOTICE');
+    }, 'ABSENCE_NOTICE', out);
   }
 
   /**
@@ -304,14 +320,14 @@ export class MailService {
    * remark is quoted so it reads as the teacher's own words rather than
    * platform copy.
    */
-  async sendDiaryRemark(to: string, info: DiaryRemarkInfo, schoolId: string | null = null): Promise<boolean> {
+  async sendDiaryRemark(to: string, info: DiaryRemarkInfo, schoolId: string | null = null, out?: MailOutcomeSink): Promise<boolean> {
     return this.sendLetter(to, schoolId, `Diary remark for ${info.studentName} — ${info.schoolName}`, {
       title: 'Diary remark',
       tone: 'alert',
       intro: `${info.teacherName} wrote a remark in ${info.studentName}'s diary on ${info.date} (${info.className}).`,
       quote: info.remark,
       note: 'Open the school app to read it in full and sign it.',
-    }, 'DIARY_REMARK');
+    }, 'DIARY_REMARK', out);
   }
 
   /**
@@ -319,15 +335,15 @@ export class MailService {
    * own number. Never names or counts other students (see
    * `AttendanceBarService.notifyLow`).
    */
-  async sendLowAttendance(to: string, info: LowAttendanceInfo, schoolId: string | null = null): Promise<boolean> {
+  async sendLowAttendance(to: string, info: LowAttendanceInfo, schoolId: string | null = null, out?: MailOutcomeSink): Promise<boolean> {
     return this.sendLetter(to, schoolId, `${info.studentName}'s attendance is ${info.percent}%`, {
       title: 'Attendance update',
       intro: `${info.studentName} (${info.className}) has attended ${info.percent}% of classes over ${info.period} — below ${info.schoolName}'s ${info.threshold}% benchmark.`,
       note: 'If something is making it hard to attend, please tell the class teacher — we would rather know.',
-    }, 'LOW_ATTENDANCE');
+    }, 'LOW_ATTENDANCE', out);
   }
 
-  async sendLeaveApplied(to: string, p: LeaveAppliedPayload, schoolId: string | null = null): Promise<boolean> {
+  async sendLeaveApplied(to: string, p: LeaveAppliedPayload, schoolId: string | null = null, out?: MailOutcomeSink): Promise<boolean> {
     return this.sendLetter(to, schoolId, `Leave request: ${p.teacherName}, ${p.dates}`, {
       title: `${p.teacherName} has applied for leave`,
       intro: `${p.dates} (${p.days} day${p.days === 1 ? '' : 's'}). ${p.periodsAffected} period${p.periodsAffected === 1 ? '' : 's'} would need cover.`,
@@ -336,19 +352,19 @@ export class MailService {
         { label: 'Periods to cover', value: String(p.periodsAffected) },
       ],
       note: 'Approve or reject it in the console under Requests — or from the WhatsApp message, if your number is verified.',
-    }, 'LEAVE_APPLIED');
+    }, 'LEAVE_APPLIED', out);
   }
 
-  async sendLeaveDecided(to: string, p: LeaveDecidedPayload, schoolId: string | null = null): Promise<boolean> {
+  async sendLeaveDecided(to: string, p: LeaveDecidedPayload, schoolId: string | null = null, out?: MailOutcomeSink): Promise<boolean> {
     const word = p.decision === 'APPROVED' ? 'approved' : 'not approved';
     return this.sendLetter(to, schoolId, `Your leave for ${p.dates} was ${word}`, {
       title: `Leave ${word}`,
       intro: `Your leave for ${p.dates} has been ${word} by ${p.byName ?? 'the office'}.`,
       rows: [{ label: 'Dates', value: p.dates }, { label: 'Decision', value: word }],
-    }, 'LEAVE_DECIDED');
+    }, 'LEAVE_DECIDED', out);
   }
 
-  async sendCoverAssigned(to: string, p: CoverAssignedPayload, schoolId: string | null = null): Promise<boolean> {
+  async sendCoverAssigned(to: string, p: CoverAssignedPayload, schoolId: string | null = null, out?: MailOutcomeSink): Promise<boolean> {
     return this.sendLetter(to, schoolId, `You are covering ${p.className} on ${p.when}`, {
       title: 'A class to cover',
       intro: `You have been assigned ${p.className}${p.subjectName ? ` (${p.subjectName})` : ''} on ${p.when}, in place of ${p.originalTeacherName}.`,
@@ -357,15 +373,46 @@ export class MailService {
         { label: 'Class', value: `${p.className}${p.subjectName ? ` · ${p.subjectName}` : ''}` },
         { label: 'For', value: p.originalTeacherName },
       ],
-    }, 'COVER_ASSIGNED');
+    }, 'COVER_ASSIGNED', out);
   }
 
-  async sendAnnouncement(to: string, info: AnnouncementInfo, schoolId: string | null = null): Promise<boolean> {
+  async sendLeaveCancelled(to: string, p: LeaveCancelledPayload, schoolId: string | null = null, out?: MailOutcomeSink): Promise<boolean> {
+    const n = p.releasedCovers;
+    // n counts only covers whose substitute WAS told; anyone who could not be
+    // (no login) is named, so the desk never reads "told" about someone who wasn't.
+    const u = p.unreached ? ` ${unreachedSentence(p.unreached)}.` : '';
+    return this.sendLetter(to, schoolId, `${p.teacherName} withdrew their leave for ${p.dates}`, {
+      title: 'Leave withdrawn',
+      intro: `${p.teacherName} has withdrawn their leave for ${p.dates}.${n ? ` ${n} cover${n === 1 ? ' was' : 's were'} released and the substitute${n === 1 ? ' has' : 's have'} been told.` : ''}${u}`,
+      rows: [{ label: 'Dates', value: p.dates }, { label: 'Covers released', value: String(n) }, ...(p.unreached ? [{ label: 'Not told', value: p.unreached }] : [])],
+    }, 'LEAVE_CANCELLED', out);
+  }
+
+  async sendCoverCancelled(to: string, p: CoverCancelledPayload, schoolId: string | null = null, out?: MailOutcomeSink): Promise<boolean> {
+    return this.sendLetter(to, schoolId, `Your cover of ${p.className} on ${p.when} is called off`, {
+      title: 'Cover called off',
+      intro: `You no longer need to cover ${p.className} on ${p.when}, because ${coverCancelledReason(p.why)}.`,
+      rows: [{ label: 'When', value: p.when }, { label: 'Class', value: p.className }],
+    }, 'COVER_CANCELLED', out);
+  }
+
+  async sendCoverUnfilled(to: string, p: CoverUnfilledPayload, schoolId: string | null = null, out?: MailOutcomeSink): Promise<boolean> {
+    const s = p.gaps === 1 ? '' : 's';
+    return this.sendLetter(to, schoolId, `${p.gaps} period${s} still ${p.gaps === 1 ? 'needs' : 'need'} cover — ${p.forWhen}`, {
+      // Periods, as the subject and the intro count them — one class can have several empty periods.
+      title: p.gaps === 1 ? 'A period still needs a teacher' : 'Periods still need a teacher',
+      tone: 'alert',
+      intro: `${p.gaps} period${s} on ${p.forWhen} ${p.gaps === 1 ? 'has' : 'have'} nobody to take ${p.gaps === 1 ? 'it' : 'them'} yet.${p.note ? ` ${p.note}` : ''}`,
+      note: 'Open the console → Leave → Coverage (or the Leave tab in the app) to pick a teacher for each.',
+    }, 'COVER_UNFILLED', out);
+  }
+
+  async sendAnnouncement(to: string, info: AnnouncementInfo, schoolId: string | null = null, out?: MailOutcomeSink): Promise<boolean> {
     return this.sendLetter(to, schoolId, info.title, {
       title: info.title,
       preheader: info.body.slice(0, 120),
       intro: info.className ? `${info.schoolName} — ${info.className}` : info.schoolName,
       body: info.body,
-    }, 'ANNOUNCEMENT');
+    }, 'ANNOUNCEMENT', out);
   }
 }

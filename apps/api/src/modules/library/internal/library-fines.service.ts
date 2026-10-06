@@ -11,6 +11,7 @@ import { LibrarySettingsService } from './library-settings.service';
 import { accruedFineRupees, dateOnlyISO, finesApply, type BorrowerKind } from './library-policy';
 import type { RemindFinesDto } from './library.dto';
 import { LIST_CEILING } from '../../../common/lists/list-ceiling';
+import { requestOutboxDrain } from '../../../common/notifications/outbox-signal';
 
 /** One line on the Fines tab — either a crystallized row or a still-growing accrual. */
 export interface FineEntry {
@@ -259,6 +260,7 @@ export class LibraryFinesService {
               targetUserId: reader.userId,
               payload: payload as unknown as Prisma.InputJsonValue,
             },
+            select: { id: true },
           });
           await emitNotifications(tx, {
             schoolId,
@@ -287,6 +289,7 @@ export class LibraryFinesService {
         }
       }
     });
+    if (pushes > 0) requestOutboxDrain();
 
     runInBackground(async () => {
       for (const job of emailJobs) {

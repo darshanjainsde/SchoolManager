@@ -21,9 +21,9 @@ import type {
 import { resolveSectionRecipients } from '../../common/notifications/recipients';
 import { runInBackground } from '../../common/notifications/run-in-background';
 import { AttendanceService } from './attendance.service';
-import { NotificationOutboxService } from './notification-outbox.service';
 import type { CreateExamDto, SaveExamResultsDto } from './management.dto';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
+import { requestOutboxDrain } from '../../common/notifications/outbox-signal';
 
 /**
  * Push for TEST_SCHEDULED/RESULTS_PUBLISHED now flows EXCLUSIVELY through the
@@ -76,7 +76,6 @@ export class ExamsService {
   constructor(
     private readonly notifications: NotificationService,
     private readonly attendance: AttendanceService,
-    private readonly outbox: NotificationOutboxService,
   ) {}
 
   /**
@@ -302,6 +301,7 @@ export class ExamsService {
           classSectionId: dto.classSectionId,
           payload: outboxPayload as unknown as Prisma.InputJsonValue,
         },
+        select: { id: true },
       });
 
       // In-app inbox rows (the bell) for every student in the section who has a
@@ -319,6 +319,8 @@ export class ExamsService {
 
       return created;
     });
+
+    requestOutboxDrain();
 
     // Best-effort EMAIL only (see EMAIL_ONLY docstring above) — push for this
     // event is the guaranteed outbox row written above, not this call. Runs
@@ -589,6 +591,7 @@ export class ExamsService {
             classSectionId: exam.classSectionId,
             payload: outboxPayload as unknown as Prisma.InputJsonValue,
           },
+          select: { id: true },
         });
 
         // In-app inbox rows (the bell) for the section's linked students —
@@ -611,7 +614,7 @@ export class ExamsService {
     // The cron is the safety net, not the delivery path — on Hobby it cannot run
     // more than once a day. Kick a drain now so a published result reaches parents
     // in seconds. Claim-safe: the drain uses FOR UPDATE SKIP LOCKED.
-    this.outbox.drainSoon();
+    requestOutboxDrain();
 
     // Nothing was actually published (no Results saved for this exam yet) —
     // telling parents results are out would be a lie.

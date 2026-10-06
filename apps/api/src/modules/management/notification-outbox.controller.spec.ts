@@ -33,4 +33,12 @@ describe('NotificationOutboxController', () => {
     await expect(controller.run()).resolves.toEqual({ processed: 3, sent: 2, failed: 1 });
     expect(outbox.drain).toHaveBeenCalledTimes(2);
   });
+
+  it("carries the drain's `more` flag to the caller, so the workflow knows to call again", async () => {
+    const outbox = { drain: jest.fn().mockResolvedValueOnce({ processed: 200, sent: 300, more: true }).mockResolvedValueOnce({ processed: 0, sent: 4, more: false }) };
+    const controller = new NotificationOutboxController(outbox as never);
+
+    await expect(controller.run()).resolves.toMatchObject({ more: true });
+    await expect(controller.run()).resolves.toMatchObject({ more: false });
+  });
 });

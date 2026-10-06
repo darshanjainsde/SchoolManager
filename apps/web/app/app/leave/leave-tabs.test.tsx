@@ -50,7 +50,6 @@ function mockApi(): ApiStub {
     if (path.includes('status=PENDING')) return Promise.resolve(PENDING);
     if (path.includes('status=APPROVED')) return Promise.resolve(APPROVED);
     if (path.startsWith('/manage/leave/coverage')) return Promise.resolve(GAPS);
-    if (path.startsWith('/manage/availability')) return Promise.resolve({ teachers: [], busy: [], periods: [] });
     if (path.startsWith('/manage/leave-policy/pending-context')) return Promise.resolve({});
     return Promise.resolve([]);
   });

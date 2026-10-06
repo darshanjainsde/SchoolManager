@@ -39,3 +39,12 @@ describe('every API entrypoint verifies tenant isolation at boot', () => {
     }
   });
 });
+
+describe('the Vercel entrypoint stamps when the invocation began', () => {
+  it('before it waits for a cold start — boot time counts against the 60 s too', () => {
+    const src = readFileSync(resolve(apiRoot, 'server.ts'), 'utf8');
+    const stamp = src.indexOf('skInvokedAt = Date.now()');
+    expect(stamp).toBeGreaterThan(-1);
+    expect(stamp).toBeLessThan(src.indexOf('await ready'));
+  });
+});

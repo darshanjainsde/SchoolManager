@@ -3,6 +3,7 @@ import { withTenant, type TenantTx } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
 import { isP2002 } from '../../common/errors/prisma-errors';
 import { dateRangeInclusive, isoWeekdayOf, toDateStr } from './internal/leave-dates';
+import { holidayDates } from './internal/school-calendar';
 import type {
   CreateLeaveTypeDefDto,
   SetLeaveAllocationDto,
@@ -487,18 +488,8 @@ export class LeavePolicyService {
     return out;
   }
 
-  /** Every holiday date string inside `[from, to]`, ranges expanded. */
+  /** Every holiday date string inside `[from, to]`, ranges expanded — the school calendar's answer. */
   private async holidaySet(tx: TenantTx, schoolId: string, from: Date, to: Date): Promise<Set<string>> {
-    const rows = await tx.holiday.findMany({ take: LIST_CEILING.STRUCTURE,
-      where: { schoolId, startDate: { lte: to }, OR: [{ endDate: null }, { endDate: { gte: from } }] },
-      select: { startDate: true, endDate: true },
-    });
-    const out = new Set<string>();
-    for (const h of rows) {
-      for (const d of dateRangeInclusive(toDateStr(h.startDate), toDateStr(h.endDate ?? h.startDate))) {
-        out.add(d);
-      }
-    }
-    return out;
+    return holidayDates(tx, schoolId, from, to);
   }
 }

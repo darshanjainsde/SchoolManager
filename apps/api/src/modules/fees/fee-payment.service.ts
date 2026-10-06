@@ -9,6 +9,7 @@ import { PaymentProviderRegistry } from './providers/payment-provider.registry';
 import type { RejectPaymentDto, SubmitPaymentDto } from './fees.dto';
 import type { FeeDecisionOutboxPayload } from '../../common/notifications/notification.types';
 import { formatRupees as rupees } from './money';
+import { requestOutboxDrain } from '../../common/notifications/outbox-signal';
 
 
 /**
@@ -57,6 +58,7 @@ export class FeePaymentService {
         targetUserId: student.userId,
         payload: { schoolName: school?.name ?? 'Your school', title: n.title, body: n.body } satisfies FeeDecisionOutboxPayload as unknown as Prisma.InputJsonValue,
       },
+      select: { id: true },
     });
   }
 
@@ -153,7 +155,7 @@ export class FeePaymentService {
    * The notification is deliberately NOT in here — see `verifyAndNotify`.
    */
   async verify(schoolId: string, actorId: string, paymentId: string) {
-    return withTenant(schoolId, async (tx) => {
+    const out = await withTenant(schoolId, async (tx) => {
       const payment = await tx.feePayment.findFirst({
         where: { id: paymentId, schoolId },
         include: { invoice: { include: { lines: { orderBy: { order: 'asc' } } } } },
@@ -227,6 +229,8 @@ export class FeePaymentService {
       this.logger.log({ schoolId, paymentId, receipt: receipt.number }, 'fee payment verified');
       return { payment: updated, receipt };
     });
+    requestOutboxDrain();
+    return out;
   }
 
   /**
@@ -235,7 +239,7 @@ export class FeePaymentService {
    * rejection has to be actionable, not just negative.
    */
   async reject(schoolId: string, actorId: string, paymentId: string, dto: RejectPaymentDto) {
-    return withTenant(schoolId, async (tx) => {
+    const out = await withTenant(schoolId, async (tx) => {
       const payment = await tx.feePayment.findFirst({ where: { id: paymentId, schoolId } });
       if (!payment) throw new ApiError('NOT_FOUND', 'Payment not found', 404);
       if (payment.status !== 'SUBMITTED') {
@@ -270,6 +274,8 @@ export class FeePaymentService {
 
       return updated;
     });
+    requestOutboxDrain();
+    return out;
   }
 
   /**

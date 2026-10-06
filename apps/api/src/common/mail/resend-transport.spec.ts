@@ -22,4 +22,12 @@ describe('ResendTransport', () => {
     await expect(new ResendTransport('re_key', f).sendMail({ from: 'a@b.c', to: 'x@y.z', subject: 's', html: 'h' })).rejects.toMatchObject({ name: 'ResendApiError', httpStatus: 422, message: 'The notify.sckools.com domain is not verified' });
     expect(new ResendApiError('m', 500, null)).toBeInstanceOf(Error);
   });
+
+  it('a 2xx with no id is accepted (SENT, nothing to reconcile), not an error that would invite a second copy', async () => {
+    const f = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+    await expect(new ResendTransport('re_key', f).sendMail({ from: 'a@b.c', to: 'x@y.z', subject: 's', html: 'h' })).resolves.toEqual({});
+    const unparsable = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => { throw new Error('not json'); } });
+    await expect(new ResendTransport('re_key', unparsable).sendMail({ from: 'a@b.c', to: 'x@y.z', subject: 's', html: 'h' })).resolves.toEqual({});
+  });
 });
+

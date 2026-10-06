@@ -190,3 +190,51 @@ describe('PushChannel', () => {
     ).resolves.toBe(false);
   });
 });
+
+describe('PushChannel.attempt', () => {
+  const msg = { kind: 'ABSENCE_NOTICE' as const, payload: ABSENCE_NOTICE };
+
+  it('no device on record is SKIPPED no-address, not a failure to retry', async () => {
+    prisma.pushToken.findMany.mockResolvedValue([]);
+    expect(await harness().attempt('p@x', msg, SCHOOL_A)).toEqual({ status: 'SKIPPED', reason: 'no-address' });
+  });
+
+  it('Expo unreachable for every chunk is a RETRY', async () => {
+    prisma.pushToken.findMany.mockResolvedValue([{ token: 'ExponentPushToken[a]' }]);
+    send.mockRejectedValue(new Error('socket hang up'));
+    expect((await harness().attempt('p@x', msg, SCHOOL_A)).status).toBe('RETRY');
+  });
+
+  it('one ok ticket is SENT', async () => {
+    prisma.pushToken.findMany.mockResolvedValue([{ token: 'ExponentPushToken[a]' }]);
+    send.mockResolvedValue([{ status: 'ok' }]);
+    expect(await harness().attempt('p@x', msg, SCHOOL_A)).toEqual({ status: 'SENT' });
+  });
+
+  it('a dead-token prune that throws after another device was reached is still SENT (no second push on retry)', async () => {
+    prisma.pushToken.findMany.mockResolvedValue([{ token: 'ExponentPushToken[a]' }, { token: 'ExponentPushToken[dead]' }]);
+    send.mockResolvedValue([{ status: 'ok' }, { status: 'error', message: 'gone', details: { error: 'DeviceNotRegistered' } }]);
+    prisma.pushToken.deleteMany.mockRejectedValue(new Error('pool timeout'));
+    const ch = harness();
+    jest.spyOn((ch as unknown as { logger: { error: (m: string) => void } }).logger, 'error').mockImplementation(() => undefined);
+    expect(await ch.attempt('p@x', msg, SCHOOL_A)).toEqual({ status: 'SENT' });
+    expect(prisma.pushToken.deleteMany).toHaveBeenCalledWith({ where: { token: { in: ['ExponentPushToken[dead]'] } } });
+  });
+
+  it('every ticket refused (not for a dead device) is FAILED', async () => {
+    prisma.pushToken.findMany.mockResolvedValue([{ token: 'ExponentPushToken[a]' }]);
+    send.mockResolvedValue([{ status: 'error', message: 'MessageTooBig', details: { error: 'MessageTooBig' } }]);
+    expect(await harness().attempt('p@x', msg, SCHOOL_A)).toEqual({ status: 'FAILED', error: 'every push ticket was refused' });
+  });
+
+  it('every token dead is SKIPPED no-address, and the dead tokens are pruned', async () => {
+    prisma.pushToken.findMany.mockResolvedValue([{ token: 'ExponentPushToken[a]' }, { token: 'ExponentPushToken[b]' }]);
+    send.mockResolvedValue([
+      { status: 'error', message: 'gone', details: { error: 'DeviceNotRegistered' } },
+      { status: 'error', message: 'gone', details: { error: 'DeviceNotRegistered' } },
+    ]);
+    prisma.pushToken.deleteMany.mockResolvedValue({ count: 2 });
+    expect(await harness().attempt('p@x', msg, SCHOOL_A)).toEqual({ status: 'SKIPPED', reason: 'no-address' });
+    expect(prisma.pushToken.deleteMany).toHaveBeenCalledWith({ where: { token: { in: ['ExponentPushToken[a]', 'ExponentPushToken[b]'] } } });
+  });
+});

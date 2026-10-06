@@ -328,6 +328,8 @@ export interface LeaveApplication {
   status: LeaveStatusValue;
   /** A single date taken at half strength — costs half a day of balance and pay. */
   halfDay: boolean;
+  /** Which half of a half day; null/absent on a full day or from an older API. */
+  halfDayPart?: 'AM' | 'PM' | null;
   createdAt: string;
 }
 
@@ -583,7 +585,7 @@ export interface TeacherReplyInput {
 // HolidayTypeValue above, both also String columns).
 
 /** The events that write a `NotificationOutbox` row today. */
-export const NOTIFICATION_OUTBOX_KINDS = ['RESULT_PUBLISHED', 'EXAM_SCHEDULED', 'ASSIGNMENT_POSTED', 'MESSAGE_RECEIVED', 'LIBRARY_NOTICE', 'SESSION_STARTED', 'SPORTS_NOTICE', 'FEE_VERIFIED', 'FEE_REJECTED', 'FEE_DUE', 'LEAVE_APPLIED', 'LEAVE_DECIDED', 'COVER_ASSIGNED', 'CONCERN_RAISED', 'CONCERN_REPLIED', 'CONCERN_RESOLVED'] as const;
+export const NOTIFICATION_OUTBOX_KINDS = ['RESULT_PUBLISHED', 'EXAM_SCHEDULED', 'ASSIGNMENT_POSTED', 'MESSAGE_RECEIVED', 'LIBRARY_NOTICE', 'SESSION_STARTED', 'SPORTS_NOTICE', 'FEE_VERIFIED', 'FEE_REJECTED', 'FEE_DUE', 'LEAVE_APPLIED', 'LEAVE_DECIDED', 'COVER_ASSIGNED', 'CONCERN_RAISED', 'CONCERN_REPLIED', 'CONCERN_RESOLVED', 'LEAVE_CANCELLED', 'COVER_CANCELLED', 'COVER_UNFILLED'] as const;
 export type NotificationOutboxKind = (typeof NOTIFICATION_OUTBOX_KINDS)[number];
 
 /**
@@ -614,6 +616,7 @@ export * from './sports/maths';
 export * from './sports/perms';
 export * from './payroll';
 export * from './fees/receipt';
+export * from './admissions/pipeline';
 
 export const NOTIFICATION_KINDS = [
   'MESSAGE',

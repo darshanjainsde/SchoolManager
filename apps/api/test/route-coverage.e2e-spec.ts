@@ -90,6 +90,18 @@ describe('route authorization coverage', () => {
     expect(unaccounted).toEqual([]);
   });
 
+  it('mounts no verb + path twice', () => {
+    // Express serves a path from the FIRST handler mounted; a second
+    // declaration is dead code that LOOKS live. That is how two `GET
+    // /me/profile` handlers (PortalController for families, MeProfileController
+    // for staff) refused every student on prod for two weeks: the checks above
+    // compare through Sets, which quietly collapsed the duplicate.
+    const seen = new Map<string, number>();
+    for (const r of mountedRoutes()) seen.set(r, (seen.get(r) ?? 0) + 1);
+    const twice = [...seen].filter(([, n]) => n > 1).map(([r]) => r);
+    expect(twice).toEqual([]);
+  });
+
   it('lists no route twice, in both buckets', () => {
     const overlap = AUTHZ_REVIEWED.filter((r) => AUTHZ_UNREVIEWED.includes(r));
     expect(overlap).toEqual([]);

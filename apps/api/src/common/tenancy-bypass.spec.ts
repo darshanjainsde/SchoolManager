@@ -98,6 +98,8 @@ const ALLOWED: Record<string, string> = {
 
   // ── Crons: no JWT, and the rows span every school ─────────────────────────
   'modules/management/exam-reminders.service.ts': 'daily cron across all schools',
+  'modules/management/cover-nudge.service.ts':
+    'the 18:00 IST cron FINDS the schools with an open gap tomorrow (one groupBy on schoolId); the count, the check and every write then run per school inside withTenant',
   'modules/management/notification-outbox.service.ts': 'outbox drain across all schools',
   'modules/mail-webhooks/resend-webhook.service.ts':
     'Resend posts delivery receipts for every school to one URL; each is matched to its ledger row by provider id and updated under that row\'s own schoolId; suppression is platform-wide by address',
@@ -115,6 +117,8 @@ const ALLOWED: Record<string, string> = {
     'User is the platform identity table auth already owns; every query carries the caller\'s own schoolId and userId',
   'modules/whatsapp/whatsapp-actions.service.ts':
     'a tap arrives with no tenant context; the tenant is the school the signed payload\'s row belongs to, every lookup carries that schoolId, and the writes go through LeaveService under withTenant',
+  'modules/whatsapp/inbound-identity.service.ts':
+    'an inbound webhook tap has no tenant context; the school comes from the signed payload\'s row, and every query carries that schoolId',
   'modules/whatsapp/whatsapp-webhook.service.ts':
     'Meta posts delivery receipts for every school to one URL; each is matched to its row by Meta\'s message id and updated under that row\'s own schoolId',
   'modules/management/sessions.service.ts': 'scheduled session-start cron scans SCHEDULED plans across all schools; every write then runs under withTenant per school',

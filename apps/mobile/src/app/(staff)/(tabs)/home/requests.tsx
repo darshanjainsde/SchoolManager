@@ -249,6 +249,10 @@ export default function Requests() {
       fetchAll();
     } catch (e) {
       setCancelError(e instanceof ApiError ? e.message : 'Could not cancel — try again.');
+      // 409: the leave changed under us (the office decided it, or another
+      // device cancelled it). The sentence says so; the list must show it too,
+      // or the row keeps offering a Cancel that can only fail again.
+      if (e instanceof ApiError && e.status === 409) fetchAll();
     } finally {
       cancellingRef.current = null;
       setCancellingId(null);

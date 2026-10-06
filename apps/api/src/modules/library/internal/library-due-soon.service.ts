@@ -4,6 +4,7 @@ import { MailService } from '../../../common/mail/mail.service';
 import type { LibraryNoticeOutboxPayload } from '../../../common/notifications/notification.types';
 import { istTodayISO } from '../../../common/dates/timetable-date';
 import { addDaysISO, dateOnlyISO } from './library-policy';
+import { requestOutboxDrain } from '../../../common/notifications/outbox-signal';
 
 /** Days before dueOn that the nudge goes out — the approved "3 days before". */
 const LEAD_DAYS = 3;
@@ -91,6 +92,7 @@ export class LibraryDueSoonService {
           targetUserId: userId,
           payload: payload as unknown as Prisma.InputJsonValue,
         },
+        select: { id: true },
       });
       await db.notification.create({
         data: { schoolId: issue.schoolId, userId, kind: 'ANNOUNCEMENT', title, body },
@@ -122,6 +124,7 @@ export class LibraryDueSoonService {
       }
     }
 
+    if (notices > 0) requestOutboxDrain();
     return { schools: activeSchools.size, notices, emails };
   }
 }

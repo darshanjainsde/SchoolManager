@@ -311,6 +311,7 @@ describe('AnnouncementsService — teacher multi-class create + push fan-out', (
             body: 'Please attend.',
             className: '5-A',
           postedOn: expect.stringMatching(/^\d{1,2} [A-Z][a-z]+$/),
+          topic: null,
           },
         },
       ]);
@@ -391,6 +392,7 @@ describe('AnnouncementsService — teacher multi-class create + push fan-out', (
             body: 'Public holiday.',
             className: null,
           postedOn: expect.stringMatching(/^\d{1,2} [A-Z][a-z]+$/),
+          topic: null,
           },
         },
         {
@@ -402,6 +404,7 @@ describe('AnnouncementsService — teacher multi-class create + push fan-out', (
             body: 'Public holiday.',
             className: null,
           postedOn: expect.stringMatching(/^\d{1,2} [A-Z][a-z]+$/),
+          topic: null,
           },
         },
       ]);

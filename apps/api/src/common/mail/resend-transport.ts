@@ -61,7 +61,11 @@ export class ResendTransport implements MailTransport {
       }),
     });
     const json = (await res.json().catch(() => ({}))) as { id?: string; message?: string; name?: string };
-    if (!res.ok || !json.id) throw new ResendApiError(json.message || `Resend ${res.status}`, res.status, json.name ?? null);
-    return { messageId: json.id };
+    if (!res.ok) throw new ResendApiError(json.message || `Resend ${res.status}`, res.status, json.name ?? null);
+    // A 2xx is Resend accepting the letter, even when the body carries no id
+    // (or does not parse): it may already be on its way, so it is SENT with no
+    // id to reconcile against — never an error, which would invite a retry and
+    // a second copy.
+    return json.id ? { messageId: json.id } : {};
   }
 }

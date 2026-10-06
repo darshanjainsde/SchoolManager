@@ -15,9 +15,9 @@ import type { MessageReceivedOutboxPayload } from '../../common/notifications/no
 import { emitNotifications } from '../../common/notifications/notification-inbox';
 import { TenantContextService } from '../tenancy';
 import { TimetableService } from './timetable.service';
-import { NotificationOutboxService } from './notification-outbox.service';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
 import { unreadCountsByThread } from '../../common/lists/relation-counts';
+import { requestOutboxDrain } from '../../common/notifications/outbox-signal';
 
 const FALLBACK_SCHOOL_NAME = 'Your school';
 const FALLBACK_SUBJECT_NAME = 'General';
@@ -59,7 +59,6 @@ export class MessagesService {
   constructor(
     private readonly tenant: TenantContextService,
     private readonly timetable: TimetableService,
-    private readonly outbox: NotificationOutboxService,
   ) {}
 
   // ── shared helpers ──────────────────────────────────────────────────────────
@@ -281,10 +280,9 @@ export class MessagesService {
       return MessagesService.detail(tx, fresh!);
     });
 
-    // Kick the outbox now rather than waiting for the daily cron — on Hobby the
-    // cron cannot run more often, and a parent message that lands tomorrow is
-    // not a message. Claim-safe (FOR UPDATE SKIP LOCKED) so it cannot race the cron.
-    this.outbox.drainSoon();
+    // Ask for a drain now rather than waiting for the daily cron — a message
+    // that lands tomorrow is not a message. Claim-safe (FOR UPDATE SKIP LOCKED).
+    requestOutboxDrain();
     return sent;
   }
 
@@ -328,7 +326,7 @@ export class MessagesService {
     dto: { body: string },
   ): Promise<MessageThreadDetail> {
     const { schoolId } = this.tenant.requireTenant();
-    return withTenant(schoolId, async (tx) => {
+    const out = await withTenant(schoolId, async (tx) => {
       const t = await this.myTeacher(tx, userId);
       // Ownership from the STORED thread, never caller input: a teacher may
       // only post to a thread whose teacherId is their own (403 otherwise).
@@ -350,6 +348,8 @@ export class MessagesService {
       const fresh = await MessagesService.loadThreadForList(tx, schoolId, thread.id, 'STUDENT');
       return MessagesService.detail(tx, fresh!);
     });
+    requestOutboxDrain();
+    return out;
   }
 
   // ── shared write path ────────────────────────────────────────────────────────
@@ -405,6 +405,7 @@ export class MessagesService {
         targetUserId: args.targetUserId,
         payload: payload as unknown as Prisma.InputJsonValue,
       },
+      select: { id: true },
     });
 
     // In-app inbox row (the bell) for the same recipient, in the SAME

@@ -1,5 +1,6 @@
 import { Body, Controller, ForbiddenException, Get, Headers, HttpCode, Post, Query, Req } from '@nestjs/common';
 import type { RawBodyRequest } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { Public } from '../../common/auth/public.decorator';
 import { WhatsAppWebhookService, type WebhookBody } from './whatsapp-webhook.service';
@@ -9,9 +10,15 @@ import { WhatsAppWebhookService, type WebhookBody } from './whatsapp-webhook.ser
  * signature over the raw body (main.ts keeps `rawBody`), checked before a
  * single row is read. Meta retries a non-2xx for hours, so an unsigned or
  * malformed post is refused with 403 — never accepted and ignored.
+ *
+ * `@SkipThrottle()`: Meta posts every status of every message we send. A
+ * morning fan-out is hundreds a minute from a handful of IPs; our 100/min/IP
+ * limit answered 429 and Meta backs off for hours. The HMAC check is the gate
+ * here, not the rate.
  */
 @Controller('webhooks/whatsapp')
 @Public()
+@SkipThrottle()
 export class WhatsAppWebhookController {
   constructor(private readonly svc: WhatsAppWebhookService) {}
 

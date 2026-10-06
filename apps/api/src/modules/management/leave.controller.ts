@@ -78,11 +78,14 @@ export class LeaveController {
  * Kept in this file (rather than a new `substitution.controller.ts`) since it
  * shares `LeaveService` and its route prefix — `manage/substitution` — is the
  * counterpart resource created by `LeaveService.approve`.
+ *
+ * The leave desk's own resource: an admin, or the accounts officer through
+ * `LeaveDeskGuard` — whoever approves leave can cover it.
  */
 @Controller('manage/substitution')
-@UseGuards(SchoolJwtGuard, RequireFeatureGuard, RolesGuard)
+@UseGuards(SchoolJwtGuard, RequireFeatureGuard, RolesGuard, LeaveDeskGuard)
 @RequireFeature('MANAGEMENT')
-@Roles('SCHOOL_ADMIN')
+@Roles('SCHOOL_ADMIN', 'STAFF')
 export class SubstitutionController {
   constructor(
     private readonly leave: LeaveService,
@@ -91,6 +94,12 @@ export class SubstitutionController {
 
   private sid(): string {
     return this.tenant.requireTenant().schoolId;
+  }
+
+  /** Who is free for this gap — what the console dropdown and the app's Coverage tab offer. */
+  @Get(':id/candidates')
+  candidates(@Param('id', ParseUUIDPipe) id: string) {
+    return this.leave.candidates(this.sid(), id);
   }
 
   @Post(':id/assign')

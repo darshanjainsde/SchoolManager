@@ -12,6 +12,7 @@ import { activeStudentsWhere } from '../../../common/roster/active-students';
 import { buildEventPlan, classLabel, drawToMatches, peopleOfSide, scheduleHeats, scheduleMatches, seedOf, type EntryIn, type HeatPlan, type MatchPlan } from './sports-build';
 import { SportsSettingsService } from './sports-settings.service';
 import type { AddVenueDto, CreateTournamentDto, EventInDto, HoldDto, MoveGroupDto, MoveSlotDto, PinEventDto, ShiftDto, UpdateTournamentDto } from './sports.dto';
+import { requestOutboxDrain } from '../../../common/notifications/outbox-signal';
 
 export interface TournamentRow { id: string; name: string; startsOn: string; endsOn: string; status: string; published: boolean; version: number; events: number }
 export interface RosterStudent { id: string; name: string; std: number; section: string; gender: string | null; dob: string | null; houseId: string | null }
@@ -256,10 +257,10 @@ export class SportsTournamentsService {
   }
 
   /** DRAFT → LIVE and visible to students; every entered child with a login gets one bell + one push naming their first slot. */
-  publish(schoolId: string, id: string, isAdmin: boolean): Promise<{ notified: number }> {
+  async publish(schoolId: string, id: string, isAdmin: boolean): Promise<{ notified: number }> {
     assertNotificationKind('SPORTS');
     assertNotificationOutboxKind('SPORTS_NOTICE');
-    return withTenant(schoolId, async (tx) => {
+    const out = await withTenant(schoolId, async (tx) => {
       const t = await this.requireTournament(tx, schoolId, id);
       if (t.status === 'DONE') throw new ApiError('TOURNAMENT_STATE', 'This tournament is finished.', 409);
       const settings = await this.settings.ensure(tx, schoolId);
@@ -326,6 +327,8 @@ export class SportsTournamentsService {
       for (const part of chunks(pushes, 1000)) await tx.notificationOutbox.createMany({ data: part });
       return { notified: rows.length };
     });
+    requestOutboxDrain();
+    return out;
   }
 
   finish(schoolId: string, id: string): Promise<void> {

@@ -59,3 +59,23 @@ export function codeFromError(error: string | null | undefined): number | null {
   const m = /\(code (\d+)\)/.exec(error ?? '');
   return m ? Number(m[1]) : null;
 }
+
+/**
+ * Meta's rate limits — every one says "not now", never "not ever":
+ * 130429 (cloud API throughput), 131056 (too many to one phone, pair rate
+ * limit), 131048 (spam rate limit), 80007 (WABA rate limit) and 4 (app-level
+ * call throughput).
+ */
+export const WHATSAPP_RATE_LIMIT_CODES: ReadonlySet<number> = new Set([130429, 131056, 131048, 80007, 4]);
+
+/**
+ * Worth trying again? Only when Meta never answered (a dropped connection),
+ * answered 5xx, or rate-limited us (WHATSAPP_RATE_LIMIT_CODES). Every other refusal — not on
+ * WhatsApp (131026), a template problem (132xxx), a bad parameter — is the
+ * same answer the next time.
+ */
+export function isTransientWhatsAppFailure(code: number | null, httpStatus: number | null): boolean {
+  if (code !== null && WHATSAPP_RATE_LIMIT_CODES.has(code)) return true;
+  if (httpStatus === null) return true;
+  return httpStatus >= 500;
+}

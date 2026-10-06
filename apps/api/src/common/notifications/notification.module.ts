@@ -47,6 +47,6 @@ import { NotificationService } from './notification.service';
   // it directly and send push for a drained outbox row without re-running it
   // through `NotificationService.notify()`'s all-channels fan-out — the
   // outbox is push-only by design (see notify()'s onlyChannels docstring).
-  exports: [NotificationService, PushChannel, WhatsAppChannel],
+  exports: [NotificationService, PushChannel, WhatsAppChannel, EmailChannel],
 })
 export class NotificationModule {}

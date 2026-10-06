@@ -18,6 +18,14 @@
  * this becomes a list of good intentions.
  */
 export const AUTHZ_REVIEWED: string[] = [
+  // Role-to-door, asserted against the booted app in role-contract.e2e-spec.ts.
+  "GET /me/account",
+  "PATCH /me/account",
+  "GET /me/profile",
+  "GET /me/notifications",
+  "GET /me/notifications/unread-count",
+  "POST /me/notifications/read",
+  "POST /me/notifications/clear",
   // ── Salary ──────────────────────────────────────────────────────────────
   // payroll-authz.e2e-spec.ts: every admin route refuses anonymous, STUDENT,
   // TEACHER and STAFF, and admits only an admin who HOLDS the per-user salary
@@ -269,6 +277,12 @@ export const AUTHZ_REVIEWED: string[] = [
   "DELETE /manage/staff/:id",
   "DELETE /manage/timetable/:id",
   "GET /internal/cron/notification-outbox",
+  // Spine Tier 1b: the 18:00 IST cover nudge (CronSecretGuard, as every cron)
+  // and the cover picker's server-side "who is free" (LeaveDeskGuard: admin or
+  // an active accounts officer, the same door as every substitution route).
+  "GET /internal/cron/cover-nudge",
+  "POST /internal/cron/cover-nudge",
+  "GET /manage/substitution/:id/candidates",
   "GET /manage/announcements/mine",
   "GET /manage/assignments",
   "GET /manage/classes",
@@ -459,6 +473,11 @@ export const AUTHZ_REVIEWED: string[] = [
   "GET /owner/print-orders/counts",
   "GET /site/enquiries/:id",
   "POST /site/enquiries/:id/notes",
+  // Admissions desk, Oct 2026 — enquiry-admin.authz.spec.ts pins the guard
+  // chain and the declaration order; admissions-desk.e2e-spec.ts proves a
+  // driver is refused and an officer reads the list.
+  "GET /site/enquiries/owners",
+  "POST /site/enquiries",
   // School backups — backups-authz.e2e-spec.ts: every owner route proven four
   // ways (anonymous, school token on owner host, platform token on school
   // host, operator); the engine room refuses any caller without the cron
@@ -586,9 +605,6 @@ export const AUTHZ_UNREVIEWED: string[] = [
   "GET /me/messages/:threadId",
   "GET /me/messages/teachers",
   "GET /me/messages/unread-count",
-  "GET /me/notifications",
-  "GET /me/notifications/unread-count",
-  "GET /me/profile",
   "GET /me/results",
   "GET /me/timetable",
   "GET /owner/blog/pending",
@@ -662,8 +678,6 @@ export const AUTHZ_UNREVIEWED: string[] = [
   "POST /me/diary/:id/sign",
   "POST /me/events/:id/register",
   "POST /me/messages",
-  "POST /me/notifications/clear",
-  "POST /me/notifications/read",
   "POST /me/photo",
   "POST /me/push-token",
   "POST /owner/auth/gate",
@@ -699,7 +713,6 @@ export const AUTHZ_UNREVIEWED: string[] = [
   "GET /manage/whatsapp-settings",
   "GET /me/phone",
   "GET /webhooks/whatsapp",
-  "PATCH /me/profile",
   "POST /auth/otp/choose",
   "POST /auth/otp/request",
   "POST /auth/otp/verify",

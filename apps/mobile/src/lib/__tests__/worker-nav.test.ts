@@ -57,4 +57,29 @@ describe('worker desks', () => {
       expect(tabsFor(s).length).toBeLessThanOrEqual(5);
     }
   });
+
+  it('an admissions officer is general staff in the app until the Leads tabs ship (Tier C)', () => {
+    // Passes the moment it is written — it pins the behaviour, so the Tier C
+    // change has to come here and change it on purpose.
+    const s = { staffRole: 'ADMISSIONS', features: ['ENQUIRY', 'MANAGEMENT'] };
+    expect(jobFor(s)).toBe('GENERAL');
+    expect(tabNamesFor(s)).toEqual(['today', 'profile']);
+  });
+
+  it('every staff job has a label in the app (else the job reads as "Staff")', () => {
+    const { readFileSync } = require('node:fs') as typeof import('node:fs');
+    const { resolve } = require('node:path') as typeof import('node:path');
+    const root = resolve(__dirname, '../../../../..');
+    const schema = readFileSync(resolve(root, 'packages/db/prisma/schema.prisma'), 'utf8');
+    const start = schema.indexOf('enum StaffRole {');
+    const jobs = schema.slice(start, schema.indexOf('}', start)).split('\n').map((l: string) => l.trim()).filter((l: string) => /^[A-Z_]+$/.test(l));
+    expect(jobs).toContain('ADMISSIONS');
+    for (const file of ['src/app/(worker)/(tabs)/today/index.tsx', 'src/app/(worker)/(tabs)/profile/index.tsx']) {
+      const src = readFileSync(resolve(__dirname, '../../../', file), 'utf8');
+      const at = src.indexOf('const STAFF_ROLE_LABEL');
+      expect(at).toBeGreaterThan(-1);
+      const block = src.slice(at, src.indexOf('};', at));
+      for (const job of jobs) expect(block).toContain(`${job}:`);
+    }
+  });
 });

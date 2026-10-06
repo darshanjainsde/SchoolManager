@@ -142,6 +142,9 @@ it('writes the real announcements desk for a browser to measure', async () => {
     // Through to a CHOSEN state: the pressed chips, and the line that says how
     // many families that actually is, are the part worth looking at.
     ['Announcements — choosing classes', [byText(/New announcement/), byText('Chosen classes'), byText('IX')]],
+    // The kind chooser and the fields that follow it; the fields stay empty on
+    // purpose — the layout is what is measured.
+    ['Announcements — writing a PTM notice', [byText(/New announcement/), byText("Parents' meeting")]],
     ['Announcements — about to delete', [
       (host) => (host.querySelector('.sk-rowline[data-clickable]') as HTMLElement)?.click(),
       byText('Delete'),
@@ -182,6 +185,7 @@ body{margin:0;padding:10px;background:var(--sk-bg,#fff)}
   expect(body, 'the long title rendered').toContain('revised date sheet');
   expect(body, 'the empty state rendered').toContain('Nothing posted yet');
   expect(portals.join(''), 'the drawers really opened').toContain('sk-panel');
+  expect(portals.join(''), 'the kind chooser rendered').toContain('What is it?');
   expect(portals.join(''), 'the class picker rendered').toContain('sk-annpick');
   expect(portals.join(''), 'a grade was actually chosen').toContain('aria-pressed="true"');
   expect(portals.join(''), 'and it says how many families that is').toMatch(/3 classes · \d+ students/);

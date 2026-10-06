@@ -215,3 +215,73 @@ describe('EmailChannel', () => {
     ).resolves.toBe(false);
   });
 });
+
+describe('EmailChannel.attempt', () => {
+  function withOutcome(outcome: unknown) {
+    const mail = Object.create(MailService.prototype) as MailService;
+    (mail as unknown as { sendLetter: MailService['sendLetter'] }).sendLetter = async (_to, _s, _subj, _l, _k, out) => {
+      if (out) out.outcome = outcome as never;
+      return (outcome as { status: string }).status === 'SENT';
+    };
+    return new EmailChannel(mail);
+  }
+  const msg = { kind: 'ABSENCE_NOTICE' as const, payload: { schoolName: 'Raffles', studentName: 'Ravi', date: 'Thu 18 Sep' } };
+
+  it('passes the mail service outcome through', async () => {
+    expect(await withOutcome({ status: 'RETRY', error: 'SMTP 421' }).attempt('a@x', msg, 's')).toEqual({ status: 'RETRY', error: 'SMTP 421' });
+    expect(await withOutcome({ status: 'SENT', providerId: 're_1' }).attempt('a@x', msg, 's')).toEqual({ status: 'SENT', providerId: 're_1' });
+  });
+
+  it('send() is still a boolean for notify()', async () => {
+    expect(await withOutcome({ status: 'FAILED', error: 'SMTP 550' }).send('a@x', msg, 's')).toBe(false);
+  });
+});
+
+describe('EmailChannel — the leave desk notices', () => {
+  const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+
+  it('LEAVE_CANCELLED names the teacher, the dates and how many covers were released', async () => {
+    const { channel, sent } = harness();
+    await channel.send('head@x', { kind: 'LEAVE_CANCELLED', payload: { schoolName: 'Raffles', leaveId: 'l1', teacherName: 'Priya Nair', dates: 'Mon 13 – Tue 14 Oct 2026', releasedCovers: 1 } }, SCHOOL);
+    expect(sent[0].subject).toBe('Priya Nair withdrew their leave for Mon 13 – Tue 14 Oct 2026');
+    expect(sent[0].text).toContain('1 cover was released and the substitute has been told.');
+    expect(sent[0].text).not.toContain('undefined');
+  });
+
+  it('a withdrawn PENDING request says nothing about covers', async () => {
+    const { channel, sent } = harness();
+    await channel.send('head@x', { kind: 'LEAVE_CANCELLED', payload: { schoolName: 'Raffles', leaveId: 'l1', teacherName: 'Priya Nair', dates: 'Mon 13 Oct 2026', releasedCovers: 0 } }, SCHOOL);
+    expect(sent[0].text).toContain('Priya Nair has withdrawn their leave for Mon 13 Oct 2026.');
+    expect(sent[0].text).not.toContain('released and');
+  });
+
+  it('COVER_CANCELLED tells the substitute which class, when and why', async () => {
+    const { channel, sent } = harness();
+    await channel.send('t@x', { kind: 'COVER_CANCELLED', payload: { schoolName: 'Raffles', substitutionId: 's1', when: 'Mon 13 Oct 2026, Period 3 (10:15–11:00)', className: '9-A', why: 'TEACHER_ON_LEAVE' } }, SCHOOL);
+    expect(sent[0].subject).toBe('Your cover of 9-A on Mon 13 Oct 2026, Period 3 (10:15–11:00) is called off');
+    expect(sent[0].text).toContain('because you are on leave that day.');
+  });
+
+  it('COVER_UNFILLED counts the periods, singular and plural, and carries the note', async () => {
+    const { channel, sent } = harness();
+    await channel.send('head@x', { kind: 'COVER_UNFILLED', payload: { schoolName: 'Raffles', gaps: 1, forDate: '2026-10-13', forWhen: 'Mon 13 Oct 2026', note: "Kavya Rao can't take 9-A." } }, SCHOOL);
+    await channel.send('head@x', { kind: 'COVER_UNFILLED', payload: { schoolName: 'Raffles', gaps: 4, forDate: '2026-10-13', forWhen: 'tomorrow, Mon 13 Oct 2026', note: null } }, SCHOOL);
+    expect(sent[0].subject).toBe('1 period still needs cover — Mon 13 Oct 2026');
+    expect(sent[0].text).toContain("1 period on Mon 13 Oct 2026 has nobody to take it yet. Kavya Rao can't take 9-A.");
+    expect(sent[1].text).toContain('4 periods on tomorrow, Mon 13 Oct 2026 have nobody to take them yet.');
+    for (const m of sent) expect(m.text).not.toContain('null');
+    // The heading counts what the subject counts — periods, never "classes".
+    expect(sent[0].text).toContain('A period still needs a teacher');
+    expect(sent[1].text).toContain('Periods still need a teacher');
+    for (const m of sent) expect(m.text).not.toMatch(/classes/i);
+  });
+
+  it('LEAVE_CANCELLED names a substitute who could not be told, and does not count them as told', async () => {
+    const { channel, sent } = harness();
+    await channel.send('head@x', { kind: 'LEAVE_CANCELLED', payload: { schoolName: 'Raffles', leaveId: 'l1', teacherName: 'Priya Nair', dates: 'Mon 13 Oct 2026', releasedCovers: 1, unreached: 'Ramesh Kumar' } }, SCHOOL);
+    expect(sent[0].text).toContain('1 cover was released and the substitute has been told. Ramesh Kumar has no login, so tell them yourself.');
+    await channel.send('head@x', { kind: 'LEAVE_CANCELLED', payload: { schoolName: 'Raffles', leaveId: 'l1', teacherName: 'Priya Nair', dates: 'Mon 13 Oct 2026', releasedCovers: 0, unreached: 'Ramesh Kumar and Sunita Iyer' } }, SCHOOL);
+    expect(sent[1].text).toContain('Priya Nair has withdrawn their leave for Mon 13 Oct 2026. Ramesh Kumar and Sunita Iyer have no login, so tell them yourself.');
+    expect(sent[1].text).not.toContain('been told');
+  });
+});

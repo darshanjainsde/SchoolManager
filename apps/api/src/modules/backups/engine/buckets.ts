@@ -180,6 +180,7 @@ export const BUCKET_OF: Readonly<Record<string, Bucket>> = {
   /* ── day: messages and notices ────────────────────────────────────────── */
   Notification: 'day',
   NotificationOutbox: 'day',
+  NotificationDelivery: 'day',
   MessageThread: 'day',
   Message: 'day',
   Announcement: 'day',

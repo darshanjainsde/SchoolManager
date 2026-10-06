@@ -61,7 +61,7 @@ export default function StaffLeavePage() {
   });
 
   const apply = useMutation({
-    mutationFn: (v: { type: string; startDate: string; endDate: string; reason?: string; halfDay?: boolean }) =>
+    mutationFn: (v: { type: string; startDate: string; endDate: string; reason?: string; halfDay?: boolean; halfDayPart?: 'AM' | 'PM' }) =>
       api.post<LeaveApplication>('/manage/leave', v),
     onSuccess: () => {
       toast.success('Leave applied for — the office will review it.');

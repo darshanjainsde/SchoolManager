@@ -162,5 +162,7 @@ export const PACK_EXCLUDED_MODELS: Readonly<Record<string, string>> = {
   GuestSession: 'a live guest login',
   EmailSuppression: "another school's unsubscribe list must not follow a pack",
   WhatsAppInbound: 'real messages real people sent',
+  NotificationOutbox: "an unsent row would be expanded and sent to the receiving school's real people",
+  NotificationDelivery: "a QUEUED delivery would be sent to the receiving school's real people",
   AuditLog: 'who did what in another school is not sample data',
 };

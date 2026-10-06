@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import type { Expo, ExpoPushMessage, ExpoPushTicket } from 'expo-server-sdk';
 import type { PrismaClient } from '@skoolos/db';
 import { formatNotification } from './format';
-import type { NotificationChannel, NotificationMessage } from './notification.types';
+import type { DeliveryChannel, DeliveryOutcome, NotificationMessage } from './notification.types';
 
 /**
  * LAZY-LOADED on purpose. `expo-server-sdk` v6 has a circular internal
@@ -54,7 +54,7 @@ async function loadExpo(): Promise<{ ExpoCtor: typeof import('expo-server-sdk').
  * added.
  */
 @Injectable()
-export class PushChannel implements NotificationChannel {
+export class PushChannel implements DeliveryChannel {
   readonly name = 'push';
 
   private readonly logger = new Logger(PushChannel.name);
@@ -62,16 +62,25 @@ export class PushChannel implements NotificationChannel {
   constructor(private readonly prisma: Pick<PrismaClient, 'pushToken'>) {}
 
   async send(to: string, message: NotificationMessage, schoolId: string): Promise<boolean> {
+    return (await this.attempt(to, message, schoolId)).status === 'SENT';
+  }
+
+  /**
+   * One attempt to reach every device on record. No device (or only dead
+   * ones) is SKIPPED no-address — nothing a retry could fix; Expo unreachable
+   * for every chunk is a RETRY; tickets all refused for other reasons is FAILED.
+   */
+  async attempt(to: string, message: NotificationMessage, schoolId: string): Promise<DeliveryOutcome> {
     const rows = await this.prisma.pushToken.findMany({
       where: { schoolId, email: to },
       select: { token: true },
     });
-    if (rows.length === 0) return false;
+    if (rows.length === 0) return { status: 'SKIPPED', reason: 'no-address' };
 
     // Lazy-loaded (see top-of-file note) — never touches expo-server-sdk at boot.
     const { ExpoCtor, expo } = await loadExpo();
     const tokens = rows.map((r) => r.token).filter((t) => ExpoCtor.isExpoPushToken(t));
-    if (tokens.length === 0) return false;
+    if (tokens.length === 0) return { status: 'SKIPPED', reason: 'no-address' };
 
     const { title, body } = formatNotification(message);
     const messages: ExpoPushMessage[] = tokens.map((token) => ({
@@ -84,11 +93,13 @@ export class PushChannel implements NotificationChannel {
 
     const dead: string[] = [];
     let delivered = false;
+    let unreachable = false;
     for (const chunk of chunks) {
       let tickets: ExpoPushTicket[];
       try {
         tickets = await expo.sendPushNotificationsAsync(chunk);
       } catch (e) {
+        unreachable = true;
         this.logger.error(`Expo push chunk failed: ${(e as Error).message}`);
         continue;
       }
@@ -104,9 +115,19 @@ export class PushChannel implements NotificationChannel {
     }
 
     if (dead.length > 0) {
-      await this.prisma.pushToken.deleteMany({ where: { token: { in: dead } } });
+      // Pruning dead tokens is bookkeeping: if it throws after another device
+      // was reached, rejecting would make the drain retry and push that device
+      // a second time. The tokens are pruned on the next send instead.
+      try {
+        await this.prisma.pushToken.deleteMany({ where: { token: { in: dead } } });
+      } catch (e) {
+        this.logger.error(`Could not prune ${dead.length} dead push token(s): ${(e as Error).message}`);
+      }
     }
 
-    return delivered;
+    if (delivered) return { status: 'SENT' };
+    if (unreachable) return { status: 'RETRY', error: 'Expo push service unreachable' };
+    if (dead.length === tokens.length) return { status: 'SKIPPED', reason: 'no-address' };
+    return { status: 'FAILED', error: 'every push ticket was refused' };
   }
 }

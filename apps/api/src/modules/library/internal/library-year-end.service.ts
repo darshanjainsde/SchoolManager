@@ -9,6 +9,7 @@ import { todayInZone, ymdString } from '../../../common/dates/birthdays';
 import type { LibraryNoticeOutboxPayload } from '../../../common/notifications/notification.types';
 import { LibrarySettingsService } from './library-settings.service';
 import { accruedFineRupees, dateOnlyISO, finesApply, isDateISO, lateDays } from './library-policy';
+import { requestOutboxDrain } from '../../../common/notifications/outbox-signal';
 
 /**
  * The library at the year end (Active Roster, Track C) — the one door the
@@ -157,6 +158,7 @@ export class LibraryYearEndService {
       }
       return { rows, schoolName: school?.name ?? '', noLogin: issues.length - rows.length };
     }).then((r) => ({ ...r }));
+    if (rows.length) requestOutboxDrain();
     const noLogin = await withTenant(schoolId, async (tx) => (await this.openStudentLoans(tx, schoolId)).filter((i) => !i.student?.userId).length);
 
     runInBackground(

@@ -1,8 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { getPlatformPrisma, resolveFeatures, type Prisma } from '@skoolos/db';
 import type { FeeDecisionOutboxPayload } from '../../common/notifications/notification.types';
-import { istTodayISO } from '../../common/dates/timetable-date';
+import { istTodayISO, shortDayDate } from '../../common/dates/timetable-date';
 import { formatRupees } from './money';
+import { requestOutboxDrain } from '../../common/notifications/outbox-signal';
 
 /** Told twice: a week before the due date, and on the day. Date-exact, so each fires once. */
 const LEADS = [7, 0] as const;
@@ -61,12 +62,15 @@ export class FeeDueSoonService {
 
       const dueISO = inv.dueDate.toISOString().slice(0, 10);
       const onTheDay = dueISO === today;
+      // One date wording everywhere ("Tue 15 Sep 2026"): toLocaleDateString
+      // with month 'short' prints "Sept" for September in en-IN.
+      const dueOn = shortDayDate(new Date(`${dueISO}T00:00:00Z`));
       const title = onTheDay
         ? `${inv.term.name} fees due today — ${formatRupees(outstanding)}`
         : `${inv.term.name} fees due in a week — ${formatRupees(outstanding)}`;
       const body = onTheDay
         ? 'Pay by bank transfer from the Fees page, or at the office.'
-        : `Due ${new Date(dueISO).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' })}. Pay from the Fees page whenever suits.`;
+        : `Due ${dueOn}. Pay from the Fees page whenever suits.`;
 
       await db.notification.create({
         data: { schoolId: inv.schoolId, userId, kind: 'FEE_DUE', title, body, linkType: 'fees', linkId: inv.id },
@@ -76,12 +80,14 @@ export class FeeDueSoonService {
           schoolId: inv.schoolId,
           kind: 'FEE_DUE',
           targetUserId: userId,
-          payload: { schoolName: school.name, title, body } satisfies FeeDecisionOutboxPayload as unknown as Prisma.InputJsonValue,
+          payload: { schoolName: school.name, title, body, termName: inv.term.name, dueOn } satisfies FeeDecisionOutboxPayload as unknown as Prisma.InputJsonValue,
         },
+        select: { id: true },
       });
       notices++;
       active.add(inv.schoolId);
     }
+    if (notices > 0) requestOutboxDrain();
     this.logger.log({ schools: active.size, notices }, 'fee-due-soon run');
     return { schools: active.size, notices };
   }

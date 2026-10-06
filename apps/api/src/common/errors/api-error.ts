@@ -85,12 +85,27 @@ export type ErrorCode =
   | 'INVITE_ALREADY_ACCEPTED'
   | 'CLASS_NOT_EMPTY'
   | 'TEACHER_CONFLICT'
+  /** The caller is not (or no longer) the substitute on this cover — pair with 403/409. */
+  | 'NOT_THE_SUBSTITUTE'
+  /** The leave this gap was opened for was withdrawn while a desk was filling it — the gap no longer needs a teacher (409). */
+  | 'COVER_GONE'
   /** Caller has no linked Teacher record — e.g. a SCHOOL_ADMIN hitting a teacher-only leave route. */
   | 'NOT_A_TEACHER'
   /** Caller has no linked Staff record — e.g. a STAFF-role JWT with no matching Staff.userId row. */
   | 'NOT_STAFF'
-  /** The LeaveApplication is no longer PENDING — already approved/rejected. */
+  /** The LeaveApplication is no longer PENDING — already approved/rejected.
+   *  The message names who decided and when. Pair with 409. */
   | 'LEAVE_NOT_PENDING'
+  /** The decider is the applicant — nobody approves or rejects their own leave. Pair with 403. */
+  | 'LEAVE_OWN_DECISION'
+  /** A leave whose first day has already gone (IST) — pair with 400. */
+  | 'LEAVE_IN_PAST'
+  /** One request longer than MAX_LEAVE_DAYS — pair with 400. */
+  | 'LEAVE_TOO_LONG'
+  /** The same person already has PENDING/APPROVED leave on one of these dates — pair with 409. */
+  | 'LEAVE_OVERLAP'
+  /** The applicant has left the school — pair with 403. */
+  | 'LEAVE_INACTIVE'
   /** The LeaveApplication is REJECTED or already CANCELLED — nothing to cancel. */
   | 'LEAVE_NOT_CANCELLABLE'
   /** Caller is neither the owning teacher nor a SCHOOL_ADMIN — pair with 403. */
@@ -101,6 +116,8 @@ export type ErrorCode =
   | 'NO_ACADEMIC_YEAR'
   /** A TEACHER targeted a class section they do not teach — pair with 403. */
   | 'CLASS_NOT_OWNED'
+  /** A teacher tried to send a holiday or timing-change notice — the office's to announce. Pair with 403. */
+  | 'TOPIC_ADMIN_ONLY'
   /** The Complaint Box: a move that belongs to someone else — a family changing
    *  a status, or a non-teacher sending a concern up to the office. Pair with 403. */
   | 'CONCERN_NOT_YOUR_MOVE'
@@ -284,6 +301,16 @@ export type ErrorCode =
   | 'PAY_RUN_EMPTY'
   | 'NOT_SPORTS_DESK'
   | 'NOT_LEAVE_DESK'
+  /** Neither a school admin nor an active admissions officer. 403. */
+  | 'NOT_ADMISSIONS_DESK'
+  /** A stage change against the pipeline's direction (LOST and the one reopen excepted). 409. */
+  | 'ENQUIRY_STAGE_BACKWARDS'
+  /** A lead given to somebody who is not an admissions officer or an admin here. 400. */
+  | 'ENQUIRY_OWNER_NOT_DESK'
+  /** The lead's stage moved between reading it and writing it (two desks at once). 409. */
+  | 'ENQUIRY_CHANGED'
+  /** A lead marked lost with no reason. 400. */
+  | 'ENQUIRY_LOST_REASON_REQUIRED'
   /** The sports teacher's permission list does not include this action. 403. */
   | 'SPORTS_PERM'
   /** Bands overlap, are empty or malformed. 400. */

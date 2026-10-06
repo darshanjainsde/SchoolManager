@@ -16,13 +16,19 @@
 # Remove this workflow once the project moves to Vercel Pro and a native
 # `*/5` cron replaces it (checkpoint-1 item).
 #
-# Two caveats that live in the RUNBOOK too:
+# Caveats that live in the RUNBOOK too:
 # - Scheduled workflows run from the DEFAULT branch only — inert until this
 #   file is on main — and GitHub pauses schedules after 60 days of repo
 #   inactivity (Actions shows "This scheduled workflow is disabled").
-# - The minute offset (3,13,…,53) is deliberate: the outbox drain has no
-#   row-claiming, so this must never fire at the same minute as the API's
-#   own 02:00 UTC Vercel cron — simultaneous drains would double-send.
+# - So scheduled runs come from main and hit the PRODUCTION API (the
+#   CRON_API_BASE default). Staging is never drained from here: it relies on
+#   the drain each notifying write asks for, and on its own 02:00 UTC cron.
+# - Overlap is safe. The drain claims outbox rows and deliveries with
+#   FOR UPDATE SKIP LOCKED plus a claimedAt stamp, so a run that overlaps
+#   another, a write's own drain or the 02:00 UTC Vercel cron never takes the
+#   same delivery twice. The minute offset (3,13,…,53) only spreads load.
+#   `concurrency` below still keeps one run of this workflow at a time, so a
+#   slow run's call loop is never doubled by the next tick.
 
 name: Drain notification outbox
 
@@ -33,10 +39,16 @@ on:
 
 permissions: {}
 
+# One run at a time; the next tick waits rather than cancelling a run mid-drain.
+concurrency:
+  group: outbox-drain
+  cancel-in-progress: false
+
 jobs:
   drain:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    # Up to 8 calls of at most 55 s each (see the loop below).
+    timeout-minutes: 9
     steps:
       - name: Call the drain endpoint
         env:
@@ -54,8 +66,20 @@ jobs:
             echo "::notice title=Outbox drain skipped::CRON_SECRET is not configured, so the outbox is not being drained. Set it in repo Settings → Secrets → Actions (it must equal the API's CRON_SECRET on Vercel)."
             exit 0
           fi
-          code=$(curl -sS -o /tmp/body -w '%{http_code}' --max-time 55 \
-            -X POST "${API_BASE}/internal/cron/notification-outbox" \
-            -H "Authorization: Bearer ${CRON_SECRET}")
-          echo "HTTP ${code}"; cat /tmp/body; echo
-          [ "${code}" = "200" ] || [ "${code}" = "201" ]
+          # Call again while the drain says `more` (a claim came back full, or
+          # the deadline ended the run), at most 8 calls per run. Each call is
+          # its own serverless invocation with its own 60 s, so this is not a
+          # chained drain; no sleep is needed between calls.
+          for call in 1 2 3 4 5 6 7 8; do
+            code=$(curl -sS -o /tmp/body -w '%{http_code}' --max-time 55 \
+              -X POST "${API_BASE}/internal/cron/notification-outbox" \
+              -H "Authorization: Bearer ${CRON_SECRET}")
+            echo "Call ${call}: HTTP ${code}"; cat /tmp/body; echo
+            if [ "${code}" != "200" ] && [ "${code}" != "201" ]; then
+              exit 1
+            fi
+            more=$(jq -r '.more // false' /tmp/body 2>/dev/null || echo false)
+            if [ "${more}" != "true" ]; then
+              break
+            fi
+          done

@@ -27,6 +27,8 @@ export function homeForRole(role: string | undefined, staffRole?: string | null)
       if (staffRole === 'SPORTS') return '/sports';
       // The accounts officer lands on Pay, which is their whole job here.
       if (staffRole === 'ACCOUNTS') return '/app/pay';
+      // The admissions officer lands on the enquiries desk, the same way.
+      if (staffRole === 'ADMISSIONS') return '/app/enquiries';
       return '/staff';
     case 'SCHOOL_ADMIN':
       return '/app';
@@ -40,4 +42,36 @@ export function homeForRole(role: string | undefined, staffRole?: string | null)
       // audience and should never reach here) — no portal to send them to.
       return '/login';
   }
+}
+
+/**
+ * The one room of the admin console a staff JOB is admitted to — `/app/pay`
+ * for the accounts officer, `/app/enquiries` for the admissions officer — or
+ * null for everybody else. Derived from `homeForRole`, so a desk is admitted
+ * exactly where its login lands and the two can never disagree.
+ */
+export function consoleDeskFor(role: string | undefined, staffRole?: string | null): string | null {
+  if (role !== 'STAFF') return null;
+  const home = homeForRole(role, staffRole);
+  return home.startsWith('/app/') ? home : null;
+}
+
+/**
+ * Where the /app layout must send this person from `pathname`, or null when
+ * they may stay. An admin stays anywhere; a desk job stays anywhere INSIDE its
+ * room (Pay's tabs are sub-paths); everyone else goes to their own portal.
+ * Chrome, not authorization — the API's guards are what refuse the data.
+ */
+export function consoleBounce(
+  role: string | undefined,
+  staffRole: string | null | undefined,
+  pathname: string,
+): string | null {
+  if (!role || role === 'SCHOOL_ADMIN') return null;
+  const desk = consoleDeskFor(role, staffRole);
+  // `usePathname()` never carries a query or hash, but a caller handing in a
+  // full href must not be bounced out of the desk's own filtered views.
+  const path = pathname.split(/[?#]/)[0] ?? pathname;
+  if (desk && (path === desk || path.startsWith(`${desk}/`))) return null;
+  return homeForRole(role, staffRole);
 }
