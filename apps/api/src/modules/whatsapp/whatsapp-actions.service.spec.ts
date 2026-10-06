@@ -356,6 +356,18 @@ describe('WhatsAppActionsService', () => {
     expect(leave.assign).toHaveBeenCalledTimes(1);
   });
 
+  it('a WhatsApp pick that loses to the console (assign is compare-and-set) says the period is covered and moves on — no list', async () => {
+    channel.deliverWith.mockResolvedValue({ ok: true, code: null });
+    identity.actorFor.mockResolvedValue({ ok: true, profile: { userId: 'admin-1', kind: 'ADMIN', role: 'SCHOOL_ADMIN' } });
+    const gap = { id: SUB, schoolId: SCHOOL, date: new Date('2026-09-21'), periodId: 'p3', classSectionId: 'cs', originalTeacherId: T1, substituteTeacherId: null };
+    db.substitution.findUnique.mockResolvedValueOnce(gap).mockResolvedValueOnce({ substituteTeacherId: 'tc' });
+    db.substitution.findFirst.mockResolvedValue(null);
+    leave.assign.mockRejectedValue(new ApiError('TEACHER_CONFLICT', 'Someone changed this cover a moment ago', 409));
+    expect(await svc().handleInbound(tap(coverPayload(SUB, 'tb', actionKeys()), 'wamid.race'))).toBe('already-covered');
+    expect(sentTexts()).toEqual(['Someone else covered that period a moment ago. Moving on.', 'Every period is covered. Thank you.']);
+    expect(leave.candidates).not.toHaveBeenCalled();
+  });
+
   it('when the 24-hour window has closed, the cover list falls back to the console template', async () => {
     db.substitution.findUnique.mockResolvedValue({ id: SUB, date: new Date('2026-09-21'), periodId: 'p3', classSectionId: 'cs', originalTeacherId: T1 });
     leave.candidates.mockResolvedValue([{ id: 'ta', name: 'Arun Mehta', teachesSubject: false, coversThatDay: 0 }]);

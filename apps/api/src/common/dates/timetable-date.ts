@@ -51,6 +51,18 @@ export function resolveAsOfDate(dateParam: string | undefined, now: Date): Date 
 }
 
 /**
+ * THE ONE "LIVE ON THIS DATE" RULE for a timetable slot: `effectiveFrom <=
+ * date AND (effectiveTo IS NULL OR effectiveTo > date)`, the date read as an
+ * IST day. Approve's gaps, the apply notice's "N periods to cover", the cover
+ * card's subject, freeTeachersFor and the WhatsApp list all spread this — a
+ * timetable published mid-leave changes every one of their answers together.
+ */
+export function liveSlotWhere(dateStr: string, now: Date = new Date()) {
+  const asOf = resolveAsOfDate(dateStr, now);
+  return { effectiveFrom: { lte: asOf }, OR: [{ effectiveTo: null }, { effectiveTo: { gt: asOf } }] };
+}
+
+/**
  * Today's calendar date in IST as `YYYY-MM-DD` — the timezone a school day is
  * judged in. Not `toISOString().slice(0,10)` on a bare `new Date()`, which
  * reports the UTC day and rolls backwards for any IST evening after 18:30.

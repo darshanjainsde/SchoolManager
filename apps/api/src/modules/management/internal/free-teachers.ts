@@ -1,7 +1,7 @@
 import type { TenantTx } from '@skoolos/db';
 import { LIST_CEILING } from '../../../common/lists/list-ceiling';
 import { isoWeekdayOf, toDateStr } from './leave-dates';
-import { resolveAsOfDate } from './timetable-date';
+import { liveSlotWhere } from './timetable-date';
 
 export interface CoverCandidate {
   id: string;
@@ -38,8 +38,7 @@ type Db = Pick<TenantTx, 'timetableSlot' | 'substitution' | 'staffAttendance' | 
  */
 export async function freeTeachersFor(db: Db, schoolId: string, gap: CoverGap): Promise<CoverCandidate[]> {
   const dateStr = toDateStr(gap.date);
-  const asOf = resolveAsOfDate(dateStr, new Date());
-  const live = { effectiveFrom: { lte: asOf }, OR: [{ effectiveTo: null }, { effectiveTo: { gt: asOf } }] };
+  const live = liveSlotWhere(dateStr);
   const weekday = isoWeekdayOf(dateStr);
 
   const [slot, busy, covering, onLeave, teachers, load] = await Promise.all([

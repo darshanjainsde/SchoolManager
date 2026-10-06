@@ -5,12 +5,13 @@ import { ApiError } from '../../common/errors/api-error';
 import { dateRangeInclusive, inHalf, isValidDateStr, isoWeekdayOf, toDateStr, todayIstDateStr } from './internal/leave-dates';
 import { workingDates } from './internal/school-calendar';
 import { freeTeachersFor, type CoverCandidate } from './internal/free-teachers';
-import { resolveAsOfDate } from './internal/timetable-date';
+import { liveSlotWhere } from './internal/timetable-date';
 import type { AssignSubstitutionDto, CreateLeaveDto } from './management.dto';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
 import { resolveLeaveDeskRecipients } from '../../common/notifications/recipients';
 import { requestOutboxDrain } from '../../common/notifications/outbox-signal';
 import { shortDayDate } from '../../common/dates/timetable-date';
+import type { CoverCancelledPayload } from '../../common/notifications/notification.types';
 
 export type { LeaveApplication };
 
@@ -116,7 +117,7 @@ export class LeaveService {
           reason: dto.reason,
         },
       });
-      await this.tellDeskApplied(tx, schoolId, callerUserId, created.id, person, dto.startDate, dto.endDate, dto.reason ?? null);
+      await this.tellDeskApplied(tx, schoolId, callerUserId, created.id, person, start, end, dto.reason ?? null, dto);
       return LeaveService.toRow(created);
     });
     requestOutboxDrain();
@@ -416,6 +417,10 @@ export class LeaveService {
         }
       }
 
+      // A teacher who was covering someone else on these days cannot now: those
+      // covers reopen, the teacher is told, and the desk hears how many.
+      if (teacherId) await LeaveService.reopenCoversOf(tx, schoolId, teacherId, dates.filter((d) => d >= todayStr), app);
+
       await this.tellTeacherDecided(tx, schoolId, app, 'APPROVED', adminUserId);
       return { gaps, gapIds };
     });
@@ -465,16 +470,9 @@ export class LeaveService {
     dateStr: string,
     app: { halfDay?: boolean | null; halfDayPart?: string | null },
   ) {
-    const asOf = resolveAsOfDate(dateStr, new Date());
     const slots = await tx.timetableSlot.findMany({
       take: LIST_CEILING.ACTIVITY,
-      where: {
-        schoolId,
-        teacherId,
-        dayOfWeek: isoWeekdayOf(dateStr),
-        effectiveFrom: { lte: asOf },
-        OR: [{ effectiveTo: null }, { effectiveTo: { gt: asOf } }],
-      },
+      where: { schoolId, teacherId, dayOfWeek: isoWeekdayOf(dateStr), ...liveSlotWhere(dateStr) },
       select: { classSectionId: true, periodId: true, period: { select: { startTime: true } } },
     });
     return slots.filter((s) => inHalf(app, s.period?.startTime));
@@ -487,17 +485,19 @@ export class LeaveService {
    * `LEAVE_CANCEL_FORBIDDEN`. `REJECTED`/already-`CANCELLED` applications
    * have nothing to cancel (`LEAVE_NOT_CANCELLABLE`).
    *
-   * - `PENDING` → straight to `CANCELLED`, no side effects (nothing was ever
-   *   generated for a pending application).
+   * - `PENDING` → straight to `CANCELLED`; nothing was generated for it, but
+   *   the leave desk was holding Approve/Reject buttons, so it is told.
    * - `APPROVED` → for every date in `[startDate, endDate]` that is
    *   today-or-later (IST) — PAST dates are immutable and are left exactly
-   *   as they were — deletes that teacher's `Substitution` gaps for the
-   *   date (covered or not: removing the override row restores the
-   *   original teacher on the recurring timetable with no further write
-   *   needed) and clears the `ON_LEAVE` `StaffAttendance` mark for the date
-   *   IF it is still `ON_LEAVE` (a mark since changed by hand, e.g. to
-   *   `ABSENT`, is left alone). Then the application itself is set to
-   *   `CANCELLED`.
+   *   as they were — deletes THIS leave's `Substitution` gaps (by
+   *   `leaveApplicationId`; an old gap from before that column, NULL, falls
+   *   back to the teacher-and-date rule), covered or not: removing the
+   *   override row restores the original teacher on the recurring timetable.
+   *   Each substitute who had one of those covers is told it is off. The
+   *   `ON_LEAVE` mark for a date is cleared IF it is still `ON_LEAVE` and no
+   *   other approved leave of the same teacher still covers that date (a
+   *   morning and an afternoon are two leaves). The desk is told, minus the
+   *   person who cancelled.
    * - Raced: a PENDING cancel that loses to an approve unwinds that approval
    *   in the same transaction; one that loses to a reject or another cancel
    *   is a 409 `LEAVE_NOT_PENDING` naming who decided. Two cancels of one
@@ -509,7 +509,7 @@ export class LeaveService {
    * already in the past).
    */
   async cancel(schoolId: string, id: string, callerUserId: string, callerRole: UserRole) {
-    return withTenant(schoolId, async (tx) => {
+    const out = await withTenant(schoolId, async (tx) => {
       const app = await tx.leaveApplication.findFirst({ where: { id, schoolId } });
       if (!app) throw new NotFoundException('Leave application not found');
 
@@ -534,7 +534,12 @@ export class LeaveService {
           where: { id, schoolId, status: 'PENDING' },
           data: { status: 'CANCELLED' },
         });
-        if (count === 1) return { status: 'CANCELLED' as const, restoredDates: 0 };
+        if (count === 1) {
+          // Nothing was generated for a pending request — but the desk was
+          // holding Approve/Reject buttons for it.
+          await LeaveService.tellDeskCancelled(tx, schoolId, app, 0, callerUserId);
+          return { status: 'CANCELLED' as const, restoredDates: 0 };
+        }
         // Somebody decided first. If they APPROVED, their gaps and ON_LEAVE
         // marks are committed and the teacher was told "approved" — cancel
         // the approved leave properly (below) rather than strand them. A
@@ -560,21 +565,59 @@ export class LeaveService {
 
       // Same split as approve: only a teacher has substitutions to unwind.
       const cancelTeacherId = app.teacherId;
-      for (const dateStr of cancelTeacherId ? dates : []) {
-        const date = new Date(dateStr);
-
-        await tx.substitution.deleteMany({
-          where: { schoolId, originalTeacherId: cancelTeacherId!, date },
+      let released = 0;
+      if (cancelTeacherId && dates.length > 0) {
+        // Only THIS leave's gaps — a second leave overlapping these dates keeps
+        // its own. Gaps from before leaveApplicationId existed (NULL) fall back
+        // to the old teacher-and-date rule.
+        const gaps = await tx.substitution.findMany({
+          take: LIST_CEILING.ACTIVITY,
+          where: {
+            schoolId,
+            date: { in: dates.map((d) => new Date(d)) },
+            OR: [{ leaveApplicationId: id }, { leaveApplicationId: null, originalTeacherId: cancelTeacherId }],
+          },
+          select: { id: true, date: true, periodId: true, classSectionId: true, substituteTeacherId: true },
         });
+        await LeaveService.tellSubstitutes(tx, schoolId, gaps, 'LEAVE_CANCELLED');
+        released = gaps.filter((g) => g.substituteTeacherId).length;
+        if (gaps.length > 0) await tx.substitution.deleteMany({ where: { id: { in: gaps.map((g) => g.id) }, schoolId } });
 
-        const mark = await tx.staffAttendance.findFirst({ where: { schoolId, teacherId: cancelTeacherId!, date } });
-        if (mark && mark.status === 'ON_LEAVE') {
-          await tx.staffAttendance.delete({ where: { id: mark.id } });
+        // A date another approved leave of this teacher still covers (the
+        // afternoon half of the same day) keeps its ON_LEAVE mark.
+        const stillAway = await LeaveService.datesOfOtherLeave(tx, schoolId, cancelTeacherId, id, dates);
+        for (const dateStr of dates) {
+          if (stillAway.has(dateStr)) continue;
+          const date = new Date(dateStr);
+          const mark = await tx.staffAttendance.findFirst({ where: { schoolId, teacherId: cancelTeacherId, date } });
+          if (mark && mark.status === 'ON_LEAVE') {
+            await tx.staffAttendance.delete({ where: { id: mark.id } });
+          }
         }
       }
 
+      await LeaveService.tellDeskCancelled(tx, schoolId, app, released, callerUserId);
       return { status: 'CANCELLED' as const, restoredDates: dates.length };
     });
+    requestOutboxDrain();
+    return out;
+  }
+
+  /** The dates (of `dates`) that another APPROVED leave of this teacher still covers. */
+  private static async datesOfOtherLeave(tx: TenantTx, schoolId: string, teacherId: string, exceptLeaveId: string, dates: string[]): Promise<Set<string>> {
+    const others = await tx.leaveApplication.findMany({
+      take: LIST_CEILING.ACTIVITY,
+      where: {
+        schoolId,
+        teacherId,
+        status: 'APPROVED',
+        id: { not: exceptLeaveId },
+        startDate: { lte: new Date(dates[dates.length - 1]) },
+        endDate: { gte: new Date(dates[0]) },
+      },
+      select: { startDate: true, endDate: true },
+    });
+    return new Set(dates.filter((d) => others.some((o) => toDateStr(o.startDate) <= d && d <= toDateStr(o.endDate))));
   }
 
   /**
@@ -659,12 +702,22 @@ export class LeaveService {
    * Assigns a substitute to a coverage gap. The substitute must be one
    * `freeTeachersFor()` offers for this gap — so the console, WhatsApp and the
    * API agree on "free" by construction. A new substitute has not seen it
-   * yet, so any earlier "seen" is cleared.
+   * yet, so any earlier "seen" is cleared; a substitute it is taken from is
+   * told.
+   *
+   * RACE-SAFE, like decide(): two desks can pick a teacher for the same gap in
+   * the same second. The write is a compare-and-set on the substitute THIS
+   * desk saw, so exactly one wins (READ COMMITTED: the loser's update waits on
+   * the winner's row lock, re-checks, and matches nothing). The loser throws
+   * before any notice, so only ONE cover card goes out — and a loser who
+   * wanted the very teacher the winner chose is simply told it is done.
    */
   async assign(schoolId: string, id: string, dto: AssignSubstitutionDto) {
     const out = await withTenant(schoolId, async (tx) => {
       const sub = await tx.substitution.findFirst({ where: { id, schoolId } });
       if (!sub) throw new NotFoundException('Substitution not found');
+      // Already theirs: nothing to change, and no second card.
+      if (sub.substituteTeacherId === dto.substituteTeacherId) return sub;
 
       // ONE definition of "free": whoever freeTeachersFor would not offer is refused.
       const free = await freeTeachersFor(tx, schoolId, sub);
@@ -672,16 +725,37 @@ export class LeaveService {
         throw new ApiError('TEACHER_CONFLICT', 'That teacher is not free then — they teach, cover or are on leave in that period.', 409, 'substituteTeacherId');
       }
 
-      const updated = await tx.substitution.update({
-        where: { id },
+      const { count } = await tx.substitution.updateMany({
+        where: { id, schoolId, substituteTeacherId: sub.substituteTeacherId },
         // A new substitute has not seen it yet.
         data: { substituteTeacherId: dto.substituteTeacherId, acknowledgedAt: null },
       });
+      if (count === 0) return LeaveService.changedMeanwhile(tx, schoolId, id, dto.substituteTeacherId);
+
+      // Taking the period from one teacher to give it to another: tell the first.
+      if (sub.substituteTeacherId) await LeaveService.tellSubstitutes(tx, schoolId, [sub], 'CHANGED');
       await this.tellSubstituteAssigned(tx, schoolId, sub, dto.substituteTeacherId);
-      return updated;
+      return { ...sub, substituteTeacherId: dto.substituteTeacherId, acknowledgedAt: null };
     });
     requestOutboxDrain();
     return out;
+  }
+
+  /**
+   * A compare-and-set on a gap matched nothing: someone changed it between
+   * this desk's read and its write. If it now holds exactly what this desk
+   * wanted, that is success (and nobody is told twice); otherwise a 409 that
+   * says where the period went.
+   */
+  private static async changedMeanwhile(tx: TenantTx, schoolId: string, id: string, wanted: string | null) {
+    const fresh = await tx.substitution.findFirst({ where: { id, schoolId } });
+    if (!fresh) throw new NotFoundException('Substitution not found');
+    if (fresh.substituteTeacherId === wanted) return fresh;
+    const now = fresh.substituteTeacherId
+      ? await tx.teacher.findFirst({ where: { id: fresh.substituteTeacherId, schoolId }, select: { firstName: true, lastName: true } })
+      : null;
+    const where = now ? `it is now with ${`${now.firstName} ${now.lastName ?? ''}`.trim()}` : 'it has just been cleared';
+    throw new ApiError('TEACHER_CONFLICT', `Someone changed this cover a moment ago — ${where}. Nothing was changed; look again and pick.`, 409, 'substituteTeacherId');
   }
 
   // ── notices ──────────────────────────────────────────────────────────────
@@ -711,22 +785,33 @@ export class LeaveService {
     return `${fmt(start, false)} – ${fmt(end, true)}`;
   }
 
-  private async tellDeskApplied(tx: TenantTx, schoolId: string, applicantUserId: string, leaveId: string, person: { kind: 'TEACHER' | 'STAFF'; id: string; firstName: string; lastName: string | null }, startDate: string, endDate: string, reason: string | null): Promise<void> {
+  private async tellDeskApplied(
+    tx: TenantTx,
+    schoolId: string,
+    applicantUserId: string,
+    leaveId: string,
+    person: { kind: 'TEACHER' | 'STAFF'; id: string; firstName: string; lastName: string | null },
+    startDate: string,
+    endDate: string,
+    reason: string | null,
+    half: { halfDay?: boolean | null; halfDayPart?: string | null },
+  ): Promise<void> {
     const [school, desk] = await Promise.all([
       tx.school.findFirst({ where: { id: schoolId }, select: { name: true } }),
       resolveLeaveDeskRecipients(tx, schoolId, { exceptUserId: applicantUserId }),
     ]);
     if (desk.length === 0) return;
     const dates = dateRangeInclusive(startDate, endDate);
-    // How many of the teacher's active periods fall on the leave's weekdays.
-    const weekdays = [...new Set(dates.map(isoWeekdayOf))];
-    // Only a teacher has periods to cover. A driver's leave is just as real,
-    // but asking the timetable about a staff id would join on nothing.
-    const perWeekday = person.kind === 'TEACHER'
-      ? await tx.timetableSlot.groupBy({ by: ['dayOfWeek'], where: { schoolId, teacherId: person.id, dayOfWeek: { in: weekdays }, effectiveTo: null }, _count: { _all: true } })
-      : [];
-    const countByDay = new Map(perWeekday.map((g) => [g.dayOfWeek, g._count._all]));
-    const periodsAffected = dates.reduce((n, d) => n + (countByDay.get(isoWeekdayOf(d)) ?? 0), 0);
+    // "N periods to cover" is exactly the gaps approve() would open: working
+    // days only, slots live THAT day, only the away half — the same two
+    // helpers, so the request and the approval can never disagree. Only a
+    // teacher has periods; asking the timetable about a staff id joins nothing.
+    let periodsAffected = 0;
+    if (person.kind === 'TEACHER') {
+      for (const d of await workingDates(tx, schoolId, startDate, endDate)) {
+        periodsAffected += (await LeaveService.slotsOfTheDay(tx, schoolId, person.id, d, half)).length;
+      }
+    }
     const teacherName = `${person.firstName} ${person.lastName ?? ''}`.trim();
     const label = LeaveService.datesLabel(startDate, endDate);
     const payload = { schoolName: school?.name ?? 'Your school', leaveId, teacherName, dates: label, days: dates.length, reason, periodsAffected };
@@ -761,24 +846,187 @@ export class LeaveService {
       tx.teacher.findFirst({ where: { id: sub.originalTeacherId, schoolId }, select: { firstName: true, lastName: true } }),
       tx.school.findFirst({ where: { id: schoolId }, select: { name: true } }),
       tx.period.findFirst({ where: { id: sub.periodId, schoolId }, select: { label: true, startTime: true, endTime: true } }),
-      tx.classSection.findFirst({ where: { id: sub.classSectionId, schoolId }, select: { name: true } }),
-      tx.timetableSlot.findFirst({ where: { schoolId, classSectionId: sub.classSectionId, periodId: sub.periodId, dayOfWeek: isoWeekdayOf(toDateStr(sub.date)), effectiveTo: null }, select: { subject: { select: { name: true } } } }),
+      tx.classSection.findFirst({ where: { id: sub.classSectionId, schoolId }, select: { name: true, grade: { select: { name: true } } } }),
+      // The subject of the slot LIVE that date — the same rule as the gap itself.
+      tx.timetableSlot.findFirst({ where: { schoolId, classSectionId: sub.classSectionId, periodId: sub.periodId, dayOfWeek: isoWeekdayOf(toDateStr(sub.date)), ...liveSlotWhere(toDateStr(sub.date)) }, select: { subject: { select: { name: true } } } }),
     ]);
     if (!substitute?.userId) return;
     const when = `${LeaveService.datesLabel(toDateStr(sub.date), toDateStr(sub.date))}, ${period ? `${period.label} (${period.startTime}–${period.endTime})` : 'a period'}`;
-    const className = section?.name ?? 'a class';
+    // "9-A", as every other leave-desk notice names a class — "A" alone names nothing.
+    const className = section ? (section.grade?.name ? `${section.grade.name}-${section.name}` : section.name) : 'a class';
     const payload = { schoolName: school?.name ?? 'Your school', substitutionId: sub.id, when, className, subjectName: slot?.subject?.name ?? null, originalTeacherName: original ? `${original.firstName} ${original.lastName ?? ''}`.trim() : 'a colleague' };
     await tx.notification.create({ data: { schoolId, userId: substitute.userId, kind: 'COVER_ASSIGNED', title: `You cover ${className}`, body: when, linkType: 'timetable', linkId: sub.id } });
     await tx.notificationOutbox.create({ data: { schoolId, kind: 'COVER_ASSIGNED', payload, targetUserId: substitute.userId }, select: { id: true } });
   }
 
+  /** "Mon 22 Sep 2026, Period 3 (10:15–11:00)" and "9-A" for each gap — two queries, not one per gap. */
+  private static async describeGaps(tx: TenantTx, schoolId: string, subs: { id: string; date: Date; periodId: string; classSectionId: string }[]) {
+    const [periods, sections] = await Promise.all([
+      tx.period.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId, id: { in: [...new Set(subs.map((s) => s.periodId))] } }, select: { id: true, label: true, startTime: true, endTime: true } }),
+      tx.classSection.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId, id: { in: [...new Set(subs.map((s) => s.classSectionId))] } }, select: { id: true, name: true, grade: { select: { name: true } } } }),
+    ]);
+    const periodOf = new Map(periods.map((p) => [p.id, p]));
+    const sectionOf = new Map(sections.map((c) => [c.id, c]));
+    return new Map(
+      subs.map((s) => {
+        const p = periodOf.get(s.periodId);
+        const c = sectionOf.get(s.classSectionId);
+        const day = LeaveService.datesLabel(toDateStr(s.date), toDateStr(s.date));
+        return [s.id, { when: `${day}, ${p ? `${p.label} (${p.startTime}–${p.endTime})` : 'a period'}`, className: c ? `${c.grade.name}-${c.name}` : 'a class' }];
+      }),
+    );
+  }
+
+  /**
+   * "Your cover is off" — one bell row and one outbox row per substitute who
+   * HAD the cover. A gap nobody was covering tells nobody; a substitute with
+   * no login has no inbox to reach.
+   */
+  static async tellSubstitutes(
+    tx: TenantTx,
+    schoolId: string,
+    subs: { id: string; date: Date; periodId: string; classSectionId: string; substituteTeacherId: string | null }[],
+    why: CoverCancelledPayload['why'],
+  ): Promise<void> {
+    const covered = subs.filter((s) => s.substituteTeacherId);
+    if (covered.length === 0) return;
+    const [school, teachers, described] = await Promise.all([
+      tx.school.findFirst({ where: { id: schoolId }, select: { name: true } }),
+      tx.teacher.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId, id: { in: [...new Set(covered.map((s) => s.substituteTeacherId!))] } }, select: { id: true, userId: true } }),
+      LeaveService.describeGaps(tx, schoolId, covered),
+    ]);
+    const userOf = new Map(teachers.map((t) => [t.id, t.userId]));
+    for (const s of covered) {
+      const userId = userOf.get(s.substituteTeacherId!);
+      const d = described.get(s.id);
+      if (!userId || !d) continue;
+      const payload = { schoolName: school?.name ?? 'Your school', substitutionId: s.id, when: d.when, className: d.className, why };
+      // Bell kind COVER_ASSIGNED: every client already has its icon and link; the title says it is off.
+      await tx.notification.create({ data: { schoolId, userId, kind: 'COVER_ASSIGNED', title: `Cover called off: ${d.className}`, body: d.when, linkType: 'timetable', linkId: s.id } });
+      await tx.notificationOutbox.create({ data: { schoolId, kind: 'COVER_CANCELLED', payload, targetUserId: userId }, select: { id: true } });
+    }
+  }
+
+  /**
+   * A notice to everyone who runs the leave desk (admins + accounts officers),
+   * minus the person whose own action caused it. Bell kind LEAVE_APPLIED so
+   * every client already has an icon and a link for it; the title says what
+   * happened. Returns how many were told. Public: the 18:00 nudge uses it.
+   */
+  static async tellDesk(
+    db: TenantTx,
+    schoolId: string,
+    n: { kind: 'LEAVE_CANCELLED' | 'COVER_UNFILLED'; payload: Record<string, string | number | null>; title: string; body: string; linkId: string | null; exceptUserId?: string | null },
+  ): Promise<number> {
+    const desk = await resolveLeaveDeskRecipients(db, schoolId, n.exceptUserId ? { exceptUserId: n.exceptUserId } : {});
+    for (const d of desk) {
+      await db.notification.create({ data: { schoolId, userId: d.userId, kind: 'LEAVE_APPLIED', title: n.title, body: n.body, linkType: 'leave', linkId: n.linkId } });
+      await db.notificationOutbox.create({ data: { schoolId, kind: n.kind, payload: n.payload, targetUserId: d.userId }, select: { id: true } });
+    }
+    return desk.length;
+  }
+
+  /**
+   * A teacher going on leave cannot cover anyone else those days: their covers
+   * (on the away half) reopen, they are told, and the desk is told how many
+   * classes are empty again. `dates` are the working, today-or-later dates.
+   */
+  private static async reopenCoversOf(
+    tx: TenantTx,
+    schoolId: string,
+    teacherId: string,
+    dates: string[],
+    app: { id: string; halfDay?: boolean | null; halfDayPart?: string | null },
+  ): Promise<number> {
+    if (dates.length === 0) return 0;
+    const covers = await tx.substitution.findMany({
+      take: LIST_CEILING.ACTIVITY,
+      where: { schoolId, substituteTeacherId: teacherId, date: { in: dates.map((d) => new Date(d)) } },
+      select: { id: true, date: true, periodId: true, classSectionId: true, substituteTeacherId: true },
+    });
+    if (covers.length === 0) return 0;
+    const periods = await tx.period.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId, id: { in: [...new Set(covers.map((c) => c.periodId))] } }, select: { id: true, startTime: true } });
+    const startOf = new Map(periods.map((p) => [p.id, p.startTime]));
+    // A half day frees only the other half: a morning leave keeps their afternoon covers.
+    const away = covers.filter((c) => inHalf(app, startOf.get(c.periodId)));
+    if (away.length === 0) return 0;
+    // Compare-and-set: only covers that are still theirs.
+    await tx.substitution.updateMany({ where: { id: { in: away.map((c) => c.id) }, schoolId, substituteTeacherId: teacherId }, data: { substituteTeacherId: null, acknowledgedAt: null } });
+    await LeaveService.tellSubstitutes(tx, schoolId, away, 'TEACHER_ON_LEAVE');
+
+    const days = [...new Set(away.map((c) => toDateStr(c.date)))].sort();
+    const [school, who] = await Promise.all([
+      tx.school.findFirst({ where: { id: schoolId }, select: { name: true } }),
+      tx.teacher.findFirst({ where: { id: teacherId, schoolId }, select: { firstName: true, lastName: true } }),
+    ]);
+    const name = who ? `${who.firstName} ${who.lastName ?? ''}`.trim() : 'A teacher';
+    const n = away.length;
+    await LeaveService.tellDesk(tx, schoolId, {
+      kind: 'COVER_UNFILLED',
+      payload: {
+        schoolName: school?.name ?? 'Your school',
+        gaps: n,
+        forDate: days[0],
+        forWhen: LeaveService.datesLabel(days[0], days[days.length - 1]),
+        note: `${name} is on leave, so ${n === 1 ? 'one of their covers has' : `${n} of their covers have`} reopened.`,
+      },
+      title: `${n} cover${n === 1 ? '' : 's'} reopened`,
+      body: `${name} is on leave`,
+      linkId: app.id,
+      // The approver too: approving a leave does not show them the teacher was covering for others.
+    });
+    return n;
+  }
+
+  /** "Priya Nair withdrew their leave" — to the desk, minus whoever withdrew it. */
+  private static async tellDeskCancelled(
+    tx: TenantTx,
+    schoolId: string,
+    app: { id: string; teacherId: string | null; staffId: string | null; startDate: Date; endDate: Date },
+    releasedCovers: number,
+    exceptUserId: string,
+  ): Promise<void> {
+    const [school, who] = await Promise.all([
+      tx.school.findFirst({ where: { id: schoolId }, select: { name: true } }),
+      app.teacherId
+        ? tx.teacher.findFirst({ where: { id: app.teacherId, schoolId }, select: { firstName: true, lastName: true } })
+        : app.staffId
+          ? tx.staff.findFirst({ where: { id: app.staffId, schoolId }, select: { firstName: true, lastName: true } })
+          : null,
+    ]);
+    const teacherName = who ? `${who.firstName} ${who.lastName ?? ''}`.trim() : 'A colleague';
+    const dates = LeaveService.datesLabel(toDateStr(app.startDate), toDateStr(app.endDate));
+    await LeaveService.tellDesk(tx, schoolId, {
+      kind: 'LEAVE_CANCELLED',
+      payload: { schoolName: school?.name ?? 'Your school', leaveId: app.id, teacherName, dates, releasedCovers },
+      title: `${teacherName} withdrew their leave`,
+      body: releasedCovers ? `${dates} · ${releasedCovers} cover${releasedCovers === 1 ? '' : 's'} released` : dates,
+      linkId: app.id,
+      exceptUserId,
+    });
+  }
+
+  /**
+   * Takes the substitute off a gap (the desk's "clear"). The teacher who was
+   * covering is told; an empty gap tells nobody. Compare-and-set like
+   * assign(): a clear racing a reassignment never clears the NEW cover blind.
+   */
   async clear(schoolId: string, id: string) {
-    return withTenant(schoolId, async (tx) => {
+    const out = await withTenant(schoolId, async (tx) => {
       const sub = await tx.substitution.findFirst({ where: { id, schoolId } });
       if (!sub) throw new NotFoundException('Substitution not found');
+      if (!sub.substituteTeacherId) return sub;
 
-      return tx.substitution.update({ where: { id }, data: { substituteTeacherId: null } });
+      const { count } = await tx.substitution.updateMany({
+        where: { id, schoolId, substituteTeacherId: sub.substituteTeacherId },
+        data: { substituteTeacherId: null, acknowledgedAt: null },
+      });
+      if (count === 0) return LeaveService.changedMeanwhile(tx, schoolId, id, null);
+      await LeaveService.tellSubstitutes(tx, schoolId, [sub], 'CHANGED');
+      return { ...sub, substituteTeacherId: null, acknowledgedAt: null };
     });
+    requestOutboxDrain();
+    return out;
   }
 
   private resolveStatus(status: string | undefined): LeaveStatusValue {

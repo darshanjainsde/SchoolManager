@@ -7,7 +7,7 @@ import { actionKeys, coverPayload, parseAction, type Action } from '../../common
 import { toE164 } from '../../common/notifications/whatsapp/phone';
 import { sendList, sendTemplate, sendText } from '../../common/notifications/whatsapp/graph.client';
 import { coverPendingTemplate, COVER_PENDING } from '../../common/notifications/whatsapp/templates';
-import { isoWeekdayOf, LeaveService, resolveAsOfDate, toDateStr } from '../management';
+import { isoWeekdayOf, LeaveService, liveSlotWhere, toDateStr } from '../management';
 import { InboundIdentityService } from './inbound-identity.service';
 import type { InboundMessage } from './whatsapp-webhook.service';
 
@@ -40,11 +40,8 @@ const apiCode = (e: unknown): string | null => (e instanceof ApiError ? ((e.getR
 
 type Db = PrismaClient;
 
-/** `effectiveFrom <= date AND (effectiveTo IS NULL OR effectiveTo > date)`, the date read as an IST day. */
-const liveOn = (date: Date) => {
-  const asOf = resolveAsOfDate(toDateStr(date), new Date());
-  return { effectiveFrom: { lte: asOf }, OR: [{ effectiveTo: null }, { effectiveTo: { gt: asOf } }] };
-};
+/** The slot live on that IST date — the one rule (liveSlotWhere). */
+const liveOn = (date: Date) => liveSlotWhere(toDateStr(date));
 
 @Injectable()
 export class WhatsAppActionsService {
@@ -188,6 +185,14 @@ export class WhatsAppActionsService {
       await this.leave.assign(sub.schoolId, sub.id, { substituteTeacherId: a.teacherId });
     } catch (e) {
       if (apiCode(e) === 'TEACHER_CONFLICT' || apiCode(e) === 'VALIDATION') {
+        // Lost a race with another desk (assign is compare-and-set): the period
+        // is covered now, so there is nothing to pick — say so and move on.
+        const now = await db.substitution.findUnique({ where: { id: sub.id }, select: { substituteTeacherId: true } });
+        if (now?.substituteTeacherId) {
+          await this.text(sub.schoolId, phone, 'Someone else covered that period a moment ago. Moving on.');
+          await this.nextGap(db, sub, phone);
+          return { result: 'already-covered', schoolId: sub.schoolId };
+        }
         await this.text(sub.schoolId, phone, 'That teacher is no longer free then — pick another.');
         await this.coverList(db, sub.schoolId, phone, sub.id);
         return { result: 'conflict', schoolId: sub.schoolId };
