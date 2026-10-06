@@ -1,5 +1,9 @@
 /**
- * pnpm --filter @skoolos/api exec tsx scripts/sample-pack/index.ts [--out file] [--password-file file]
+ * pnpm --filter @skoolos/api exec tsx scripts/sample-pack/index.ts [--out file] [--password-file file] [--no-phones]
+ *
+ * --no-phones  blank every phone number before the pack is cut. REQUIRED for a
+ *              pack bound for production (the demo school Google reviews): the
+ *              generator's numbers are in the real Indian mobile range.
  *
  * Builds a complete sample school — Nursery to XII, three sections each, 78
  * teachers, fees, salary, four months of attendance, exams, diary, library,
@@ -33,11 +37,13 @@ import { planStaffing } from './staffing';
 import { Ctx } from './ctx';
 import { SCHOOL } from './data';
 import { makeRng } from './rng';
+import { scrubPhones } from './scrub';
 
 const argv = process.argv.slice(2);
 const flag = (n: string) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : undefined; };
 const OUT = resolve(process.env.INIT_CWD ?? process.cwd(), flag('out') ?? join(homedir(), 'Downloads', 'sckools-sample-packs', 'sample-school-nursery-xii.sckools'));
 const PW_FILE = flag('password-file') ?? join(homedir(), '.sckools-staging-backup-password');
+const NO_PHONES = argv.includes('--no-phones');
 const REPO = resolve(__dirname, '../../../..');
 const t0 = Date.now();
 const secs = () => `${((Date.now() - t0) / 1000).toFixed(0)}s`;
@@ -87,12 +93,22 @@ async function main() {
 
   await buildSchool(c, log);
 
+  if (NO_PHONES) {
+    const removed = await scrubPhones(db, school.id);
+    log(`phones scrubbed: ${Object.entries(removed).map(([k, n]) => `${k} ${n}`).join(', ') || 'none present'} — none left anywhere`);
+  }
+
   /* ── cut the pack: setup + day, minus what must never travel ──────────── */
   const plan = scopePlan(buildSchemaPlan(), ['setup', 'day'], { exclude: Object.keys(PACK_EXCLUDED_MODELS) });
   log(`cutting the pack: ${plan.insertOrder.length} tables, scope ${plan.buckets.join('+')}`);
   const sink = new MemorySink();
   const deps = { db, files: new MemoryObjectStore(true), machine: MACHINE, plan, appVersion: 'sample-pack-generator' };
   let state = await beginExport(deps, school.id);
+  // The pack's "taken at" is the day its data describes, not the day it was
+  // built: a load shifts every date by the whole weeks since takenAt
+  // (bucket-import → weeksBetween), so stamping SCHOOL.asOf makes a load on any
+  // later day bring the newest records to within the last six days.
+  state = { ...state, source: { ...state.source, takenAt: new Date(`${SCHOOL.asOf}T00:00:00+05:30`).toISOString() } };
   let manifest: Manifest | undefined;
   for (let i = 0; i < 100_000; i += 1) {
     const res = await runExport(deps, state, sink, password, { deadline: Number.MAX_SAFE_INTEGER });

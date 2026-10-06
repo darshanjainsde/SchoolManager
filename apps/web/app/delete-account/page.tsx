@@ -6,7 +6,7 @@ import { getRequestHost } from '@/lib/request';
 import { SckoolsLogo } from '@/components/brand/sckools-logo';
 import styles from './delete-account.module.css';
 
-const LAST_UPDATED = '26 July 2026';
+const LAST_UPDATED = '7 October 2026';
 const CONTACT_EMAIL = 'admin@sckools.com';
 
 // Pre-filled request so a user's email gives us everything we need to act.
@@ -105,7 +105,10 @@ export default async function DeleteAccountPage() {
           <ul>
             <li>Your account and login credentials.</li>
             <li>Your profile details (name, class, admission and roll number, profile photo).</li>
+            <li>Your phone number and your WhatsApp message settings.</li>
             <li>Your device push-notification tokens.</li>
+            <li>Messages, complaint-box entries, diary sign-offs and files or photos you sent in the app.</li>
+            <li>For staff: the bank account, IFSC, PAN and UAN you entered for pay.</li>
             <li>Personal records linked to your account, such as your attendance history.</li>
           </ul>
         </section>
@@ -114,7 +117,8 @@ export default async function DeleteAccountPage() {
           <h2>What may be retained</h2>
           <p>
             A school may be legally required to keep certain academic or
-            administrative records for a period of time; where that applies, the
+            administrative records for a period of time, such as fee receipts and
+            pay records; where that applies, the
             school (as the data controller) retains them under its own
             obligations. We may also keep limited information where the law
             requires it, and anonymised or aggregate data that no longer

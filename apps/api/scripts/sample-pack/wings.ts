@@ -134,20 +134,42 @@ export async function messages(c: Ctx): Promise<void> {
   const threads: Prisma.MessageThreadCreateManyInput[] = [];
   const msgs: Prisma.MessageCreateManyInput[] = [];
   const secOf = new Map(c.sections.map((s) => [s.id, s]));
-  const openers = [
-    'Good morning ma’am. Could you please tell me how my child is doing in class?',
-    'Sir, my child was absent yesterday because of fever. Kindly let us know the homework that was given.',
-    'Could you share the syllabus for the upcoming unit test?',
-    'My child is finding this chapter a little difficult. Is there any extra practice you can suggest?',
-    'Thank you for the remark in the diary. We will make sure it is followed at home.',
+  // Each topic is a real exchange, read top to bottom: no line repeats, and no
+  // "Sir"/"ma'am" — the teacher a thread lands on can be either. (The first
+  // version cycled one reply and one "thank you", which read as a bot to the
+  // Play reviewer this pack is loaded for.)
+  const scripts: readonly (readonly [string, string, string, string])[] = [
+    ['Good morning. Could you please tell me how my child is doing in class?',
+      'Good morning. Your child is doing well and is attentive in class. A little more practice at home will help.',
+      'Thank you. Which topics should we revise at home this week?',
+      'Please revise the last two chapters and the exercises in the notebook. That will be enough.'],
+    ['My child was absent yesterday because of fever. Kindly let us know the homework that was given.',
+      'Hope the fever is better now. The homework is in the diary for that day; please have it completed by Monday.',
+      'Much better now, thank you. We will finish it by Monday.',
+      'Good to hear. Please make sure your child rests well this week.'],
+    ['Could you share the syllabus for the upcoming unit test?',
+      'The unit test will cover the chapters taught so far. I have shared the list in the diary.',
+      'Thank you. Will there be questions from the worksheet as well?',
+      'Yes, a few questions will come from the worksheet. Please revise it once.'],
+    ['My child is finding this chapter a little difficult. Is there any extra practice you can suggest?',
+      'Yes, I will give a short practice sheet on Monday. Please ask your child to attempt it and show me.',
+      'Thank you, we will do that.',
+      'Your child did the practice sheet well today. Keep it up!'],
+    ['Thank you for the remark in the diary. We will make sure it is followed at home.',
+      'Thank you for your support. Please feel free to message me anytime.',
+      'Sure, thank you.',
+      'You are welcome. Have a good day.'],
   ];
-  const replies = [
-    'Good morning. Your child is doing well and is attentive in class. A little more practice at home will help.',
-    'Hope the fever is better now. The homework is in the diary for that day; please have it completed by Monday.',
-    'The unit test will cover the chapters taught so far. I have shared the list in the diary.',
-    'Yes, I will give a short practice sheet on Monday. Please ask your child to attempt it and show me.',
-    'Thank you for your support. Please feel free to message me anytime.',
-  ];
+  /** Push a time into daytime IST: families write 07:00–21:00, teachers reply 10:00–17:00. */
+  const IST = 330 * 60_000;
+  const daytime = (t: Date, fromFamily: boolean): Date => {
+    const [lo, hi] = fromFamily ? [7, 21] : [10, 17];
+    const local = new Date(t.getTime() + IST);
+    const h = local.getUTCHours();
+    if (h >= lo && h < hi) return t;
+    const day = new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate() + (h >= hi ? 1 : 0), lo, r.int(5, 55)));
+    return new Date(day.getTime() - IST);
+  };
   const used = new Set<string>();
   for (const stu of r.shuffle(c.students).slice(0, 80)) {
     const sec = secOf.get(stu.sectionId)!;
@@ -158,14 +180,14 @@ export async function messages(c: Ctx): Promise<void> {
     used.add(key);
     const id = randomUUID();
     let t = addDays(AS_OF, -r.int(2, 40));
-    const k = r.int(0, replies.length - 1);
-    const n = r.int(2, 5);
+    const script = scripts[r.int(0, scripts.length - 1)]!;
+    const n = r.int(2, 4);
     for (let m = 0; m < n; m += 1) {
-      t = new Date(t.getTime() + r.int(2, 20) * 3_600_000);
       const fromFamily = m % 2 === 0;
+      t = daytime(new Date(t.getTime() + r.int(1, 6) * 3_600_000), fromFamily);
       msgs.push({
         schoolId, threadId: id, senderRole: fromFamily ? 'STUDENT' : 'TEACHER',
-        body: fromFamily ? (m === 0 ? openers[k]! : 'Thank you, I will do that.') : replies[k]!,
+        body: script[m]!,
         readAt: m === n - 1 && !fromFamily && r.chance(0.3) ? null : new Date(t.getTime() + 3_600_000), createdAt: t,
       });
     }
