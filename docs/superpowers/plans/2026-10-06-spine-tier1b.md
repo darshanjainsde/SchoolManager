@@ -50,7 +50,7 @@
 
 **Files:**
 - Modify: `packages/db/prisma/schema.prisma` (models `LeaveApplication`, `Substitution`)
-- Create: `packages/db/prisma/migrations/20261006_010000_leave_cover_links/migration.sql`
+- Create: `packages/db/prisma/migrations/20261007_010000_leave_cover_links/migration.sql`
 - Modify: `packages/types/src/index.ts` (`LeaveApplication.halfDayPart`)
 - Test: `packages/db/src/rls-coverage.spec.ts` (existing), `pnpm typecheck`
 
@@ -100,7 +100,7 @@ model Substitution {
 
 - [ ] **Step 2: Write the migration**
 
-Create `packages/db/prisma/migrations/20261006_010000_leave_cover_links/migration.sql`:
+Create `packages/db/prisma/migrations/20261007_010000_leave_cover_links/migration.sql`:
 
 ```sql
 -- Notification spine, Tier 1b: the leave desk, done right.
@@ -155,7 +155,7 @@ Expected: valid schema, client generated, PASS, typecheck clean.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add packages/db/prisma/schema.prisma packages/db/prisma/migrations/20261006_010000_leave_cover_links/migration.sql packages/types/src/index.ts
+git add packages/db/prisma/schema.prisma packages/db/prisma/migrations/20261007_010000_leave_cover_links/migration.sql packages/types/src/index.ts
 git commit -m "feat(db): a gap knows its leave and whether its substitute has seen it; a half day knows which half"
 ```
 
@@ -3030,7 +3030,7 @@ git commit -m "feat(leave): an 18:00 IST nudge to the leave desk names tomorrow'
 
 - [ ] **Step 1:** `pnpm preflight` — expect green. A red test is fixed, not skipped.
 - [ ] **Step 2:** One fresh reviewer (most capable model) on `git diff origin/staging..HEAD`, with this plan and the spec. Fix what it finds; re-run preflight.
-- [ ] **Step 3:** `git fetch origin && git log --oneline origin/staging..HEAD`; `git push -u origin HEAD`; `gh pr create --base staging` (title "Notification spine Tier 1b: the leave desk, done right"; body: task list; "Migration `20261006_010000_leave_cover_links` — staging applies on push; production BEFORE the staging→main merge, or every Substitution read fails"; the new cron `cover-nudge` 12:30 UTC). Wait for CI; merge.
+- [ ] **Step 3:** `git fetch origin && git log --oneline origin/staging..HEAD`; `git push -u origin HEAD`; `gh pr create --base staging` (title "Notification spine Tier 1b: the leave desk, done right"; body: task list; "Migration `20261007_010000_leave_cover_links` — staging applies on push; production BEFORE the staging→main merge, or every Substitution read fails"; the new cron `cover-nudge` 12:30 UTC). Wait for CI; merge.
 - [ ] **Step 4:** On staging (Ladwa), once `db-migrate` has run: apply for a half day PM as a teacher for tomorrow → approve as the accounts officer from the app → only afternoon periods appear under Coverage; pick a teacher from the app's Coverage tab; from that teacher's WhatsApp tap "Got it" (or, while v2 is pending, see the v1 card) and watch "seen" appear on both the console and the app; cancel the leave and read the `COVER_CANCELLED` and `LEAVE_CANCELLED` delivery rows; `curl -X POST -H "Authorization: Bearer $CRON_SECRET" https://api.test.sckools.com/internal/cron/cover-nudge` twice and see one `COVER_UNFILLED` per desk person.
 - [ ] **Step 5:** Tell the owner: run the prod migration first; `node scripts/whatsapp-verify.mjs` for the two templates' review status; once both are APPROVED on production, remove them from `GATED_TEMPLATES` in a follow-up.
 

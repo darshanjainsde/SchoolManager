@@ -487,7 +487,7 @@ git commit -m "feat(whatsapp): cover_assigned_v2 and cover_cancelled submitted; 
 
 **Files:**
 - Modify: `packages/db/prisma/schema.prisma` (model `NotificationOutbox`, model `School`, new model)
-- Create: `packages/db/prisma/migrations/20261006_000000_notification_delivery/migration.sql`
+- Create: `packages/db/prisma/migrations/20261007_000000_notification_delivery/migration.sql`
 - Test: `packages/db/src/rls-coverage.spec.ts` (existing — fails if the new table has no policy)
 
 **Interfaces:**
@@ -550,7 +550,7 @@ model NotificationDelivery {
 
 - [ ] **Step 2: Write the migration**
 
-Create `packages/db/prisma/migrations/20261006_000000_notification_delivery/migration.sql`:
+Create `packages/db/prisma/migrations/20261007_000000_notification_delivery/migration.sql`:
 
 ```sql
 -- Notification spine, Tier 1: one delivery row per (outbox row, person, channel).
@@ -611,7 +611,7 @@ Expected: `The schema … is valid`, client generated, rls-coverage PASS. (Delet
 - [ ] **Step 4: Commit**
 
 ```bash
-git add packages/db/prisma/schema.prisma packages/db/prisma/migrations/20261006_000000_notification_delivery/migration.sql
+git add packages/db/prisma/schema.prisma packages/db/prisma/migrations/20261007_000000_notification_delivery/migration.sql
 git commit -m "feat(db): NotificationDelivery — one row per message, person and channel, under RLS"
 ```
 
@@ -2812,6 +2812,6 @@ git commit -m "fix(leave): approve/reject match only a PENDING row — the losin
 
 - [ ] **Step 1:** `pnpm preflight` — expect green. A red test is fixed, not skipped.
 - [ ] **Step 2:** One fresh reviewer (most capable model) on `git diff origin/staging..HEAD`, with this plan and the spec. Fix what it finds; re-run preflight.
-- [ ] **Step 3:** `git fetch origin && git log --oneline origin/staging..HEAD`; push the branch (`git push -u origin HEAD`); open a PR to `staging` with `gh pr create --base staging` (title "Notification spine Tier 1a: deliveries, identity, race-safe leave decisions"; body: the task list, the template-submission output from Task 1 Step 8, and "Migration `20261006_000000_notification_delivery` — staging applies on push; prod before the staging→main merge"). Wait for CI; merge.
+- [ ] **Step 3:** `git fetch origin && git log --oneline origin/staging..HEAD`; push the branch (`git push -u origin HEAD`); open a PR to `staging` with `gh pr create --base staging` (title "Notification spine Tier 1a: deliveries, identity, race-safe leave decisions"; body: the task list, the template-submission output from Task 1 Step 8, and "Migration `20261007_000000_notification_delivery` — staging applies on push; prod before the staging→main merge"). Wait for CI; merge.
 - [ ] **Step 4:** On staging, once `db-migrate` has run: `curl -s https://api.test.sckools.com/ready`; apply for leave as a Ladwa teacher and, within a minute, read `NotificationDelivery` for that outbox row (three rows per desk person — PUSH, WHATSAPP, EMAIL — each SENT or SKIPPED with a reason) and see the outbox row's `sentAt` set; tap Approve from the officer's verified WhatsApp and see the leave APPROVED with `reviewedById` = the officer.
 - [ ] **Step 5:** Tell the owner: (a) `WHATSAPP_WABA_ID` must be set on `skoolos-api` Production and Preview, or the gated templates never go; (b) run the prod migration before merging staging→main; (c) the template review status (`node scripts/whatsapp-verify.mjs`).
