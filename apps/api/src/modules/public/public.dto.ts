@@ -6,12 +6,15 @@ import {
 import type { PublicEvent } from '../community';
 
 export class SubmitEnquiryDto {
+  // Same rules as the desk: submit trims, so a blank value would land as ''.
   @IsString()
   @Length(1, 120)
+  @Matches(/\S/, { message: 'parentName must not be blank' })
   parentName!: string;
 
   @IsString()
   @Length(1, 40)
+  @Matches(/\d/, { message: 'phone must contain a number' })
   phone!: string;
 
   @IsOptional()
