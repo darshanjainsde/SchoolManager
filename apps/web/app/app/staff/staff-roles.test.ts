@@ -81,4 +81,12 @@ describe('staff roles agree across database, API and console', () => {
       expect(labels.slice(0, labels.indexOf('};'))).toContain(`${role}:`);
     }
   });
+
+  it('offers the admissions officer at every school — ENQUIRY is in every tier', () => {
+    // LIBRARIAN, SPORTS and ACCOUNTS hide where the school lacks their module.
+    // Admissions has no module to lack, so the filter must never name it.
+    const at = consoleSrc.indexOf('const allowedRoles');
+    expect(at).toBeGreaterThan(-1);
+    expect(consoleSrc.slice(at, at + 300)).not.toContain("'ADMISSIONS'");
+  });
 });

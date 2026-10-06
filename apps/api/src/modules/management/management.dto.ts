@@ -305,7 +305,7 @@ export class UpdateTeacherDto {
  * The login role stays STAFF — the job title, not the account type, is what
  * makes a librarian.
  */
-const STAFF_ROLES = ['OFFICE', 'SUPPORT', 'DRIVER', 'HELPER', 'SECURITY', 'LIBRARIAN', 'SPORTS', 'ACCOUNTS', 'OTHER'] as const;
+const STAFF_ROLES = ['OFFICE', 'SUPPORT', 'DRIVER', 'HELPER', 'SECURITY', 'LIBRARIAN', 'SPORTS', 'ACCOUNTS', 'ADMISSIONS', 'OTHER'] as const;
 export type StaffRoleValue = (typeof STAFF_ROLES)[number];
 
 export class CreateStaffDto {

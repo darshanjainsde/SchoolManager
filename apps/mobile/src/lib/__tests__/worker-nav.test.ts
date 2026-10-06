@@ -57,4 +57,12 @@ describe('worker desks', () => {
       expect(tabsFor(s).length).toBeLessThanOrEqual(5);
     }
   });
+
+  it('an admissions officer is general staff in the app until the Leads tabs ship (Tier C)', () => {
+    // Passes the moment it is written — it pins the behaviour, so the Tier C
+    // change has to come here and change it on purpose.
+    const s = { staffRole: 'ADMISSIONS', features: ['ENQUIRY', 'MANAGEMENT'] };
+    expect(jobFor(s)).toBe('GENERAL');
+    expect(tabNamesFor(s)).toEqual(['today', 'profile']);
+  });
 });
