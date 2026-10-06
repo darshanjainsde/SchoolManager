@@ -27,7 +27,7 @@ const tap = (payload: string, id = 'wamid.tap') => ({ id, from: FROM, type: 'but
 
 describe('WhatsAppActionsService', () => {
   const env = { ...process.env };
-  const leave = { approve: jest.fn(), reject: jest.fn(), assign: jest.fn() };
+  const leave = { approve: jest.fn(), reject: jest.fn(), assign: jest.fn(), candidates: jest.fn() };
   const channel = { deliverWith: jest.fn().mockResolvedValue({ ok: true, code: null }) };
   const identity = { actorFor: jest.fn() };
   const svc = () => new WhatsAppActionsService(leave as never, channel as never, identity as never);
@@ -44,8 +44,23 @@ describe('WhatsAppActionsService', () => {
     db.leaveApplication.findUnique.mockResolvedValue({ id: LEAVE, schoolId: SCHOOL, status: 'PENDING', teacherId: T1 });
     db.teacher.findFirst.mockResolvedValue({ firstName: 'Priya', lastName: 'Nair' });
     identity.actorFor.mockResolvedValue({ ok: true, profile: { userId: 'admin-1', kind: 'ADMIN', role: 'SCHOOL_ADMIN' } });
+    leave.candidates.mockResolvedValue([]);
   });
   afterAll(() => { process.env = env; });
+
+  /** Runs the real send closure so the list Meta would receive can be read off sendList. */
+  function captureList() {
+    const spy = jest.spyOn(require('../../common/notifications/whatsapp/graph.client'), 'sendList');
+    channel.deliverWith.mockImplementation(async (_s: string, _p: string, _k: string, _l: string, fn: (c: unknown, p: null, f: unknown) => Promise<unknown>) => {
+      await fn({ token: 't', phoneNumberId: '1', wabaId: null, graphVersion: 'v21.0' }, null, jest.fn().mockResolvedValue({ ok: true, json: async () => ({ messages: [{ id: 'w' }] }) }));
+      return { ok: true, code: null };
+    });
+    return {
+      list: () => spy.mock.calls[0]?.[2] as { body: string; footer?: string; rows: { id: string; title: string; description?: string }[] } | undefined,
+      restore: () => spy.mockRestore(),
+    };
+  }
+  const someone = (i: number) => ({ id: `t${i}`, name: `Teacher ${i}`, teachesSubject: false, coversThatDay: 0 });
 
   it('a retried webhook (same Meta message id) is a no-op', async () => {
     db.whatsAppInbound.create.mockRejectedValueOnce(new Prisma.PrismaClientKnownRequestError('Unique constraint failed', { code: 'P2002', clientVersion: 'test' }));
@@ -119,19 +134,127 @@ describe('WhatsAppActionsService', () => {
     expect(leave.assign).not.toHaveBeenCalled();
   });
 
-  it('Approve runs the SAME LeaveService.approve the console runs, then offers the cover list for the first gap', async () => {
+  it('Approve runs the SAME LeaveService.approve the console runs, then offers the free teachers LeaveService names', async () => {
     leave.approve.mockResolvedValue({ gaps: 2, gapIds: [SUB, 'gap-2'] });
+    leave.candidates.mockResolvedValue([
+      { id: 'ta', name: 'Arun Mehta', teachesSubject: true, coversThatDay: 0 },
+      { id: 'tb', name: 'Kavya Rao', teachesSubject: false, coversThatDay: 1 },
+    ]);
     db.substitution.findUnique.mockResolvedValue({ id: SUB, date: new Date('2026-09-21'), periodId: 'p3', classSectionId: 'cs', originalTeacherId: T1 });
-    db.teacher.findMany.mockResolvedValue([{ id: 'ta', firstName: 'Arun', lastName: 'Mehta' }, { id: 'tb', firstName: 'Kavya', lastName: 'Rao' }, { id: T1, firstName: 'Priya', lastName: 'Nair' }]);
-    db.timetableSlot.findFirst.mockResolvedValue({ subjectId: 'maths', subject: { name: 'Mathematics' } });
-    db.timetableSlot.findMany.mockResolvedValueOnce([{ teacherId: 'tb' }]) // busy that period
-      .mockResolvedValueOnce([{ teacherId: 'ta' }]); // teaches the subject
+    db.timetableSlot.findFirst.mockResolvedValue({ subject: { name: 'Mathematics' } });
     expect(await svc().handleInbound(tap(leavePayload('approve', LEAVE, actionKeys())))).toBe('approved:2');
     expect(leave.approve).toHaveBeenCalledWith(SCHOOL, LEAVE, 'admin-1');
     expect(sentTexts()[0]).toMatch(/^Approved\. Priya Nair has been told\. 2 periods need cover/);
+    expect(leave.candidates).toHaveBeenCalledWith(SCHOOL, SUB);
+    // The list computes nothing itself: no timetable or attendance sweep of its own.
+    expect(db.timetableSlot.findMany).not.toHaveBeenCalled();
+    expect(db.staffAttendance.findMany).not.toHaveBeenCalled();
+    expect(db.teacher.findMany).not.toHaveBeenCalled();
     const list = channel.deliverWith.mock.calls.find((c) => c[3] === 'interactive:list');
     expect(list).toBeDefined();
     expect(list![0]).toBe(SCHOOL);
+  });
+
+  it('the list shows who teaches the subject and how loaded the others are, in LeaveService\'s order, and names the school', async () => {
+    leave.candidates.mockResolvedValue([
+      { id: 'ta', name: 'Arun Mehta', teachesSubject: true, coversThatDay: 0 },
+      { id: 'tb', name: 'Kavya Rao', teachesSubject: false, coversThatDay: 1 },
+      { id: 'tc', name: 'Mohan Lal', teachesSubject: false, coversThatDay: 2 },
+      { id: 'td', name: 'Anil Kumar', teachesSubject: false, coversThatDay: 0 },
+    ]);
+    db.substitution.findUnique.mockResolvedValue({ id: SUB, date: new Date('2026-09-21'), periodId: 'p3', classSectionId: 'cs', originalTeacherId: T1 });
+    db.timetableSlot.findFirst.mockResolvedValue({ subject: { name: 'Mathematics' } });
+    const cap = captureList();
+    await svc().coverList(db as never, SCHOOL, '+919876543210', SUB);
+    const sent = cap.list()!;
+    expect(sent.rows.map((r) => [r.title, r.description])).toEqual([
+      ['Arun Mehta', 'teaches Mathematics'],
+      ['Kavya Rao', '1 cover already that day'],
+      ['Mohan Lal', '2 covers already that day'],
+      ['Anil Kumar', 'free this period'],
+      ['Decide in the console', 'leave this one for later'],
+    ]);
+    expect(sent.body).toBe('Raffles: 9-A · Mathematics\nMon 21 Sep, Period 3 (10:15–11:00)');
+    expect(sent.footer).toBe('4 free');
+    // Each row is a signed pick of THAT teacher for THIS gap.
+    const { parseAction } = require('../../common/notifications/whatsapp/actions');
+    expect(sent.rows.map((r) => parseAction(r.id, actionKeys()).action)).toEqual([
+      { kind: 'cover', substitutionId: SUB, teacherId: 'ta' },
+      { kind: 'cover', substitutionId: SUB, teacherId: 'tb' },
+      { kind: 'cover', substitutionId: SUB, teacherId: 'tc' },
+      { kind: 'cover', substitutionId: SUB, teacherId: 'td' },
+      { kind: 'cover', substitutionId: SUB, teacherId: 'skip' },
+    ]);
+    cap.restore();
+  });
+
+  it('the subject is read off the slot LIVE that date, not any slot that was ever open', async () => {
+    leave.candidates.mockResolvedValue([someone(1)]);
+    db.substitution.findUnique.mockResolvedValue({ id: SUB, date: new Date('2026-09-21'), periodId: 'p3', classSectionId: 'cs', originalTeacherId: T1 });
+    await svc().coverList(db as never, SCHOOL, '+919876543210', SUB);
+    const asOf = new Date('2026-09-21T00:00:00+05:30');
+    expect(db.timetableSlot.findFirst.mock.calls[0][0].where).toEqual({
+      schoolId: SCHOOL, classSectionId: 'cs', periodId: 'p3', dayOfWeek: 1,
+      effectiveFrom: { lte: asOf }, OR: [{ effectiveTo: null }, { effectiveTo: { gt: asOf } }],
+    });
+  });
+
+  it('more than nine free teachers: nine rows and the way out (Meta\'s ten), ids within 200 characters, and "and N more in the console"', async () => {
+    leave.candidates.mockResolvedValue(Array.from({ length: 13 }, (_, i) => someone(i + 1)));
+    db.substitution.findUnique.mockResolvedValue({ id: SUB, date: new Date('2026-09-21'), periodId: 'p3', classSectionId: 'cs', originalTeacherId: T1 });
+    const cap = captureList();
+    await svc().coverList(db as never, SCHOOL, '+919876543210', SUB);
+    const sent = cap.list()!;
+    expect(sent.rows).toHaveLength(10);
+    expect(sent.rows.slice(0, 9).map((r) => r.title)).toEqual(Array.from({ length: 9 }, (_, i) => `Teacher ${i + 1}`));
+    expect(sent.rows[9].title).toBe('Decide in the console');
+    for (const r of sent.rows) expect(r.id.length).toBeLessThanOrEqual(200);
+    expect(sent.body).toMatch(/9 shown here, and 4 more in the console\.$/);
+    expect(sent.footer).toBe('13 free');
+    cap.restore();
+  });
+
+  it('exactly nine free: all nine shown, no "more" line', async () => {
+    leave.candidates.mockResolvedValue(Array.from({ length: 9 }, (_, i) => someone(i + 1)));
+    db.substitution.findUnique.mockResolvedValue({ id: SUB, date: new Date('2026-09-21'), periodId: 'p3', classSectionId: 'cs', originalTeacherId: T1 });
+    const cap = captureList();
+    await svc().coverList(db as never, SCHOOL, '+919876543210', SUB);
+    expect(cap.list()!.rows).toHaveLength(10);
+    expect(cap.list()!.body).not.toMatch(/more in the console/);
+    cap.restore();
+  });
+
+  it('nobody free: no list, and a reply in plain words that names the school', async () => {
+    leave.candidates.mockResolvedValue([]);
+    db.substitution.findUnique.mockResolvedValue({ id: SUB, date: new Date('2026-09-21'), periodId: 'p3', classSectionId: 'cs', originalTeacherId: T1 });
+    await svc().coverList(db as never, SCHOOL, '+919876543210', SUB);
+    expect(channel.deliverWith.mock.calls.map((c) => c[3])).toEqual(['text']);
+    expect(sentTexts()).toEqual(['Raffles: nobody is free to cover 9-A on Mon 21 Sep, Period 3 (10:15–11:00). Every teacher is teaching, covering or on leave then. Please decide in the console.']);
+  });
+
+  it('Approve with nobody free still approves, and says nobody is free', async () => {
+    leave.approve.mockResolvedValue({ gaps: 1, gapIds: [SUB] });
+    leave.candidates.mockResolvedValue([]);
+    db.substitution.findUnique.mockResolvedValue({ id: SUB, date: new Date('2026-09-21'), periodId: 'p3', classSectionId: 'cs', originalTeacherId: T1 });
+    expect(await svc().handleInbound(tap(leavePayload('approve', LEAVE, actionKeys()), 'wamid.none'))).toBe('approved:1');
+    expect(sentTexts()[1]).toMatch(/^Raffles: nobody is free to cover 9-A/);
+  });
+
+  it('a gap removed between the approve and the list (a cancel in the console) is answered, not retried', async () => {
+    leave.approve.mockResolvedValue({ gaps: 1, gapIds: [SUB] });
+    leave.candidates.mockRejectedValue(new NotFoundException('Substitution not found'));
+    db.substitution.findUnique.mockResolvedValue({ id: SUB, date: new Date('2026-09-21'), periodId: 'p3', classSectionId: 'cs', originalTeacherId: T1 });
+    expect(await svc().handleInbound(tap(leavePayload('approve', LEAVE, actionKeys()), 'wamid.gone'))).toBe('approved:1');
+    expect(sentTexts()[1]).toBe('Raffles: that period no longer needs cover. Nothing to pick.');
+    expect(db.whatsAppInbound.delete).not.toHaveBeenCalled();
+  });
+
+  it('an infrastructure failure while listing the free teachers rethrows, so Meta retries', async () => {
+    leave.approve.mockResolvedValue({ gaps: 1, gapIds: [SUB] });
+    leave.candidates.mockRejectedValue(new Error('pool timeout'));
+    db.substitution.findUnique.mockResolvedValue({ id: SUB, date: new Date('2026-09-21'), periodId: 'p3', classSectionId: 'cs', originalTeacherId: T1 });
+    await expect(svc().handleInbound(tap(leavePayload('approve', LEAVE, actionKeys()), 'wamid.listinfra'))).rejects.toThrow('pool timeout');
+    expect(db.whatsAppInbound.delete).toHaveBeenCalledWith({ where: { id: 'wamid.listinfra' } });
   });
 
   it('an infrastructure failure inside the action frees the inbound row and rethrows, so Meta retries and the tap is not lost', async () => {
@@ -222,8 +345,12 @@ describe('WhatsAppActionsService', () => {
     identity.actorFor.mockResolvedValue({ ok: true, profile: { userId: 'admin-1', kind: 'ADMIN', role: 'SCHOOL_ADMIN' } });
     db.substitution.findUnique.mockResolvedValue({ id: SUB, schoolId: SCHOOL, date: new Date('2026-09-21'), periodId: 'p3', classSectionId: 'cs', originalTeacherId: T1, substituteTeacherId: null });
     leave.assign.mockRejectedValue(new ApiError('TEACHER_CONFLICT', 'busy', 409));
+    leave.candidates.mockResolvedValue([{ id: 'ta', name: 'Arun Mehta', teachesSubject: false, coversThatDay: 0 }]);
     expect(await svc().handleInbound(tap(coverPayload(SUB, 'tb', actionKeys()), 'wamid.2'))).toBe('conflict');
     expect(sentTexts()[0]).toMatch(/no longer free/);
+    // The re-offered list is LeaveService's own answer for that gap.
+    expect(leave.candidates).toHaveBeenCalledWith(SCHOOL, SUB);
+    expect(channel.deliverWith.mock.calls.map((c) => c[3])).toEqual(['text', 'interactive:list']);
 
     expect(await svc().handleInbound(tap(coverPayload(SUB, 'skip', actionKeys()), 'wamid.3'))).toBe('skipped');
     expect(leave.assign).toHaveBeenCalledTimes(1);
@@ -231,7 +358,7 @@ describe('WhatsAppActionsService', () => {
 
   it('when the 24-hour window has closed, the cover list falls back to the console template', async () => {
     db.substitution.findUnique.mockResolvedValue({ id: SUB, date: new Date('2026-09-21'), periodId: 'p3', classSectionId: 'cs', originalTeacherId: T1 });
-    db.teacher.findMany.mockResolvedValue([{ id: 'ta', firstName: 'Arun', lastName: 'Mehta' }]);
+    leave.candidates.mockResolvedValue([{ id: 'ta', name: 'Arun Mehta', teachesSubject: false, coversThatDay: 0 }]);
     channel.deliverWith.mockImplementation(async (_s: string, _p: string, _k: string, label: string) => (label === 'interactive:list' ? { ok: false, code: 131047 } : { ok: true, code: null }));
     await svc().coverList(db as never, SCHOOL, '+919876543210', SUB);
     expect(channel.deliverWith.mock.calls.map((c) => c[3])).toEqual(['interactive:list', 'sckools_cover_pending']);

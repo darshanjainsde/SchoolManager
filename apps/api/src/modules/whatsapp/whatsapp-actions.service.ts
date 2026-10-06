@@ -1,4 +1,4 @@
-import { HttpException, Injectable, Logger } from '@nestjs/common';
+import { HttpException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { getPlatformPrisma, type PrismaClient } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
 import { isP2002 } from '../../common/errors/prisma-errors';
@@ -7,7 +7,7 @@ import { actionKeys, coverPayload, parseAction, type Action } from '../../common
 import { toE164 } from '../../common/notifications/whatsapp/phone';
 import { sendList, sendTemplate, sendText } from '../../common/notifications/whatsapp/graph.client';
 import { coverPendingTemplate, COVER_PENDING } from '../../common/notifications/whatsapp/templates';
-import { isoWeekdayOf, LeaveService, toDateStr } from '../management';
+import { isoWeekdayOf, LeaveService, resolveAsOfDate, toDateStr } from '../management';
 import { InboundIdentityService } from './inbound-identity.service';
 import type { InboundMessage } from './whatsapp-webhook.service';
 
@@ -32,12 +32,19 @@ import type { InboundMessage } from './whatsapp-webhook.service';
  * points at the console.
  */
 const OUT_OF_WINDOW = 131047;
-const NO_ROWS_CAP = 9; // Meta's list holds 10; the last row is "decide in the console".
+/** Meta's interactive list holds 10 rows (ids ≤ 200 chars); the last row is "decide in the console". */
+const NO_ROWS_CAP = 9;
 
 /** ApiError keeps its code in the HttpException body ({ code, message, field }). */
 const apiCode = (e: unknown): string | null => (e instanceof ApiError ? ((e.getResponse() as { code?: string }).code ?? null) : null);
 
 type Db = PrismaClient;
+
+/** `effectiveFrom <= date AND (effectiveTo IS NULL OR effectiveTo > date)`, the date read as an IST day. */
+const liveOn = (date: Date) => {
+  const asOf = resolveAsOfDate(toDateStr(date), new Date());
+  return { effectiveFrom: { lte: asOf }, OR: [{ effectiveTo: null }, { effectiveTo: { gt: asOf } }] };
+};
 
 @Injectable()
 export class WhatsAppActionsService {
@@ -219,47 +226,51 @@ export class WhatsAppActionsService {
   // ── the cover list ─────────────────────────────────────────────────────
 
   /**
-   * "Who covers this period?" — teachers of the school who are free: no
-   * timetable slot of their own then, not already covering another gap
-   * then, not the teacher on leave, not themselves on leave that day.
-   * Same-subject teachers first, then by name; nine rows and a way out.
+   * "Who covers this period?" — exactly the teachers LeaveService.candidates
+   * names (freeTeachersFor), in the same order: whoever teaches the subject,
+   * then the least loaded. Meta's list holds 10 rows, so nine teachers and a
+   * way out; anyone past the ninth is named as "and N more in the console".
    */
   async coverList(db: Db, schoolId: string, phone: string, substitutionId: string): Promise<void> {
     const sub = await db.substitution.findUnique({ where: { id: substitutionId }, select: { id: true, date: true, periodId: true, classSectionId: true, originalTeacherId: true } });
     if (!sub) return;
-    const weekday = isoWeekdayOf(toDateStr(sub.date));
-    const [slot, busy, covering, onLeave, teachers] = await Promise.all([
-      db.timetableSlot.findFirst({ where: { schoolId, classSectionId: sub.classSectionId, periodId: sub.periodId, dayOfWeek: weekday, effectiveTo: null }, select: { subjectId: true } }),
-      db.timetableSlot.findMany({ where: { schoolId, dayOfWeek: weekday, periodId: sub.periodId, effectiveTo: null }, select: { teacherId: true } }),
-      db.substitution.findMany({ where: { schoolId, date: sub.date, periodId: sub.periodId, substituteTeacherId: { not: null } }, select: { substituteTeacherId: true } }),
-      db.staffAttendance.findMany({ where: { schoolId, date: sub.date, status: 'ON_LEAVE' }, select: { teacherId: true } }),
-      db.teacher.findMany({ where: { schoolId, userId: { not: null } }, select: { id: true, firstName: true, lastName: true }, orderBy: [{ firstName: 'asc' }] }),
+    const [free, when, school] = await Promise.all([
+      // A gap removed between the approve and this read (a cancel in the
+      // console) is an answer, not a failure: say so rather than retry.
+      this.leave.candidates(schoolId, sub.id).catch((e: unknown) => {
+        if (e instanceof NotFoundException) return null;
+        throw e;
+      }),
+      this.whenOf(db, schoolId, sub.date, sub.periodId, sub.classSectionId),
+      db.school.findFirst({ where: { id: schoolId }, select: { name: true } }),
     ]);
-    const out = new Set<string>([sub.originalTeacherId, ...busy.map((b) => b.teacherId), ...covering.map((c) => c.substituteTeacherId), ...onLeave.map((o) => o.teacherId)].filter((x): x is string => !!x));
-    const free = teachers.filter((t) => !out.has(t.id));
-    const teachesSubject = new Set<string>();
-    if (slot?.subjectId) {
-      const rows = await db.timetableSlot.findMany({ where: { schoolId, subjectId: slot.subjectId, effectiveTo: null, teacherId: { in: free.map((t) => t.id) } }, select: { teacherId: true }, distinct: ['teacherId'] });
-      for (const r of rows) teachesSubject.add(r.teacherId);
-    }
-    free.sort((a, b) => Number(teachesSubject.has(b.id)) - Number(teachesSubject.has(a.id)) || a.firstName.localeCompare(b.firstName));
-    const when = await this.whenOf(db, schoolId, sub.date, sub.periodId, sub.classSectionId);
-    const keys = this.keys();
-    if (free.length === 0) {
-      await this.text(schoolId, phone, `Nobody is free for ${when.className} on ${when.when}. Decide in the console.`);
+    const schoolName = school?.name ?? 'Your school';
+    if (free === null) {
+      await this.text(schoolId, phone, `${schoolName}: that period no longer needs cover. Nothing to pick.`);
       return;
     }
-    const rows = free.slice(0, NO_ROWS_CAP).map((t) => ({
+    if (free.length === 0) {
+      await this.text(schoolId, phone, `${schoolName}: nobody is free to cover ${when.className} on ${when.when}. Every teacher is teaching, covering or on leave then. Please decide in the console.`);
+      return;
+    }
+    const keys = this.keys();
+    const shown = free.slice(0, NO_ROWS_CAP);
+    const more = free.length - shown.length;
+    const rows = shown.map((t) => ({
       id: coverPayload(sub.id, t.id, keys),
-      title: `${t.firstName} ${t.lastName ?? ''}`.trim(),
-      description: teachesSubject.has(t.id) ? `teaches ${when.subjectName ?? 'this subject'}` : 'free this period',
+      title: t.name,
+      description: t.teachesSubject
+        ? `teaches ${when.subjectName ?? 'this subject'}`
+        : t.coversThatDay > 0
+          ? `${t.coversThatDay} cover${t.coversThatDay === 1 ? '' : 's'} already that day`
+          : 'free this period',
     }));
     rows.push({ id: coverPayload(sub.id, 'skip', keys), title: 'Decide in the console', description: 'leave this one for later' });
+    const body = `${schoolName}: ${when.className}${when.subjectName ? ` · ${when.subjectName}` : ''}\n${when.when}${more > 0 ? `\n\n${shown.length} shown here, and ${more} more in the console.` : ''}`;
     const sent = await this.channel.deliverWith(schoolId, phone, 'COVER_LIST', 'interactive:list', (cfg, pnid, f) =>
-      sendList(cfg, phone, { header: 'Who covers?', body: `${when.className}${when.subjectName ? ` · ${when.subjectName}` : ''}\n${when.when}`, button: 'Pick a teacher', rows, footer: `${free.length} free` }, { phoneNumberId: pnid, fetchImpl: f }),
+      sendList(cfg, phone, { header: 'Who covers?', body, button: 'Pick a teacher', rows, footer: `${free.length} free` }, { phoneNumberId: pnid, fetchImpl: f }),
     );
     if (!sent.ok && sent.code === OUT_OF_WINDOW) {
-      const school = await db.school.findFirst({ where: { id: schoolId }, select: { name: true } });
       const open = await db.substitution.count({ where: { schoolId, originalTeacherId: sub.originalTeacherId, substituteTeacherId: null, date: { gte: sub.date } } });
       await this.channel.deliverWith(schoolId, phone, 'COVER_PENDING', COVER_PENDING, (cfg, pnid, f) => sendTemplate(cfg, phone, coverPendingTemplate(school?.name ?? 'The school', open), { phoneNumberId: pnid, fetchImpl: f }));
     }
@@ -294,7 +305,8 @@ export class WhatsAppActionsService {
     const [period, section, slot] = await Promise.all([
       db.period.findFirst({ where: { id: periodId, schoolId }, select: { label: true, order: true, startTime: true, endTime: true } }),
       db.classSection.findFirst({ where: { id: classSectionId, schoolId }, select: { name: true } }),
-      db.timetableSlot.findFirst({ where: { schoolId, classSectionId, periodId, dayOfWeek: isoWeekdayOf(toDateStr(date)), effectiveTo: null }, select: { subject: { select: { name: true } } } }),
+      // The subject of the slot LIVE that date — the same timetable version freeTeachersFor reads.
+      db.timetableSlot.findFirst({ where: { schoolId, classSectionId, periodId, dayOfWeek: isoWeekdayOf(toDateStr(date)), ...liveOn(date) }, select: { subject: { select: { name: true } } } }),
     ]);
     const d = new Date(`${toDateStr(date)}T00:00:00Z`);
     const day = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getUTCDay()];
