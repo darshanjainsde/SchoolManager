@@ -328,6 +328,8 @@ export interface LeaveApplication {
   status: LeaveStatusValue;
   /** A single date taken at half strength — costs half a day of balance and pay. */
   halfDay: boolean;
+  /** Which half of a half day; null/absent on a full day or from an older API. */
+  halfDayPart?: 'AM' | 'PM' | null;
   createdAt: string;
 }
 
