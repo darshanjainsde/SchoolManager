@@ -452,8 +452,8 @@ export class ConcernsService {
         await tx.notificationOutbox.create({
           data: { schoolId, kind, payload: { schoolName: school?.name ?? 'Your school', title, body: concern.title }, targetUserId: concern.raisedById },
         });
-      requestOutboxDrain();
       });
+      requestOutboxDrain();
     } catch { /* as above */ }
   }
 }
