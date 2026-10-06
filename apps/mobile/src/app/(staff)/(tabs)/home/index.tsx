@@ -323,6 +323,11 @@ export default function Today() {
               { label: 'Holidays', icon: 'holidays', route: '/(staff)/(tabs)/home/holidays', tone: 'green' },
               // The teacher's own shelf (second edition) — only for a school with the library on.
               ...(hasFeature(s, 'LIBRARY') ? [{ label: 'Library', icon: 'library', route: '/(staff)/(tabs)/home/library' }] : []),
+              // Pay slips, only where the school runs pay on Sckools.
+              ...(hasFeature(s, 'SALARY') ? [{ label: 'My pay', icon: 'fees', route: '/(staff)/(tabs)/home/salary', tone: 'green' as const }] : []),
+              // Concerns the class teacher's families raised. Free, so always
+              // drawn — it was on no screen before 2026-10-07 (nav-reachability).
+              { label: 'Complaint Box', icon: 'concern', route: '/(staff)/(tabs)/home/concerns', tone: 'amber' },
             ]}
           />
 

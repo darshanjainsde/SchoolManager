@@ -403,9 +403,12 @@ export default function Home() {
               { label: 'Timetable', icon: 'timetable', route: '/(family)/(tabs)/home/timetable' },
               { label: 'Notices', icon: 'notices', route: '/(family)/(tabs)/home/notices', tone: 'amber' },
               { label: 'Holidays', icon: 'holidays', route: '/(family)/(tabs)/home/holidays', tone: 'green' },
-              // The four the web portal had first (second edition). A paid
+              // The four the web portal had first (second edition), then the
+              // Complaint Box — free, so always drawn: it was missing from this
+              // grid, and families could reach it only from a notification
+              // (guard: lib/__tests__/nav-reachability.test.ts). A paid
               // module's tool is drawn only for a school that has it.
-              ...MORE_ITEMS.filter((t) => ['Sports', 'Library', 'Report cards', 'Birthdays'].includes(t.label))
+              ...MORE_ITEMS.filter((t) => ['Sports', 'Library', 'Report cards', 'Birthdays', 'Complaint Box'].includes(t.label))
                 .filter((t) => !t.feature || hasFeature(s, t.feature))
                 .map((t) => ({ label: t.label, icon: t.icon, route: t.route, tone: t.tone })),
             ]}
