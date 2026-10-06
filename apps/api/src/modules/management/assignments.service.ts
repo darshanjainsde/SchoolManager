@@ -238,6 +238,7 @@ export class AssignmentsService {
           classSectionId: dto.classSectionId,
           payload: outboxPayload as unknown as Prisma.InputJsonValue,
         },
+        select: { id: true },
       });
 
       // In-app inbox rows (the bell) for every student in the section who has a

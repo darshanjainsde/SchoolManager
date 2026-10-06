@@ -681,7 +681,7 @@ export class LeaveService {
     const body = `${label} · ${dates.length} day${dates.length === 1 ? '' : 's'}${periodsAffected ? ` · ${periodsAffected} periods to cover` : ''}`;
     for (const a of desk) {
       await tx.notification.create({ data: { schoolId, userId: a.userId, kind: 'LEAVE_APPLIED', title, body, linkType: 'leave', linkId: leaveId } });
-      await tx.notificationOutbox.create({ data: { schoolId, kind: 'LEAVE_APPLIED', payload, targetUserId: a.userId } });
+      await tx.notificationOutbox.create({ data: { schoolId, kind: 'LEAVE_APPLIED', payload, targetUserId: a.userId }, select: { id: true } });
     }
   }
 
@@ -699,7 +699,7 @@ export class LeaveService {
     const word = decision === 'APPROVED' ? 'approved' : 'not approved';
     const payload = { schoolName: school?.name ?? 'Your school', leaveId: app.id, decision, dates: label, byName: await LeaveService.nameOf(tx, schoolId, adminUserId), byUserId: adminUserId };
     await tx.notification.create({ data: { schoolId, userId: teacher.userId, kind: 'LEAVE_DECIDED', title: `Leave ${word}`, body: label, linkType: 'leave', linkId: app.id } });
-    await tx.notificationOutbox.create({ data: { schoolId, kind: 'LEAVE_DECIDED', payload, targetUserId: teacher.userId } });
+    await tx.notificationOutbox.create({ data: { schoolId, kind: 'LEAVE_DECIDED', payload, targetUserId: teacher.userId }, select: { id: true } });
   }
 
   private async tellSubstituteAssigned(tx: TenantTx, schoolId: string, sub: { id: string; date: Date; periodId: string; classSectionId: string; originalTeacherId: string }, substituteTeacherId: string): Promise<void> {
@@ -716,7 +716,7 @@ export class LeaveService {
     const className = section?.name ?? 'a class';
     const payload = { schoolName: school?.name ?? 'Your school', substitutionId: sub.id, when, className, subjectName: slot?.subject?.name ?? null, originalTeacherName: original ? `${original.firstName} ${original.lastName ?? ''}`.trim() : 'a colleague' };
     await tx.notification.create({ data: { schoolId, userId: substitute.userId, kind: 'COVER_ASSIGNED', title: `You cover ${className}`, body: when, linkType: 'timetable', linkId: sub.id } });
-    await tx.notificationOutbox.create({ data: { schoolId, kind: 'COVER_ASSIGNED', payload, targetUserId: substitute.userId } });
+    await tx.notificationOutbox.create({ data: { schoolId, kind: 'COVER_ASSIGNED', payload, targetUserId: substitute.userId }, select: { id: true } });
   }
 
   async clear(schoolId: string, id: string) {

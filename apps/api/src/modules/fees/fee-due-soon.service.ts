@@ -82,6 +82,7 @@ export class FeeDueSoonService {
           targetUserId: userId,
           payload: { schoolName: school.name, title, body, termName: inv.term.name, dueOn } satisfies FeeDecisionOutboxPayload as unknown as Prisma.InputJsonValue,
         },
+        select: { id: true },
       });
       notices++;
       active.add(inv.schoolId);

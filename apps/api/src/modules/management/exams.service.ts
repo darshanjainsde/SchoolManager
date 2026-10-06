@@ -301,6 +301,7 @@ export class ExamsService {
           classSectionId: dto.classSectionId,
           payload: outboxPayload as unknown as Prisma.InputJsonValue,
         },
+        select: { id: true },
       });
 
       // In-app inbox rows (the bell) for every student in the section who has a
@@ -590,6 +591,7 @@ export class ExamsService {
             classSectionId: exam.classSectionId,
             payload: outboxPayload as unknown as Prisma.InputJsonValue,
           },
+          select: { id: true },
         });
 
         // In-app inbox rows (the bell) for the section's linked students —

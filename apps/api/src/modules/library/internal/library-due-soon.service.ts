@@ -92,6 +92,7 @@ export class LibraryDueSoonService {
           targetUserId: userId,
           payload: payload as unknown as Prisma.InputJsonValue,
         },
+        select: { id: true },
       });
       await db.notification.create({
         data: { schoolId: issue.schoolId, userId, kind: 'ANNOUNCEMENT', title, body },

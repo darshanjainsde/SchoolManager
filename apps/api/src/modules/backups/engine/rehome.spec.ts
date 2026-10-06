@@ -166,4 +166,10 @@ describe('what a sample pack must never carry', () => {
   it('excludes the two that would reach a real person outside the demo', () => {
     expect(Object.keys(PACK_EXCLUDED_MODELS)).toEqual(expect.arrayContaining(['PushToken', 'GuestSession']));
   });
+
+  it('excludes the notification queue, so a pack never sends its pending messages to the receiving school', () => {
+    expect(Object.keys(PACK_EXCLUDED_MODELS)).toEqual(
+      expect.arrayContaining(['NotificationOutbox', 'NotificationDelivery']),
+    );
+  });
 });

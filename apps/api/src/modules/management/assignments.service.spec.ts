@@ -177,6 +177,7 @@ describe('AssignmentsService', () => {
             classSectionName: '8-C',
           },
         },
+        select: { id: true },
       });
       // Both writes happened via the SAME `withTenant` call (the mutation
       // transaction) — there is no second, separate transaction here (unlike
