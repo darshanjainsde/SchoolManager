@@ -14,7 +14,8 @@ jest.mock('@skoolos/db', () => ({ ...jest.requireActual('@skoolos/db'), getPlatf
 import { NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { Prisma } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
-import { leavePayload, coverPayload, ackPayload, cantPayload, actionKeys, ACTION_TTL_MS } from '../../common/notifications/whatsapp/actions';
+import { leavePayload, coverPayload, ackPayload, cantPayload, actionKeys, parseAction, ACTION_TTL_MS } from '../../common/notifications/whatsapp/actions';
+import * as graphClient from '../../common/notifications/whatsapp/graph.client';
 import { WhatsAppActionsService } from './whatsapp-actions.service';
 
 const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
@@ -50,7 +51,7 @@ describe('WhatsAppActionsService', () => {
 
   /** Runs the real send closure so the list Meta would receive can be read off sendList. */
   function captureList() {
-    const spy = jest.spyOn(require('../../common/notifications/whatsapp/graph.client'), 'sendList');
+    const spy = jest.spyOn(graphClient, 'sendList');
     channel.deliverWith.mockImplementation(async (_s: string, _p: string, _k: string, _l: string, fn: (c: unknown, p: null, f: unknown) => Promise<unknown>) => {
       await fn({ token: 't', phoneNumberId: '1', wabaId: null, graphVersion: 'v21.0' }, null, jest.fn().mockResolvedValue({ ok: true, json: async () => ({ messages: [{ id: 'w' }] }) }));
       return { ok: true, code: null };
@@ -177,8 +178,7 @@ describe('WhatsAppActionsService', () => {
     expect(sent.body).toBe('Raffles: 9-A · Mathematics\nMon 21 Sep, Period 3 (10:15–11:00)');
     expect(sent.footer).toBe('4 free');
     // Each row is a signed pick of THAT teacher for THIS gap.
-    const { parseAction } = require('../../common/notifications/whatsapp/actions');
-    expect(sent.rows.map((r) => parseAction(r.id, actionKeys()).action)).toEqual([
+    expect(sent.rows.map((r: { id: string }) => { const parsed = parseAction(r.id, actionKeys()); return parsed.ok ? parsed.action : parsed; })).toEqual([
       { kind: 'cover', substitutionId: SUB, teacherId: 'ta' },
       { kind: 'cover', substitutionId: SUB, teacherId: 'tb' },
       { kind: 'cover', substitutionId: SUB, teacherId: 'tc' },
