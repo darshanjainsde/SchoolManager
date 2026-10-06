@@ -81,8 +81,20 @@ export class WhatsAppActionsService {
         } else ({ result, schoolId } = await this.act(db, parsed.action, phone));
       }
     } catch (e) {
-      result = `error: ${(e as Error).message}`.slice(0, 200);
       this.logger.error(`WhatsApp action failed for ${m.id}: ${(e as Error).message}`);
+      if (!(e instanceof ApiError)) {
+        // Infrastructure (a pool timeout inside LeaveService.approve, say), not
+        // a business answer. Recording "error:" and returning 200 would lose the
+        // tap: Meta's resend would then hit the primary key and read 'duplicate'.
+        // Free the key and rethrow; the webhook answers 500 and Meta retries the
+        // tap from the start. That is safe: approve/reject refuse a second
+        // decision (LEAVE_NOT_PENDING -> 'already-decided') and assign on an
+        // already-covered gap answers 'already-covered', so nothing acts twice.
+        await db.whatsAppInbound.delete({ where: { id: m.id } }).catch((de: unknown) => this.logger.warn(`Could not free inbound ${m.id} for retry: ${(de as Error).message}`));
+        throw e;
+      }
+      // An ApiError is a deterministic business refusal: record it and answer 200.
+      result = `error: ${(e as Error).message}`.slice(0, 200);
     }
     await db.whatsAppInbound.update({ where: { id: m.id }, data: { result, schoolId } }).catch(() => undefined);
     return result;

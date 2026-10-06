@@ -1,5 +1,5 @@
 const db = {
-  whatsAppInbound: { create: jest.fn().mockResolvedValue({}), update: jest.fn().mockResolvedValue({}) },
+  whatsAppInbound: { create: jest.fn().mockResolvedValue({}), update: jest.fn().mockResolvedValue({}), delete: jest.fn().mockResolvedValue({}) },
   leaveApplication: { findUnique: jest.fn() },
   substitution: { findUnique: jest.fn(), findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
   user: { findFirst: jest.fn() },
@@ -59,6 +59,7 @@ describe('WhatsAppActionsService', () => {
   });
 
   it('the tapping number is normalised like every stored number', async () => {
+    leave.approve.mockResolvedValue({ gaps: 0, gapIds: [] });
     await svc().handleInbound({ ...tap(leavePayload('approve', LEAVE, actionKeys()), 'wamid.3'), from: '09876543210' });
     expect(db.whatsAppInbound.create).toHaveBeenCalledWith({ data: expect.objectContaining({ phone: '+919876543210' }) });
   });
@@ -100,6 +101,31 @@ describe('WhatsAppActionsService', () => {
     const list = channel.deliverWith.mock.calls.find((c) => c[3] === 'interactive:list');
     expect(list).toBeDefined();
     expect(list![0]).toBe(SCHOOL);
+  });
+
+  it('an infrastructure failure inside the action frees the inbound row and rethrows, so Meta retries and the tap is not lost', async () => {
+    leave.approve.mockRejectedValueOnce(new Error('pool timeout'));
+    await expect(svc().handleInbound(tap(leavePayload('approve', LEAVE, actionKeys()), 'wamid.infra'))).rejects.toThrow('pool timeout');
+    expect(db.whatsAppInbound.delete).toHaveBeenCalledWith({ where: { id: 'wamid.infra' } });
+    expect(db.whatsAppInbound.update).not.toHaveBeenCalled();
+  });
+
+  it('an ApiError other than already-decided is a business answer: recorded as error:, row kept', async () => {
+    leave.approve.mockRejectedValueOnce(new ApiError('VALIDATION', 'nope', 400));
+    const r = await svc().handleInbound(tap(leavePayload('approve', LEAVE, actionKeys()), 'wamid.biz'));
+    expect(r).toMatch(/^error:/);
+    expect(db.whatsAppInbound.delete).not.toHaveBeenCalled();
+    expect(db.whatsAppInbound.update).toHaveBeenCalledWith({ where: { id: 'wamid.biz' }, data: expect.objectContaining({ result: expect.stringMatching(/^error:/) }) });
+  });
+
+  it('a retry of the tap after an infrastructure failure approves exactly once', async () => {
+    leave.approve.mockRejectedValueOnce(new Error('pool timeout')).mockResolvedValueOnce({ gaps: 0, gapIds: [] });
+    const t = tap(leavePayload('approve', LEAVE, actionKeys()), 'wamid.retry');
+    await expect(svc().handleInbound(t)).rejects.toThrow('pool timeout');
+    expect(await svc().handleInbound(t)).toBe('approved');
+    expect(db.whatsAppInbound.create).toHaveBeenCalledTimes(2);
+    expect(leave.approve).toHaveBeenCalledTimes(2);
+    expect(db.whatsAppInbound.update).toHaveBeenCalledTimes(1); // only the success is recorded
   });
 
   it('Approve on an already-decided request says so and changes nothing', async () => {
