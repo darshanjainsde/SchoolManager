@@ -152,6 +152,16 @@ describe('WhatsAppChannel', () => {
       expect(f).toHaveBeenCalledTimes(1);
     });
 
+    it('Redis grants sibling 1 then flaps for sibling 2 (same phone, same words): still one send', async () => {
+      const redis = { status: 'ready', set: jest.fn().mockResolvedValueOnce('OK').mockRejectedValueOnce(new Error('ECONNRESET')), del: jest.fn() };
+      const f = okFetch();
+      const c = channel({ redis: () => redis as never, f });
+      await expect(c.send('p@x', NOTICE, SCHOOL)).resolves.toBe(true);
+      await expect(c.send('p@x', NOTICE, SCHOOL)).resolves.toBe(true);
+      expect(redis.set).toHaveBeenCalledTimes(2);
+      expect(f).toHaveBeenCalledTimes(1);
+    });
+
     it('Redis that cannot connect: memory fallback, no throw', async () => {
       const redis = { status: 'end', connect: jest.fn().mockRejectedValue(new Error('down')), set: jest.fn() };
       const f = okFetch();

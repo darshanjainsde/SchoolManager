@@ -85,7 +85,8 @@ export class WhatsAppChannel implements NotificationChannel {
    * parameters and pass. Keyed on phone + template + parameters.
    *
    * One copy per phone across every serverless instance, through Redis
-   * (SET NX with a 60 s expiry); memory only when Redis is unreachable. The
+   * (SET NX with a 60 s expiry); memory decides only when Redis is
+   * unreachable, but every Redis grant is mirrored there too. The
    * Redis key is a hash — the phone number is personal data and stays out of
    * it. The memory map is pruned when it grows, so a fan-out of thousands
    * stays bounded.
@@ -109,7 +110,13 @@ export class WhatsAppChannel implements NotificationChannel {
           const key = `wa:dedup:${createHash('sha256').update(raw).digest('hex').slice(0, 32)}`;
           const got = await withTimeout(r.set(key, '1', 'EX', WhatsAppChannel.DEDUPE_MS / 1000, 'NX'), DEDUP_REDIS_TIMEOUT_MS);
           if (got === null) return null;
+          // Record it in memory too: if Redis flaps between this send and an
+          // identical sibling one, the memory fallback must still know this
+          // phone was sent to. (Memory already holding it means this server
+          // sent it during an earlier outage — a duplicate either way.)
+          if (this.isDuplicateLocal(raw)) return null;
           return async () => {
+            this.recent.delete(raw);
             try {
               await withTimeout(r.del(key), DEDUP_REDIS_TIMEOUT_MS);
             } catch {
