@@ -50,15 +50,6 @@ export function AddEnquiryDrawer({ onClose, onSaved }: { onClose: () => void; on
       ...(gradeInterest.trim() ? { gradeInterest: gradeInterest.trim() } : {}),
       ...(message.trim() ? { message: message.trim() } : {}),
     }),
-    onSuccess: (row) => {
-      void qc.invalidateQueries({ queryKey: ['site-enquiries'] });
-      onClose();
-      if (row?.id) onSaved?.(row.id);
-      toast.success('Enquiry saved — it is yours on the Admissions desk.');
-    },
-    // The drawer stays open and keeps every field: the reason is shown where
-    // the person is looking, not in a toast that slides away.
-    onError: (e) => setError(e instanceof ApiError ? e.message : 'It did not save. Check your connection and try again.'),
     onSettled: () => { sending.current = false; },
   });
 
@@ -66,7 +57,20 @@ export function AddEnquiryDrawer({ onClose, onSaved }: { onClose: () => void; on
     if (sending.current) return;
     sending.current = true;
     setError(null);
-    post.mutate();
+    // Callbacks passed to mutate() (not to useMutation) are dropped by react-query
+    // once this component unmounts, so closing the drawer mid-request does not
+    // fire onClose a second time or announce a save the person walked away from.
+    post.mutate(undefined, {
+      onSuccess: (row) => {
+        void qc.invalidateQueries({ queryKey: ['site-enquiries'] });
+        onClose();
+        if (row?.id) onSaved?.(row.id);
+        toast.success('Enquiry saved — it is yours on the Admissions desk.');
+      },
+      // The drawer stays open and keeps every field: the reason is shown where
+      // the person is looking, not in a toast that slides away.
+      onError: (e) => setError(e instanceof ApiError ? e.message : 'It did not save. Check your connection and try again.'),
+    });
   }
 
   const ready = parentName.trim() !== '' && /\d/.test(phone);
@@ -77,9 +81,15 @@ export function AddEnquiryDrawer({ onClose, onSaved }: { onClose: () => void; on
       subtitle="A family who walked in or rang. It is yours on the Admissions desk."
       onClose={onClose}
       footer={(
-        <button type="button" className="sk-btn sk-press" data-variant="primary" disabled={post.isPending || !ready} onClick={save}>
-          {post.isPending ? 'Saving…' : 'Save enquiry'}
-        </button>
+        <>
+          {/* Above Save, in the pinned footer: on a 360px phone with the keyboard up
+              the body has scrolled away, and an error up there is never seen. The footer is a
+              wrapping flex row, so the full-width basis puts it on its own line. */}
+          {error ? <p className="sk-state err" role="alert" style={{ flex: '1 0 100%', margin: 0 }}>{error}</p> : null}
+          <button type="button" className="sk-btn sk-press" data-variant="primary" disabled={post.isPending || !ready} onClick={save}>
+            {post.isPending ? 'Saving…' : 'Save enquiry'}
+          </button>
+        </>
       )}
     >
       <div className="sk-enq-filters" role="group" aria-label="How did they reach us?">
@@ -112,7 +122,6 @@ export function AddEnquiryDrawer({ onClose, onSaved }: { onClose: () => void; on
         <input type="checkbox" className="sk-check" checked={whatsappOk} onChange={(e) => setWhatsappOk(e.target.checked)} />
         They are happy to get WhatsApp messages from the school
       </label>
-      {error ? <p className="sk-state err" role="alert">{error}</p> : null}
     </Overlay>
   );
 }

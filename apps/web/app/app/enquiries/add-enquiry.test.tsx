@@ -124,4 +124,41 @@ describe('Add enquiry — a family who walked in or rang', () => {
     fireEvent.change(screen.getByLabelText('Phone number'), { target: { value: 'call me' } });
     expect(screen.getByRole('button', { name: 'Save enquiry' })).toBeDisabled();
   });
+
+  it('closing the drawer mid-request: the late answer does not close it again or announce a save', async () => {
+    let resolve!: (v: { id: string }) => void;
+    const post = vi.fn().mockReturnValue(new Promise((r) => { resolve = r; }));
+    (useApi as ReturnType<typeof vi.fn>).mockReturnValue(mockApi({ post }));
+    const onClose = vi.fn();
+    const onSaved = vi.fn();
+
+    const { unmount } = renderWithProviders(<AddEnquiryDrawer onClose={onClose} onSaved={onSaved} />);
+    fireEvent.change(await screen.findByLabelText(/Parent/), { target: { value: 'Meera' } });
+    fireEvent.change(screen.getByLabelText('Phone number'), { target: { value: '98290 11223' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save enquiry' }));
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+
+    // The person presses Close; the parent unmounts the drawer.
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    unmount();
+    resolve({ id: 'late-1' });
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  it('shows a refusal in the pinned footer, directly above Save, not in the scrolling body', async () => {
+    const api = mockApi({ post: vi.fn().mockRejectedValue(new ApiError(400, 'phone must contain a digit', null)) });
+    (useApi as ReturnType<typeof vi.fn>).mockReturnValue(api);
+    renderWithProviders(<AddEnquiryDrawer onClose={vi.fn()} />);
+    fireEvent.change(await screen.findByLabelText(/Parent/), { target: { value: 'Meera' } });
+    fireEvent.change(screen.getByLabelText('Phone number'), { target: { value: '98290 11223' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save enquiry' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert.closest('.sk-panel-actions')).not.toBeNull();
+    expect(alert.closest('.sk-panel-body')).toBeNull();
+    expect(alert.nextElementSibling).toBe(screen.getByRole('button', { name: 'Save enquiry' }));
+  });
 });

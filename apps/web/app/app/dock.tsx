@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import Link from 'next/link';
 import { createPortal } from 'react-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -153,6 +153,9 @@ export function Dock({ hasFees, open, setOpen }: {
   setOpen: (k: DockDrawerKind | null) => void;
 }) {
   const hydrated = useHydrated();
+  // One handler for all three drawers; the focus trap no longer depends on it
+  // being stable, but a stable one stops needless re-renders of the drawer.
+  const closeDrawer = useCallback(() => setOpen(null), [setOpen]);
 
   const buttons = [
     ...(hasFees ? [{ key: 'pay', label: 'Record payment', icon: Wallet, run: () => setOpen('pay') }] : []),
@@ -197,9 +200,9 @@ export function Dock({ hasFees, open, setOpen }: {
         })}
       </div>
 
-      {hydrated && open === 'pay' && <PaymentPicker onClose={() => setOpen(null)} />}
-      {hydrated && open === 'announce' && <AnnounceDrawer onClose={() => setOpen(null)} />}
-      {hydrated && open === 'enquiry' && <AddEnquiryDrawer onClose={() => setOpen(null)} />}
+      {hydrated && open === 'pay' && <PaymentPicker onClose={closeDrawer} />}
+      {hydrated && open === 'announce' && <AnnounceDrawer onClose={closeDrawer} />}
+      {hydrated && open === 'enquiry' && <AddEnquiryDrawer onClose={closeDrawer} />}
     </>
   );
 }
