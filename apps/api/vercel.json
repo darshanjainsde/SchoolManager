@@ -27,6 +27,10 @@
       "schedule": "0 2 * * *"
     },
     {
+      "path": "/internal/cron/cover-nudge",
+      "schedule": "30 12 * * *"
+    },
+    {
       "path": "/internal/cron/fee-due-soon",
       "schedule": "30 1 * * *"
     },

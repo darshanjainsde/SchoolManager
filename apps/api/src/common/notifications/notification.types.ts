@@ -321,12 +321,18 @@ export interface CoverCancelledPayload {
 export interface CoverUnfilledPayload {
   schoolName: string;
   gaps: number;
-  /** YYYY-MM-DD the gaps fall on — also what makes the evening nudge once-only. */
+  /** YYYY-MM-DD the gaps fall on. */
   forDate: string;
   /** "tomorrow, Tue 14 Oct 2026" / "Mon 13 Oct 2026". */
   forWhen: string;
   /** Why now, when it is not the evening nudge: "Ramesh Kumar can't take 9-A, …". */
   note: string | null;
+  /**
+   * Set ONLY by the 18:00 nudge, to the date it is for — its once-per-school-
+   * per-date key. A "Can't" or a reopened cover for the same date is not a
+   * nudge and must never stop the evening one.
+   */
+  nudgeFor?: string;
 }
 
 /** The single source of truth mapping each event to its payload shape. */
