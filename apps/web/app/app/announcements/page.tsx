@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { Megaphone, Plus } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
-import { Cell, Field, Figure, Figures, Note, Overlay, Row, RowList, RowTitle, ScrollBox, ShowMore } from '@/components/ui/kit';
+import { Cell, Field, FieldRow, Figure, Figures, Note, Overlay, Row, RowList, RowTitle, ScrollBox, ShowMore } from '@/components/ui/kit';
 import {
   audienceOf, groupNotices, postedAtLabel, whenLabel,
   type AnnouncementRow, type Notice,
@@ -46,10 +46,41 @@ interface SchoolClass {
   _count: { students: number };
 }
 
+/** What WhatsApp is told when the notice is one of the three it has a narrow template for. */
+type NoticeTopicBody =
+  | { kind: 'HOLIDAY'; closedOn: string; occasion: string; resumesOn: string }
+  | { kind: 'PTM'; on: string; at: string }
+  | { kind: 'TIMING'; on: string; from: string; to: string };
+
 interface CreateAnnouncementBody {
   title: string;
   body: string;
   classSectionIds?: string[];
+  topic?: NoticeTopicBody;
+}
+
+type TopicKind = 'GENERAL' | 'HOLIDAY' | 'PTM' | 'TIMING';
+const TOPIC_LABEL: Record<TopicKind, string> = { GENERAL: 'General', HOLIDAY: 'Holiday', PTM: "Parents' meeting", TIMING: 'Timing change' };
+
+// Fixed names, never toLocaleDateString: ICU prints "Sept" for September.
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** '2026-10-11' -> '11 Oct'; '' until the admin has picked a real date. */
+function dayMonth(iso: string): string {
+  const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m || Number(m[1]) < 1 || Number(m[1]) > 12) return '';
+  return `${Number(m[2])} ${MONTHS[Number(m[1]) - 1]}`;
+}
+
+/** What the title says until the admin writes their own. */
+function suggestedTitle(kind: TopicKind, f: { closedOn: string; occasion: string; on: string }): string {
+  if (kind === 'HOLIDAY') {
+    const d = dayMonth(f.closedOn), why = f.occasion.trim();
+    return d && why ? `School closed on ${d} for ${why}` : '';
+  }
+  const d = dayMonth(f.on);
+  if (!d) return '';
+  return kind === 'PTM' ? `Parents' meeting on ${d}` : kind === 'TIMING' ? `School timings change on ${d}` : '';
 }
 
 /** The drawer is one layer with four jobs — never a dialog on top of a drawer. */
@@ -155,16 +186,32 @@ function Composer({
   saving: boolean;
   /** Set when editing: the words are prefilled and the audience is fixed. */
   initial?: Notice;
-  onSubmit: (data: { title: string; body: string; classSectionIds: string[]; whole: boolean }) => void;
+  onSubmit: (data: { title: string; body: string; classSectionIds: string[]; whole: boolean; topic?: NoticeTopicBody }) => void;
 }) {
   const editing = !!initial;
-  const [title, setTitle] = useState(initial?.title ?? '');
+  const [kind, setKind] = useState<TopicKind>('GENERAL');
+  const [closedOn, setClosedOn] = useState('');
+  const [occasion, setOccasion] = useState('');
+  const [resumesOn, setResumesOn] = useState('');
+  const [on, setOn] = useState('');
+  const [at, setAt] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  // The title follows the details until the admin writes one of their own.
+  const [typedTitle, setTypedTitle] = useState(initial?.title ?? '');
+  const title = editing || typedTitle !== '' ? typedTitle : suggestedTitle(kind, { closedOn, occasion, on });
   const [body, setBody] = useState(initial?.body ?? '');
   const [whole, setWhole] = useState(initial ? initial.audience === 'SCHOOL' : true);
   const [picked, setPicked] = useState<string[]>([]);
 
   const reach = classes.filter((c) => picked.includes(c.id)).reduce((n, c) => n + c._count.students, 0);
-  const ready = title.trim() && body.trim() && (whole || picked.length > 0);
+  const topic: NoticeTopicBody | null =
+    kind === 'HOLIDAY' && closedOn && occasion.trim() && resumesOn ? { kind, closedOn, occasion: occasion.trim(), resumesOn }
+    : kind === 'PTM' && on && at ? { kind, on, at }
+    : kind === 'TIMING' && on && from && to ? { kind, on, from, to }
+    : null;
+  const topicReady = editing || kind === 'GENERAL' || topic !== null;
+  const ready = title.trim() && body.trim() && (whole || picked.length > 0) && topicReady;
 
   return (
     <form
@@ -172,17 +219,80 @@ function Composer({
       onSubmit={(e) => {
         e.preventDefault();
         if (!ready || saving) return;
-        onSubmit({ title: title.trim(), body: body.trim(), classSectionIds: picked, whole });
+        onSubmit({ title: title.trim(), body: body.trim(), classSectionIds: picked, whole, ...(topic && !editing ? { topic } : {}) });
       }}
       className="flex flex-col gap-4"
     >
+      {!editing && (
+        <div className="sk-field">
+          <span className="sk-lab">What is it?</span>
+          <div
+            className="sk-seg"
+            role="group"
+            aria-label="What is it?"
+            style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))' }}
+          >
+            {(Object.keys(TOPIC_LABEL) as TopicKind[]).map((k) => (
+              <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)}>{TOPIC_LABEL[k]}</button>
+            ))}
+          </div>
+          {kind !== 'GENERAL' && (
+            <p className="sk-muted">WhatsApp sends these details in a fixed message. The app and email show your title and message.</p>
+          )}
+        </div>
+      )}
+
+      {!editing && kind === 'HOLIDAY' && (
+        <>
+          <FieldRow min={150}>
+            <Field id="ann-closed" label="Closed on">
+              {(p) => <input {...p} type="date" className="sk-input" value={closedOn} onChange={(e) => setClosedOn(e.target.value)} />}
+            </Field>
+            <Field id="ann-resumes" label="Classes resume">
+              {(p) => <input {...p} type="date" className="sk-input" value={resumesOn} onChange={(e) => setResumesOn(e.target.value)} />}
+            </Field>
+          </FieldRow>
+          <Field id="ann-occasion" label="For">
+            {(p) => (
+              <input {...p} type="text" className="sk-input" value={occasion} maxLength={60} placeholder="Diwali"
+                onChange={(e) => setOccasion(e.target.value)} />
+            )}
+          </Field>
+        </>
+      )}
+
+      {!editing && kind === 'PTM' && (
+        <FieldRow min={150}>
+          <Field id="ann-on" label="Date">
+            {(p) => <input {...p} type="date" className="sk-input" value={on} onChange={(e) => setOn(e.target.value)} />}
+          </Field>
+          <Field id="ann-at" label="Time">
+            {(p) => <input {...p} type="time" className="sk-input" value={at} onChange={(e) => setAt(e.target.value)} />}
+          </Field>
+        </FieldRow>
+      )}
+
+      {!editing && kind === 'TIMING' && (
+        <FieldRow min={110}>
+          <Field id="ann-on" label="Date">
+            {(p) => <input {...p} type="date" className="sk-input" value={on} onChange={(e) => setOn(e.target.value)} />}
+          </Field>
+          <Field id="ann-from" label="From">
+            {(p) => <input {...p} type="time" className="sk-input" value={from} onChange={(e) => setFrom(e.target.value)} />}
+          </Field>
+          <Field id="ann-to" label="To">
+            {(p) => <input {...p} type="time" className="sk-input" value={to} onChange={(e) => setTo(e.target.value)} />}
+          </Field>
+        </FieldRow>
+      )}
+
       <Field id="ann-title" label="Title">
         {(p) => (
           <input
             {...p}
             className="sk-input"
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={(e) => setTypedTitle(e.target.value)}
             placeholder="Parent–Teacher Meeting on Saturday"
             maxLength={160}
             autoFocus
@@ -437,6 +547,7 @@ export default function AnnouncementsPage() {
                 title: v.title,
                 body: v.body,
                 ...(v.whole ? {} : { classSectionIds: v.classSectionIds }),
+                ...(v.topic ? { topic: v.topic } : {}),
               })
             }
           />
