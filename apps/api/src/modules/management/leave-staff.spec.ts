@@ -1,6 +1,8 @@
 import 'reflect-metadata';
 
 const txMock = {
+  // The advisory lock apply() takes before its overlap read.
+  $queryRaw: jest.fn().mockResolvedValue([{}]),
   teacher: { findFirst: jest.fn() },
   staff: { findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
   leaveTypeDef: { findFirst: jest.fn() },

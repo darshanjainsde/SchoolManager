@@ -1,6 +1,9 @@
 import 'reflect-metadata';
 
 const txMock = {
+  // Advisory locks (apply's per-person, approve/assign's per-day) and
+  // assign's FOR SHARE read of the gap's leave — one row = still APPROVED.
+  $queryRaw: jest.fn().mockResolvedValue([{}]),
   teacher: { findFirst: jest.fn(), findMany: jest.fn() },
   // Leave is no longer a teachers-only idea: every read resolves the caller
   // to a Teacher OR a Staff row, so the mock has to answer for both.
@@ -66,6 +69,7 @@ describe('LeaveService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     withTenantMock.mockImplementation((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));
+    txMock.$queryRaw.mockResolvedValue([{}]);
     txMock.school.findFirst.mockResolvedValue({ name: 'Raffles' });
     txMock.user.findMany.mockResolvedValue([]);
     txMock.timetableSlot.groupBy.mockResolvedValue([]);
@@ -578,7 +582,7 @@ describe('LeaveService', () => {
         await svc.approve(SCHOOL, LEAVE_ID, ADMIN_USER);
 
         expect(txMock.substitution.findMany.mock.calls[0][0].where).toEqual({ schoolId: SCHOOL, substituteTeacherId: TEACHER, date: { in: [new Date('2026-11-11')] } });
-        expect(txMock.substitution.updateMany).toHaveBeenCalledWith({ where: { id: { in: ['cover-1'] }, schoolId: SCHOOL, substituteTeacherId: TEACHER }, data: { substituteTeacherId: null, acknowledgedAt: null } });
+        expect(txMock.substitution.updateMany).toHaveBeenCalledWith({ where: { id: 'cover-1', schoolId: SCHOOL, substituteTeacherId: TEACHER }, data: { substituteTeacherId: null, acknowledgedAt: null } });
         const rows = txMock.notificationOutbox.create.mock.calls.map((c) => c[0].data);
         expect(rows).toContainEqual(expect.objectContaining({ kind: 'COVER_CANCELLED', targetUserId: TEACHER_USER, payload: expect.objectContaining({ substitutionId: 'cover-1', why: 'TEACHER_ON_LEAVE' }) }));
         // The approver too: approving did not show them the teacher was covering for others.
@@ -597,7 +601,8 @@ describe('LeaveService', () => {
         ]);
         txMock.period.findMany.mockResolvedValue([{ id: 'p-am', label: 'P1', startTime: '8:00', endTime: '8:45' }, { id: 'p-pm', label: 'P6', startTime: '13:30', endTime: '14:15' }]);
         await svc.approve(SCHOOL, LEAVE_ID, ADMIN_USER);
-        expect(txMock.substitution.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { id: { in: ['am'] }, schoolId: SCHOOL, substituteTeacherId: TEACHER } }));
+        expect(txMock.substitution.updateMany).toHaveBeenCalledTimes(1);
+        expect(txMock.substitution.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'am', schoolId: SCHOOL, substituteTeacherId: TEACHER } }));
       });
 
       it('covers on days already gone are history: not reopened, nobody told', async () => {
@@ -795,7 +800,7 @@ describe('LeaveService', () => {
       txMock.user.findMany.mockResolvedValue([{ id: ADMIN_USER, email: 'head@x' }]);
       await svc.cancel(SCHOOL, LEAVE_ID, TEACHER_USER, 'TEACHER');
       expect(txMock.notificationOutbox.create.mock.calls.map((c) => c[0].data)).toEqual([
-        expect.objectContaining({ kind: 'LEAVE_CANCELLED', targetUserId: ADMIN_USER, payload: { schoolName: 'Raffles', leaveId: LEAVE_ID, teacherName: 'Asha Rao', dates: 'Mon 20 Jul 2026', releasedCovers: 0 } }),
+        expect.objectContaining({ kind: 'LEAVE_CANCELLED', targetUserId: ADMIN_USER, payload: { schoolName: 'Raffles', leaveId: LEAVE_ID, teacherName: 'Asha Rao', dates: 'Mon 20 Jul 2026', releasedCovers: 0, unreached: null } }),
       ]);
       expect(txMock.notificationOutbox.create.mock.calls[0][0].select).toEqual({ id: true });
       // Nothing was generated for a pending request, so nothing is unwound.
@@ -1480,5 +1485,208 @@ describe('the substitute answers', () => {
     txMock.teacher.findFirst.mockResolvedValue({ userId: 'u-kavya', firstName: 'Asha', lastName: 'Rao' });
     await svc.assign(SCHOOL, SUB_ID, { substituteTeacherId: OTHER_TEACHER });
     expect(txMock.notificationOutbox.create.mock.calls[0][0].data.payload.substituteTeacherId).toBe(OTHER_TEACHER);
+  });
+});
+
+describe('LeaveService — the fix wave: races, and what each loser and each desk is told', () => {
+  const svc = new LeaveService();
+  /** Every $queryRaw as `sql` (placeholders as ?) + its bound values. */
+  const raws = () => txMock.$queryRaw.mock.calls.map(([strings, ...values]: [string[], ...unknown[]]) => ({ sql: strings.join('?'), values }));
+  const LOCK_SQL = 'SELECT pg_advisory_xact_lock(hashtext(?), hashtext(?))::text';
+  const lockOrder = (key: string) => {
+    const i = raws().findIndex((r) => r.sql === LOCK_SQL && r.values[1] === key);
+    return i < 0 ? Infinity : txMock.$queryRaw.mock.invocationCallOrder[i];
+  };
+
+  afterEach(() => jest.useRealTimers());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    withTenantMock.mockImplementation((_s: string, fn: (tx: unknown) => unknown) => fn(txMock));
+    txMock.$queryRaw.mockResolvedValue([{}]);
+    txMock.school.findFirst.mockResolvedValue({ name: 'Raffles' });
+    txMock.school.findUnique.mockResolvedValue({ workingDays: [1, 2, 3, 4, 5, 6] });
+    txMock.holiday.findMany.mockResolvedValue([]);
+    txMock.user.findMany.mockResolvedValue([{ id: ADMIN_USER, email: 'head@x' }]);
+    txMock.staff.findMany.mockResolvedValue([]);
+    txMock.substitution.findMany.mockResolvedValue([]);
+    txMock.substitution.updateMany.mockResolvedValue({ count: 1 });
+    txMock.leaveApplication.updateMany.mockResolvedValue({ count: 1 });
+    txMock.leaveApplication.findMany.mockResolvedValue([]);
+    txMock.leaveTypeDef.findFirst.mockResolvedValue(null);
+    txMock.classSection.findMany.mockResolvedValue([{ id: CLASS_SECTION, name: 'A', grade: { name: '9' } }, { id: 'cs-7b', name: 'B', grade: { name: '7' } }]);
+    txMock.period.findMany.mockResolvedValue([{ id: PERIOD, label: 'Period 3', startTime: '10:15', endTime: '11:00' }]);
+    txMock.teacher.findMany.mockResolvedValue([]);
+    txMock.teacher.findFirst.mockResolvedValue(null);
+    txMock.staffAttendance.findFirst.mockResolvedValue(null);
+    txMock.timetableSlot.findFirst.mockResolvedValue(null);
+    txMock.timetableSlot.findMany.mockResolvedValue([]);
+  });
+
+  describe('apply', () => {
+    beforeEach(() => {
+      jest.useFakeTimers().setSystemTime(new Date('2026-10-06T03:00:00.000Z'));
+      txMock.teacher.findFirst.mockResolvedValue({ id: TEACHER, firstName: 'Asha', lastName: 'Rao', isActive: true });
+      txMock.leaveApplication.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: LEAVE_ID, status: 'PENDING', reason: null, createdAt: new Date(), ...data }));
+    });
+
+    it('a date sent with an IST offset is saved as the day it was judged — "2026-10-13T00:00+05:30" is the 13th, not 18:30 UTC on the 12th', async () => {
+      await svc.apply(SCHOOL, TEACHER_USER, { type: 'SICK', startDate: '2026-10-13T00:00+05:30', endDate: '2026-10-13T00:00+05:30' });
+      const data = txMock.leaveApplication.create.mock.calls[0][0].data;
+      expect(data.startDate).toEqual(new Date('2026-10-13'));
+      expect(data.endDate).toEqual(new Date('2026-10-13'));
+      // …the same day the overlap check looked at.
+      expect(txMock.leaveApplication.findMany.mock.calls[0][0].where.startDate).toEqual({ lte: new Date('2026-10-13') });
+    });
+
+    it('a double-tapped Submit: the per-person lock is taken BEFORE the overlap read, so the second tap sees the first row', async () => {
+      await svc.apply(SCHOOL, TEACHER_USER, { type: 'SICK', startDate: '2026-10-13', endDate: '2026-10-13' });
+      expect(raws()).toContainEqual({ sql: LOCK_SQL, values: [SCHOOL, `leave:${TEACHER}`] });
+      expect(lockOrder(`leave:${TEACHER}`)).toBeLessThan(txMock.leaveApplication.findMany.mock.invocationCallOrder[0]);
+    });
+  });
+
+  describe('assign', () => {
+    const gap = { id: SUB_ID, schoolId: SCHOOL, date: new Date('2026-07-20'), periodId: PERIOD, classSectionId: CLASS_SECTION, originalTeacherId: TEACHER, substituteTeacherId: null, leaveApplicationId: null as string | null };
+    beforeEach(() => {
+      txMock.substitution.findFirst.mockResolvedValue(gap);
+      (freeTeachersFor as jest.Mock).mockResolvedValue([{ id: OTHER_TEACHER, name: 'Kavya Rao', teachesSubject: true, coversThatDay: 0 }]);
+    });
+
+    it("holds the day's cover lock from the \"who is free\" read to the write", async () => {
+      await svc.assign(SCHOOL, SUB_ID, { substituteTeacherId: OTHER_TEACHER });
+      expect(raws()).toContainEqual({ sql: LOCK_SQL, values: [SCHOOL, 'cover:2026-07-20'] });
+      expect(lockOrder('cover:2026-07-20')).toBeLessThan((freeTeachersFor as jest.Mock).mock.invocationCallOrder[0]);
+    });
+
+    it('the desk that lost the teacher to another gap is told which class has them — and nothing is written or sent', async () => {
+      (freeTeachersFor as jest.Mock).mockResolvedValue([]);
+      txMock.substitution.findMany.mockResolvedValue([{ id: 'g-other', date: new Date('2026-07-20'), periodId: PERIOD, classSectionId: 'cs-7b' }]);
+      txMock.teacher.findFirst.mockResolvedValue({ firstName: 'Kavya', lastName: 'Rao' });
+      await expect(svc.assign(SCHOOL, SUB_ID, { substituteTeacherId: OTHER_TEACHER })).rejects.toMatchObject({
+        response: { code: 'TEACHER_CONFLICT', field: 'substituteTeacherId', message: 'Kavya Rao is already covering 7-B in that period. Nothing was changed; pick someone else.' },
+        status: 409,
+      });
+      expect(txMock.substitution.findMany.mock.calls[0][0].where).toEqual({ schoolId: SCHOOL, date: gap.date, periodId: PERIOD, substituteTeacherId: OTHER_TEACHER, NOT: { id: SUB_ID } });
+      expect(txMock.substitution.updateMany).not.toHaveBeenCalled();
+      expect(txMock.notificationOutbox.create).not.toHaveBeenCalled();
+    });
+
+    it('a teacher whose leave was approved a moment ago: "on leave that day"', async () => {
+      (freeTeachersFor as jest.Mock).mockResolvedValue([]);
+      txMock.teacher.findFirst.mockResolvedValue({ firstName: 'Kavya', lastName: 'Rao' });
+      txMock.staffAttendance.findFirst.mockResolvedValue({ id: 'mark' });
+      await expect(svc.assign(SCHOOL, SUB_ID, { substituteTeacherId: OTHER_TEACHER })).rejects.toMatchObject({
+        response: { message: 'Kavya Rao is on leave that day. Nothing was changed; pick someone else.' },
+      });
+    });
+
+    it('a gap whose leave was withdrawn meanwhile is refused (COVER_GONE) before any lock, read of who is free, write or card', async () => {
+      txMock.substitution.findFirst.mockResolvedValue({ ...gap, leaveApplicationId: LEAVE_ID });
+      txMock.$queryRaw.mockResolvedValueOnce([]); // FOR SHARE … status = 'APPROVED' finds no row
+      await expect(svc.assign(SCHOOL, SUB_ID, { substituteTeacherId: OTHER_TEACHER })).rejects.toMatchObject({ response: { code: 'COVER_GONE' }, status: 409 });
+      const [first] = raws();
+      expect(first.sql).toContain('FOR SHARE');
+      expect(first.sql).toContain(`status = 'APPROVED'`);
+      expect(first.values).toEqual([LEAVE_ID, SCHOOL]);
+      expect(raws()).toHaveLength(1);
+      expect(freeTeachersFor).not.toHaveBeenCalled();
+      expect(txMock.substitution.updateMany).not.toHaveBeenCalled();
+      expect(txMock.notificationOutbox.create).not.toHaveBeenCalled();
+    });
+
+    it("a gap of a leave still approved: its row is held FOR SHARE first, then the day's lock, then the write", async () => {
+      txMock.substitution.findFirst.mockResolvedValue({ ...gap, leaveApplicationId: LEAVE_ID });
+      await svc.assign(SCHOOL, SUB_ID, { substituteTeacherId: OTHER_TEACHER });
+      expect(raws()[0].sql).toContain('FOR SHARE');
+      expect(raws()[1]).toEqual({ sql: LOCK_SQL, values: [SCHOOL, 'cover:2026-07-20'] });
+      expect(txMock.substitution.updateMany).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('approve', () => {
+    beforeEach(() => {
+      jest.useFakeTimers().setSystemTime(new Date('2026-10-06T03:00:00.000Z'));
+      txMock.leaveApplication.findFirst.mockResolvedValue({ id: LEAVE_ID, schoolId: SCHOOL, teacherId: TEACHER, staffId: null, status: 'PENDING', startDate: new Date('2026-10-12'), endDate: new Date('2026-10-14') });
+    });
+
+    it('locks each working day, in date order, BEFORE marking ON_LEAVE or reopening the teacher\'s covers', async () => {
+      await svc.approve(SCHOOL, LEAVE_ID, ADMIN_USER);
+      const locks = raws().filter((r) => r.sql === LOCK_SQL).map((r) => r.values[1]);
+      expect(locks).toEqual(['cover:2026-10-12', 'cover:2026-10-13', 'cover:2026-10-14']);
+      const lastLock = lockOrder('cover:2026-10-14');
+      expect(lastLock).toBeLessThan(txMock.staffAttendance.findFirst.mock.invocationCallOrder[0]);
+      expect(lastLock).toBeLessThan(txMock.substitution.findMany.mock.invocationCallOrder[0]);
+    });
+
+    it('a staff member\'s leave takes no day locks — they cover nothing', async () => {
+      txMock.leaveApplication.findFirst.mockResolvedValue({ id: LEAVE_ID, schoolId: SCHOOL, teacherId: null, staffId: 'staff-1', status: 'PENDING', startDate: new Date('2026-10-12'), endDate: new Date('2026-10-14') });
+      txMock.staff.findFirst.mockResolvedValue({ userId: null });
+      await svc.approve(SCHOOL, LEAVE_ID, ADMIN_USER);
+      expect(raws().filter((r) => r.sql === LOCK_SQL)).toEqual([]);
+    });
+
+    it('reopening covers tells and counts ONLY the covers really reopened: one cleared meanwhile is left alone', async () => {
+      txMock.substitution.findMany.mockResolvedValue([
+        { id: 'c1', date: new Date('2026-10-12'), periodId: PERIOD, classSectionId: CLASS_SECTION, substituteTeacherId: TEACHER },
+        { id: 'c2', date: new Date('2026-10-13'), periodId: PERIOD, classSectionId: 'cs-7b', substituteTeacherId: TEACHER },
+      ]);
+      // c2 was cleared by the desk between the read and the write.
+      txMock.substitution.updateMany.mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 });
+      txMock.teacher.findMany.mockResolvedValue([{ id: TEACHER, userId: TEACHER_USER, firstName: 'Asha', lastName: 'Rao' }]);
+      await svc.approve(SCHOOL, LEAVE_ID, ADMIN_USER);
+      expect(txMock.substitution.updateMany.mock.calls.map((c) => c[0].where)).toEqual([
+        { id: 'c1', schoolId: SCHOOL, substituteTeacherId: TEACHER },
+        { id: 'c2', schoolId: SCHOOL, substituteTeacherId: TEACHER },
+      ]);
+      const rows = txMock.notificationOutbox.create.mock.calls.map((c) => c[0].data);
+      expect(rows.filter((r) => r.kind === 'COVER_CANCELLED').map((r) => r.payload.substitutionId)).toEqual(['c1']);
+      expect(rows.find((r) => r.kind === 'COVER_UNFILLED').payload).toMatchObject({ gaps: 1, forDate: '2026-10-12', forWhen: 'Mon 12 Oct 2026' });
+      expect(txMock.notification.create.mock.calls.map((c) => c[0].data.title)).toContain('1 cover reopened');
+    });
+
+    it('none really reopened (all cleared meanwhile): nobody is told anything about covers', async () => {
+      txMock.substitution.findMany.mockResolvedValue([{ id: 'c1', date: new Date('2026-10-12'), periodId: PERIOD, classSectionId: CLASS_SECTION, substituteTeacherId: TEACHER }]);
+      txMock.substitution.updateMany.mockResolvedValueOnce({ count: 0 });
+      await svc.approve(SCHOOL, LEAVE_ID, ADMIN_USER);
+      expect(txMock.notificationOutbox.create.mock.calls.map((c) => c[0].data.kind)).not.toEqual(expect.arrayContaining(['COVER_CANCELLED']));
+      expect(txMock.notificationOutbox.create.mock.calls.map((c) => c[0].data.kind)).not.toEqual(expect.arrayContaining(['COVER_UNFILLED']));
+    });
+  });
+
+  describe('cancel — the desk letter counts only substitutes who were told', () => {
+    beforeEach(() => {
+      jest.useFakeTimers().setSystemTime(new Date('2026-07-21T03:00:00.000Z'));
+      txMock.leaveApplication.findFirst.mockResolvedValue({ id: LEAVE_ID, schoolId: SCHOOL, teacherId: TEACHER, staffId: null, status: 'APPROVED', startDate: new Date('2026-07-21'), endDate: new Date('2026-07-22') });
+      txMock.substitution.deleteMany.mockResolvedValue({ count: 2 });
+      txMock.user.findMany.mockResolvedValue([{ id: ADMIN_USER, email: 'head@x' }, { id: 'u-head2', email: 'h2@x' }]);
+      txMock.teacher.findFirst.mockResolvedValue({ firstName: 'Asha', lastName: 'Rao' });
+    });
+
+    it('a substitute with no login is not counted as told — the desk is told to tell them', async () => {
+      txMock.substitution.findMany.mockResolvedValue([
+        { id: 'g1', date: new Date('2026-07-21'), periodId: PERIOD, classSectionId: CLASS_SECTION, substituteTeacherId: OTHER_TEACHER },
+        { id: 'g2', date: new Date('2026-07-22'), periodId: PERIOD, classSectionId: CLASS_SECTION, substituteTeacherId: 't-ramesh' },
+      ]);
+      txMock.teacher.findMany.mockResolvedValue([
+        { id: OTHER_TEACHER, userId: 'u-kavya', firstName: 'Kavya', lastName: 'Rao' },
+        { id: 't-ramesh', userId: null, firstName: 'Ramesh', lastName: 'Kumar' },
+      ]);
+      await svc.cancel(SCHOOL, LEAVE_ID, ADMIN_USER, 'SCHOOL_ADMIN');
+      const rows = txMock.notificationOutbox.create.mock.calls.map((c) => c[0].data);
+      expect(rows.filter((r) => r.kind === 'COVER_CANCELLED').map((r) => r.targetUserId)).toEqual(['u-kavya']);
+      expect(rows.find((r) => r.kind === 'LEAVE_CANCELLED').payload).toEqual({
+        schoolName: 'Raffles', leaveId: LEAVE_ID, teacherName: 'Asha Rao', dates: 'Tue 21 – Wed 22 Jul 2026', releasedCovers: 1, unreached: 'Ramesh Kumar',
+      });
+      const bell = txMock.notification.create.mock.calls.map((c) => c[0].data).find((d) => d.title === 'Asha Rao withdrew their leave');
+      expect(bell.body).toBe('Tue 21 – Wed 22 Jul 2026 · 1 cover released · Ramesh Kumar has no login, so tell them yourself');
+    });
+
+    it('everyone reached: no "unreached" at all', async () => {
+      txMock.substitution.findMany.mockResolvedValue([{ id: 'g1', date: new Date('2026-07-21'), periodId: PERIOD, classSectionId: CLASS_SECTION, substituteTeacherId: OTHER_TEACHER }]);
+      txMock.teacher.findMany.mockResolvedValue([{ id: OTHER_TEACHER, userId: 'u-kavya', firstName: 'Kavya', lastName: 'Rao' }]);
+      await svc.cancel(SCHOOL, LEAVE_ID, ADMIN_USER, 'SCHOOL_ADMIN');
+      const desk = txMock.notificationOutbox.create.mock.calls.map((c) => c[0].data).find((r) => r.kind === 'LEAVE_CANCELLED');
+      expect(desk.payload).toMatchObject({ releasedCovers: 1, unreached: null });
+    });
   });
 });

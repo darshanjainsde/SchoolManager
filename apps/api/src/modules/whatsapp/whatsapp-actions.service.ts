@@ -184,6 +184,11 @@ export class WhatsAppActionsService {
     try {
       await this.leave.assign(sub.schoolId, sub.id, { substituteTeacherId: a.teacherId });
     } catch (e) {
+      if (apiCode(e) === 'COVER_GONE') {
+        // The leave was withdrawn while this pick was on its way: the period needs nobody.
+        await this.text(sub.schoolId, phone, 'That leave was withdrawn a moment ago, so this period no longer needs a teacher. Nothing was changed.');
+        return { result: 'leave-withdrawn', schoolId: sub.schoolId };
+      }
       if (apiCode(e) === 'TEACHER_CONFLICT' || apiCode(e) === 'VALIDATION') {
         // Lost a race with another desk (assign is compare-and-set): the period
         // is covered now, so there is nothing to pick — say so and move on.

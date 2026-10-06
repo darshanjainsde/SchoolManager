@@ -368,6 +368,16 @@ describe('WhatsAppActionsService', () => {
     expect(leave.candidates).not.toHaveBeenCalled();
   });
 
+  it('a WhatsApp pick on a gap whose leave was just withdrawn is told so — no list, no error', async () => {
+    channel.deliverWith.mockResolvedValue({ ok: true, code: null });
+    identity.actorFor.mockResolvedValue({ ok: true, profile: { userId: 'admin-1', kind: 'ADMIN', role: 'SCHOOL_ADMIN' } });
+    db.substitution.findUnique.mockResolvedValueOnce({ id: SUB, schoolId: SCHOOL, date: new Date('2026-09-21'), periodId: 'p3', classSectionId: 'cs', originalTeacherId: T1, substituteTeacherId: null });
+    leave.assign.mockRejectedValue(new ApiError('COVER_GONE', 'This leave was withdrawn a moment ago', 409));
+    expect(await svc().handleInbound(tap(coverPayload(SUB, 'tb', actionKeys()), 'wamid.gone'))).toBe('leave-withdrawn');
+    expect(sentTexts()).toEqual(['That leave was withdrawn a moment ago, so this period no longer needs a teacher. Nothing was changed.']);
+    expect(leave.candidates).not.toHaveBeenCalled();
+  });
+
   it('when the 24-hour window has closed, the cover list falls back to the console template', async () => {
     db.substitution.findUnique.mockResolvedValue({ id: SUB, date: new Date('2026-09-21'), periodId: 'p3', classSectionId: 'cs', originalTeacherId: T1 });
     leave.candidates.mockResolvedValue([{ id: 'ta', name: 'Arun Mehta', teachesSubject: false, coversThatDay: 0 }]);

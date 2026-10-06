@@ -87,6 +87,8 @@ export type ErrorCode =
   | 'TEACHER_CONFLICT'
   /** The caller is not (or no longer) the substitute on this cover — pair with 403/409. */
   | 'NOT_THE_SUBSTITUTE'
+  /** The leave this gap was opened for was withdrawn while a desk was filling it — the gap no longer needs a teacher (409). */
+  | 'COVER_GONE'
   /** Caller has no linked Teacher record — e.g. a SCHOOL_ADMIN hitting a teacher-only leave route. */
   | 'NOT_A_TEACHER'
   /** Caller has no linked Staff record — e.g. a STAFF-role JWT with no matching Staff.userId row. */
