@@ -92,22 +92,25 @@ describe('Dock drawers — they post to the REAL endpoints', () => {
     expect(setOpen).toHaveBeenCalledWith(null);
   });
 
-  it('a walk-in enquiry goes down the same path as the website form', async () => {
-    const api = mockApi({ post: vi.fn().mockResolvedValue({}) });
+  it('a walk-in is taken at the desk — owned, never throttled — not posted to the public form', async () => {
+    const api = mockApi({ post: vi.fn().mockResolvedValue({ id: 'e1' }) });
     (useApi as ReturnType<typeof vi.fn>).mockReturnValue(api);
 
     renderWithProviders(<Dock hasFees={false} open="enquiry" setOpen={vi.fn()} />);
 
-    fireEvent.change(screen.getByLabelText(/Parent/), { target: { value: 'Meera Purohit' } });
-    fireEvent.change(screen.getByLabelText(/Phone/), { target: { value: '98290 11223' } });
+    fireEvent.change(await screen.findByLabelText(/Parent/), { target: { value: 'Meera Purohit' } });
+    fireEvent.change(screen.getByLabelText('Phone number'), { target: { value: '98290 11223' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save enquiry' }));
 
     await waitFor(() =>
-      expect(api.post).toHaveBeenCalledWith('/public/enquiry', {
+      expect(api.post).toHaveBeenCalledWith('/site/enquiries', {
         parentName: 'Meera Purohit',
         phone: '98290 11223',
+        source: 'WALK_IN',
+        whatsappOk: false,
       }),
     );
+    expect(api.post).not.toHaveBeenCalledWith('/public/enquiry', expect.anything());
   });
 
   it('without FEES the payment button simply is not there', () => {

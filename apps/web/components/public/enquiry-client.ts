@@ -1,4 +1,5 @@
 'use client';
+import type { PublicSource } from '@skoolos/types';
 
 /**
  * Browser-side enquiry submission shared by the main enquiry form and the
@@ -13,6 +14,8 @@ export async function submitEnquiry(fields: {
   email?: string;
   gradeInterest?: string;
   message?: string;
+  /** Which public door — the course card says so; the contact form leaves it to default to WEBSITE. */
+  source?: PublicSource;
 }): Promise<EnquiryResult> {
   const base = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
   try {
