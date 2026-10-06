@@ -28,6 +28,19 @@ const set = (label: string, value: string) => fireEvent.change(screen.getByLabel
 const openNew = async () => { page(); fireEvent.click(await screen.findByRole('button', { name: /new announcement/i })); };
 
 describe('the kind of notice', () => {
+  it('a past date cannot be picked: every date input has min = today', async () => {
+    await openNew();
+    fireEvent.click(screen.getByRole('button', { name: 'Holiday' }));
+    const d = new Date();
+    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    expect(screen.getByLabelText('Closed on')).toHaveAttribute('min', today);
+    expect(screen.getByLabelText('Classes resume')).toHaveAttribute('min', today);
+    fireEvent.click(screen.getByRole('button', { name: "Parents' meeting" }));
+    expect(screen.getByLabelText('Date')).toHaveAttribute('min', today);
+    fireEvent.click(screen.getByRole('button', { name: 'Timing change' }));
+    expect(screen.getByLabelText('Date')).toHaveAttribute('min', today);
+  });
+
   it('posts a PTM with its date and time, and prefills the title', async () => {
     await openNew();
     fireEvent.click(screen.getByRole('button', { name: "Parents' meeting" }));
@@ -58,7 +71,7 @@ describe('the kind of notice', () => {
     expect(screen.getByLabelText('Title')).toHaveValue('Diwali break');
   });
 
-  it('Post stays disabled until the chosen kind has every field', async () => {
+  it('Post does nothing until the chosen kind has every field', async () => {
     await openNew();
     fireEvent.click(screen.getByRole('button', { name: 'Timing change' }));
     set('Title', 't'); set('Message', 'm'); set('Date', '2099-10-13'); set('From', '08:00');

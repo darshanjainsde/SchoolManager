@@ -72,6 +72,12 @@ function dayMonth(iso: string): string {
   return `${Number(m[2])} ${MONTHS[Number(m[1]) - 1]}`;
 }
 
+/** Today as the browser's calendar day, 'YYYY-MM-DD' — the earliest a notice's date may be. The server is the real gate. */
+function todayLocal(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 /** What the title says until the admin writes their own. */
 function suggestedTitle(kind: TopicKind, f: { closedOn: string; occasion: string; on: string }): string {
   if (kind === 'HOLIDAY') {
@@ -189,6 +195,7 @@ function Composer({
   onSubmit: (data: { title: string; body: string; classSectionIds: string[]; whole: boolean; topic?: NoticeTopicBody }) => void;
 }) {
   const editing = !!initial;
+  const today = useMemo(todayLocal, []);
   const [kind, setKind] = useState<TopicKind>('GENERAL');
   const [closedOn, setClosedOn] = useState('');
   const [occasion, setOccasion] = useState('');
@@ -246,10 +253,10 @@ function Composer({
         <>
           <FieldRow min={150}>
             <Field id="ann-closed" label="Closed on">
-              {(p) => <input {...p} type="date" className="sk-input" value={closedOn} onChange={(e) => setClosedOn(e.target.value)} />}
+              {(p) => <input {...p} type="date" min={today} className="sk-input" value={closedOn} onChange={(e) => setClosedOn(e.target.value)} />}
             </Field>
             <Field id="ann-resumes" label="Classes resume">
-              {(p) => <input {...p} type="date" className="sk-input" value={resumesOn} onChange={(e) => setResumesOn(e.target.value)} />}
+              {(p) => <input {...p} type="date" min={today} className="sk-input" value={resumesOn} onChange={(e) => setResumesOn(e.target.value)} />}
             </Field>
           </FieldRow>
           <Field id="ann-occasion" label="For">
@@ -264,7 +271,7 @@ function Composer({
       {!editing && kind === 'PTM' && (
         <FieldRow min={150}>
           <Field id="ann-on" label="Date">
-            {(p) => <input {...p} type="date" className="sk-input" value={on} onChange={(e) => setOn(e.target.value)} />}
+            {(p) => <input {...p} type="date" min={today} className="sk-input" value={on} onChange={(e) => setOn(e.target.value)} />}
           </Field>
           <Field id="ann-at" label="Time">
             {(p) => <input {...p} type="time" className="sk-input" value={at} onChange={(e) => setAt(e.target.value)} />}
@@ -275,7 +282,7 @@ function Composer({
       {!editing && kind === 'TIMING' && (
         <FieldRow min={110}>
           <Field id="ann-on" label="Date">
-            {(p) => <input {...p} type="date" className="sk-input" value={on} onChange={(e) => setOn(e.target.value)} />}
+            {(p) => <input {...p} type="date" min={today} className="sk-input" value={on} onChange={(e) => setOn(e.target.value)} />}
           </Field>
           <Field id="ann-from" label="From">
             {(p) => <input {...p} type="time" className="sk-input" value={from} onChange={(e) => setFrom(e.target.value)} />}
