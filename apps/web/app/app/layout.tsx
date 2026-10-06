@@ -4,7 +4,7 @@ import { useSchoolMark } from '@/components/use-school-mark';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ChevronDown, ChevronsLeft, ChevronsRight, LayoutDashboard, LogOut, Menu, X,
 } from 'lucide-react';
@@ -212,6 +212,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const accessToken = useAuthStore((s) => s.accessToken);
   const audience = useAuthStore((s) => s.audience);
   const clear = useAuthStore((s) => s.clear);
+  const qc = useQueryClient();
   const api = useApi({ audience: 'school', hostHeader: host });
   useSessionProbe(api, 'school', !!host, host);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -241,7 +242,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   // The school's resolved feature set drives which nav items are shown, and
   // `role` gates the console itself — see the redirect effect below.
-  const { data: me } = useQuery({
+  const { data: me, isPending: meLoading } = useQuery({
     queryKey: ['me', host],
     queryFn: () => api.get<{ features?: string[]; role?: string; staffRole?: string | null; name?: string | null; schoolMarkUrl?: string | null }>('/auth/me'),
     enabled: hydrated && isSchoolHost(host) && hasSession && audience === 'school',
@@ -373,8 +374,19 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   if (status === 'unknown' && !accessToken) return <ConsoleSkeleton chrome="side" label="School admin" />;
   if (!hasSession || audience !== 'school') return null;
 
+  // No admin chrome — menu or page — until we know WHO this is. A desk job (the
+  // admissions officer) would otherwise see the full admin menu for a moment,
+  // and a deep link to /app/students would mount a page that fires admin
+  // queries (403s) before the bounce effect runs. Only while the request is in
+  // flight: if /auth/me FAILS the old behaviour stands, so an admin is never
+  // left on a skeleton forever (the API's guards refuse the data regardless).
+  if (meLoading) return <ConsoleSkeleton chrome="side" label="School admin" />;
+
   function handleLogout() {
     clear();
+    // Drop the cached `me` (and everything else) with the session, so the next
+    // login on this tab never starts from the previous person's role.
+    qc.clear();
     router.replace('/login');
   }
 

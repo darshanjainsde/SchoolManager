@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { deskModel } from '../app/app/nav-model';
 import { consoleBounce, consoleDeskFor, homeForRole } from './role-routes';
 
 describe('homeForRole', () => {
@@ -150,5 +151,20 @@ describe('which console room a desk job may stand in', () => {
       expect(consoleBounce('SCHOOL_ADMIN', null, path)).toBeNull();
       expect(consoleBounce('SCHOOL_ADMIN', 'ADMISSIONS', path)).toBeNull();
     }
+  });
+});
+
+describe('the desk sidebar never offers a door that bounces', () => {
+  it.each(['ACCOUNTS', 'ADMISSIONS'])('every %s sidebar link is a place the officer may stand', (job) => {
+    const desk = consoleDeskFor('STAFF', job)!;
+    expect(desk).toBeTruthy();
+    const hrefs = deskModel(desk).map((e) => (e.kind === 'item' ? e.item.href : e.items.map((i) => i.href))).flat();
+    expect(hrefs.length).toBeGreaterThan(0);
+    for (const href of hrefs) expect(consoleBounce('STAFF', job, href)).toBeNull();
+  });
+
+  it('covers every staff job that has a desk in the console', () => {
+    const jobs = ['OFFICE', 'SUPPORT', 'DRIVER', 'HELPER', 'SECURITY', 'LIBRARIAN', 'SPORTS', 'ACCOUNTS', 'ADMISSIONS', 'OTHER'];
+    expect(jobs.filter((j) => consoleDeskFor('STAFF', j) !== null).sort()).toEqual(['ACCOUNTS', 'ADMISSIONS']);
   });
 });
