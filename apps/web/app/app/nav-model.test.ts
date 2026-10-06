@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { NAV_MODEL, groupOf, leafActive, navLeaves, visibleModel } from './nav-model';
+import { NAV_MODEL, deskModel, groupOf, leafActive, navLeaves, visibleModel } from './nav-model';
 
 /**
  * The sidebar's contract. Every console route lives in EXACTLY one place —
@@ -81,5 +81,11 @@ describe('the grouped sidebar model', () => {
     expect(leafActive('/app/fees', '/app/fees/verify')).toBe(true);
     // '/app/staff' must not claim '/app/staff-attendance'.
     expect(leafActive('/app/staff', '/app/staff-attendance')).toBe(false);
+  });
+
+  it('a desk job sees its one room — the sidebar never offers a door that bounces', () => {
+    expect(deskModel('/app/enquiries').map((e) => (e.kind === 'item' ? e.item.label : e.label))).toEqual(['Enquiries']);
+    expect(deskModel('/app/pay').map((e) => (e.kind === 'item' ? e.item.href : e.key))).toEqual(['/app/pay']);
+    expect(deskModel('/app/nowhere')).toEqual([]);
   });
 });
