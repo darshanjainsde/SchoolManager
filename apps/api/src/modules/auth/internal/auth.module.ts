@@ -20,6 +20,6 @@ import { MeProfileService } from './me-profile.service';
   imports: [FeaturesModule, OtpModule],
   providers: [AuthService, PasswordService, PasswordResetService, SchoolResolveService, PhoneProfilesService, OtpAuthService, MeProfileService],
   controllers: [AuthController, AcceptInviteController, OtpAuthController, MeProfileController],
-  exports: [PasswordService],
+  exports: [PasswordService, PhoneProfilesService],
 })
 export class AuthModule {}
