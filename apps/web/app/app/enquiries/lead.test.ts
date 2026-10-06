@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  daysUntil, deskCounts, deskOrder, dialable, dueLabel, initials, isOpen,
-  matchesFilter, matchesQuery, stageTone, STAGE_LABEL,
+  OUTCOMES, daysUntil, deskCounts, deskOrder, dialable, dueLabel, initials, isOpen, leadsCsv,
+  matchesFilter, matchesQuery, sourceLabel, stageButtons, stageTone, STAGE_LABEL,
   type Lead,
 } from './lead';
 
@@ -10,10 +10,11 @@ const TODAY = new Date('2026-09-03T05:00:00.000Z');
 
 function lead(over: Partial<Lead> = {}): Lead {
   return {
-    id: 'l1', parentName: 'Sneha Kulkarni', phone: '+91 98123 00011', email: null,
+    id: 'l1', parentName: 'Sneha Kulkarni', childName: null, phone: '+91 98123 00011', email: null,
     gradeInterest: 'Class III', message: null, status: 'CONTACTED', followUpAt: null,
-    ownerUserId: null, ownerName: null, lostReason: null, noteCount: 0,
-    createdAt: '2026-08-27T10:00:00.000Z',
+    ownerUserId: null, ownerName: null, ownerOnDesk: false, lostReason: null, noteCount: 0,
+    source: 'WEBSITE', whatsappOk: false, lastContactedAt: null,
+    createdAt: '2026-08-27T10:00:00.000Z', updatedAt: '2026-08-27T10:00:00.000Z',
     ...over,
   };
 }
@@ -167,5 +168,91 @@ describe('reaching them', () => {
     expect(initials('Sneha Kulkarni')).toBe('SK');
     expect(initials('Manoj')).toBe('M');
     expect(initials('  Priya   Nair ')).toBe('PN');
+  });
+});
+
+describe('whose leads these are', () => {
+  it('My leads is the open leads this person owns', () => {
+    expect(matchesFilter(lead({ ownerUserId: 'me', ownerOnDesk: true }), 'MINE', TODAY, 'me')).toBe(true);
+    expect(matchesFilter(lead({ ownerUserId: 'other', ownerOnDesk: true }), 'MINE', TODAY, 'me')).toBe(false);
+    expect(matchesFilter(lead({ ownerUserId: 'me', status: 'ENROLLED' }), 'MINE', TODAY, 'me')).toBe(false);
+  });
+
+  /** Before /auth/me answers there is no "me": the filter shows nothing rather than everything. */
+  it('My leads is empty, not everybody, before we know who you are', () => {
+    expect(matchesFilter(lead({ ownerUserId: null }), 'MINE', TODAY, null)).toBe(false);
+  });
+
+  it('Unowned holds the open leads nobody is on — including one whose owner has left the desk', () => {
+    expect(matchesFilter(lead({ ownerUserId: null }), 'UNOWNED', TODAY)).toBe(true);
+    expect(matchesFilter(lead({ ownerUserId: 'gone', ownerOnDesk: false }), 'UNOWNED', TODAY)).toBe(true);
+    expect(matchesFilter(lead({ ownerUserId: 'here', ownerOnDesk: true }), 'UNOWNED', TODAY)).toBe(false);
+    expect(matchesFilter(lead({ ownerUserId: null, status: 'LOST' }), 'UNOWNED', TODAY)).toBe(false);
+  });
+
+  it('Interested is a stage of its own, and still open', () => {
+    expect(matchesFilter(lead({ status: 'INTERESTED' }), 'INTERESTED', TODAY)).toBe(true);
+    expect(isOpen(lead({ status: 'INTERESTED' }))).toBe(true);
+    expect(STAGE_LABEL.INTERESTED).toBe('Interested');
+  });
+});
+
+describe('where a lead came from', () => {
+  it('names the source in plain words', () => {
+    expect(sourceLabel(lead({ source: 'WALK_IN' }))).toBe('Walk-in');
+    expect(sourceLabel(lead({ source: 'COURSE_CARD' }))).toBe('Course card');
+  });
+
+  it('reads a payload from before the source existed as the website', () => {
+    expect(sourceLabel({ source: undefined } as unknown as Lead)).toBe('Website');
+  });
+});
+
+describe('the stage buttons only go forward', () => {
+  it('past stages are records, the current one is marked, only later ones can be pressed', () => {
+    const b = stageButtons('CONTACTED');
+    expect(b.map((x) => x.key)).toEqual(['NEW', 'CONTACTED', 'INTERESTED', 'VISITED', 'APPLIED', 'ENROLLED']);
+    expect(b.map((x) => x.state)).toEqual(['done', 'now', undefined, undefined, undefined, undefined]);
+    expect(b.filter((x) => x.canClick).map((x) => x.key)).toEqual(['INTERESTED', 'VISITED', 'APPLIED', 'ENROLLED']);
+  });
+
+  it('a lost lead presses nothing on the road — it is reopened instead', () => {
+    expect(stageButtons('LOST').some((x) => x.canClick || x.state)).toBe(false);
+    expect(stageButtons('CLOSED').some((x) => x.canClick)).toBe(false);
+  });
+});
+
+describe('after a call', () => {
+  it('asks the same four answers the WhatsApp buttons will', () => {
+    expect(OUTCOMES.map((o) => o.label)).toEqual(['Contacted', 'Interested', 'No answer', 'Lost']);
+  });
+});
+
+describe('exporting the list on screen', () => {
+  it('has one header and one line per lead, in the desk’s words', () => {
+    const row = lead({
+      parentName: 'Sneha Kulkarni', childName: 'Ira', phone: '98123 00011', email: 'sneha@example.com',
+      gradeInterest: 'Class III', source: 'WALK_IN', status: 'CONTACTED', ownerName: 'Sunita Kale',
+      followUpAt: '2026-09-05T00:00:00.000Z', lastContactedAt: '2026-09-02T06:30:00.000Z',
+    });
+    const lines = leadsCsv([row]).trimEnd().split('\r\n');
+    expect(lines).toEqual([
+      'Received,Parent,Child,Phone,Email,Class,Source,Stage,Owner,Follow-up,Last contacted,Lost reason',
+      '2026-08-27,Sneha Kulkarni,Ira,98123 00011,sneha@example.com,Class III,Walk-in,Contacted,Sunita Kale,2026-09-05,2026-09-02,',
+    ]);
+  });
+
+  it('quotes a comma, a quote or a line break, so a message cannot shift the columns', () => {
+    const csv = leadsCsv([lead({ parentName: 'Rao, "Ravi"', status: 'LOST', lostReason: 'Moved\ncity' })]);
+    expect(csv).toContain('"Rao, ""Ravi"""');
+    expect(csv).toContain('"Moved\ncity"');
+  });
+
+  /** The website form is public: whatever a stranger types lands in this file. */
+  it('never hands a spreadsheet a formula typed into the website form', () => {
+    const csv = leadsCsv([lead({ parentName: '=HYPERLINK("http://x","click")', phone: '+91 98123 00011' })]);
+    expect(csv).toContain(`"'=HYPERLINK(""http://x"",""click"")"`);
+    expect(csv).toContain("'+91 98123 00011");
+    expect(csv).not.toMatch(/(^|,)=HYPERLINK/m);
   });
 });
