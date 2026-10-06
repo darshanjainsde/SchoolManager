@@ -37,13 +37,13 @@ export default function AdminProfilePage() {
   const api = useApi({ audience: 'school', hostHeader: host });
   const qc = useQueryClient();
   const key = ['me-profile', host];
-  const q = useQuery({ queryKey: key, enabled: !!host, retry: false, queryFn: () => api.get<MeProfile>('/me/profile') });
+  const q = useQuery({ queryKey: key, enabled: !!host, retry: false, queryFn: () => api.get<MeProfile>('/me/account') });
 
   const [name, setName] = useState('');
   useEffect(() => { if (q.data) setName(q.data.name ?? ''); }, [q.data]);
 
   const save = useMutation({
-    mutationFn: (patch: { name?: string; notifyPrefs?: Partial<Record<PrefKey, boolean>> }) => api.patch<MeProfile>('/me/profile', patch),
+    mutationFn: (patch: { name?: string; notifyPrefs?: Partial<Record<PrefKey, boolean>> }) => api.patch<MeProfile>('/me/account', patch),
     onSuccess: (p, patch) => {
       qc.setQueryData(key, p);
       qc.invalidateQueries({ queryKey: ['me', host] });

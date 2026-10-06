@@ -364,6 +364,24 @@ export const api = {
     return s;
   },
 
+  /**
+   * Can the server send a sign-in code right now (GET /auth/otp/ready)? The
+   * phone door is drawn only on an explicit `true`: prod answered `false`
+   * for weeks while the app opened on "Mobile number" anyway, so a family's
+   * first tap met "Signing in by code is not switched on". A 404 from an
+   * older API, a 500, a bad body or no network all mean the password door.
+   */
+  async otpReady(): Promise<boolean> {
+    try {
+      const res = await safeFetch(`${BASE}/auth/otp/ready`, { headers: { 'X-Skoolos-Client': 'native' } });
+      if (!res.ok) return false;
+      const body = (await res.json()) as { ready?: unknown };
+      return body?.ready === true;
+    } catch {
+      return false;
+    }
+  },
+
   // ── The phone door (design §4). No host: the app does not know the school
   // before the number does, so the server searches every school and the
   // chooser carries each profile's host.

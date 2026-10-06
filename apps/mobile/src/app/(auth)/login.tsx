@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -39,6 +39,22 @@ export default function Login() {
   const insets = useSafeAreaInsets();
 
   const [mode, setMode] = useState<Mode>('phone');
+  // null while asking. The phone door appears only on an explicit yes — never
+  // drawn first and taken away, never offered when the server cannot send a
+  // code (mirrors the web Gatehouse's `otpReady === true`).
+  const [otpReady, setOtpReady] = useState<boolean | null>(null);
+  useEffect(() => {
+    let live = true;
+    api.otpReady().then((r) => { if (live) setOtpReady(r); }).catch(() => { if (live) setOtpReady(false); });
+    return () => { live = false; };
+  }, []);
+  // The password door is what shows while we ask; if someone has already
+  // started typing into it, a late "yes" adds the tabs but does not move them.
+  const typedEarly = useRef(false);
+  useEffect(() => {
+    if (otpReady === true && typedEarly.current) setMode('password');
+  }, [otpReady]);
+  const door: Mode = otpReady === true ? mode : 'password';
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [focus, setFocus] = useState<'phone' | 'code' | 'id' | 'pw' | null>(null);
@@ -170,16 +186,18 @@ export default function Login() {
             <View style={{ gap: 3 }}>
               <Text style={{ fontFamily: font.serif, fontSize: 21, fontWeight: '600', letterSpacing: -0.2, color: tokens.color.ink }}>Welcome back</Text>
               <Text style={{ fontSize: 12, lineHeight: 17, color: sub }}>
-                {mode === 'phone' ? 'Your mobile number is all it takes — a code comes on WhatsApp.' : 'Your student code (like RAF-00042) or email is all it takes — no school code.'}
+                {door === 'phone' ? 'Your mobile number is all it takes — a code comes on WhatsApp.' : 'Your student code (like RAF-00042) or email is all it takes — no school code.'}
               </Text>
             </View>
 
-            <View style={{ flexDirection: 'row', gap: 4, padding: 4, borderRadius: 12, backgroundColor: tokens.color.appBg }}>
-              {modeTab('phone', 'Mobile number')}
-              {modeTab('password', 'Email & password')}
-            </View>
+            {otpReady === true ? (
+              <View style={{ flexDirection: 'row', gap: 4, padding: 4, borderRadius: 12, backgroundColor: tokens.color.appBg }}>
+                {modeTab('phone', 'Mobile number')}
+                {modeTab('password', 'Email & password')}
+              </View>
+            ) : null}
 
-            {mode === 'phone' && step === 'phone' ? (
+            {door === 'phone' && step === 'phone' ? (
               <>
                 <Field label="Mobile number">
                   <TextInput
@@ -193,7 +211,7 @@ export default function Login() {
               </>
             ) : null}
 
-            {mode === 'phone' && step === 'code' && req ? (
+            {door === 'phone' && step === 'code' && req ? (
               <>
                 <Field label="The 6-digit code">
                   <TextInput
@@ -214,7 +232,7 @@ export default function Login() {
               </>
             ) : null}
 
-            {mode === 'phone' && step === 'choose' && choice ? (
+            {door === 'phone' && step === 'choose' && choice ? (
               <View style={{ gap: 8 }} testID="otp-choose">
                 <Text style={{ fontSize: 13.5, fontWeight: '700', color: tokens.color.ink }}>Who are you opening for?</Text>
                 <Text style={{ fontSize: 12, color: sub }}>This number is on more than one profile. The others stay one tap away on the shelf.</Text>
@@ -238,18 +256,18 @@ export default function Login() {
               </View>
             ) : null}
 
-            {mode === 'password' ? (
+            {door === 'password' ? (
               <>
                 <Field label="Student code or email">
                   <TextInput
-                    value={identifier} onChangeText={setIdentifier} placeholder="RAF-00042" placeholderTextColor={tokens.color.placeholder}
+                    value={identifier} onChangeText={(v) => { if (otpReady !== true) typedEarly.current = true; setIdentifier(v); }} placeholder="RAF-00042" placeholderTextColor={tokens.color.placeholder}
                     autoCapitalize="none" autoCorrect={false} keyboardType="email-address" autoComplete="username" textContentType="username" testID="login-id"
                     onFocus={() => setFocus('id')} onBlur={() => setFocus(null)} style={fieldInputStyle(tokens, { focused: focus === 'id' })}
                   />
                 </Field>
                 <Field label="Password">
                   <TextInput
-                    value={password} onChangeText={setPassword} placeholder="••••••••" placeholderTextColor={tokens.color.placeholder}
+                    value={password} onChangeText={(v) => { if (otpReady !== true) typedEarly.current = true; setPassword(v); }} placeholder="••••••••" placeholderTextColor={tokens.color.placeholder}
                     secureTextEntry autoComplete="password" textContentType="password" testID="login-pw"
                     onFocus={() => setFocus('pw')} onBlur={() => setFocus(null)} style={fieldInputStyle(tokens, { focused: focus === 'pw' })}
                   />
