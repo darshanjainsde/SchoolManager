@@ -20,4 +20,12 @@ describe('toNotificationMessage', () => {
   it('an unknown kind is refused, never rendered as an assignment', () => {
     expect(() => toNotificationMessage('NOPE' as NotificationOutboxKind, {}, 'x')).toThrow(/NOPE/);
   });
+
+  it('a fee-due row with its term and date becomes the FEE topic; an older row without them stays general', () => {
+    const S = 'Raffles Public School';
+    const withTerm = toNotificationMessage('FEE_DUE', { schoolName: S, title: 't', body: 'b', termName: 'Term 2', dueOn: 'Mon 13 Oct 2026' }, 'x');
+    expect(withTerm.kind === 'ANNOUNCEMENT' && withTerm.payload.topic).toEqual({ kind: 'FEE', term: 'Term 2', dueOn: 'Mon 13 Oct 2026' });
+    const old = toNotificationMessage('FEE_DUE', { schoolName: S, title: 't', body: 'b' }, 'x');
+    expect(old.kind === 'ANNOUNCEMENT' && old.payload.topic).toBeFalsy();
+  });
 });

@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { getPlatformPrisma, resolveFeatures, type Prisma } from '@skoolos/db';
 import type { FeeDecisionOutboxPayload } from '../../common/notifications/notification.types';
-import { istTodayISO } from '../../common/dates/timetable-date';
+import { istTodayISO, shortDayDate } from '../../common/dates/timetable-date';
 import { formatRupees } from './money';
 import { requestOutboxDrain } from '../../common/notifications/outbox-signal';
 
@@ -77,7 +77,7 @@ export class FeeDueSoonService {
           schoolId: inv.schoolId,
           kind: 'FEE_DUE',
           targetUserId: userId,
-          payload: { schoolName: school.name, title, body } satisfies FeeDecisionOutboxPayload as unknown as Prisma.InputJsonValue,
+          payload: { schoolName: school.name, title, body, termName: inv.term.name, dueOn: shortDayDate(new Date(`${dueISO}T00:00:00Z`)) } satisfies FeeDecisionOutboxPayload as unknown as Prisma.InputJsonValue,
         },
       });
       notices++;

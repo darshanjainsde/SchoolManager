@@ -188,7 +188,15 @@ export function toNotificationMessage(kind: NotificationOutboxKind, payload: unk
       const p = payload as FeeDecisionOutboxPayload;
       return {
         kind: 'ANNOUNCEMENT',
-        payload: { schoolName: p.schoolName, title: p.title, body: p.body, className: 'Fees', postedOn },
+        payload: {
+          schoolName: p.schoolName,
+          title: p.title,
+          body: p.body,
+          className: 'Fees',
+          postedOn,
+          // Only the due-date reminder has a narrow template; a decision on a claim stays general.
+          topic: kind === 'FEE_DUE' && p.termName && p.dueOn ? { kind: 'FEE', term: p.termName, dueOn: p.dueOn } : null,
+        },
       };
     }
     case 'SESSION_STARTED': {
