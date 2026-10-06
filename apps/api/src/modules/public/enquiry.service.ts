@@ -245,8 +245,11 @@ export class EnquiryService {
         throw new ApiError('ENQUIRY_OWNER_NOT_DESK', 'A lead can only be given to an admissions officer or a school admin.', 400, 'ownerUserId');
       }
 
+      const stageChanges = dto.status !== undefined && move !== 'SAME';
       const data: Record<string, unknown> = {};
-      if (dto.status !== undefined) data.status = dto.status;
+      // Only a real move writes the stage: echoing the stage a lead already has
+      // must not overwrite another desk's concurrent move.
+      if (stageChanges) data.status = dto.status;
       if (dto.followUpAt !== undefined) {
         data.followUpAt = dto.followUpAt ? new Date(dto.followUpAt) : null;
       }
@@ -257,16 +260,16 @@ export class EnquiryService {
       if (terminal) data.followUpAt = null;
       // A reason belongs to being lost. Moving back out of LOST drops it rather
       // than leaving a stale explanation attached to a live lead.
-      if (dto.status !== undefined && dto.status !== 'LOST' && dto.lostReason === undefined) {
+      if (stageChanges && dto.status !== 'LOST' && dto.lostReason === undefined) {
         data.lostReason = null;
       }
 
-      const stageChanges = dto.status !== undefined && move !== 'SAME';
       const reasonChanged = lostNow && !stageChanges && !!reason && reason !== (existing.lostReason ?? '').trim();
 
       let updated: Awaited<ReturnType<typeof tx.enquiry.update>>;
-      if (stageChanges) {
-        // Compare-and-set on the stage we judged the move against. Under READ
+      if (stageChanges || dto.lostReason !== undefined) {
+        // Compare-and-set on the stage we judged against — for a move, and for a
+        // lost reason (it only means something while the lead is still LOST). Under READ
         // COMMITTED two desks could both pass "forward" from the same stage and
         // the last commit would win, moving the lead backwards.
         const { count } = await tx.enquiry.updateMany({ where: { id, schoolId, status: existing.status }, data });
