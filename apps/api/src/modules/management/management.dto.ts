@@ -20,6 +20,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { BlankAsNull, IsMobile, NormaliseEmail } from '../../common/validation/form-fields';
 import { BLOOD_GROUPS, EMPLOYMENT_TYPES, GENDERS, POLICE_VERIFICATION, RESULT_STATUSES, STUDENT_CATEGORIES, TEACHER_DESIGNATIONS, TET_STATUSES, codesOf } from '@skoolos/types';
 import {
   ASSIGNMENT_ATTACHMENT_KINDS,
@@ -166,134 +167,110 @@ export class UpdateWorkingDaysDto {
 
 // ── Teacher ──────────────────────────────────────────────────────────────────
 
-export class CreateTeacherDto {
-  @IsString()
-  @Length(1, 120)
-  firstName!: string;
-
-  @IsString()
-  @Length(1, 120)
-  lastName!: string;
-
-  @IsOptional()
-  @IsEmail()
-  email?: string;
-
-  @IsOptional()
-  @IsString()
-  phone?: string;
-
-  @IsOptional()
-  @IsUUID()
-  photoAssetId?: string;
-
-  @IsOptional()
-  @IsUUID()
-  primarySubjectId?: string;
-
-  @IsOptional()
-  @IsString()
-  bio?: string;
+/**
+ * The teacher record a form or a sheet can fill in, every field optional.
+ *
+ * `@BlankAsNull()` on each: the form sends '' for a field nobody touched (and
+ * for one an edit clears), and `@IsOptional()` alone would run `@IsIn` /
+ * `@IsDateString` against that '' and refuse it — see form-fields.ts.
+ */
+class TeacherRecordFields {
+  @IsOptional() @IsUUID() photoAssetId?: string | null;
+  @IsOptional() @IsUUID() primarySubjectId?: string;
+  @IsOptional() @IsString() bio?: string;
 
   // `isActive` mirrors `status` and is written only by release / reactivate.
-  // ── Onboarding record — every field optional; lists come from @skoolos/types ──
-  @IsOptional() @IsIn(codesOf(GENDERS)) gender?: string;
-  @IsOptional() @IsDateString() dob?: string;
-  @IsOptional() @IsIn([...BLOOD_GROUPS]) bloodGroup?: string;
-  @IsOptional() @IsString() @Length(0, 30) whatsappPhone?: string;
+  // ── Onboarding record — lists come from @skoolos/types ──
+  @BlankAsNull() @IsOptional() @IsIn(codesOf(GENDERS)) gender?: string | null;
+  @BlankAsNull() @IsOptional() @IsDateString() dob?: string | null;
+  @BlankAsNull() @IsOptional() @IsIn([...BLOOD_GROUPS]) bloodGroup?: string | null;
+  @BlankAsNull() @IsOptional() @IsMobile({ message: 'Enter a 10-digit WhatsApp number, or leave it blank to use the mobile.' }) whatsappPhone?: string | null;
   @IsOptional() @IsBoolean() whatsappOptIn?: boolean;
-  @IsOptional() @IsString() @Length(0, 40) employeeCode?: string;
-  @IsOptional() @IsIn(codesOf(TEACHER_DESIGNATIONS)) designation?: string;
-  @IsOptional() @IsString() @Length(0, 80) department?: string;
-  @IsOptional() @IsIn(codesOf(EMPLOYMENT_TYPES)) employmentType?: string;
-  @IsOptional() @IsDateString() joinedOn?: string;
-  @IsOptional() @IsString() @Length(0, 120) highestQualification?: string;
-  @IsOptional() @IsString() @Length(0, 60) professionalQualification?: string;
-  @IsOptional() @IsIn(codesOf(TET_STATUSES)) tetStatus?: string;
-  @IsOptional() @IsString() @Length(0, 60) tetCertificateNo?: string;
-  @IsOptional() @IsDateString() tetValidTill?: string;
-  @IsOptional() @IsString() @Length(0, 120) specialisation?: string;
-  @IsOptional() @IsInt() @Min(0) @Max(60) experienceYears?: number;
-  @IsOptional() @IsString() @Length(0, 160) previousSchool?: string;
-  @IsOptional() @IsString() @Length(0, 160) addressLine1?: string;
-  @IsOptional() @IsString() @Length(0, 160) addressLine2?: string;
-  @IsOptional() @IsString() @Length(0, 80) city?: string;
-  @IsOptional() @IsString() @Length(0, 80) region?: string;
-  @IsOptional() @IsString() @Length(0, 12) postalCode?: string;
-  @IsOptional() @IsString() @Length(0, 120) emergencyContactName?: string;
-  @IsOptional() @IsString() @Length(0, 30) emergencyContactPhone?: string;
-  @IsOptional() @IsString() @Length(0, 40) emergencyContactRelation?: string;
-  @IsOptional() @IsIn(codesOf(POLICE_VERIFICATION)) policeVerification?: string;
-  @IsOptional() @IsDateString() policeVerifiedOn?: string;
-  @IsOptional() @IsDateString() medicalFitnessOn?: string;
-  @IsOptional() @IsDateString() pocsoTrainedOn?: string;
-
+  @BlankAsNull() @IsOptional() @IsString() @Length(0, 40) employeeCode?: string | null;
+  @BlankAsNull() @IsOptional() @IsIn(codesOf(TEACHER_DESIGNATIONS)) designation?: string | null;
+  @BlankAsNull() @IsOptional() @IsString() @Length(0, 80) department?: string | null;
+  @BlankAsNull() @IsOptional() @IsIn(codesOf(EMPLOYMENT_TYPES)) employmentType?: string | null;
+  @BlankAsNull() @IsOptional() @IsDateString() joinedOn?: string | null;
+  @BlankAsNull() @IsOptional() @IsString() @Length(0, 120) highestQualification?: string | null;
+  @BlankAsNull() @IsOptional() @IsString() @Length(0, 60) professionalQualification?: string | null;
+  @BlankAsNull() @IsOptional() @IsIn(codesOf(TET_STATUSES)) tetStatus?: string | null;
+  @BlankAsNull() @IsOptional() @IsString() @Length(0, 60) tetCertificateNo?: string | null;
+  @BlankAsNull() @IsOptional() @IsDateString() tetValidTill?: string | null;
+  @BlankAsNull() @IsOptional() @IsString() @Length(0, 120) specialisation?: string | null;
+  @IsOptional() @IsInt() @Min(0) @Max(60) experienceYears?: number | null;
+  @BlankAsNull() @IsOptional() @IsString() @Length(0, 160) previousSchool?: string | null;
+  @BlankAsNull() @IsOptional() @IsString() @Length(0, 160) addressLine1?: string | null;
+  @BlankAsNull() @IsOptional() @IsString() @Length(0, 160) addressLine2?: string | null;
+  @BlankAsNull() @IsOptional() @IsString() @Length(0, 80) city?: string | null;
+  @BlankAsNull() @IsOptional() @IsString() @Length(0, 80) region?: string | null;
+  @BlankAsNull() @IsOptional() @IsString() @Length(0, 12) postalCode?: string | null;
+  @BlankAsNull() @IsOptional() @IsString() @Length(0, 120) emergencyContactName?: string | null;
+  @BlankAsNull() @IsOptional() @IsString() @Length(0, 30) emergencyContactPhone?: string | null;
+  @BlankAsNull() @IsOptional() @IsString() @Length(0, 40) emergencyContactRelation?: string | null;
+  @BlankAsNull() @IsOptional() @IsIn(codesOf(POLICE_VERIFICATION)) policeVerification?: string | null;
+  @BlankAsNull() @IsOptional() @IsDateString() policeVerifiedOn?: string | null;
+  @BlankAsNull() @IsOptional() @IsDateString() medicalFitnessOn?: string | null;
+  @BlankAsNull() @IsOptional() @IsDateString() pocsoTrainedOn?: string | null;
 }
 
-export class UpdateTeacherDto {
+/**
+ * Adding a teacher needs three things (2026-10-07): a first name, the email
+ * that becomes their login, and the mobile that WhatsApp, the phone login and
+ * leave approvals all hang on. A last name is optional — many teachers go by
+ * one name. Everything else can be filled at hiring or later.
+ */
+export class CreateTeacherDto extends TeacherRecordFields {
+  @IsString()
+  @Length(1, 120, { message: 'Enter their first name.' })
+  firstName!: string;
+
   @IsOptional()
   @IsString()
-  @Length(1, 120)
+  @Length(0, 120)
+  lastName?: string;
+
+  @NormaliseEmail()
+  @IsEmail({}, { message: 'Enter their email. It becomes their login.' })
+  email!: string;
+
+  @IsString({ message: 'Enter a 10-digit mobile number.' })
+  @IsMobile()
+  phone!: string;
+}
+
+/**
+ * An edit sends only what changed. A record made before email and mobile were
+ * required may still lack them, so they stay optional here — but a value that
+ * IS sent has to be a real one: neither can be blanked once set.
+ */
+export class UpdateTeacherDto extends TeacherRecordFields {
+  @IsOptional()
+  @IsString()
+  @Length(1, 120, { message: 'Enter their first name.' })
   firstName?: string;
 
   @IsOptional()
   @IsString()
-  @Length(1, 120)
+  @Length(0, 120)
   lastName?: string;
 
   @IsOptional()
-  @IsEmail()
+  @NormaliseEmail()
+  @IsEmail({}, { message: 'Enter their email. It becomes their login.' })
   email?: string;
 
   @IsOptional()
   @IsString()
+  @IsMobile()
   phone?: string;
+}
 
-  @IsOptional()
-  @IsUUID()
-  photoAssetId?: string;
-
-  @IsOptional()
-  @IsUUID()
-  primarySubjectId?: string;
-
-  @IsOptional()
-  @IsString()
-  bio?: string;
-
-  // `isActive` mirrors `status` and is written only by release / reactivate.
-  // ── Onboarding record — every field optional; lists come from @skoolos/types ──
-  @IsOptional() @IsIn(codesOf(GENDERS)) gender?: string;
-  @IsOptional() @IsDateString() dob?: string;
-  @IsOptional() @IsIn([...BLOOD_GROUPS]) bloodGroup?: string;
-  @IsOptional() @IsString() @Length(0, 30) whatsappPhone?: string;
-  @IsOptional() @IsBoolean() whatsappOptIn?: boolean;
-  @IsOptional() @IsString() @Length(0, 40) employeeCode?: string;
-  @IsOptional() @IsIn(codesOf(TEACHER_DESIGNATIONS)) designation?: string;
-  @IsOptional() @IsString() @Length(0, 80) department?: string;
-  @IsOptional() @IsIn(codesOf(EMPLOYMENT_TYPES)) employmentType?: string;
-  @IsOptional() @IsDateString() joinedOn?: string;
-  @IsOptional() @IsString() @Length(0, 120) highestQualification?: string;
-  @IsOptional() @IsString() @Length(0, 60) professionalQualification?: string;
-  @IsOptional() @IsIn(codesOf(TET_STATUSES)) tetStatus?: string;
-  @IsOptional() @IsString() @Length(0, 60) tetCertificateNo?: string;
-  @IsOptional() @IsDateString() tetValidTill?: string;
-  @IsOptional() @IsString() @Length(0, 120) specialisation?: string;
-  @IsOptional() @IsInt() @Min(0) @Max(60) experienceYears?: number;
-  @IsOptional() @IsString() @Length(0, 160) previousSchool?: string;
-  @IsOptional() @IsString() @Length(0, 160) addressLine1?: string;
-  @IsOptional() @IsString() @Length(0, 160) addressLine2?: string;
-  @IsOptional() @IsString() @Length(0, 80) city?: string;
-  @IsOptional() @IsString() @Length(0, 80) region?: string;
-  @IsOptional() @IsString() @Length(0, 12) postalCode?: string;
-  @IsOptional() @IsString() @Length(0, 120) emergencyContactName?: string;
-  @IsOptional() @IsString() @Length(0, 30) emergencyContactPhone?: string;
-  @IsOptional() @IsString() @Length(0, 40) emergencyContactRelation?: string;
-  @IsOptional() @IsIn(codesOf(POLICE_VERIFICATION)) policeVerification?: string;
-  @IsOptional() @IsDateString() policeVerifiedOn?: string;
-  @IsOptional() @IsDateString() medicalFitnessOn?: string;
-  @IsOptional() @IsDateString() pocsoTrainedOn?: string;
-
+/** The live "who is this?" check the Add teacher form runs as the office types. */
+export class TeacherIdentityQueryDto {
+  @BlankAsNull() @IsOptional() @NormaliseEmail() @IsString() @Length(0, 254) email?: string | null;
+  @BlankAsNull() @IsOptional() @IsString() @Length(0, 30) phone?: string | null;
+  /** The record being edited — never reported as its own duplicate. */
+  @BlankAsNull() @IsOptional() @IsUUID() excludeId?: string | null;
 }
 
 // ── Staff (non-teaching) ────────────────────────────────────────────────────

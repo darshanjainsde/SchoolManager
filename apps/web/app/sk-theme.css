@@ -4836,3 +4836,119 @@ button.sk-hubdoor:hover { transform: translateY(-2px); border-color: var(--sk-br
 .sk-annempty h4 { font-family: var(--sk-serif); font-size: 16px; font-weight: 650; color: var(--sk-ink); }
 .sk-annempty p { max-width: 42ch; font-size: 13px; line-height: 1.55; color: var(--sk-ink-3); }
 .sk-annempty > .sk-btn { margin-top: 6px; }
+
+/* ═══ DATE FIELD (components/ui/date-field.tsx) ══════════════════════════════
+   Typed first (dd/mm/yyyy, slashes put in as you type), calendar second: month
+   and year are dropdowns, so a date of birth is two picks, not forty clicks of
+   "previous month". The popover hangs off the field and flips above it when
+   the page has no room below. Day cells clear the 24px touch floor. */
+.sk-dfield { position: relative; min-width: 0; }
+.sk-dfield > input { width: 100%; box-sizing: border-box; padding-right: 38px; font-variant-numeric: tabular-nums; }
+.sk-dfield-btn {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 8px;
+  background: none; color: var(--sk-ink-3); cursor: pointer;
+}
+.sk-dfield-btn:hover:not(:disabled) { color: var(--sk-brand); background: color-mix(in srgb, var(--sk-brand) 9%, transparent); }
+.sk-dfield-btn:disabled { cursor: default; opacity: .5; }
+/* The hint sits under the input; the button centres on the input alone. */
+.sk-dfield:has(.sk-dfield-hint) .sk-dfield-btn { top: 19px; }
+.sk-dfield-hint { display: block; margin-top: 5px; font-size: 12px; color: var(--sk-bad); }
+.sk-dfield-pop {
+  position: fixed; z-index: 80;
+  /* A fixed box's % is of the window. The script sets the exact width; this is the fallback. */
+  width: min(304px, calc(100% - 32px)); box-sizing: border-box; padding: 12px;
+  background: var(--sk-card); border: 1px solid var(--sk-line-2); border-radius: 14px;
+  box-shadow: 0 18px 40px -12px rgba(20, 16, 50, .28), 0 2px 6px rgba(20, 16, 50, .08);
+}
+.sk-dfield-head { display: grid; grid-template-columns: 32px minmax(0, 1.4fr) minmax(0, 1fr) 32px; gap: 6px; align-items: center; margin-bottom: 10px; }
+.sk-dfield-head select {
+  width: 100%; min-width: 0; box-sizing: border-box; height: 34px; padding: 0 8px;
+  border: 1px solid var(--sk-line-2); border-radius: 9px; background: var(--sk-card); color: var(--sk-ink);
+  font: 600 13px/1 inherit; font-family: inherit; cursor: pointer;
+}
+.sk-dfield-head select:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: 1px; }
+.sk-dfield-nav {
+  display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--sk-line-2); border-radius: 9px;
+  background: var(--sk-card); color: var(--sk-ink-2, var(--sk-ink)); cursor: pointer;
+}
+.sk-dfield-nav:hover { border-color: var(--sk-brand); color: var(--sk-brand); }
+.sk-dfield-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
+.sk-dfield-grid .wd { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; color: var(--sk-ink-3); text-align: center; padding-bottom: 4px; }
+.sk-dfield-grid button {
+  height: 36px; min-width: 0; border: 1px solid transparent; border-radius: 9px; background: none;
+  color: var(--sk-ink); font: 500 13px/1 inherit; font-family: inherit; font-variant-numeric: tabular-nums; cursor: pointer;
+}
+.sk-dfield-grid button:hover:not(:disabled) { background: color-mix(in srgb, var(--sk-brand) 10%, transparent); }
+.sk-dfield-grid button[data-today] { border-color: color-mix(in srgb, var(--sk-brand) 45%, transparent); font-weight: 700; }
+.sk-dfield-grid button[aria-selected="true"] { background: var(--sk-brand); border-color: var(--sk-brand); color: #fff; font-weight: 700; }
+.sk-dfield-grid button:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: 1px; }
+.sk-dfield-grid button:disabled { color: var(--sk-ink-3); opacity: .4; cursor: default; }
+.sk-dfield-foot { display: flex; justify-content: space-between; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--sk-line); }
+.sk-dfield-link { border: 0; background: none; padding: 6px 4px; color: var(--sk-brand); font: 600 12.5px/1 inherit; font-family: inherit; cursor: pointer; min-height: 28px; }
+.sk-dfield-link:disabled { color: var(--sk-ink-3); cursor: default; }
+
+/* ═══ TEACHER FORM (app/app/teachers/teacher-form.tsx) ═══════════════════════
+   UI ledger `form-card-capped-on-a-wide-screen`: the card used to be capped at
+   640px, leaving the right half of a 1440–1920px console empty while the form
+   ran three screens tall. Now the form takes the width — fields flow two or
+   three across — and a sticky side panel earns the rest: who this person
+   already is, and what the record still lacks. Stacks on a phone.
+   Ledger `required-field-errors-not-shown-on-the-field`: an invalid field is
+   red on its own box, with its reason under it, and the summary on top. */
+.sk-tform { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (min-width: 1100px) { .sk-tform { grid-template-columns: minmax(0, 1fr) minmax(min(100%, 280px), 340px); } }
+.sk-tform-main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.sk-tform-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 14px 14px; }
+.sk-tform-grid > .wide { grid-column: 1 / -1; }
+.sk-tf-field { display: flex; flex-direction: column; min-width: 0; }
+.sk-tf-field > label.sk-lab[data-req]::after { content: '*'; color: var(--sk-bad); margin-left: 3px; }
+.sk-tf-in {
+  display: block; width: 100%; box-sizing: border-box; min-height: 40px; padding: 9px 11px;
+  border: 1px solid var(--sk-line-2); border-radius: 10px; background: var(--sk-card); color: var(--sk-ink);
+  font: 13.5px/1.3 inherit; font-family: inherit; transition: border-color .12s, box-shadow .12s;
+}
+.sk-tf-in::placeholder { color: var(--sk-ink-3); opacity: .75; }
+.sk-tf-in:focus { outline: none; border-color: var(--sk-brand); box-shadow: 0 0 0 3px color-mix(in srgb, var(--sk-brand) 18%, transparent); }
+.sk-tf-in[aria-invalid="true"] { border-color: var(--sk-bad); box-shadow: 0 0 0 3px color-mix(in srgb, var(--sk-bad) 16%, transparent); }
+.sk-tf-field:has([aria-invalid="true"]) > label.sk-lab { color: var(--sk-bad); }
+.sk-tf-hint { margin-top: 5px; font-size: 11.5px; color: var(--sk-ink-3); }
+.sk-tf-err { margin-top: 5px; font-size: 12px; font-weight: 600; color: var(--sk-bad); }
+.sk-tf-ok { margin-top: 5px; font-size: 12px; color: var(--sk-good); }
+.sk-tf-sum {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 10px 12px; border-radius: 10px;
+  background: var(--sk-bad-tint); color: var(--sk-bad); font-size: 13px; font-weight: 600;
+}
+.sk-tf-sum button { border: 0; background: none; padding: 4px 2px; min-height: 30px; color: inherit; font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.sk-tf-sect { border-top: 1px solid var(--sk-line); padding-top: 4px; }
+.sk-tf-sect > button {
+  width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 0; min-height: 40px;
+  border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.sk-tf-sect > button .t { font-weight: 700; font-size: 13.5px; }
+.sk-tf-sect > button .s { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--sk-ink-3); font-size: 12px; }
+.sk-tf-sect > button .bad { color: var(--sk-bad); font-size: 12px; font-weight: 600; }
+.sk-tf-sect > .body { display: flex; flex-direction: column; gap: 14px; padding: 4px 0 10px; }
+.sk-tf-side { position: sticky; top: 16px; display: flex; flex-direction: column; gap: 14px; }
+.sk-tf-side .sk-card-b { display: flex; flex-direction: column; gap: 10px; }
+.sk-tf-who { display: flex; gap: 10px; align-items: flex-start; padding: 9px 10px; border-radius: 10px; background: var(--sk-paper); font-size: 12.5px; line-height: 1.45; }
+.sk-tf-who b { font-weight: 700; }
+.sk-tf-who .dot { flex: none; width: 9px; height: 9px; margin-top: 5px; border-radius: 50%; background: var(--sk-good); }
+.sk-tf-who[data-tone="warn"] .dot { background: var(--sk-amber); }
+.sk-tf-who[data-tone="bad"] .dot { background: var(--sk-bad); }
+.sk-tf-who[data-tone="idle"] .dot { background: var(--sk-line-2); }
+.sk-tf-meter { height: 6px; border-radius: 99px; background: var(--sk-line); overflow: hidden; }
+.sk-tf-meter > i { display: block; height: 100%; background: var(--sk-brand); border-radius: inherit; transition: width .2s; }
+.sk-tf-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 12.5px; }
+.sk-tf-list li { display: flex; gap: 8px; align-items: center; color: var(--sk-ink-3); }
+.sk-tf-list li::before { content: ''; flex: none; width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--sk-line-2); }
+.sk-tf-list li[data-done] { color: var(--sk-ink); }
+.sk-tf-list li[data-done]::before { background: var(--sk-good); border-color: var(--sk-good); }
+@media (max-width: 1099px) { .sk-tf-side { position: static; } }
+
+/* The WhatsApp consent tick: a native checkbox ignores padding (UI ledger
+   `padding-ignored-on-a-native-form-control`), so on a touch screen the box
+   itself grows to the 24px floor. */
+@media (pointer: coarse), (max-width: 640px) {
+  .sk-tform input[type="checkbox"] { width: 24px; height: 24px; margin: -2px 0 0; flex: none; }
+}

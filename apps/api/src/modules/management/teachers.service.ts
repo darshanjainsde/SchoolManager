@@ -1,13 +1,14 @@
 import { toE164 } from '../../common/otp/phone-identity';
 import { randomBytes } from 'node:crypto';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { getPlatformPrisma, withTenant } from '@skoolos/db';
+import { withTenant } from '@skoolos/db';
 import type { TeacherProfile } from '@skoolos/types';
 import { PasswordService } from '../auth';
 import { ApiError } from '../../common/errors/api-error';
 import { isP2002, isP2003, isP2025, p2002Target } from '../../common/errors/prisma-errors';
 import { LoginInviteService } from './internal/login-invite.service';
 import { closeLoginIn, reopenLoginIn } from './internal/close-login';
+import { activeElsewhere, assertIdentityFree, ELSEWHERE_MESSAGE, findTeacherHere, identityOf, type TeacherHere } from './internal/teacher-identity';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 import { AuditService } from '../../common/audit/audit.service';
@@ -127,38 +128,96 @@ export class TeachersService {
   }
 
   async create(schoolId: string, dto: CreateTeacherDto) {
+    const identity = identityOf(dto);
     try {
-      return await withTenant(schoolId, (tx) =>
-        tx.teacher.create({
+      return await withTenant(schoolId, async (tx) => {
+        // One record per person here, one active post per person anywhere.
+        await assertIdentityFree(tx, schoolId, identity);
+        return tx.teacher.create({
           // phoneE164 is the office number normalised — the phone login's index;
           // whatsappPhoneE164 is the number an inbound WhatsApp action resolves.
-          data: { ...teacherRecordData(dto), phoneE164: toE164(dto.phone), whatsappPhoneE164: toE164(dto.whatsappPhone), schoolId },
-        }),
-      );
+          data: {
+            ...teacherRecordData(dto),
+            lastName: dto.lastName?.trim() ?? '',
+            email: identity.email,
+            phoneE164: identity.phoneE164,
+            whatsappPhoneE164: toE164(dto.whatsappPhone),
+            schoolId,
+          },
+        });
+      });
     } catch (e) {
       if (isP2002(e)) throw new ConflictException('A teacher with those details already exists');
       throw e;
     }
   }
 
+  /**
+   * "Who is this?" — what the Add / Edit teacher form shows beside the email
+   * and mobile as they are typed, before Save. The same rules Save enforces
+   * (assertIdentityFree), read without writing, plus one thing Save never
+   * blocks on: the number is also a family login here, which is fine and
+   * worth saying so the office is not surprised by it.
+   */
+  async identityCheck(schoolId: string, q: { email?: string | null; phone?: string | null; excludeId?: string | null }) {
+    const identity = identityOf(q);
+    const empty = { teacherHere: null as (TeacherHere & { left: boolean }) | null, activeElsewhere: null as 'email' | 'phone' | null, familyHere: [] as string[], phoneValid: q.phone ? identity.phoneE164 !== null : null };
+    if (!identity.email && !identity.phoneE164) return empty;
+    const [here, family] = await withTenant(schoolId, async (tx) => [
+      await findTeacherHere(tx, schoolId, identity, q.excludeId),
+      identity.phoneE164
+        ? await tx.student.findMany({
+            where: { schoolId, guardianPhoneE164: identity.phoneE164, isActive: true },
+            take: 4,
+            orderBy: [{ firstName: 'asc' }],
+            select: { firstName: true, lastName: true, classSection: { select: { name: true, grade: { select: { name: true } } } } },
+          })
+        : [],
+    ] as const);
+    // Someone already here is the answer; whether they are also elsewhere is moot.
+    const elsewhere = here ? null : await activeElsewhere(schoolId, identity);
+    return {
+      ...empty,
+      teacherHere: here ? { ...here, left: here.status === 'LEFT' } : null,
+      activeElsewhere: elsewhere,
+      familyHere: family.map((s) => `${s.firstName} ${s.lastName}`.trim() + (s.classSection ? ` (${s.classSection.grade.name}-${s.classSection.name})` : '')),
+    };
+  }
+
   async update(schoolId: string, id: string, dto: UpdateTeacherDto) {
     try {
-      return await withTenant(schoolId, (tx) =>
-        tx.teacher.update({
+      return await withTenant(schoolId, async (tx) => {
+        // Only an identifier that CHANGES is checked: a record that predates
+        // these rules (or shares a number with a sample school's copy) must
+        // still be editable for everything else.
+        if (dto.email !== undefined || dto.phone !== undefined) {
+          const cur = await tx.teacher.findFirst({ where: { schoolId, id }, select: { email: true, phoneE164: true } });
+          if (!cur) throw new NotFoundException('Teacher not found');
+          const next = identityOf(dto);
+          const changed = {
+            email: dto.email !== undefined && next.email !== (cur.email?.toLowerCase() ?? null) ? next.email : null,
+            phoneE164: dto.phone !== undefined && next.phoneE164 !== cur.phoneE164 ? next.phoneE164 : null,
+          };
+          await assertIdentityFree(tx, schoolId, changed, id);
+        }
+        return tx.teacher.update({
           where: { id },
           data: {
             ...teacherRecordData(dto),
+            ...(dto.lastName !== undefined ? { lastName: dto.lastName.trim() } : {}),
+            ...(dto.email !== undefined ? { email: identityOf(dto).email } : {}),
             ...(dto.phone !== undefined ? { phoneE164: toE164(dto.phone) } : {}),
             ...(dto.whatsappPhone !== undefined ? { whatsappPhoneE164: toE164(dto.whatsappPhone) } : {}),
           },
-        }),
-      );
+        });
+      });
     } catch (e) {
       if (isP2025(e)) throw new NotFoundException('Teacher not found');
       if (isP2002(e)) throw new ConflictException('A teacher with those details already exists');
       throw e;
     }
   }
+
 
   async remove(schoolId: string, id: string) {
     try {
@@ -328,42 +387,25 @@ export class TeachersService {
   }
 
   /**
-   * One school per teacher (Phase 5·1): the same identity (email) must not
-   * hold an ACTIVE teaching post with a login at another school. Cross-tenant
-   * by nature, so this runs on the platform client — the tenant-scoped `tx`
-   * cannot see other schools by design. Released teachers (isActive=false)
-   * don't block; neither do rows never linked to a login.
+   * One school per teacher (Phase 5·1, widened 2026-10-07): the same person —
+   * by email OR mobile — must not hold an ACTIVE teaching post at another
+   * school. Released teachers (isActive=false) don't block. The message names
+   * no school: where someone works is not another office's to learn.
    */
-  private async assertNotActiveElsewhere(schoolId: string, email: string): Promise<void> {
-    const platform = getPlatformPrisma();
-    const elsewhere = await platform.teacher.findFirst({
-      where: {
-        email: { equals: email, mode: 'insensitive' },
-        isActive: true,
-        userId: { not: null },
-        schoolId: { not: schoolId },
-      },
-      select: { school: { select: { name: true } } },
-    });
-    if (elsewhere) {
-      throw new ApiError(
-        'ALREADY_AT_SCHOOL',
-        `This teacher is active at ${elsewhere.school.name} — that school's office must release them before onboarding here`,
-        409,
-        'email',
-      );
-    }
+  private async assertNotActiveElsewhere(schoolId: string, identity: { email: string | null; phoneE164: string | null }): Promise<void> {
+    const field = await activeElsewhere(schoolId, identity);
+    if (field) throw new ApiError('ALREADY_AT_SCHOOL', ELSEWHERE_MESSAGE, 409, field);
   }
 
   /** Back on the roll — the same row, the same login reopened, in one transaction. */
   async reactivate(schoolId: string, actorUserId: string, id: string): Promise<{ id: string; status: 'ACTIVE' }> {
     const t = await withTenant(schoolId, (tx) =>
-      tx.teacher.findFirst({ where: { schoolId, id }, select: { userId: true, status: true, email: true } }),
+      tx.teacher.findFirst({ where: { schoolId, id }, select: { userId: true, status: true, email: true, phoneE164: true } }),
     );
     if (!t) throw new NotFoundException('Teacher not found');
     if (t.status === 'ACTIVE') throw new ApiError('ALREADY_ACTIVE', 'This teacher is already active', 409, 'status');
     // Released here, onboarded elsewhere since: the other school holds them now.
-    if (t.email) await this.assertNotActiveElsewhere(schoolId, t.email.toLowerCase());
+    await this.assertNotActiveElsewhere(schoolId, { email: t.email?.toLowerCase() ?? null, phoneE164: t.phoneE164 });
 
     await withTenant(schoolId, async (tx) => {
       await tx.teacher.update({
@@ -419,7 +461,7 @@ export class TeachersService {
       }
 
       // One school per teacher (Phase 5·1) — see assertNotActiveElsewhere.
-      await this.assertNotActiveElsewhere(schoolId, email);
+      await this.assertNotActiveElsewhere(schoolId, { email, phoneE164: teacher.phoneE164 });
 
       const placeholder = randomBytes(32).toString('base64url');
       const passwordHash = await this.passwords.hash(placeholder);

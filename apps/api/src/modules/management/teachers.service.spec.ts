@@ -23,6 +23,8 @@ const txMock = {
   featuredStaff: { count: jest.fn(), deleteMany: jest.fn(), updateMany: jest.fn() },
   libraryIssue: { count: jest.fn() },
   messageThread: { count: jest.fn() },
+  // The identity guard's advisory lock (teacher-identity.ts).
+  $queryRaw: jest.fn().mockResolvedValue([]),
 };
 
 const withTenantMock = jest.fn((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));
@@ -433,21 +435,18 @@ describe('TeachersService one-school guard + release (Phase 5·1)', () => {
     expect(txMock.user.create).not.toHaveBeenCalled();
   });
 
-  it('blocks onboarding when the identity is ACTIVE with a login at another school', async () => {
-    platformMock.teacher.findFirst.mockResolvedValue({ school: { name: 'Green Valley School' } });
+  it('blocks onboarding when the identity is ACTIVE at another school, without naming that school', async () => {
+    platformMock.teacher.findFirst.mockResolvedValue({ id: 'elsewhere' });
 
-    await expect(
-      svc.createLogin(SCHOOL, TEACHER_ID, { email: 'p.iyer@x.com' }),
-    ).rejects.toMatchObject({ status: 409, response: { code: 'ALREADY_AT_SCHOOL' } });
+    const err = await svc.createLogin(SCHOOL, TEACHER_ID, { email: 'p.iyer@x.com' }).catch((e) => e);
+    expect(err).toMatchObject({ status: 409, response: { code: 'ALREADY_AT_SCHOOL', field: 'email' } });
+    expect(JSON.stringify(err.response)).not.toContain('Green Valley');
     expect(txMock.user.create).not.toHaveBeenCalled();
-    // The guard exempts this school, released rows, and rows never linked to a login.
+    // The guard exempts this school and released rows. A row without a login
+    // still counts: an active post is an active post (2026-10-07).
     expect(platformMock.teacher.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({
-          isActive: true,
-          userId: { not: null },
-          schoolId: { not: SCHOOL },
-        }),
+        where: expect.objectContaining({ isActive: true, schoolId: { not: SCHOOL }, email: { equals: 'p.iyer@x.com', mode: 'insensitive' } }),
       }),
     );
   });
@@ -545,15 +544,22 @@ describe('TeachersService one-school guard + release (Phase 5·1)', () => {
 describe('TeachersService — the E.164 twin of the office phone', () => {
   it('is written on create and refreshed on update, and left alone when the phone is not in the body', async () => {
     withTenantMock.mockImplementation((_s: string, fn: (tx: unknown) => unknown) => fn(txMock));
-    txMock.teacher.create.mockClear(); txMock.teacher.update.mockClear();
+    txMock.teacher.create.mockClear(); txMock.teacher.update.mockClear(); txMock.teacher.findFirst.mockReset();
+    platformMock.teacher.findFirst.mockResolvedValue(null);
     const svc = new TeachersService({} as never, {} as never, {} as never);
     txMock.teacher.create.mockResolvedValue({});
-    await svc.create(SCHOOL, { firstName: 'Priya', lastName: 'Nair', phone: '+91 98765 43210' } as never);
-    expect(txMock.teacher.create.mock.calls[0][0].data).toMatchObject({ phone: '+91 98765 43210', phoneE164: '+919876543210', schoolId: SCHOOL });
+    txMock.teacher.findFirst.mockResolvedValue(null);
+    await svc.create(SCHOOL, { firstName: 'Priya', email: 'Priya@X.com', phone: '+91 98765 43210' } as never);
+    expect(txMock.teacher.create.mock.calls[0][0].data).toMatchObject({
+      phone: '+91 98765 43210', phoneE164: '+919876543210', email: 'priya@x.com', lastName: '', schoolId: SCHOOL,
+    });
+    // The current row, then "anyone else here with it?" — nobody.
+    txMock.teacher.findFirst.mockResolvedValueOnce({ email: 'priya@x.com', phoneE164: '+919876543210' }).mockResolvedValueOnce(null);
     txMock.teacher.update.mockResolvedValue({});
-    await svc.update(SCHOOL, 't1', { phone: '' } as never);
-    expect(txMock.teacher.update.mock.calls[0][0].data).toEqual({ phone: '', phoneE164: null });
+    await svc.update(SCHOOL, 't1', { phone: '9123456789' } as never);
+    expect(txMock.teacher.update.mock.calls[0][0].data).toEqual({ phone: '9123456789', phoneE164: '+919123456789' });
     await svc.update(SCHOOL, 't1', { lastName: 'N' } as never);
     expect(txMock.teacher.update.mock.calls[1][0].data).toEqual({ lastName: 'N' });
   });
+
 });

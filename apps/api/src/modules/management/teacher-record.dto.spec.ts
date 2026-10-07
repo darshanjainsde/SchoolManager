@@ -4,11 +4,66 @@ import { validate } from 'class-validator';
 import { CreateTeacherDto, UpdateTeacherDto } from './management.dto';
 import { teacherRecordData } from './teachers.service';
 
-const base = { firstName: 'Rajeshwari', lastName: 'Balasubramanian' };
+const base = { firstName: 'Rajeshwari', lastName: 'Balasubramanian', email: 'r.bala@school.edu.in', phone: '98765 43210' };
 
 describe('the teacher onboarding record', () => {
-  it('quick-add is still two names', async () => {
-    expect(await validate(plainToInstance(CreateTeacherDto, base))).toEqual([]);
+  it('quick-add is a first name, an email and a mobile', async () => {
+    expect(await validate(plainToInstance(CreateTeacherDto, { firstName: 'Rajeshwari', email: 'r@school.in', phone: '9876543210' }))).toEqual([]);
+  });
+
+  it.each([
+    ['firstName', { email: 'r@school.in', phone: '9876543210' }, 'Enter their first name.'],
+    ['email', { firstName: 'R', phone: '9876543210' }, 'Enter their email. It becomes their login.'],
+    ['phone', { firstName: 'R', email: 'r@school.in' }, 'Enter a 10-digit mobile number.'],
+  ])('requires %s, and says so in words an office reads', async (field, body, message) => {
+    const errors = await validate(plainToInstance(CreateTeacherDto, body));
+    const e = errors.find((x) => x.property === field);
+    expect(Object.values(e?.constraints ?? {})).toContain(message);
+  });
+
+  it.each(['12345', '5876543210', 'not a phone', '+91 98765'])('refuses %p as a mobile', async (phone) => {
+    const errors = await validate(plainToInstance(CreateTeacherDto, { ...base, phone }));
+    expect(errors.map((e) => e.property)).toEqual(['phone']);
+  });
+
+  it.each(['9876543210', '+91 98765 43210', '098765-43210', '919876543210'])('accepts %p as a mobile', async (phone) => {
+    expect(await validate(plainToInstance(CreateTeacherDto, { ...base, phone }))).toEqual([]);
+  });
+
+  it('lower-cases and trims the email, so one person is one address', () => {
+    expect(plainToInstance(CreateTeacherDto, { ...base, email: '  Asha.K@School.IN ' }).email).toBe('asha.k@school.in');
+  });
+
+  /**
+   * THE REGRESSION (2026-10-07): the Add teacher form sends '' for every field
+   * left blank, and twelve of them were refused, which an office read as
+   * twelve required fields. This is the form's own body shape.
+   */
+  it('accepts the form’s real body with every optional field left blank', async () => {
+    const blankRecord = Object.fromEntries(
+      ['gender', 'dob', 'bloodGroup', 'whatsappPhone', 'employeeCode', 'designation', 'department', 'employmentType', 'joinedOn',
+        'highestQualification', 'professionalQualification', 'tetStatus', 'tetCertificateNo', 'tetValidTill', 'specialisation',
+        'previousSchool', 'addressLine1', 'addressLine2', 'city', 'region', 'postalCode', 'emergencyContactName',
+        'emergencyContactPhone', 'emergencyContactRelation', 'policeVerification', 'policeVerifiedOn', 'medicalFitnessOn', 'pocsoTrainedOn'].map((k) => [k, '']),
+    );
+    const body = { ...base, lastName: '', photoAssetId: null, whatsappOptIn: false, ...blankRecord };
+    expect(await validate(plainToInstance(CreateTeacherDto, body))).toEqual([]);
+    expect(await validate(plainToInstance(UpdateTeacherDto, body))).toEqual([]);
+    // …and a blank reaches the service as null, which clears the column.
+    const dto = plainToInstance(UpdateTeacherDto, body);
+    expect(dto.designation).toBeNull();
+    expect(dto.dob).toBeNull();
+    expect(dto.whatsappPhone).toBeNull();
+  });
+
+  it('a blank of only spaces is blank too', async () => {
+    expect(plainToInstance(UpdateTeacherDto, { designation: '   ' }).designation).toBeNull();
+  });
+
+  it('an edit may leave email and mobile out, but cannot blank them once given', async () => {
+    expect(await validate(plainToInstance(UpdateTeacherDto, { designation: 'TGT' }))).toEqual([]);
+    const errors = await validate(plainToInstance(UpdateTeacherDto, { email: '', phone: '' }));
+    expect(errors.map((e) => e.property).sort()).toEqual(['email', 'phone']);
   });
 
   it('accepts a full record', async () => {
@@ -55,6 +110,8 @@ describe('the teacher onboarding record', () => {
 
   it('the update DTO carries the same record, all optional', async () => {
     expect(await validate(plainToInstance(UpdateTeacherDto, { designation: 'TGT', whatsappPhone: '' }))).toEqual([]);
+    const errors = await validate(plainToInstance(UpdateTeacherDto, { whatsappPhone: '12345' }));
+    expect(errors.map((e) => e.property)).toEqual(['whatsappPhone']);
   });
 });
 

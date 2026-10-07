@@ -32,9 +32,9 @@ const codes = (l: readonly (readonly [string, string])[]) => l.map(([c]) => c);
 
 export const TEACHER_COLUMNS: Column[] = [
   { header: 'First name', key: 'firstName', required: true, example: 'Rajeshwari', width: 18 },
-  { header: 'Last name', key: 'lastName', required: true, example: 'Balasubramanian', width: 20 },
-  { header: 'Email', key: 'email', example: 'r.balasubramanian@school.edu.in', width: 30 },
-  { header: 'Phone', key: 'phone', example: '9876543210', width: 14 },
+  { header: 'Last name', key: 'lastName', example: 'Balasubramanian', width: 20 },
+  { header: 'Email', key: 'email', required: true, example: 'r.balasubramanian@school.edu.in', width: 30 },
+  { header: 'Phone', key: 'phone', required: true, example: '9876543210', width: 14 },
   { header: 'WhatsApp number', key: 'whatsappPhone', example: '9876543210', width: 16 },
   { header: 'WhatsApp messages OK (YES/NO)', key: 'whatsappOptIn', list: ['YES', 'NO'], example: 'YES', width: 14 },
   { header: 'Gender', key: 'gender', list: codes(GENDERS), example: 'FEMALE', width: 10 },
@@ -103,11 +103,11 @@ export const COLUMNS: Record<SheetKind, Column[]> = { teachers: TEACHER_COLUMNS,
 export const INSTRUCTIONS: Record<SheetKind, string[]> = {
   teachers: [
     'One teacher per row on the Data sheet. Do not change the header row.',
-    'Only First name and Last name are needed. Fill the rest when you have it — you can always edit a teacher later.',
+    'First name, Email and Phone are needed. Last name and everything else can be filled when you have it — you can always edit a teacher later.',
     'Columns with a dropdown (Post, Employment type, TET status…) only accept the listed values. See the Lists sheet.',
     'Dates are YYYY-MM-DD, e.g. 2019-06-01. Excel date cells also work.',
     'Phone numbers: 10 digits, or with +91. The WhatsApp number is where updates go; leave it blank if it is the same as the phone.',
-    'Emails must be unique across your teachers. A teacher only gets a login once an email is on file.',
+    'Each email and each phone number can belong to only one teacher. A teacher who is still active at another school must be released there first.',
     'Upload the file on the Onboarding tab. Nothing is created until every row passes the check and you press Import.',
   ],
   students: [
