@@ -260,6 +260,8 @@ export type ErrorCode =
   /** Onboarding a teacher whose email already belongs to a LEFT row at THIS
    *  school — reactivate that row instead of making a duplicate. 409. */
   | 'ALREADY_HERE_INACTIVE'
+  /** The email or mobile already belongs to a teacher at this school — 409, with `field`. */
+  | 'ALREADY_TEACHER_HERE'
   /** Turning the birthday wall public without the parental-consent confirmation. 400. */
   | 'CONSENT_REQUIRED'
   // ── Sessions / year end (Active Roster, Track C) ──

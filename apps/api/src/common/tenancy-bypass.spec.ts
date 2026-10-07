@@ -140,8 +140,8 @@ const ALLOWED: Record<string, string> = {
     'reads one school\'s slug and its LIVE domain hostnames to purge that school\'s cached pages. Routing metadata, not tenant row content, and it runs fire-and-forget after the request\'s tenant transaction has already committed — so there is no tenant transaction left to scope it to',
   'configure-app.ts':
     'the CORS allow-list reads Domain.hostname for LIVE domains, so a school on its own address is not refused by the browser. Runs before any request context exists, so there is no tenant to scope to; reads two columns of platform routing metadata and no tenant row content',
-  'modules/management/teachers.service.ts':
-    'the one-school-per-teacher rule is cross-tenant by nature, and login shutdown revokes platform-wide auth state',
+  'modules/management/internal/teacher-identity.ts':
+    'the one-school-per-teacher rule is cross-tenant by nature: a yes/no read of other schools by email or mobile, never their rows',
   'modules/management/email-settings.service.ts':
     'writes the sender credential the post-commit mail path reads through the platform client',
   'modules/portal/portal.service.ts':

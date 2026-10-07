@@ -8,6 +8,7 @@ import {
   ParseUUIDPipe,
   Post,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { SchoolJwtGuard } from '../../common/auth/school-jwt.guard';
@@ -18,7 +19,7 @@ import type { SchoolJwtPayload } from '../../common/auth/jwt-payload';
 import { RequireFeature, RequireFeatureGuard } from '../features';
 import { TenantContextService } from '../tenancy';
 import { TeachersService } from './teachers.service';
-import { CreateLoginDto, CreateTeacherDto, ReleaseTeacherDto, UpdateTeacherDto } from './management.dto';
+import { CreateLoginDto, CreateTeacherDto, ReleaseTeacherDto, TeacherIdentityQueryDto, UpdateTeacherDto } from './management.dto';
 
 @Controller('manage/teachers')
 @UseGuards(SchoolJwtGuard, RequireFeatureGuard, RolesGuard)
@@ -51,6 +52,16 @@ export class TeachersController {
   @Roles('TEACHER')
   me(@CurrentUser() u: SchoolJwtPayload) {
     return this.teachers.me(this.sid(), u.sub);
+  }
+
+  /**
+   * "Who is this?" for the Add / Edit teacher form: already a teacher here,
+   * active at another school (yes/no only), also a family login here. Read
+   * only — Save re-checks the same rules inside its own transaction.
+   */
+  @Get('identity-check')
+  identityCheck(@Query() q: TeacherIdentityQueryDto) {
+    return this.teachers.identityCheck(this.sid(), q);
   }
 
   @Post()

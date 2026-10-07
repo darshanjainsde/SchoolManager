@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { DateField } from '@/components/ui/date-field';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useApi } from '@/lib/use-api';
@@ -208,10 +209,11 @@ export default function ReleaseSheet({
           )}
 
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.4fr)', gap: 10 }}>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-              <span className="sk-lab">Leaving on</span>
-              <input className="sk-input" type="date" value={leftOn} onChange={(e) => setLeftOn(e.target.value)} required />
-            </label>
+            {/* A div, not a wrapping <label>: the date field holds a calendar button too. */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0 }}>
+              <label className="sk-lab" htmlFor="release-left-on" style={{ marginBottom: 0 }}>Leaving on</label>
+              <DateField id="release-left-on" className="sk-input" value={leftOn} onChange={setLeftOn} min="2000-01-01" max="2075-12-31" />
+            </div>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
               <span className="sk-lab">Reason</span>
               <input

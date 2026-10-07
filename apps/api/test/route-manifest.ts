@@ -454,6 +454,7 @@ export const AUTHZ_REVIEWED: string[] = [
   "GET /manage/periods",
   "GET /manage/subjects",
   "GET /manage/teachers",
+  "GET /manage/teachers/identity-check",
   "GET /manage/teachers/me",
   "GET /manage/years",
   "POST /manage/grades",

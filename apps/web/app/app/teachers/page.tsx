@@ -1,12 +1,12 @@
 'use client';
-import { useEffect, useRef, useState, type CSSProperties, type FocusEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type FocusEvent, type ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Plus, Trash2, Upload, Pencil, X, KeyRound, CheckCircle2, Send, UserMinus, Undo2 } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import ReleaseSheet from './release-sheet';
-import TeacherForm, { toRecordBody, type TeacherRecordInput } from './teacher-form';
+import TeacherForm, { toRecordBody, type IdentityCheck, type TeacherRecordInput } from './teacher-form';
 import { EmailHint } from '@/components/use-email-check';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -211,6 +211,12 @@ function InviteSentModal({
 export default function TeachersPage() {
   const host = useHost();
   const api = useApi({ audience: 'school', hostHeader: host });
+  /** The form's live "who is this?" — stable, so its debounce is not reset on every render. */
+  const checkIdentity = useCallback(
+    (q: { email?: string; phone?: string; excludeId?: string }) =>
+      api.get<IdentityCheck>(`/manage/teachers/identity-check?${new URLSearchParams(q as Record<string, string>).toString()}`),
+    [api],
+  );
   const queryClient = useQueryClient();
 
   // ── Local state ──────────────────────────────────────────────────────────
@@ -267,7 +273,8 @@ export default function TeachersPage() {
       resetAddForm();
       toast.success('Teacher added');
     },
-    onError: (err: Error) => toast.error(`Failed to add teacher: ${err.message}`),
+    // The form puts the refusal on its field (serverError below); the toast only says it did not save.
+    onError: () => toast.error('Teacher not added — see the highlighted fields'),
   });
 
   const updateMutation = useMutation({
@@ -278,7 +285,7 @@ export default function TeachersPage() {
       resetEditForm();
       toast.success('Teacher updated');
     },
-    onError: (err: Error) => toast.error(`Failed to update teacher: ${err.message}`),
+    onError: () => toast.error('Changes not saved — see the highlighted fields'),
   });
 
   const deleteMutation = useMutation({
@@ -429,7 +436,10 @@ export default function TeachersPage() {
             title="Add teacher"
             onSave={(record: TeacherRecordInput) => addMutation.mutate({ ...toRecordBody(record), photoAssetId: addPhotoAssetId ?? record.photoAssetId ?? null })}
             isSaving={addMutation.isPending}
+            serverError={addMutation.error}
+            checkIdentity={checkIdentity}
             onCancel={() => {
+              addMutation.reset();
               setShowAdd(false);
               resetAddForm();
             }}
@@ -456,14 +466,18 @@ export default function TeachersPage() {
         <div className="sk-cardgrid">
           {teachers.map((teacher, i) =>
             editId === teacher.id ? (
+              // The edit form spans the whole grid row: it has a side panel and three-across fields.
+              <div key={teacher.id} style={{ gridColumn: '1 / -1' }}>
               <TeacherForm
-                key={teacher.id}
                 title="Edit teacher"
                 initial={teacher}
                 photoUrl={teacher.photoAssetId ? (photoUrlMap[teacher.photoAssetId] ?? null) : null}
                 onSave={(record: TeacherRecordInput) => updateMutation.mutate({ id: teacher.id, ...toRecordBody(record), photoAssetId: editPhotoAssetId ?? teacher.photoAssetId ?? null })}
                 isSaving={updateMutation.isPending}
+                serverError={updateMutation.error}
+                checkIdentity={checkIdentity}
                 onCancel={() => {
+                  updateMutation.reset();
                   setEditId(null);
                   resetEditForm();
                 }}
@@ -473,6 +487,7 @@ export default function TeachersPage() {
                 isUploadingPhoto={isUploadingEditPhoto}
                 uploadedPhotoUrl={editPhotoUrl}
               />
+              </div>
             ) : (
               // `sk-pinin` on the one card just created: it drops in slightly
               // rotated and settles square, like a slip pinned to a board.

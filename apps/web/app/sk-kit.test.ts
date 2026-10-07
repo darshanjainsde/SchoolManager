@@ -225,6 +225,9 @@ describe('no screen has gone back to hand-rolling what the kit provides', () => 
       'app/app/pay/drawer.tsx',
       // The console dock's own popover, which predates the kit.
       'app/app/dock.tsx',
+      // An anchored calendar, not a modal: no scrim, no focus trap, placed
+      // against its input. Portalled so a clipping card cannot cut it off.
+      'components/ui/date-field.tsx',
     ];
     const offenders = screens
       .filter((f) => code(readFileSync(f, 'utf8')).includes('createPortal'))
