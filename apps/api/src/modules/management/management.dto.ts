@@ -1,5 +1,6 @@
 import {
   ArrayMaxSize,
+  ArrayMinSize,
   IsArray,
   IsBoolean,
   IsDateString,
@@ -529,6 +530,49 @@ export class AssignSlotDto {
 
   @IsUUID()
   academicYearId!: string;
+
+  /** First day the change holds, 'YYYY-MM-DD'. Never before today — the service clamps it. Default today. */
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) from?: string;
+
+  /** The day the earlier value comes back ("this week only"), exclusive. Absent = every coming week. */
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) until?: string;
+}
+
+export class TimetableCellDto {
+  @IsInt() @Min(1) @Max(7) dayOfWeek!: number;
+  @IsUUID() periodId!: string;
+}
+
+/**
+ * Give one subject's periods in one class to one teacher — the clicked period
+ * plus any of the subject's other periods — over [from, until).
+ * The preview takes `cell` (the clicked one); applying takes the `cells` ticked.
+ */
+export class SubjectTeacherPreviewDto {
+  @IsUUID() classSectionId!: string;
+  @IsUUID() academicYearId!: string;
+  @IsUUID() subjectId!: string;
+  @IsUUID() teacherId!: string;
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) from?: string;
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) until?: string;
+  @IsOptional() @ValidateNested() @Type(() => TimetableCellDto) cell?: TimetableCellDto;
+}
+
+export class SubjectTeacherApplyDto {
+  @IsUUID() classSectionId!: string;
+  @IsUUID() academicYearId!: string;
+  @IsUUID() subjectId!: string;
+  @IsUUID() teacherId!: string;
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) from?: string;
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) until?: string;
+  /** A week holds at most 7 × the periods in a day; 80 is a ceiling, not a target. */
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(80) @ValidateNested({ each: true }) @Type(() => TimetableCellDto) cells!: TimetableCellDto[];
+}
+
+/** Removing a period: from the viewed week on, or for that week only. */
+export class UnassignSlotQueryDto {
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) from?: string;
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) until?: string;
 }
 
 // ── Availability ──────────────────────────────────────────────────────────────

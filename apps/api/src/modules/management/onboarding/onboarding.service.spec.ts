@@ -225,6 +225,11 @@ describe('the import', () => {
 });
 
 describe('the templates and exports', () => {
+  // Builds a whole workbook with a dropdown validation per list column: 0.7s
+  // alone, but over the 20s default when `pnpm test` runs every package's
+  // suite at once on one machine (measured 2026-10-07 — it failed the
+  // preflight twice while passing alone). The work is legitimate; the limit
+  // is what was wrong for it.
   it('a template has Instructions, Data with the header row, and dropdown lists', async () => {
     txMock.grade.findMany.mockResolvedValue([{ name: 'Nursery' }, { name: '5' }]);
     txMock.classSection.findMany.mockResolvedValue([{ name: 'A' }, { name: 'B' }]);
@@ -237,7 +242,7 @@ describe('the templates and exports', () => {
     const lists = wb.getWorksheet('Lists')!;
     expect(String(lists.getCell(1, 1).value)).toBe('Class');
     expect(lists.getCell(2, 1).value).toBe('Nursery');
-  });
+  }, 60_000);
   it('an export round-trips through the parser', async () => {
     txMock.teacher.findMany.mockResolvedValue([{ firstName: 'Priya', lastName: 'Iyer', email: 'p@school.test', whatsappOptIn: true, dob: new Date(Date.UTC(1990, 0, 2)), designation: 'TGT' }]);
     const buf = await svc.export(SCHOOL, 'teachers');

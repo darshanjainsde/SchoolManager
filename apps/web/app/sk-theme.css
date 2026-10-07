@@ -4952,3 +4952,37 @@ button.sk-hubdoor:hover { transform: translateY(-2px); border-color: var(--sk-br
 @media (pointer: coarse), (max-width: 640px) {
   .sk-tform input[type="checkbox"] { width: 24px; height: 24px; margin: -2px 0 0; flex: none; }
 }
+
+/* ═══ PERIOD DRAWER (components/timetable/PeriodDialog.tsx) ══════════════════
+   One period, or every period of the subject in the class. Each row the change
+   would touch is a line with its own tick; a clash is red and cannot be ticked,
+   a dated thing the swap disturbs is amber and never blocks. */
+.sk-pd { display: flex; flex-direction: column; gap: 14px; }
+.sk-pd-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.sk-pd-field > .sk-input { width: 100%; box-sizing: border-box; min-height: 40px; }
+.sk-pd-field > .sk-input[aria-invalid="true"] { border-color: var(--sk-bad); box-shadow: 0 0 0 3px color-mix(in srgb, var(--sk-bad) 16%, transparent); }
+.sk-pd-err { display: block; font-size: 12px; font-weight: 600; color: var(--sk-bad); }
+.sk-pd-warn { display: block; font-size: 12px; color: var(--sk-amber-ink, var(--sk-amber)); }
+.sk-pd-hint { margin: 0; font-size: 12px; color: var(--sk-ink-3); }
+.sk-pd-load { margin: 0; font-size: 12.5px; color: var(--sk-ink-2); font-variant-numeric: tabular-nums; }
+.sk-pd-check { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; cursor: pointer; }
+.sk-pd-check > input { margin-top: 3px; flex: none; width: 16px; height: 16px; }
+.sk-pd-check b { display: block; font-weight: 650; color: var(--sk-ink); }
+.sk-pd-sub { display: block; margin-top: 2px; font-size: 12px; color: var(--sk-ink-3); }
+.sk-pd-others { border: 1px solid var(--sk-line); border-radius: 12px; padding: 12px; margin: 0; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.sk-pd-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.sk-pd-rows[data-off] { opacity: .55; }
+.sk-pd-rows > li { padding: 6px 8px; border-radius: 9px; display: flex; flex-direction: column; gap: 3px; }
+.sk-pd-rows > li[data-clash] { background: var(--sk-bad-tint); }
+.sk-pd-row { display: grid; grid-template-columns: 20px auto minmax(0, 1fr); align-items: center; gap: 8px; font-size: 13px; min-height: 28px; cursor: pointer; }
+.sk-pd-row > input { width: 16px; height: 16px; margin: 0; }
+.sk-pd-row .when { font-weight: 650; font-variant-numeric: tabular-nums; }
+.sk-pd-row .now { color: var(--sk-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Touch: native checkboxes ignore padding — grow the box itself (UI ledger). */
+@media (pointer: coarse), (max-width: 640px) {
+  .sk-pd-check > input, .sk-pd-row > input { width: 24px; height: 24px; }
+  .sk-pd-row { grid-template-columns: 28px auto minmax(0, 1fr); min-height: 36px; }
+}
+/* A filled timetable period is itself the "change" control: the whole card is the target. */
+.sk-tt-cellbtn { display: flex; flex-direction: column; justify-content: center; width: 100%; min-height: 34px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; min-width: 0; }
+.sk-tt-cellbtn:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: 4px; border-radius: 6px; }
