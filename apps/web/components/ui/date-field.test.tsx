@@ -169,4 +169,57 @@ describe('the date field', () => {
     rerender(<DateField id="d" value="" onChange={vi.fn()} aria-label="d" />);
     expect(screen.getByLabelText('d')).toHaveValue('');
   });
+
+  /**
+   * WHERE IT OPENS ON A PHONE. A static snapshot cannot show placement, so it
+   * is asserted here with phone geometry: a 360x640 window, the field in the
+   * right-hand column, or near the bottom of a long form.
+   */
+  describe('placement on a phone', () => {
+    const setWindow = (w: number, h: number) => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: w });
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: h });
+    };
+    const rect = (left: number, top: number, width = 150, height = 40) =>
+      ({ left, top, right: left + width, bottom: top + height, width, height, x: left, y: top, toJSON: () => ({}) }) as DOMRect;
+    async function openAt(r: DOMRect) {
+      const user = userEvent.setup({ delay: null });
+      render(<Harness initial="1999-09-14" />);
+      vi.spyOn(screen.getByLabelText('Date of birth'), 'getBoundingClientRect').mockReturnValue(r);
+      await user.click(screen.getByRole('button', { name: 'Open calendar' }));
+      return screen.getByRole('dialog', { name: 'Choose a date' });
+    }
+
+    it('a field in the right-hand column of a 360px phone: the calendar is pulled in, 16px from the edge, never past it', async () => {
+      setWindow(360, 640);
+      const d = await openAt(rect(196, 120));
+      const left = parseFloat(d.style.left), width = parseFloat(d.style.width);
+      expect(width).toBeLessThanOrEqual(360 - 32);
+      expect(left).toBeGreaterThanOrEqual(16);
+      expect(left + width).toBeLessThanOrEqual(360 - 16);
+      expect(parseFloat(d.style.top)).toBe(120 + 40 + 6);
+    });
+
+    it('a 320px phone: the calendar narrows to the window, 16px each side', async () => {
+      setWindow(320, 568);
+      const d = await openAt(rect(16, 100, 288));
+      expect(parseFloat(d.style.width)).toBe(288);
+      expect(parseFloat(d.style.left)).toBe(16);
+    });
+
+    it('a field near the bottom of the screen: the calendar opens upward, above the field', async () => {
+      setWindow(390, 700);
+      const d = await openAt(rect(20, 600));
+      expect(d.style.top).toBe('');
+      expect(parseFloat(d.style.bottom)).toBe(700 - 600 + 6);
+    });
+
+    it('a desktop: it opens under the field, at its full 304px', async () => {
+      setWindow(1440, 900);
+      const d = await openAt(rect(600, 300, 260));
+      expect(parseFloat(d.style.width)).toBe(304);
+      expect(parseFloat(d.style.left)).toBe(600);
+      expect(parseFloat(d.style.top)).toBe(346);
+    });
+  });
 });

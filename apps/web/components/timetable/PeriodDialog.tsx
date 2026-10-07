@@ -72,6 +72,8 @@ export interface PeriodDialogProps {
   onSave: (s: PeriodDialogSave) => void;
   isSaving: boolean;
   onClose: () => void;
+  /** Change mode: take the period off the timetable (from the same date the change would start). */
+  onRemove?: () => void;
 }
 
 const DAYS = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -79,7 +81,7 @@ const rowKey = (r: { dayOfWeek: number; periodId: string }) => `${r.dayOfWeek}:$
 const rowLabel = (r: PreviewRow) => `${DAYS[r.dayOfWeek]} ${r.periodLabel}`;
 
 export function PeriodDialog(props: PeriodDialogProps) {
-  const { mode, dayLabel, periodLabel, classLabel, weekLabel, fromLabel, nextWeekLabel, subjects, teachers, initial, preview, onSave, isSaving, onClose } = props;
+  const { mode, dayLabel, periodLabel, classLabel, weekLabel, fromLabel, nextWeekLabel, subjects, teachers, initial, preview, onSave, isSaving, onClose, onRemove } = props;
   const [subjectId, setSubjectId] = useState(initial?.subjectId ?? subjects[0]?.id ?? '');
   // No silent default: the first teacher in the list is nobody's choice.
   const [teacherId, setTeacherId] = useState(initial?.teacherId ?? '');
@@ -144,7 +146,12 @@ export function PeriodDialog(props: PeriodDialogProps) {
       onClose={onClose}
       footer={
         <>
-          <button type="button" className="sk-btn sk-press" onClick={onClose}>Cancel</button>
+          <span style={{ display: 'flex', gap: 9, flexWrap: 'wrap' }}>
+            <button type="button" className="sk-btn sk-press" onClick={onClose}>Cancel</button>
+            {mode === 'change' && onRemove && (
+              <button type="button" className="sk-btn sk-press" style={{ color: 'var(--sk-bad)' }} onClick={onRemove}>Remove period</button>
+            )}
+          </span>
           <button type="button" className="sk-btn sk-press" data-variant="primary" disabled={!canSave || isSaving} onClick={save}>
             {isSaving ? 'Saving…' : chosen.length > 1 ? `Save ${chosen.length} periods` : mode === 'change' ? 'Save' : 'Assign'}
           </button>

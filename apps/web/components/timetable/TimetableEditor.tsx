@@ -377,13 +377,13 @@ export function TimetableEditor({ classes, classesLoading = false, classSectionI
       {title && <p className="sk-lab" style={{ marginBottom: 8 }}>{title}</p>}
 
       {/* Class selector */}
-      <div className="sk-card" style={{ marginBottom: 18, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <label htmlFor="tt-class" className="sk-lab" style={{ flex: 'none' }}>
+      <div className="sk-card sk-tt-classbar" style={{ marginBottom: 18, padding: '12px 16px' }}>
+        <label htmlFor="tt-class" className="sk-lab" style={{ marginBottom: 0 }}>
           Class
         </label>
         <select
           id="tt-class"
-          style={{ ...fieldStyle, maxWidth: 260 }}
+          style={fieldStyle}
           onFocus={ringFocus}
           onBlur={ringBlur}
           value={classSectionId}
@@ -460,7 +460,7 @@ export function TimetableEditor({ classes, classesLoading = false, classSectionI
       {classSectionId && !timetableQuery.isLoading && !timetableQuery.error && (
         <div className="sk-card" style={{ overflow: 'hidden' }}>
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720, tableLayout: 'fixed' }}>
+            <table className="sk-tt-table">
               <thead>
                 <tr>
                   <th style={{ ...headCellStyle, textAlign: 'left', width: 116 }}>Period</th>
@@ -592,21 +592,7 @@ export function TimetableEditor({ classes, classesLoading = false, classSectionI
                                     onClick={() => confirmDeleteSlot(slot, day.label)}
                                     disabled={deleteMutation.isPending}
                                     aria-label={`Remove ${slot.subject.name} from ${day.label} ${period.label}`}
-                                    className="sk-press opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-50"
-                                    style={{
-                                      position: 'absolute',
-                                      top: 4,
-                                      right: 4,
-                                      display: 'grid',
-                                      placeItems: 'center',
-                                      width: 20,
-                                      height: 20,
-                                      borderRadius: 6,
-                                      border: 'none',
-                                      background: 'transparent',
-                                      color: 'var(--sk-ink-3)',
-                                      cursor: 'pointer',
-                                    }}
+                                    className="sk-press sk-tt-remove opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-50"
                                     onMouseEnter={(e) => {
                                       e.currentTarget.style.background = 'var(--sk-bad-tint)';
                                       e.currentTarget.style.color = 'var(--sk-bad)';
@@ -716,6 +702,7 @@ export function TimetableEditor({ classes, classesLoading = false, classSectionI
           initial={pendingCell.slot ? { subjectId: pendingCell.slot.subjectId, teacherId: pendingCell.slot.teacherId, teacherName: `${pendingCell.slot.teacher.firstName} ${pendingCell.slot.teacher.lastName}`.trim() } : null}
           preview={previewSubjectTeacher}
           onSave={(save) => assignMutation.mutate(save)}
+          onRemove={pendingCell.slot ? () => { const slot = pendingCell.slot!; setPendingCell(null); confirmDeleteSlot(slot, pendingCell.dayLabel); } : undefined}
           isSaving={assignMutation.isPending}
           onClose={() => {
             setPendingCell(null);
