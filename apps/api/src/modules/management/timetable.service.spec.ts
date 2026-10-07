@@ -26,9 +26,7 @@ jest.mock('@skoolos/db', () => ({
 }));
 
 import { TimetableService } from './timetable.service';
-import { ApiError } from '../../common/errors/api-error';
 import { startOfIstDay } from './internal/timetable-date';
-import type { AssignSlotDto } from './management.dto';
 
 const SCHOOL = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const CLASS_SECTION = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
@@ -40,14 +38,6 @@ const TEACHER_NEW = '11111111-1111-1111-1111-111111111111';
 const YEAR = '22222222-2222-2222-2222-222222222222';
 const ACTIVE_SLOT_ID = '33333333-3333-3333-3333-333333333333';
 
-const baseDto: AssignSlotDto = {
-  classSectionId: CLASS_SECTION,
-  dayOfWeek: 3,
-  periodId: PERIOD,
-  subjectId: SUBJECT_NEW,
-  teacherId: TEACHER_NEW,
-  academicYearId: YEAR,
-};
 
 /** Every ref lookup used by `assign`'s validation step resolves to "found". */
 function mockValidRefs() {
@@ -75,143 +65,11 @@ describe('TimetableService — versioned assign/unassign/read', () => {
     jest.useRealTimers();
   });
 
-  describe('assign — no active version', () => {
-    it('creates a new slot with effectiveFrom = start of today (IST), no old version to close', async () => {
-      const now = new Date('2026-07-22T14:30:00.000Z');
-      jest.setSystemTime(now);
-      txMock.timetableSlot.findFirst
-        .mockResolvedValueOnce(null) // activeForSlot lookup
-        .mockResolvedValueOnce(null); // teacherClash lookup
-      txMock.timetableSlot.create.mockResolvedValue({ id: 'new-slot' });
-
-      await svc.assign(SCHOOL, baseDto);
-
-      expect(txMock.timetableSlot.update).not.toHaveBeenCalled();
-      expect(txMock.timetableSlot.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            effectiveFrom: startOfIstDay(now),
-            subjectId: SUBJECT_NEW,
-            teacherId: TEACHER_NEW,
-          }),
-        }),
-      );
-    });
-  });
-
-  describe('assign — active version exists from a previous day', () => {
-    it('closes the old version (effectiveTo = today) and creates a new active version, never mutating the old row', async () => {
-      const now = new Date('2026-07-22T09:00:00.000Z');
-      jest.setSystemTime(now);
-      const oldVersion = {
-        id: ACTIVE_SLOT_ID,
-        subjectId: SUBJECT_OLD,
-        teacherId: TEACHER_OLD,
-        effectiveFrom: new Date('2026-06-01T00:00:00.000Z'), // created weeks ago
-        effectiveTo: null,
-      };
-      txMock.timetableSlot.findFirst
-        .mockResolvedValueOnce(oldVersion) // activeForSlot
-        .mockResolvedValueOnce(null); // teacherClash (excludes oldVersion's own id)
-      txMock.timetableSlot.create.mockResolvedValue({ id: 'new-version' });
-
-      await svc.assign(SCHOOL, baseDto);
-
-      // The old row is closed, never given the new teacher/subject in place.
-      expect(txMock.timetableSlot.update).toHaveBeenCalledWith({
-        where: { id: ACTIVE_SLOT_ID },
-        data: { effectiveTo: startOfIstDay(now) },
-      });
-      expect(txMock.timetableSlot.update).toHaveBeenCalledTimes(1);
-      expect(txMock.timetableSlot.update).not.toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ subjectId: expect.anything() }) }),
-      );
-
-      // A brand-new row is created for the new version, dated from today.
-      expect(txMock.timetableSlot.create).toHaveBeenCalledWith({
-        data: {
-          schoolId: SCHOOL,
-          classSectionId: CLASS_SECTION,
-          dayOfWeek: baseDto.dayOfWeek,
-          periodId: PERIOD,
-          subjectId: SUBJECT_NEW,
-          teacherId: TEACHER_NEW,
-          academicYearId: YEAR,
-          effectiveFrom: startOfIstDay(now),
-        },
-        include: expect.any(Object),
-      });
-    });
-
-    it('is a no-op when the requested subject+teacher already match the active version', async () => {
-      jest.setSystemTime(new Date('2026-07-22T09:00:00.000Z'));
-      const identical = {
-        id: ACTIVE_SLOT_ID,
-        subjectId: SUBJECT_NEW,
-        teacherId: TEACHER_NEW,
-        effectiveFrom: new Date('2026-06-01T00:00:00.000Z'),
-        effectiveTo: null,
-      };
-      txMock.timetableSlot.findFirst.mockResolvedValueOnce(identical).mockResolvedValueOnce(null);
-      txMock.timetableSlot.findUniqueOrThrow.mockResolvedValue(identical);
-
-      await svc.assign(SCHOOL, baseDto);
-
-      expect(txMock.timetableSlot.update).not.toHaveBeenCalled();
-      expect(txMock.timetableSlot.create).not.toHaveBeenCalled();
-      expect(txMock.timetableSlot.findUniqueOrThrow).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { id: ACTIVE_SLOT_ID } }),
-      );
-    });
-  });
-
-  describe('assign — active version was itself created earlier today', () => {
-    it('updates that row in place instead of stacking two versions on the same calendar day', async () => {
-      const now = new Date('2026-07-22T18:00:00.000Z'); // 2026-07-22, 23:30 IST — still the same IST day as the row below
-      jest.setSystemTime(now);
-      const createdEarlierToday = {
-        id: ACTIVE_SLOT_ID,
-        subjectId: SUBJECT_OLD,
-        teacherId: TEACHER_OLD,
-        effectiveFrom: startOfIstDay(new Date('2026-07-22T05:30:00.000Z')), // created this morning IST
-        effectiveTo: null,
-      };
-      txMock.timetableSlot.findFirst
-        .mockResolvedValueOnce(createdEarlierToday)
-        .mockResolvedValueOnce(null);
-      txMock.timetableSlot.update.mockResolvedValue({ id: ACTIVE_SLOT_ID });
-
-      await svc.assign(SCHOOL, baseDto);
-
-      expect(txMock.timetableSlot.update).toHaveBeenCalledWith({
-        where: { id: ACTIVE_SLOT_ID },
-        data: { subjectId: SUBJECT_NEW, teacherId: TEACHER_NEW },
-        include: expect.any(Object),
-      });
-      // No brand-new row and no effectiveTo write for this same-day correction.
-      expect(txMock.timetableSlot.create).not.toHaveBeenCalled();
-      expect(txMock.timetableSlot.update).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  describe('assign — teacher clash', () => {
-    it('throws an ApiError(TEACHER_CONFLICT, 409) when the teacher already holds an active slot in that day+period, excluding the slot being replaced', async () => {
-      jest.setSystemTime(new Date('2026-07-22T09:00:00.000Z'));
-      txMock.timetableSlot.findFirst
-        .mockResolvedValueOnce(null) // no active version for this exact slot
-        .mockResolvedValueOnce({ id: 'someone-elses-slot' }); // teacher busy elsewhere
-
-      try {
-        await svc.assign(SCHOOL, baseDto);
-        throw new Error('expected assign to throw');
-      } catch (e) {
-        expect(e).toBeInstanceOf(ApiError);
-        expect((e as ApiError).getStatus()).toBe(409);
-        expect((e as ApiError).getResponse()).toMatchObject({ code: 'TEACHER_CONFLICT' });
-      }
-      expect(txMock.timetableSlot.create).not.toHaveBeenCalled();
-    });
-  });
+  // assign / unassign are a splice of dated versions now: every date case is
+  // in internal/timetable-splice.spec.ts (pure), and the writes against a real
+  // database — history kept, past weeks refused, clashes, this-week-only —
+  // are in test/timetable-swap.e2e-spec.ts. Mocking their call sequence here
+  // would only pin the implementation.
 
   describe('listForClass — as-of reads prove the past is immutable', () => {
     it('reading as of a date before the reassignment returns the OLD version', async () => {
@@ -292,24 +150,6 @@ describe('TimetableService — versioned assign/unassign/read', () => {
   });
 
   describe('unassign', () => {
-    it('sets effectiveTo = today on the active version instead of deleting it', async () => {
-      const now = new Date('2026-07-22T16:00:00.000Z');
-      jest.setSystemTime(now);
-      txMock.timetableSlot.findFirst.mockResolvedValue({ id: ACTIVE_SLOT_ID, effectiveTo: null });
-
-      await svc.unassign(SCHOOL, ACTIVE_SLOT_ID);
-
-      expect(txMock.timetableSlot.findFirst).toHaveBeenCalledWith({
-        where: { id: ACTIVE_SLOT_ID, schoolId: SCHOOL, effectiveTo: null },
-      });
-      expect(txMock.timetableSlot.update).toHaveBeenCalledWith({
-        where: { id: ACTIVE_SLOT_ID },
-        data: { effectiveTo: startOfIstDay(now) },
-      });
-      // Prove there is no hard delete anywhere in this path.
-      expect((txMock.timetableSlot as Record<string, unknown>).delete).toBeUndefined();
-    });
-
     it('throws NotFoundException when there is no active version for that id', async () => {
       txMock.timetableSlot.findFirst.mockResolvedValue(null);
 

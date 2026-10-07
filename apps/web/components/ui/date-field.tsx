@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
+import { Z } from '@/lib/z-layers';
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 
 /**
@@ -21,6 +22,10 @@ import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
  * clips, ran off the right edge when the field sat in a right-hand column
  * (measured: 48px past a 768px window), and a page-entrance transform would
  * have trapped a fixed overlay (UI ledger `fixed-overlay-inline-in-an-animated-page`).
+ *
+ * The portal carries `.skosx`, like the kit's Overlay: every `--sk-*` colour is
+ * scoped to that class, so a calendar outside it had no background and no ink —
+ * it opened see-through, and read as "the calendar does not show" (2026-10-07).
  */
 export interface DateFieldProps {
   id: string;
@@ -257,7 +262,7 @@ export function DateField({ id, value, onChange, min = '1940-01-01', max = '2045
       {typedBad && <span id={hintId} className="sk-dfield-hint">Type the date as dd/mm/yyyy, e.g. 14/09/1999{max !== '2045-12-31' ? `, no later than ${displayOf(max)}` : ''}.</span>}
 
       {open && typeof document !== 'undefined' && createPortal(
-        <div ref={popRef} id={popId} className="sk-dfield-pop" style={pos} role="dialog" aria-label="Choose a date">
+        <div ref={popRef} id={popId} className="skosx sk-dfield-pop" style={{ ...pos, zIndex: Z.OVERLAY }} role="dialog" aria-label="Choose a date">
           <div className="sk-dfield-head">
             <button type="button" className="sk-dfield-nav" aria-label="Previous month" onClick={() => moveMonth(-1)}><ChevronLeft className="h-4 w-4" aria-hidden="true" /></button>
             <select aria-label="Month" value={view.m} onChange={(e) => { const m = +e.target.value; setView((v) => ({ ...v, m })); setFocusDay((d) => Math.min(d, daysIn(view.y, m))); }}>
@@ -297,7 +302,8 @@ export function DateField({ id, value, onChange, min = '1940-01-01', max = '2045
             })}
           </div>
           <div className="sk-dfield-foot">
-            <button type="button" className="sk-dfield-link" disabled={!inRange(today)} onClick={() => pick(today)}>Today</button>
+            {/* A date of birth can never be today: offer the shortcut only where it can be picked. */}
+            {inRange(today) ? <button type="button" className="sk-dfield-link" onClick={() => pick(today)}>Today</button> : <span />}
             {value && <button type="button" className="sk-dfield-link" onClick={() => { onChange(''); setText(''); close(true); }}>Clear</button>}
           </div>
         </div>,
