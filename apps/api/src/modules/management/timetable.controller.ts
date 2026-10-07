@@ -20,7 +20,7 @@ import { TenantContextService } from '../tenancy';
 import { TimetableService } from './timetable.service';
 import { TeacherDayService } from './teacher-day.service';
 import { istTodayISO } from './internal/timetable-date';
-import { AssignSlotDto, AvailabilityQueryDto } from './management.dto';
+import { AssignSlotDto, AvailabilityQueryDto, SubjectTeacherApplyDto, SubjectTeacherPreviewDto, UnassignSlotQueryDto } from './management.dto';
 
 @Controller('manage/timetable')
 @UseGuards(SchoolJwtGuard, RequireFeatureGuard, RolesGuard)
@@ -68,9 +68,25 @@ export class TimetableController {
     return this.timetable.assign(this.sid(), dto);
   }
 
+  /**
+   * "Also give Rishika the other English periods of V-B" — what would change,
+   * what clashes, and what it disturbs. Reads only; POST because it carries a body.
+   */
+  @Post('subject-teacher/preview')
+  @HttpCode(200)
+  previewSubjectTeacher(@Body() dto: SubjectTeacherPreviewDto) {
+    return this.timetable.previewSubjectTeacher(this.sid(), dto);
+  }
+
+  /** Apply the periods ticked in that preview, in one transaction. */
+  @Post('subject-teacher')
+  applySubjectTeacher(@Body() dto: SubjectTeacherApplyDto) {
+    return this.timetable.applySubjectTeacher(this.sid(), dto);
+  }
+
   @Delete(':id')
   @HttpCode(204)
-  unassign(@Param('id', ParseUUIDPipe) id: string) {
-    return this.timetable.unassign(this.sid(), id);
+  unassign(@Param('id', ParseUUIDPipe) id: string, @Query() q: UnassignSlotQueryDto) {
+    return this.timetable.unassign(this.sid(), id, q);
   }
 }

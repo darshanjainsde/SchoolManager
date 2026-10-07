@@ -1,13 +1,19 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { withTenant } from '@skoolos/db';
+import { withTenant, type TenantTx } from '@skoolos/db';
 import type { TimetableSlot } from '@skoolos/types';
 import { ApiError } from '../../common/errors/api-error';
 import { isP2002, p2002Target } from '../../common/errors/prisma-errors';
-import { isSameIstDay, resolveAsOfDate, startOfIstDay } from './internal/timetable-date';
-import type { AssignSlotDto, AvailabilityQueryDto } from './management.dto';
+import { istTodayISO, resolveAsOfDate, shortDayDate, startOfIstDay } from './internal/timetable-date';
+import { applySplice, planSplice } from './internal/timetable-splice';
+import type { AssignSlotDto, AvailabilityQueryDto, SubjectTeacherApplyDto, SubjectTeacherPreviewDto } from './management.dto';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
 
 export type { TimetableSlot };
+
+/** Versions live on `d`: started on or before it, not yet ended. */
+const liveOn = (d: Date) => ({ effectiveFrom: { lte: d }, OR: [{ effectiveTo: null }, { effectiveTo: { gt: d } }] });
+/** An IST midnight → 'YYYY-MM-DD'. */
+const istDay = (d: Date) => istTodayISO(d);
 
 const SLOT_INCLUDE = {
   period: true,
@@ -44,151 +50,216 @@ export class TimetableService {
   }
 
   /**
-   * Versioned assign: never mutates an existing slot's teacher/subject in
-   * place. For the target (classSectionId, dayOfWeek, periodId, academicYearId):
-   *  - no ACTIVE version (effectiveTo IS NULL) → create one, effectiveFrom = today.
-   *  - an ACTIVE version exists and differs → close it (effectiveTo = today)
-   *    and create a new ACTIVE version (effectiveFrom = today). The old row
-   *    is kept forever, so a past `date` read still sees it.
-   *  - an ACTIVE version exists, was itself first created today, and differs
-   *    → update it in place instead of stacking two versions on the same
-   *    calendar day (versioning is day-granular; there is no "past" instant
-   *    to preserve within the same day, and the effectiveFrom unique index
-   *    would otherwise collide).
-   *  - an ACTIVE version exists and matches exactly (same subject + teacher)
-   *    → no-op, return it as-is.
-   * Teacher-clash detection is unchanged in spirit: a teacher can't hold two
-   * ACTIVE slots in the same day+period, excluding the very slot being
-   * replaced.
+   * Put a subject and a teacher in one period, over a window of time.
+   *
+   * The period is a run of dated versions (see internal/timetable-splice.ts):
+   * the change is spliced in over [from, until), so every week before `from`
+   * reads exactly as it was taught. `from` defaults to today and is never
+   * earlier — a past week cannot be edited, by the editor or by this API.
+   * `until` absent = every coming week; a date = that week only, after which
+   * the earlier value comes back on its own.
+   *
+   * A teacher cannot be in two classes at once: any version of theirs in
+   * another class, in this weekday and period, that overlaps the window is a
+   * TEACHER_CONFLICT naming that class.
    */
   async assign(schoolId: string, dto: AssignSlotDto) {
+    const win = this.window(dto.from, dto.until);
+    return this.writeCells(schoolId, dto, [{ dayOfWeek: dto.dayOfWeek, periodId: dto.periodId }], win, { strict: true }).then((r) => r.slots[0]);
+  }
+
+  /**
+   * "Also give Rishika the other English periods of V-B": every period of the
+   * subject in this class, live on `from`, held by someone else — plus the
+   * clicked period — each checked for the teacher's clashes over the window
+   * and for the dated things a swap disturbs. Reads only.
+   */
+  async previewSubjectTeacher(schoolId: string, dto: SubjectTeacherPreviewDto) {
+    const win = this.window(dto.from, dto.until);
+    return withTenant(schoolId, async (tx) => {
+      const [teacher, subject] = await Promise.all([
+        tx.teacher.findFirst({ where: { schoolId, id: dto.teacherId }, select: { id: true, firstName: true, lastName: true, isActive: true } }),
+        tx.subject.findFirst({ where: { schoolId, id: dto.subjectId }, select: { id: true, name: true } }),
+      ]);
+      if (!teacher) throw new BadRequestException('teacherId not found in this school');
+      if (!subject) throw new BadRequestException('subjectId not found in this school');
+
+      const live = await tx.timetableSlot.findMany({
+        take: LIST_CEILING.ACTIVITY,
+        where: { schoolId, classSectionId: dto.classSectionId, academicYearId: dto.academicYearId, ...liveOn(win.from) },
+        select: { dayOfWeek: true, periodId: true, subjectId: true, teacherId: true, period: { select: { label: true, order: true } }, teacher: { select: { firstName: true, lastName: true } } },
+      });
+      const key = (c: { dayOfWeek: number; periodId: string }) => `${c.dayOfWeek}:${c.periodId}`;
+      const bySlot = new Map(live.map((l) => [key(l), l]));
+      const ofSubject = live.filter((l) => l.subjectId === dto.subjectId);
+      const rows = ofSubject.filter((l) => l.teacherId !== dto.teacherId).map((l) => ({ dayOfWeek: l.dayOfWeek, periodId: l.periodId }));
+      let clicked: { dayOfWeek: number; periodId: string } | null = null;
+      if (dto.cell) {
+        clicked = { dayOfWeek: dto.cell.dayOfWeek, periodId: dto.cell.periodId };
+        const already = bySlot.get(key(clicked));
+        const isNoop = already && already.subjectId === dto.subjectId && already.teacherId === dto.teacherId;
+        if (!isNoop && !rows.some((r) => key(r) === key(clicked!))) rows.unshift(clicked);
+      }
+      const periods = await tx.period.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId, id: { in: [...new Set(rows.map((r) => r.periodId))] } }, select: { id: true, label: true, order: true } });
+      const periodOf = new Map(periods.map((p) => [p.id, p]));
+
+      const out = [];
+      for (const r of rows) {
+        const cur = bySlot.get(key(r));
+        const clash = await this.clashFor(tx, schoolId, dto.teacherId, dto.academicYearId, dto.classSectionId, r, win);
+        out.push({
+          dayOfWeek: r.dayOfWeek,
+          periodId: r.periodId,
+          periodLabel: periodOf.get(r.periodId)?.label ?? '',
+          periodOrder: periodOf.get(r.periodId)?.order ?? 0,
+          clicked: !!clicked && key(r) === key(clicked),
+          current: cur ? { subjectId: cur.subjectId, teacherId: cur.teacherId, teacherName: `${cur.teacher.firstName} ${cur.teacher.lastName}`.trim() } : null,
+          clash,
+          warnings: await this.warningsFor(tx, schoolId, dto.teacherId, dto.classSectionId, r, win, cur ? `${cur.teacher.firstName} ${cur.teacher.lastName}`.trim() : null),
+        });
+      }
+      out.sort((x, y) => Number(y.clicked) - Number(x.clicked) || x.dayOfWeek - y.dayOfWeek || x.periodOrder - y.periodOrder);
+
+      const load = await tx.timetableSlot.count({ where: { schoolId, teacherId: dto.teacherId, academicYearId: dto.academicYearId, ...liveOn(win.from) } });
+      return {
+        teacher: { id: teacher.id, name: `${teacher.firstName} ${teacher.lastName}`.trim(), active: teacher.isActive },
+        subject,
+        from: istDay(win.from),
+        until: win.until ? istDay(win.until) : null,
+        rows: out,
+        alreadyTheirs: ofSubject.length - ofSubject.filter((l) => l.teacherId !== dto.teacherId).length,
+        load: { now: load },
+      };
+    });
+  }
+
+  /**
+   * Apply the periods the office ticked. All of them land or none do, EXCEPT
+   * a period that has picked up a clash since the preview (someone booked the
+   * teacher in between): that one is skipped and reported, never forced.
+   */
+  async applySubjectTeacher(schoolId: string, dto: SubjectTeacherApplyDto) {
+    const win = this.window(dto.from, dto.until);
+    const unique = [...new Map(dto.cells.map((c) => [`${c.dayOfWeek}:${c.periodId}`, c])).values()];
+    const r = await this.writeCells(schoolId, dto, unique, win, { strict: false });
+    return { changed: r.slots.length, skipped: r.skipped, from: istDay(win.from), until: win.until ? istDay(win.until) : null };
+  }
+
+  /** The shared write: validate the references once, then splice each cell in one transaction. */
+  private async writeCells(
+    schoolId: string,
+    ref: { classSectionId: string; subjectId: string; teacherId: string; academicYearId: string },
+    cells: { dayOfWeek: number; periodId: string }[],
+    win: { from: Date; until: Date | null },
+    opts: { strict: boolean },
+  ) {
     try {
       return await withTenant(schoolId, async (tx) => {
-        const [cs, period, subject, teacher, year] = await Promise.all([
-          tx.classSection.findUnique({ where: { id: dto.classSectionId } }),
-          tx.period.findUnique({ where: { id: dto.periodId } }),
-          tx.subject.findUnique({ where: { id: dto.subjectId } }),
-          tx.teacher.findUnique({ where: { id: dto.teacherId } }),
-          tx.academicYear.findUnique({ where: { id: dto.academicYearId } }),
+        const [cs, subject, teacher, year, periods] = await Promise.all([
+          tx.classSection.findUnique({ where: { id: ref.classSectionId } }),
+          tx.subject.findUnique({ where: { id: ref.subjectId } }),
+          tx.teacher.findUnique({ where: { id: ref.teacherId } }),
+          tx.academicYear.findUnique({ where: { id: ref.academicYearId } }),
+          tx.period.findMany({ take: LIST_CEILING.STRUCTURE, where: { schoolId, id: { in: cells.map((c) => c.periodId) } }, select: { id: true } }),
         ]);
         if (!cs) throw new BadRequestException('classSectionId not found in this school');
-        if (!period) throw new BadRequestException('periodId not found in this school');
         if (!subject) throw new BadRequestException('subjectId not found in this school');
         if (!teacher) throw new BadRequestException('teacherId not found in this school');
         if (!year) throw new BadRequestException('academicYearId not found in this school');
+        if (periods.length !== new Set(cells.map((c) => c.periodId)).size) throw new BadRequestException('periodId not found in this school');
+        if (!teacher.isActive) throw new ApiError('VALIDATION', `${teacher.firstName} ${teacher.lastName} has left the school and cannot be given periods.`, 400, 'teacherId');
 
-        const today = startOfIstDay(new Date());
+        // Two offices moving the same teacher at once: one waits for the other.
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${schoolId}), hashtext(${`timetable-teacher:${ref.teacherId}`}))::text`;
 
-        const activeForSlot = await tx.timetableSlot.findFirst({
-          where: {
-            schoolId,
-            classSectionId: dto.classSectionId,
-            dayOfWeek: dto.dayOfWeek,
-            periodId: dto.periodId,
-            academicYearId: dto.academicYearId,
-            effectiveTo: null,
-          },
-        });
-
-        const teacherClash = await tx.timetableSlot.findFirst({
-          where: {
-            schoolId,
-            teacherId: dto.teacherId,
-            dayOfWeek: dto.dayOfWeek,
-            periodId: dto.periodId,
-            academicYearId: dto.academicYearId,
-            effectiveTo: null,
-            ...(activeForSlot ? { NOT: { id: activeForSlot.id } } : {}),
-          },
-        });
-        if (teacherClash) {
-          throw new ApiError(
-            'TEACHER_CONFLICT',
-            'That teacher is already booked in that period',
-            409,
-            'teacherId',
-          );
-        }
-
-        if (activeForSlot) {
-          const unchanged =
-            activeForSlot.subjectId === dto.subjectId && activeForSlot.teacherId === dto.teacherId;
-          if (unchanged) {
-            return tx.timetableSlot.findUniqueOrThrow({
-              where: { id: activeForSlot.id },
-              include: SLOT_INCLUDE,
-            });
+        const slots = [];
+        const skipped: { dayOfWeek: number; periodId: string; reason: string }[] = [];
+        for (const c of cells) {
+          const clash = await this.clashFor(tx, schoolId, ref.teacherId, ref.academicYearId, ref.classSectionId, c, win);
+          if (clash) {
+            const reason = `${teacher.firstName} ${teacher.lastName} teaches ${clash.classLabel} in this period${clash.from ? ` from ${clash.from}` : ''}.`.replace('  ', ' ');
+            if (opts.strict) throw new ApiError('TEACHER_CONFLICT', reason, 409, 'teacherId');
+            skipped.push({ ...c, reason });
+            continue;
           }
-
-          if (isSameIstDay(activeForSlot.effectiveFrom, today)) {
-            // Same-day correction: update in place rather than stacking a
-            // second version on the same calendar day.
-            return tx.timetableSlot.update({
-              where: { id: activeForSlot.id },
-              data: { subjectId: dto.subjectId, teacherId: dto.teacherId },
-              include: SLOT_INCLUDE,
-            });
-          }
-
-          await tx.timetableSlot.update({
-            where: { id: activeForSlot.id },
-            data: { effectiveTo: today },
-          });
+          const key = { schoolId, classSectionId: ref.classSectionId, dayOfWeek: c.dayOfWeek, periodId: c.periodId, academicYearId: ref.academicYearId };
+          const versions = await tx.timetableSlot.findMany({ take: LIST_CEILING.ACTIVITY, where: key, select: { id: true, effectiveFrom: true, effectiveTo: true, subjectId: true, teacherId: true } });
+          const ops = planSplice(versions, win.from, win.until, { subjectId: ref.subjectId, teacherId: ref.teacherId });
+          await applySplice(tx, key, ops);
+          const now = await tx.timetableSlot.findFirst({ where: { ...key, ...liveOn(win.from) }, include: SLOT_INCLUDE });
+          if (now) slots.push(now);
         }
-
-        return tx.timetableSlot.create({
-          data: {
-            schoolId,
-            classSectionId: dto.classSectionId,
-            dayOfWeek: dto.dayOfWeek,
-            periodId: dto.periodId,
-            subjectId: dto.subjectId,
-            teacherId: dto.teacherId,
-            academicYearId: dto.academicYearId,
-            effectiveFrom: today,
-          },
-          include: SLOT_INCLUDE,
-        });
+        return { slots, skipped };
       });
     } catch (e) {
-      // Safety net: a race condition between the pre-checks above and the
-      // create/update can still surface as a P2002 on either unique index.
+      // A race the lock cannot see (the same CLASS period changed by two
+      // offices at once) surfaces as the unique index; say what to do.
       if (isP2002(e)) {
         const target = p2002Target(e);
-        if (target.includes('teacher')) {
-          throw new ApiError(
-            'TEACHER_CONFLICT',
-            'That teacher is already booked in that period',
-            409,
-            'teacherId',
-          );
-        }
-        if (!target) {
-          const teacherExists = await withTenant(schoolId, (tx) =>
-            tx.timetableSlot.findFirst({
-              where: {
-                schoolId,
-                teacherId: dto.teacherId,
-                dayOfWeek: dto.dayOfWeek,
-                periodId: dto.periodId,
-                academicYearId: dto.academicYearId,
-                effectiveTo: null,
-              },
-            }),
-          );
-          if (teacherExists) {
-            throw new ApiError(
-              'TEACHER_CONFLICT',
-              'That teacher is already booked in that period',
-              409,
-              'teacherId',
-            );
-          }
-        }
-        throw new BadRequestException('This slot was just updated by someone else — please retry');
+        if (target.includes('teacher')) throw new ApiError('TEACHER_CONFLICT', 'That teacher is already booked in that period', 409, 'teacherId');
+        throw new BadRequestException('This period was just changed by someone else — reload and try again');
       }
       throw e;
     }
+  }
+
+  /** [from, until) for a change: from never before today (past weeks are as they were taught); until after from. */
+  private window(from?: string, until?: string): { from: Date; until: Date | null } {
+    const today = startOfIstDay(new Date());
+    const asked = from ? resolveAsOfDate(from, new Date()) : today;
+    const f = asked < today ? today : asked;
+    const u = until ? resolveAsOfDate(until, new Date()) : null;
+    if (u && u <= f) throw new ApiError('VALIDATION', 'A change for one week has to end after it starts.', 400, 'until');
+    return { from: f, until: u };
+  }
+
+  /** The teacher's version in ANOTHER class, this weekday and period, overlapping the window. */
+  private async clashFor(tx: TenantTx, schoolId: string, teacherId: string, academicYearId: string, classSectionId: string, c: { dayOfWeek: number; periodId: string }, win: { from: Date; until: Date | null }) {
+    const hit = await tx.timetableSlot.findFirst({
+      where: {
+        schoolId, teacherId, academicYearId, dayOfWeek: c.dayOfWeek, periodId: c.periodId,
+        classSectionId: { not: classSectionId },
+        ...(win.until ? { effectiveFrom: { lt: win.until } } : {}),
+        OR: [{ effectiveTo: null }, { effectiveTo: { gt: win.from } }],
+      },
+      orderBy: { effectiveFrom: 'asc' },
+      select: { effectiveFrom: true, classSection: { select: { name: true, grade: { select: { name: true } } } } },
+    });
+    if (!hit) return null;
+    return {
+      classLabel: `${hit.classSection.grade.name}-${hit.classSection.name}`,
+      // Only worth saying when the clash begins later than the change does.
+      from: hit.effectiveFrom > win.from ? shortDayDate(hit.effectiveFrom) : null,
+    };
+  }
+
+  /**
+   * Dated things a swap disturbs, on the days it covers (at most the next two
+   * weeks of an open-ended change). None of them block — each is something
+   * the office should know before pressing Save.
+   */
+  private async warningsFor(tx: TenantTx, schoolId: string, teacherId: string, classSectionId: string, c: { dayOfWeek: number; periodId: string }, win: { from: Date; until: Date | null }, currentTeacherName: string | null): Promise<string[]> {
+    const horizon = new Date(win.from.getTime() + 14 * 86_400_000);
+    const stop = win.until && win.until < horizon ? win.until : horizon;
+    const dates: string[] = [];
+    for (let t = win.from.getTime(); t < stop.getTime(); t += 86_400_000) {
+      const day = istDay(new Date(t));
+      if ((new Date(`${day}T00:00:00Z`).getUTCDay() || 7) === c.dayOfWeek) dates.push(day);
+    }
+    if (!dates.length) return [];
+    const asDates = dates.map((x) => new Date(`${x}T00:00:00Z`));
+    const [leave, covering, arranged] = await Promise.all([
+      tx.leaveApplication.findMany({ take: 20, where: { schoolId, teacherId, status: 'APPROVED', OR: asDates.map((x) => ({ startDate: { lte: x }, endDate: { gte: x } })) }, select: { startDate: true, endDate: true } }),
+      tx.substitution.findMany({ take: 20, where: { schoolId, substituteTeacherId: teacherId, periodId: c.periodId, date: { in: asDates } }, select: { date: true, classSectionId: true } }),
+      tx.substitution.findMany({ take: 20, where: { schoolId, classSectionId, periodId: c.periodId, date: { in: asDates }, substituteTeacherId: { not: null } }, select: { date: true } }),
+    ]);
+    const out: string[] = [];
+    for (const x of asDates) {
+      if (leave.some((l) => l.startDate <= x && l.endDate >= x)) out.push(`On leave ${shortDayDate(x)} — this period will need cover.`);
+    }
+    if (covering.length) out.push(`Already covering another class in this period on ${covering.map((s) => shortDayDate(s.date)).join(', ')}.`);
+    if (arranged.length) out.push(`Cover is already arranged here on ${arranged.map((s) => shortDayDate(s.date)).join(', ')}${currentTeacherName ? ` for ${currentTeacherName}` : ''} — check it in Leave.`);
+    return out;
   }
 
   /**
@@ -283,19 +354,22 @@ export class TimetableService {
     });
   }
 
-  /** Closes the active version (`effectiveTo = today`) rather than deleting — history is preserved. */
-  async unassign(schoolId: string, id: string) {
-    const today = startOfIstDay(new Date());
+  /**
+   * Remove the period from the viewed week on (`from`, never before today),
+   * or for that week only (`until`). The weeks before stay as they were; a
+   * version that started today has no earlier part and is removed outright.
+   * `id` is any version of the period — the grid hands over the one it shows.
+   */
+  async unassign(schoolId: string, id: string, q: { from?: string; until?: string } = {}) {
+    const win = this.window(q.from, q.until);
     await withTenant(schoolId, async (tx) => {
-      const slot = await tx.timetableSlot.findFirst({
-        where: { id, schoolId, effectiveTo: null },
-      });
+      const slot = await tx.timetableSlot.findFirst({ where: { id, schoolId } });
       if (!slot) throw new NotFoundException('Timetable slot not found');
-
-      await tx.timetableSlot.update({
-        where: { id },
-        data: { effectiveTo: today },
-      });
+      const key = { schoolId, classSectionId: slot.classSectionId, dayOfWeek: slot.dayOfWeek, periodId: slot.periodId, academicYearId: slot.academicYearId };
+      const versions = await tx.timetableSlot.findMany({ take: LIST_CEILING.ACTIVITY, where: key, select: { id: true, effectiveFrom: true, effectiveTo: true, subjectId: true, teacherId: true } });
+      const ops = planSplice(versions, win.from, win.until, null);
+      if (!ops.length) throw new NotFoundException('Timetable slot not found');
+      await applySplice(tx, key, ops);
     });
   }
 }

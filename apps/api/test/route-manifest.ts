@@ -301,6 +301,8 @@ export const AUTHZ_REVIEWED: string[] = [
   "POST /manage/staff/:id/invite/resend",
   "POST /manage/staff/:id/login",
   "POST /manage/timetable",
+  "POST /manage/timetable/subject-teacher",
+  "POST /manage/timetable/subject-teacher/preview",
   "POST /me/assignments/:id/seen",
   "PUT /manage/classes/:id",
   "PUT /manage/staff-attendance",

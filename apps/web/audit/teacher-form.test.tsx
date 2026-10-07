@@ -8,6 +8,11 @@
  *  3. the date field's calendar open.
  * The ledger entry this guards is `form-card-capped-on-a-wide-screen`: judge
  * the panel at 1440 and 1920, where the old 640px card left half the screen bare.
+ *
+ * <body> deliberately does NOT carry `.skosx` here (the app's doesn't): the
+ * first version of this page put it there, so the portalled calendar borrowed
+ * the theme from <body> and measured fine while on the real page it opened
+ * see-through (2026-10-07). A portal must bring its own theme scope.
  */
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -71,7 +76,7 @@ describe('audit: the teacher form', () => {
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>${appCss()}</style>
 <style>body{margin:0;padding:10px;background:var(--sk-bg,#fff)} .audit-panel{margin-bottom:28px} .audit-panel:last-child{padding-bottom:380px}</style>
-</head><body class="skosx"><main class="skosx">
+</head><body><main class="skosx">
 ${panel('Add teacher · Save pressed with nothing filled', one.host.innerHTML)}
 ${panel('Edit teacher · long record, clash found, every section open', two.host.innerHTML)}
 ${panel('Add teacher · date of birth calendar open', three.host.innerHTML)}

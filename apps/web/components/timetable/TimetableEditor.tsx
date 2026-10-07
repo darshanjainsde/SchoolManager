@@ -1,5 +1,5 @@
 'use client';
-import { useState, useMemo, type CSSProperties, type FocusEvent } from 'react';
+import { useCallback, useState, useMemo, type CSSProperties, type FocusEvent } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -7,6 +7,7 @@ import { X, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { ApiError } from '@/lib/api';
+import { PeriodDialog, type PeriodDialogSave, type SubjectTeacherPreview } from './PeriodDialog';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -36,6 +37,8 @@ interface Teacher {
   id: string;
   firstName: string;
   lastName: string;
+  /** False once released: never offered for a new period. */
+  isActive?: boolean;
 }
 
 interface TimetableSlot {
@@ -155,116 +158,6 @@ const headCellStyle: CSSProperties = {
   borderBottom: '1px solid var(--sk-line)',
 };
 
-// ── Assign Modal ──────────────────────────────────────────────────────────────
-
-interface AssignModalProps {
-  periodLabel: string;
-  dayLabel: string;
-  subjects: Subject[];
-  teachers: Teacher[];
-  onAssign: (subjectId: string, teacherId: string) => void;
-  isAssigning: boolean;
-  onClose: () => void;
-}
-
-function AssignModal({
-  periodLabel,
-  dayLabel,
-  subjects,
-  teachers,
-  onAssign,
-  isAssigning,
-  onClose,
-}: AssignModalProps) {
-  const [subjectId, setSubjectId] = useState(subjects[0]?.id ?? '');
-  const [teacherId, setTeacherId] = useState(teachers[0]?.id ?? '');
-
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 50,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'rgba(15, 30, 24, 0.5)',
-        padding: 16,
-      }}
-    >
-      <div className="sk-card" style={{ width: '100%', maxWidth: 380 }}>
-        <div className="sk-card-h sk-wrap-sm" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <h3>
-            Assign period — {dayLabel}, {periodLabel}
-          </h3>
-          <button onClick={onClose} className="sk-btn sk-press" aria-label="Close" style={{ padding: 7 }}>
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="sk-card-b">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-            <label htmlFor="tt-subject" className="sk-lab">
-              Subject
-            </label>
-            <select
-              id="tt-subject"
-              style={fieldStyle}
-              onFocus={ringFocus}
-              onBlur={ringBlur}
-              value={subjectId}
-              onChange={(e) => setSubjectId(e.target.value)}
-            >
-              {subjects.length === 0 && <option value="">No subjects — add one in Classes</option>}
-              {subjects.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                  {s.code ? ` (${s.code})` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-            <label htmlFor="tt-teacher" className="sk-lab">
-              Teacher
-            </label>
-            <select
-              id="tt-teacher"
-              style={fieldStyle}
-              onFocus={ringFocus}
-              onBlur={ringBlur}
-              value={teacherId}
-              onChange={(e) => setTeacherId(e.target.value)}
-            >
-              {teachers.length === 0 && <option value="">No teachers found</option>}
-              {teachers.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.firstName} {t.lastName}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="sk-wrap-sm" style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-            <button
-              className="sk-btn sk-press"
-              data-variant="primary"
-              onClick={() => onAssign(subjectId, teacherId)}
-              disabled={isAssigning || !subjectId || !teacherId}
-            >
-              {isAssigning ? 'Assigning…' : 'Assign'}
-            </button>
-            <button className="sk-btn sk-press" onClick={onClose}>
-              Cancel
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 interface PendingCell {
@@ -272,6 +165,8 @@ interface PendingCell {
   periodId: string;
   dayLabel: string;
   periodLabel: string;
+  /** The version shown in the cell, when the period is already filled ("Change period"). */
+  slot?: TimetableSlot;
 }
 
 export interface TimetableEditorProps {
@@ -319,6 +214,14 @@ export function TimetableEditor({ classes, classesLoading = false, classSectionI
   const viewedSunday = addDays(viewedMonday, 6);
   const asOfDate = now < viewedMonday ? viewedMonday : now > viewedSunday ? viewedSunday : now;
   const dateParam = toDateParam(asOfDate);
+  // A change starts today on the current week, on Monday on a future week —
+  // never earlier: past weeks are as they were taught (the API refuses too).
+  // "This week only" ends where the next week begins.
+  const changeFrom = isCurrentWeek ? now : viewedMonday;
+  const fromParam = toDateParam(changeFrom);
+  const untilParam = toDateParam(addDays(viewedMonday, 7));
+  const fromLabel = isCurrentWeek && !anchorDate ? 'today' : `${WEEKDAY_LABELS[isoWeekday(changeFrom)]} ${formatShort(changeFrom)}`;
+  const nextWeekLabel = `Mon ${formatShort(addDays(viewedMonday, 7))}`;
 
   // ── Queries ──────────────────────────────────────────────────────────────
   const periodsQuery = useQuery({
@@ -399,36 +302,60 @@ export function TimetableEditor({ classes, classesLoading = false, classSectionI
   const selectedClass = useMemo(() => classes.find((c) => c.id === classSectionId), [classes, classSectionId]);
 
   // ── Mutations ─────────────────────────────────────────────────────────────
+  /** What the drawer previews: the clicked period plus the subject's other periods in this class. */
+  const previewSubjectTeacher = useCallback(
+    (q: { subjectId: string; teacherId: string; keep: boolean }) =>
+      api.post<SubjectTeacherPreview>('/manage/timetable/subject-teacher/preview', {
+        classSectionId,
+        academicYearId: selectedClass?.academicYearId,
+        subjectId: q.subjectId,
+        teacherId: q.teacherId,
+        from: fromParam,
+        ...(q.keep ? {} : { until: untilParam }),
+        ...(pendingCell ? { cell: { dayOfWeek: pendingCell.dayOfWeek, periodId: pendingCell.periodId } } : {}),
+      }),
+    [api, classSectionId, selectedClass?.academicYearId, fromParam, untilParam, pendingCell],
+  );
+
   const assignMutation = useMutation({
-    mutationFn: (body: {
-      classSectionId: string;
-      dayOfWeek: number;
-      periodId: string;
-      subjectId: string;
-      teacherId: string;
-      academicYearId: string;
-    }) => api.post<TimetableSlot>('/manage/timetable', body),
-    onSuccess: () => {
-      // Prefix-matches every `['timetable', classSectionId, <date>]` query,
-      // regardless of which week was being viewed when this fired.
-      void queryClient.invalidateQueries({ queryKey: ['timetable', classSectionId] });
+    mutationFn: (save: PeriodDialogSave) =>
+      api.post<{ changed: number; skipped: { dayOfWeek: number; periodId: string; reason: string }[] }>('/manage/timetable/subject-teacher', {
+        classSectionId,
+        academicYearId: selectedClass?.academicYearId,
+        subjectId: save.subjectId,
+        teacherId: save.teacherId,
+        from: fromParam,
+        ...(save.keep ? {} : { until: untilParam }),
+        cells: save.cells,
+      }),
+    onSuccess: (res, save) => {
+      // Prefix-matches every `['timetable', …]` query, whichever week or class view fired it.
+      void queryClient.invalidateQueries({ queryKey: ['timetable'] });
       setPendingCell(null);
-      toast.success('Slot assigned');
+      const subject = subjectsQuery.data?.find((x) => x.id === save.subjectId)?.name ?? 'The subject';
+      const t = teachersQuery.data?.find((x) => x.id === save.teacherId);
+      const who = t ? `${t.firstName} ${t.lastName}`.trim() : 'the teacher';
+      const when = save.keep ? `from ${fromLabel}` : `for the week of ${weekRangeLabel(viewedMonday)}`;
+      const late = res.skipped.map((x) => `${WEEKDAY_LABELS[x.dayOfWeek]} — ${x.reason}`);
+      const stays = [...save.leftAsIs.filter((x) => x.reason !== 'unticked').map((x) => `${x.label} (${x.reason})`), ...late];
+      toast.success(
+        `${subject} in ${selectedClass ? `${selectedClass.grade.name}-${selectedClass.name}` : 'this class'}: ${res.changed === 1 ? '1 period' : `${res.changed} periods`} now with ${who} ${when}.`,
+        stays.length ? { description: `Stays as it is: ${stays.join('; ')}.` } : undefined,
+      );
     },
     onError: (err: Error) => {
       if (err instanceof ApiError && err.status === 409) {
         toast.error(`Clash: ${err.message}`);
-      } else if (err instanceof ApiError && err.status === 400) {
-        toast.error(`Invalid reference: ${err.message}`);
       } else {
-        toast.error(`Failed to assign slot: ${err.message}`);
+        toast.error(`Not saved: ${err.message}`);
       }
-      // Do NOT fill the cell; query cache is unchanged
+      // The cells keep what they had; the query cache is unchanged.
     },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (slotId: string) => api.del<{ ok: boolean }>(`/manage/timetable/${slotId}`),
+    // From the viewed week on — never the weeks already taught.
+    mutationFn: (slotId: string) => api.del<{ ok: boolean }>(`/manage/timetable/${slotId}?from=${fromParam}`),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['timetable', classSectionId] });
       toast.success('Slot removed');
@@ -439,7 +366,7 @@ export function TimetableEditor({ classes, classesLoading = false, classSectionI
   // Safe-delete: confirm before firing the destructive mutation.
   function confirmDeleteSlot(slot: TimetableSlot, dayLabel: string) {
     const ok = window.confirm(
-      `Remove ${slot.subject.name} from ${dayLabel} ${slot.period.label}? This can’t be undone.`,
+      `Remove ${slot.subject.name} from ${dayLabel} ${slot.period.label}, from ${fromLabel} on? Earlier weeks keep it.`,
     );
     if (ok) deleteMutation.mutate(slot.id);
   }
@@ -637,10 +564,28 @@ export function TimetableEditor({ classes, classesLoading = false, classSectionI
                                   justifyContent: 'center',
                                 }}
                               >
-                                <div style={{ fontWeight: 700, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{slot.subject.name}</div>
-                                <div style={{ fontSize: 10.5, color: 'var(--sk-ink-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {slot.teacher.firstName} {slot.teacher.lastName}
-                                </div>
+                                {(() => {
+                                  const text = (
+                                    <>
+                                      <div style={{ fontWeight: 700, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{slot.subject.name}</div>
+                                      <div style={{ fontSize: 10.5, color: 'var(--sk-ink-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {slot.teacher.firstName} {slot.teacher.lastName}
+                                      </div>
+                                    </>
+                                  );
+                                  // A filled period opens "Change period" — no more remove-then-assign.
+                                  // Past weeks are read-only.
+                                  return isPastWeek ? text : (
+                                    <button
+                                      type="button"
+                                      className="sk-tt-cellbtn"
+                                      aria-label={`Change ${slot.subject.name} with ${slot.teacher.firstName} ${slot.teacher.lastName}, ${day.label} ${period.label}`}
+                                      onClick={() => setPendingCell({ dayOfWeek: day.value, periodId: period.id, dayLabel: `${day.label} ${formatShort(day.date)}`, periodLabel: period.label, slot })}
+                                    >
+                                      {text}
+                                    </button>
+                                  );
+                                })()}
                                 {/* Delete action — hidden for read-only past weeks */}
                                 {!isPastWeek && (
                                   <button
@@ -751,25 +696,27 @@ export function TimetableEditor({ classes, classesLoading = false, classSectionI
         </div>
       )}
 
-      {/* Assign modal */}
-      {pendingCell && (
-        <AssignModal
-          periodLabel={pendingCell.periodLabel}
+      {/* Assign / change drawer */}
+      {pendingCell && selectedClass && (
+        <PeriodDialog
+          mode={pendingCell.slot ? 'change' : 'assign'}
           dayLabel={pendingCell.dayLabel}
-          subjects={subjectsQuery.data ?? []}
-          teachers={teachersQuery.data ?? []}
-          onAssign={(subjectId, teacherId) => {
-            if (!selectedClass) return;
-            assignMutation.mutate({
-              classSectionId,
-              dayOfWeek: pendingCell.dayOfWeek,
-              periodId: pendingCell.periodId,
-              subjectId,
-              teacherId,
-              academicYearId: selectedClass.academicYearId,
-            });
-          }}
-          isAssigning={assignMutation.isPending}
+          dayOfWeek={pendingCell.dayOfWeek}
+          periodId={pendingCell.periodId}
+          periodLabel={pendingCell.periodLabel}
+          classLabel={`${selectedClass.grade.name}-${selectedClass.name}`}
+          weekLabel={weekRangeLabel(viewedMonday)}
+          fromLabel={fromLabel}
+          nextWeekLabel={nextWeekLabel}
+          subjects={(subjectsQuery.data ?? []).map((x) => ({ id: x.id, label: `${x.name}${x.code ? ` (${x.code})` : ''}` }))}
+          teachers={(teachersQuery.data ?? [])
+            // Never offer someone who has left; keep the current teacher listed so the drawer can show them.
+            .filter((t) => t.isActive !== false || t.id === pendingCell.slot?.teacherId)
+            .map((t) => ({ id: t.id, label: `${t.firstName} ${t.lastName}`.trim() }))}
+          initial={pendingCell.slot ? { subjectId: pendingCell.slot.subjectId, teacherId: pendingCell.slot.teacherId, teacherName: `${pendingCell.slot.teacher.firstName} ${pendingCell.slot.teacher.lastName}`.trim() } : null}
+          preview={previewSubjectTeacher}
+          onSave={(save) => assignMutation.mutate(save)}
+          isSaving={assignMutation.isPending}
           onClose={() => {
             setPendingCell(null);
             assignMutation.reset();

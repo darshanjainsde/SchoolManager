@@ -95,6 +95,22 @@ describe('the date field', () => {
     expect(screen.getByLabelText('Date of birth')).toHaveFocus();
   });
 
+  /**
+   * THE REGRESSION (2026-10-07, on prod): the calendar is portalled to <body>,
+   * outside the console's `.skosx` wrapper, where every --sk-* colour token is
+   * undefined — it opened with no background and faint text, see-through over
+   * the form. It must carry the theme scope itself, above the page chrome.
+   */
+  it('the open calendar carries the console theme and sits above the page', async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<Harness initial="2026-10-07" />);
+    await user.click(screen.getByRole('button', { name: 'Open calendar' }));
+    const dialog = screen.getByRole('dialog', { name: 'Choose a date' });
+    expect(dialog.closest('.skosx')).not.toBeNull();
+    expect(dialog.parentElement).toBe(document.body);
+    expect(Number(dialog.style.zIndex)).toBeGreaterThanOrEqual(80);
+  });
+
   it('opens on the stored month, Monday first, with the stored day selected', async () => {
     const user = userEvent.setup({ delay: null });
     render(<Harness initial="2026-10-07" />);
@@ -110,6 +126,7 @@ describe('the date field', () => {
     await user.click(screen.getByRole('button', { name: 'Open calendar' }));
     expect(screen.getByRole('gridcell', { name: '21 December 2008' })).toBeDisabled();
     expect(screen.getByRole('gridcell', { name: '20 December 2008' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Today' })).not.toBeInTheDocument();
     const years = [...(screen.getByRole('combobox', { name: 'Year' }) as HTMLSelectElement).options].map((o) => o.value);
     expect(years[0]).toBe('2008');
     expect(years[years.length - 1]).toBe('1950');
