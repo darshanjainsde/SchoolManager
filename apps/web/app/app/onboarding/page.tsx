@@ -24,7 +24,7 @@ import { Cell, Row, RowTitle } from '@/components/ui/kit';
 type Kind = 'teachers' | 'students' | 'classes';
 const KINDS: { kind: Kind; title: string; what: string; needsSession: boolean }[] = [
   { kind: 'classes', title: 'Classes & sections', what: 'The classes you run and their sections, for one session. Do this first — students are placed into these.', needsSession: true },
-  { kind: 'teachers', title: 'Teachers', what: 'Names, contact, post, qualifications, TET, safety checks. Only the names are required.', needsSession: false },
+  { kind: 'teachers', title: 'Teachers', what: 'Names, contact, post, qualifications, TET, safety checks. First name, email and mobile are required.', needsSession: false },
   { kind: 'students', title: 'Students', what: 'The roll for one session: admission number, names, class and section, guardian. New session? Export last year, edit, import here.', needsSession: true },
 ];
 const KIND_LABEL: Record<Kind, string> = { classes: 'Classes & sections', teachers: 'Teachers', students: 'Students' };

@@ -16,6 +16,14 @@ jest.mock('@skoolos/db', () => ({
   withTenant: (_s: string, fn: (tx: unknown) => unknown) => fn(txMock),
 }));
 
+// The cross-school half of the identity check reads every school on the
+// platform client; here it answers per test.
+const activeElsewhere = jest.fn();
+jest.mock('../internal/teacher-identity', () => ({
+  ...jest.requireActual('../internal/teacher-identity'),
+  activeElsewhere: (...a: unknown[]) => activeElsewhere(...a),
+}));
+
 import { OnboardingService, cellValue } from './onboarding.service';
 import { TEACHER_COLUMNS, STUDENT_COLUMNS, CLASS_COLUMNS, headerIndex } from './onboarding.sheets';
 import type { StudentsService } from '../students.service';
@@ -40,7 +48,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   txMock.academicYear.findFirst.mockResolvedValue({ id: 'y1', name: '2026-27' });
   txMock.classSection.findMany.mockResolvedValue([{ id: '11111111-1111-4111-8111-111111111111', name: 'B', grade: { name: '5' } }]);
-  txMock.teacher.findMany.mockResolvedValue([{ id: 't1', email: 'existing@school.test', employeeCode: 'T-001' }]);
+  txMock.teacher.findMany.mockResolvedValue([{ id: 't1', email: 'existing@school.test', employeeCode: 'T-001', phoneE164: '+919000000001' }]);
+  activeElsewhere.mockResolvedValue(null);
   txMock.student.findMany.mockResolvedValue([{ admissionNo: 'ADM-001' }]);
   txMock.grade.findMany.mockResolvedValue([{ id: 'g5', name: '5', order: 0 }]);
   txMock.grade.count.mockResolvedValue(1);
@@ -114,9 +123,35 @@ describe('the preview — every problem, before anything is written', () => {
     expect(pre.ok).toBe(0);
   });
   it('an email or employee code already on file is an error, never an update', async () => {
-    const file = await xlsx(H(TEACHER_COLUMNS), [['Priya', 'Iyer', 'Existing@School.test', '', '', '', '', '', '', 'T-001']]);
+    const file = await xlsx(H(TEACHER_COLUMNS), [['Priya', 'Iyer', 'Existing@School.test', '9876543210', '', '', '', '', '', 'T-001']]);
     const pre = await svc.preview(SCHOOL, 'teachers', file, {});
     expect(pre.issues.map((i) => i.column).sort()).toEqual(['Email', 'Employee code']);
+  });
+  it('email and phone are required, each said once, and a last name is not', async () => {
+    const file = await xlsx(H(TEACHER_COLUMNS), [['Priya']]);
+    const pre = await svc.preview(SCHOOL, 'teachers', file, {});
+    expect(pre.issues.map((i) => `${i.column}: ${i.message}`).sort()).toEqual(['Email: Email is required.', 'Phone: Phone is required.']);
+  });
+  it('a mobile already on file, or twice in the file however it is written, is an error', async () => {
+    const file = await xlsx(H(TEACHER_COLUMNS), [
+      ['Asha', '', 'asha@school.test', '+91 90000 00001'],
+      ['Ravi', '', 'ravi@school.test', '98765 43210'],
+      ['Ravi', 'Again', 'ravi2@school.test', '+919876543210'],
+    ]);
+    const pre = await svc.preview(SCHOOL, 'teachers', file, {});
+    const msgs = pre.issues.map((i) => `${i.row}·${i.column}: ${i.message}`);
+    expect(msgs).toEqual(expect.arrayContaining([
+      '2·Phone: A teacher with +91 90000 00001 is already on file.',
+      expect.stringMatching(/^4·Phone: .* appears more than once in this file\.$/),
+    ]));
+    expect(pre.issues.filter((i) => i.row === 3)).toEqual([]);
+  });
+  it('a teacher still active at another school is refused, without naming the school', async () => {
+    activeElsewhere.mockResolvedValue('phone');
+    const file = await xlsx(H(TEACHER_COLUMNS), [['Asha', '', 'asha@school.test', '9876543210']]);
+    const pre = await svc.preview(SCHOOL, 'teachers', file, {});
+    expect(pre.issues).toEqual([{ row: 2, column: 'Phone', message: expect.stringMatching(/active at another school on Sckools/) }]);
+    expect(activeElsewhere).toHaveBeenCalledWith(SCHOOL, { email: 'asha@school.test', phoneE164: '+919876543210' });
   });
   it('students: resolves Class + Section to the session’s section, and refuses one that does not exist', async () => {
     const file = await xlsx(H(STUDENT_COLUMNS), [

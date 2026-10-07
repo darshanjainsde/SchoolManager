@@ -7,6 +7,8 @@ import { COLUMNS, INSTRUCTIONS, headerIndex, type Column, type SheetKind } from 
 import { CreateStudentDto, CreateTeacherDto } from '../management.dto';
 import { StudentsService } from '../students.service';
 import { TeachersService } from '../teachers.service';
+import { activeElsewhere, ELSEWHERE_MESSAGE, identityOf } from '../internal/teacher-identity';
+import { toE164 } from '../../../common/otp/phone-identity';
 import { LIST_CEILING } from '../../../common/lists/list-ceiling';
 
 /**
@@ -264,10 +266,21 @@ export class OnboardingService {
       }
       if (kind === 'teachers') {
         dupCheck(row, 'Email', 'email', r.email);
-        if (r.email && ctx.teacherEmails.has(String(r.email).toLowerCase())) issues.push({ row, column: 'Email', message: `A teacher with ${r.email} is already on file.` });
+        if (r.email && ctx.teacherEmails.has(String(r.email).trim().toLowerCase())) issues.push({ row, column: 'Email', message: `A teacher with ${r.email} is already on file.` });
+        // The mobile is the other half of who a teacher is (teacher-identity.ts):
+        // once per file, once per school, and not an active teacher elsewhere.
+        const phone = toE164(r.phone ? String(r.phone) : null);
+        if (phone) {
+          dupCheck(row, 'Phone', 'phoneE164', phone);
+          if (ctx.teacherPhones.has(phone)) issues.push({ row, column: 'Phone', message: `A teacher with ${r.phone} is already on file.` });
+        }
+        const elsewhere = await activeElsewhere(schoolId, identityOf({ email: r.email ? String(r.email) : null, phone: r.phone ? String(r.phone) : null }));
+        if (elsewhere) issues.push({ row, column: elsewhere === 'email' ? 'Email' : 'Phone', message: ELSEWHERE_MESSAGE });
         if (r.employeeCode) { dupCheck(row, 'Employee code', 'employeeCode', r.employeeCode); if (ctx.employeeCodes.has(String(r.employeeCode))) issues.push({ row, column: 'Employee code', message: `Employee code ${r.employeeCode} is already on file.` }); }
         const errs = await validate(plainToInstance(CreateTeacherDto, this.teacherBody(r)));
-        for (const e of errs) issues.push({ row, column: cols.find((c) => c.key === e.property)?.header ?? e.property, message: Object.values(e.constraints ?? {})[0] ?? 'Invalid value.' });
+        // A blank required cell is already reported above as "… is required".
+        const blank = (k: string) => cols.some((c) => c.key === k && c.required) && (r[k] === '' || r[k] === undefined || r[k] === null);
+        for (const e of errs) if (!blank(e.property)) issues.push({ row, column: cols.find((c) => c.key === e.property)?.header ?? e.property, message: Object.values(e.constraints ?? {})[0] ?? 'Invalid value.' });
       }
       if (kind === 'students') {
         dupCheck(row, 'Admission no.', 'admissionNo', r.admissionNo);
@@ -366,7 +379,7 @@ export class OnboardingService {
           sections.set(sectionKey(c.grade.name, c.name), c.id);
         }
       }
-      const teachers = await tx.teacher.findMany({ take: LIST_CEILING.ROSTER, where: { schoolId }, select: { id: true, email: true, employeeCode: true } });
+      const teachers = await tx.teacher.findMany({ take: LIST_CEILING.ROSTER, where: { schoolId }, select: { id: true, email: true, employeeCode: true, phoneE164: true } });
       const students = kind === 'students' ? await tx.student.findMany({ take: LIST_CEILING.ROSTER, where: { schoolId }, select: { admissionNo: true } }) : [];
       return {
         yearId: year?.id ?? '', yearName: year?.name ?? '',
@@ -374,6 +387,7 @@ export class OnboardingService {
         teacherEmails: new Set(teachers.map((t) => t.email?.toLowerCase()).filter((e): e is string => !!e)),
         teacherIdByEmail: new Map(teachers.filter((t) => t.email).map((t) => [t.email!.toLowerCase(), t.id])),
         employeeCodes: new Set(teachers.map((t) => t.employeeCode).filter((c): c is string => !!c)),
+        teacherPhones: new Set(teachers.map((t) => t.phoneE164).filter((p): p is string => !!p)),
         admissionNos: new Set(students.map((s) => s.admissionNo.trim().toLowerCase())),
       };
     });
