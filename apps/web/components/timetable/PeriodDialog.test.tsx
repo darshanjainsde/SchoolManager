@@ -140,4 +140,14 @@ describe('the period drawer', () => {
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByRole('button', { name: 'Assign' })).toBeEnabled();
   });
+
+  it('change mode offers "Remove period" — the way to remove on a phone, where the hover cross is not', async () => {
+    const user = userEvent.setup({ delay: null });
+    const onRemove = vi.fn();
+    const { rerender } = render(<PeriodDialog {...base} mode="change" initial={{ subjectId: 'eng', teacherId: 'krishna', teacherName: 'Krishna Shah' }} preview={vi.fn().mockResolvedValue(plan([]))} onSave={vi.fn()} onRemove={onRemove} />);
+    await user.click(screen.getByRole('button', { name: 'Remove period' }));
+    expect(onRemove).toHaveBeenCalledTimes(1);
+    rerender(<PeriodDialog {...base} preview={vi.fn().mockResolvedValue(plan([]))} onSave={vi.fn()} onRemove={onRemove} />);
+    expect(screen.queryByRole('button', { name: 'Remove period' })).not.toBeInTheDocument();
+  });
 });
