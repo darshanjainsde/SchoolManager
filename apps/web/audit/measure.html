@@ -142,11 +142,17 @@ function audit(doc,win,w){
       R.push(`${panel} | COLUMN OFF-CENTRE: ${left}px left, ${right}px right | ${main.className} | add margin-inline: auto`);
     }
   }
-  // Ragged columns, per list.
-  for(const list of doc.querySelectorAll('.sk-rowlist')){
-    const rows=[...list.querySelectorAll(':scope > .sk-rowline')];
+  // Ragged columns, per list. Every list shape that is meant to read as a
+  // table is named here — a list missing from this table is never measured
+  // (the period drawer's rows were, until 2026-10-07).
+  const LISTS=[
+    ['.sk-rowlist', ':scope > .sk-rowline', ':scope > .sk-rowcell'],
+    ['.sk-pd-rows', ':scope > li > .sk-pd-row', ':scope > *'],
+  ];
+  for(const [listSel,rowSel,cellSel] of LISTS) for(const list of doc.querySelectorAll(listSel)){
+    const rows=[...list.querySelectorAll(rowSel)];
     if(rows.length<2) continue;
-    const cols=rows.map(r=>[...r.querySelectorAll(':scope > .sk-rowcell')].map(c=>Math.round(c.getBoundingClientRect().left)));
+    const cols=rows.map(r=>[...r.querySelectorAll(cellSel)].map(c=>Math.round(c.getBoundingClientRect().left)));
     const n=Math.min(...cols.map(c=>c.length));
     for(let c=0;c<n;c++){
       const xs=cols.map(r=>r[c]);

@@ -4970,19 +4970,42 @@ button.sk-hubdoor:hover { transform: translateY(-2px); border-color: var(--sk-br
 .sk-pd-check b { display: block; font-weight: 650; color: var(--sk-ink); }
 .sk-pd-sub { display: block; margin-top: 2px; font-size: 12px; color: var(--sk-ink-3); }
 .sk-pd-others { border: 1px solid var(--sk-line); border-radius: 12px; padding: 12px; margin: 0; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-.sk-pd-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .sk-pd-rows[data-off] { opacity: .55; }
-.sk-pd-rows > li { padding: 6px 8px; border-radius: 9px; display: flex; flex-direction: column; gap: 3px; }
+/* The LIST owns the three tracks (tick · day · who has it now); every row and
+   its label inherit them through subgrid, so the columns line up down the list
+   whatever a period is called ("Mon I" or "Thu Period 10"). UI ledger
+   `table-built-as-flex-rows-goes-ragged` — measured 18px ragged before this. */
+.sk-pd-rows { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 20px max-content minmax(0, 1fr); column-gap: 8px; row-gap: 2px; }
+.sk-pd-rows > li { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; row-gap: 3px; padding: 6px 8px; border-radius: 9px; }
 .sk-pd-rows > li[data-clash] { background: var(--sk-bad-tint); }
-.sk-pd-row { display: grid; grid-template-columns: 20px auto minmax(0, 1fr); align-items: center; gap: 8px; font-size: 13px; min-height: 28px; cursor: pointer; }
+.sk-pd-rows > li > .sk-pd-err, .sk-pd-rows > li > .sk-pd-warn { grid-column: 2 / -1; }
+.sk-pd-row { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: center; font-size: 13px; min-height: 28px; cursor: pointer; }
 .sk-pd-row > input { width: 16px; height: 16px; margin: 0; }
 .sk-pd-row .when { font-weight: 650; font-variant-numeric: tabular-nums; }
 .sk-pd-row .now { color: var(--sk-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Touch: native checkboxes ignore padding — grow the box itself (UI ledger). */
 @media (pointer: coarse), (max-width: 640px) {
   .sk-pd-check > input, .sk-pd-row > input { width: 24px; height: 24px; }
-  .sk-pd-row { grid-template-columns: 28px auto minmax(0, 1fr); min-height: 36px; }
+  .sk-pd-rows { grid-template-columns: 28px max-content minmax(0, 1fr); }
+  .sk-pd-row { min-height: 36px; }
 }
 /* A filled timetable period is itself the "change" control: the whole card is the target. */
 .sk-tt-cellbtn { display: flex; flex-direction: column; justify-content: center; width: 100%; min-height: 34px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; min-width: 0; }
 .sk-tt-cellbtn:focus-visible { outline: 2px solid var(--sk-brand); outline-offset: 4px; border-radius: 6px; }
+
+/* Timetable period actions. The remove cross is a hover affordance on a desk.
+   A phone has no hover, so there it was invisible AND 20x20 (measured at
+   360-414px). Shown always it took a quarter of a ~100px cell and cut every
+   name to four letters. On a touch screen the period itself is the control —
+   a tap opens the drawer, which has "Remove period" — so the cross goes. */
+.sk-tt-remove { position: absolute; top: 4px; right: 4px; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; border: none; background: transparent; color: var(--sk-ink-3); cursor: pointer; }
+@media (hover: none), (max-width: 640px) {
+  .sk-tt-remove { display: none; }
+}
+/* The week grid scrolls inside its card. On a phone each day gets ~120px so a
+   subject and a teacher's name are readable, rather than seven slivers. */
+.sk-tt-table { width: 100%; border-collapse: collapse; table-layout: fixed; min-width: 720px; }
+@media (max-width: 640px) { .sk-tt-table { min-width: 860px; } }
+/* The class picker: label over its select, like every other labelled field. */
+.sk-tt-classbar { display: flex; flex-direction: column; gap: 6px; }
+.sk-tt-classbar > select { width: min(100%, 320px); box-sizing: border-box; }
