@@ -96,3 +96,26 @@ export function fmtDateTime(v: DateIn): string {
   const d = asMoment(v);
   return `${d.getDate()} ${MON[d.getMonth()]} ${d.getFullYear()}, ${fmtTime(d)}`;
 }
+
+/**
+ * THE SCHOOL'S CLOCK. Some moments are read in the school's time whatever
+ * the phone says — "seen 8:10 am" on the leave desk, the date a report card
+ * was issued. Every school on Sckools is in India (IST, UTC+5:30, no daylight
+ * saving), so this is a fixed shift, done by hand like everything here. A
+ * refactor once swapped these for the phone clock and only a UTC CI runner
+ * noticed (2026-10-08): keep the zone where the meaning needs it.
+ */
+function inSchoolClock(v: DateIn): Date {
+  const d = asMoment(v);
+  return new Date(d.getTime() + (330 + d.getTimezoneOffset()) * 60_000);
+}
+
+/** "8:10 am", in the school's time (IST). */
+export function fmtSchoolTime(v: DateIn): string {
+  return fmtTime(inSchoolClock(v));
+}
+
+/** "8 Oct 2026", the school's calendar day (IST) of a moment. */
+export function fmtSchoolDate(v: DateIn): string {
+  return fmtDate(inSchoolClock(v));
+}

@@ -9,7 +9,7 @@ import { Button, Eyebrow, Row } from '@/components/desk';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
-import { fmtDay, fmtTime, fmtWeekdayDay } from '@/lib/dates';
+import { fmtDay, fmtSchoolTime, fmtWeekdayDay } from '@/lib/dates';
 import { leaveTypeLabel } from '@/lib/labels';
 
 interface LeaveRow {
@@ -57,8 +57,8 @@ const span = (r: Pick<LeaveRow, 'startDate' | 'endDate' | 'halfDay' | 'halfDayPa
     : r.startDate.slice(0, 10) === r.endDate.slice(0, 10) ? day(r.startDate)
       : `${day(r.startDate)} – ${day(r.endDate)}`;
 
-/** "8:10 am", on the phone's clock (the school's, for a phone in India). */
-const seenAt = (iso: string) => fmtTime(iso);
+/** "8:10 am", in the school's time. */
+const seenAt = (iso: string) => fmtSchoolTime(iso);
 
 /** A 409 means another desk moved first: the server's sentence says how, and the screen must look again. */
 const isConflict = (e: unknown) => e instanceof ApiError && e.status === 409;

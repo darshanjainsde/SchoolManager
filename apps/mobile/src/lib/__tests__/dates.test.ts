@@ -1,4 +1,4 @@
-import { fmtDate, fmtDateTime, fmtDay, fmtDayTime, fmtLongDay, fmtMonthYear, fmtTime, fmtWeekdayDate, fmtWeekdayDay, fmtWeekdayShort } from '../dates';
+import { fmtDate, fmtDateTime, fmtDay, fmtDayTime, fmtLongDay, fmtMonthYear, fmtSchoolDate, fmtSchoolTime, fmtTime, fmtWeekdayDate, fmtWeekdayDay, fmtWeekdayShort } from '../dates';
 
 /**
  * One way to write a date: the Indian order, the same on every phone. These
@@ -30,5 +30,14 @@ describe('dates', () => {
     expect(fmtTime(new Date(2026, 9, 8, 9, 0))).toBe('9:00 am');
     expect(fmtDayTime(noon)).toBe('8 Oct, 12:57 pm');
     expect(fmtDateTime(noon)).toBe('8 Oct 2026, 12:57 pm');
+  });
+});
+
+describe("the school's clock (IST) whatever the phone's zone", () => {
+  it('reads a UTC moment as Indian time', () => {
+    // 02:40 UTC is 08:10 IST — on a UTC phone, an IST phone, anywhere.
+    expect(fmtSchoolTime('2026-10-08T02:40:00.000Z')).toBe('8:10 am');
+    // 20:00 UTC on the 7th is already the 8th in India.
+    expect(fmtSchoolDate('2026-10-07T20:00:00.000Z')).toBe('8 Oct 2026');
   });
 });
