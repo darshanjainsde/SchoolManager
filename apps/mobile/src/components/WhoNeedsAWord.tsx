@@ -9,7 +9,6 @@ import type {
 import { api, ApiError } from '@/lib/api';
 import { Page, PageHeader, Toast } from '@/components/ui';
 import { ThresholdSlider } from '@/components/ThresholdSlider';
-import { font } from '@/theme/tokens';
 import { useTokens } from '@/theme/theme-context';
 
 /** Matches the server's `NOTICE_COOLDOWN_DAYS`. */
@@ -178,7 +177,7 @@ export function WhoNeedsAWord({
                   </View>
                   <Text
                     style={{
-                      fontFamily: font.mono,
+                      fontVariant: ['tabular-nums'],
                       fontSize: 13,
                       fontWeight: '700',
                       color: tokens.color.red,

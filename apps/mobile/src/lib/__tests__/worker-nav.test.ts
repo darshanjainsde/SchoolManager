@@ -27,15 +27,15 @@ describe('worker desks', () => {
   it('an accounts officer gets the desk on the JOB; the Pay tab needs the SALARY override', () => {
     const withPay = { staffRole: 'ACCOUNTS', features: ['MANAGEMENT', 'SALARY'] };
     expect(jobFor(withPay)).toBe('ACCOUNTS');
-    expect(tabNamesFor(withPay)).toEqual(['leavedesk', 'paydesk', 'profile']);
+    expect(tabNamesFor(withPay)).toEqual(['today', 'leavedesk', 'paydesk', 'profile']);
     // Leave first: Pay needs a right an admin grants (re-audit 2026-10-08).
-    expect(homeTabFor(withPay)).toBe('leavedesk');
+    expect(homeTabFor(withPay)).toBe('today');
     // No SALARY: still the accounts desk, still the leave decisions — no Pay
     // tab, and the portal opens on Leave rather than on a tab that is hidden.
     const noPay = { staffRole: 'ACCOUNTS', features: ['MANAGEMENT'] };
     expect(jobFor(noPay)).toBe('ACCOUNTS');
-    expect(tabNamesFor(noPay)).toEqual(['leavedesk', 'profile']);
-    expect(homeTabFor(noPay)).toBe('leavedesk');
+    expect(tabNamesFor(noPay)).toEqual(['today', 'leavedesk', 'profile']);
+    expect(homeTabFor(noPay)).toBe('today');
   });
   it('an older session (no staffRole) and no session are general', () => {
     expect(jobFor({ features: ['SPORTS'] })).toBe('GENERAL');

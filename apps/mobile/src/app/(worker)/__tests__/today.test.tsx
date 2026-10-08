@@ -1,4 +1,3 @@
-import { formatDate } from '@/lib/portal';
 import { render, screen } from '@testing-library/react-native';
 import Today from '../(tabs)/today/index';
 import { api, ApiError } from '@/lib/api';
@@ -63,11 +62,13 @@ it('renders the identity greeting, stat boxes, and recent days from the real MyS
   render(<Today />);
 
   expect(await screen.findByText('Hi, Sam')).toBeTruthy();
-  expect(screen.getByText('Office staff')).toBeTruthy();
+  expect(screen.getByText(/Office staff/)).toBeTruthy();
   expect(screen.getByTestId('stat-percent')).toHaveTextContent('67%');
   expect(screen.getByTestId('stat-present')).toHaveTextContent('2');
   expect(screen.getByTestId('stat-absent')).toHaveTextContent('1');
-  expect(screen.getByText(formatDate('2026-07-01'))).toBeTruthy();
+  // UI v2: the month is a strip of day squares; the latest day is named in words.
+  expect(screen.getByTestId('recent-days')).toHaveTextContent(/Last marked 3 Jul 2026 · Present/);
+  expect(screen.getByTestId('today-standing')).toBeTruthy();
 });
 
 it('shows no dead-end leave card while staff cannot apply (re-audit 2026-10-08)', async () => {
@@ -75,5 +76,6 @@ it('shows no dead-end leave card while staff cannot apply (re-audit 2026-10-08)'
   render(<Today />);
   await screen.findByText('No attendance has been recorded for you yet this month.');
   expect(screen.queryByText(/Applying for leave isn.t available here yet/)).toBeNull();
-  expect(screen.queryByText('Leave')).toBeNull();
+  // UI v2: a Leave tile that says what to do instead (ask the office), never a dead end.
+  expect(screen.getByTestId('today-leave-tile')).toHaveTextContent(/Apply through the office/);
 });

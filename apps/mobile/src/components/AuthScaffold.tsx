@@ -10,6 +10,7 @@ import {
   type TextStyle, useWindowDimensions } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop, Circle } from 'react-native-svg';
 import { SckoolsLogo } from '@/components/SckoolsLogo';
+import { Button } from '@/components/Button';
 import { useTokens } from '@/theme/theme-context';
 import { brand, font } from '@/theme/tokens';
 
@@ -163,22 +164,46 @@ export function AuthScaffold({
  * mistype. Tracked small-caps is also the register-book way to head a column,
  * which is the voice this whole app is written in.
  */
-export function Field({ label, children }: { label: string; children: ReactNode }) {
+export function Field({
+  label,
+  children,
+  hint,
+  error,
+  optional,
+  counter,
+}: {
+  label: string;
+  children: ReactNode;
+  /** The line under the box: what to type, or the format. */
+  hint?: string;
+  /** Replaces the hint in the SAME line, so nothing jumps (Material 3). */
+  error?: string | null;
+  /** "(optional)" after the label — mark optional, not only required (Baymard). */
+  optional?: boolean;
+  /** "41 / 200", shown past 75% of the limit by the caller. */
+  counter?: string;
+}) {
   const tokens = useTokens();
+  // UI v2: the label is a sentence above the box at 13/600 — readable, not a
+  // tracked small-cap — and the supporting line is always reserved.
   return (
-    <View style={{ gap: 5 }}>
-      <Text
-        style={{
-          fontSize: 10,
-          fontWeight: '800',
-          letterSpacing: 0.8,
-          textTransform: 'uppercase',
-          color: tokens.color.sub,
-        }}
-      >
+    <View style={{ gap: 6 }}>
+      <Text style={{ fontSize: 13, lineHeight: 18, fontWeight: '600', color: tokens.color.ink2 }}>
         {label}
+        {optional ? <Text style={{ fontWeight: '500', color: tokens.color.sub }}> (optional)</Text> : null}
       </Text>
       {children}
+      {hint || error || counter ? (
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8, minHeight: 16 }}>
+          <Text
+            accessibilityLiveRegion={error ? 'polite' : 'none'}
+            style={{ flex: 1, fontSize: 12, lineHeight: 16, color: error ? tokens.color.red : tokens.color.sub }}
+          >
+            {error ?? hint ?? ''}
+          </Text>
+          {counter ? <Text style={{ fontSize: 12, lineHeight: 16, color: tokens.color.sub, fontVariant: ['tabular-nums'] }}>{counter}</Text> : null}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -194,20 +219,25 @@ export function Field({ label, children }: { label: string; children: ReactNode 
  * proportional type makes that check harder than it needs to be.
  */
 export function fieldInputStyle(
-  tokens: { color: { appBg: string; indigo: string; line: string; ink: string } },
-  opts: { focused?: boolean; mono?: boolean } = {},
+  tokens: { color: { appBg: string; surface?: string; indigo: string; line: string; line2?: string; ink: string; red?: string } },
+  opts: { focused?: boolean; mono?: boolean; error?: boolean; multiline?: boolean } = {},
 ): TextStyle {
+  // UI v2: a white box, 56 dp, 14 dp corners; 1 dp line at rest, 2 dp accent
+  // on focus, 2 dp error colour when wrong. Input at 16 sp (Material 3).
+  const border = opts.error ? (tokens.color.red ?? tokens.color.indigo) : opts.focused ? tokens.color.indigo : (tokens.color.line2 ?? tokens.color.line);
   return {
-    backgroundColor: tokens.color.appBg,
-    borderColor: opts.focused ? tokens.color.indigo : tokens.color.line,
-    borderWidth: 1.5,
-    borderRadius: 11,
-    paddingVertical: 12,
-    paddingHorizontal: 13,
+    backgroundColor: tokens.color.surface ?? tokens.color.appBg,
+    borderColor: border,
+    borderWidth: opts.focused || opts.error ? 2 : 1,
+    borderRadius: 14,
+    minHeight: opts.multiline ? 96 : 56,
+    paddingVertical: opts.multiline ? 14 : 0,
+    paddingHorizontal: opts.focused || opts.error ? 15 : 16,
     color: tokens.color.ink,
+    textAlignVertical: opts.multiline ? 'top' : 'center',
     ...(opts.mono
-      ? { fontFamily: font.mono, fontSize: 15, letterSpacing: 1.5 }
-      : { fontSize: 14.5 }),
+      ? { fontFamily: font.mono, fontSize: 16, letterSpacing: 1.2 }
+      : { fontSize: 16 }),
   };
 }
 
@@ -231,26 +261,8 @@ export function AuthButton({
   disabled?: boolean;
   testID?: string;
 }) {
-  const tokens = useTokens();
-  return (
-    <Pressable
-      testID={testID}
-      onPress={onPress}
-      disabled={disabled}
-      accessibilityRole="button"
-      style={({ pressed }) => ({
-        backgroundColor: tokens.color.indigo,
-        borderRadius: 11,
-        paddingVertical: 14,
-        opacity: disabled ? 0.45 : 1,
-        transform: [{ scale: pressed && !disabled ? 0.965 : 1 }],
-      })}
-    >
-      <Text style={{ color: tokens.color.onBrand, fontWeight: '700', textAlign: 'center', fontSize: 15 }}>
-        {label}
-      </Text>
-    </Pressable>
-  );
+  // UI v2: the one Button, filled and full width (components/Button.tsx).
+  return <Button label={label} onPress={onPress} disabled={disabled} testID={testID} block />;
 }
 
 /**
@@ -277,15 +289,15 @@ export function AuthLink({
       onPress={onPress}
       accessibilityRole="link"
       hitSlop={10}
-      // 12.5px of text plus 8 of slop was a 33dp target; padding and slop together clear 44.
-      style={({ pressed }) => ({ paddingVertical: 6, transform: [{ scale: pressed ? 0.965 : 1 }] })}
+      // A 44 dp row: the words are small, the target is not.
+      style={({ pressed }) => ({ minHeight: 44, justifyContent: 'center', paddingVertical: 6, transform: [{ scale: pressed ? 0.965 : 1 }] })}
     >
       <Text
         style={{
           color: tone === 'accent' ? tokens.color.indigo : tokens.color.sub,
           fontWeight: '700',
           textAlign: 'center',
-          fontSize: 12.5,
+          fontSize: 14,
         }}
       >
         {label}

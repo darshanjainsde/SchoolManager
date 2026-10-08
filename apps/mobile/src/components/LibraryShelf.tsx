@@ -79,7 +79,7 @@ export function LibraryShelf() {
             <Figure
               testID="library-next-due"
               label="Next due"
-              value={soonest ? (soonest.daysLeft < 0 ? 'Late' : soonest.daysLeft === 0 ? 'Today' : `${soonest.daysLeft} day${soonest.daysLeft === 1 ? '' : 's'}`) : '—'}
+              value={soonest ? (soonest.daysLeft < 0 ? 'Late' : soonest.daysLeft === 0 ? 'Today' : `${soonest.daysLeft} day${soonest.daysLeft === 1 ? '' : 's'}`) : 'None'}
               hint={soonest ? formatDate(soonest.dueOn) : 'nothing out'}
               tone={soonest ? (soonest.daysLeft < 0 ? 'bad' : soonest.daysLeft <= 3 ? 'warn' : undefined) : undefined}
             />
@@ -122,7 +122,7 @@ export function LibraryShelf() {
                     <Text style={{ fontSize: 13, fontWeight: '600', color: tokens.color.ink }} numberOfLines={1}>{f.title}</Text>
                     <Text style={{ fontSize: 11, color: tokens.color.sub }}>{f.reason}</Text>
                   </View>
-                  <Text style={{ fontFamily: font.mono, fontSize: 13, fontWeight: '600', color: tokens.color.red }}>{fine(f.amountRupees)}</Text>
+                  <Text style={{ fontVariant: ['tabular-nums'], fontSize: 13, fontWeight: '600', color: tokens.color.red }}>{fine(f.amountRupees)}</Text>
                 </View>
               ))}
             </Page>

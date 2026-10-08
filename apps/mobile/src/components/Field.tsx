@@ -17,7 +17,7 @@ export { Field, fieldInputStyle };
  * and `fieldInputStyle` rule so the whole app fills in a form the same way.
  */
 
-/** A plain text field: label above, the pencil rule inks in on focus. */
+/** A plain text field: label above, a white box that takes the accent on focus. */
 export function TextField({
   label,
   value,
@@ -25,21 +25,38 @@ export function TextField({
   placeholder,
   testID,
   mono,
+  hint,
+  error,
+  optional,
+  maxLength,
+  multiline,
   ...rest
-}: Omit<TextInputProps, 'style'> & { label: string; mono?: boolean }) {
+}: Omit<TextInputProps, 'style'> & {
+  label: string;
+  mono?: boolean;
+  /** The line under the box; an `error` replaces it in place. */
+  hint?: string;
+  error?: string | null;
+  optional?: boolean;
+}) {
   const tokens = useTokens();
   const [focused, setFocused] = useState(false);
+  const len = typeof value === 'string' ? value.length : 0;
+  // A counter only once the limit is near (GOV.UK: past ~75%), never a silent cut.
+  const counter = maxLength && len >= maxLength * 0.75 ? `${len} / ${maxLength}` : undefined;
   return (
-    <Field label={label}>
+    <Field label={label} hint={hint} error={error} optional={optional} counter={counter}>
       <TextInput
         testID={testID}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor={tokens.color.placeholder}
+        maxLength={maxLength}
+        multiline={multiline}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        style={fieldInputStyle(tokens, { focused, mono })}
+        style={fieldInputStyle(tokens, { focused, mono, error: !!error, multiline })}
         {...rest}
       />
     </Field>
@@ -47,7 +64,7 @@ export function TextField({
 }
 
 /**
- * Money. The ₹ is drawn, never typed; the figure is in the mono face; what
+ * Money. The ₹ is drawn, never typed; the figure is in sans with tabular digits; what
  * the caller receives is PAISE, so no screen ever divides by a hundred.
  */
 export function MoneyField({
@@ -85,7 +102,7 @@ export function MoneyField({
           placeholderTextColor={tokens.color.placeholder}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          style={{ flex: 1, paddingVertical: 12, fontFamily: font.mono, fontSize: 16, color: tokens.color.ink }}
+          style={{ flex: 1, paddingVertical: 12, fontVariant: ['tabular-nums'], fontSize: 16, color: tokens.color.ink }}
         />
       </View>
     </Field>
@@ -158,9 +175,9 @@ export function SegmentedField<V extends string>({
         style={{
           flexDirection: 'row',
           backgroundColor: tokens.color.surfaceMuted,
-          borderRadius: 11,
-          padding: 3,
-          gap: 3,
+          borderRadius: 999,
+          padding: 4,
+          gap: 4,
         }}
       >
         {options.map((o) => {
@@ -174,17 +191,19 @@ export function SegmentedField<V extends string>({
               onPress={() => onChange(o.value)}
               style={{
                 flex: 1,
-                minHeight: 34,
+                minHeight: 40,
                 alignItems: 'center',
                 justifyContent: 'center',
-                borderRadius: 9,
-                backgroundColor: on ? tokens.color.indigo : 'transparent',
+                borderRadius: 999,
+                backgroundColor: on ? tokens.color.surface : 'transparent',
+                borderWidth: on ? 1 : 0,
+                borderColor: tokens.color.line2,
               }}
             >
               <Text
                 maxFontSizeMultiplier={1.3}
                 numberOfLines={1}
-                style={{ fontSize: 12, fontWeight: '700', color: on ? tokens.color.onBrand : tokens.color.sub }}
+                style={{ fontSize: 14, fontWeight: '700', color: on ? tokens.color.ink : tokens.color.sub }}
               >
                 {o.label}
               </Text>
@@ -296,7 +315,7 @@ export function PhotoField({
 /** Small helper for the fee form: a plain money figure for a label row. */
 export function MoneyLabel({ children }: { children: ReactNode }) {
   const tokens = useTokens();
-  return <Text style={{ fontFamily: font.mono, fontSize: 13, color: tokens.color.ink }}>{children}</Text>;
+  return <Text style={{ fontVariant: ['tabular-nums'], fontSize: 13, color: tokens.color.ink }}>{children}</Text>;
 }
 
 export { rupees };

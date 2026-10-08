@@ -1,17 +1,17 @@
 import { useReload } from '@/lib/query';
 import { useCallback, useState, type ReactNode } from 'react';
-import { Pressable, Text, View, Alert } from 'react-native';
+import { Text, View, Alert } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import type { TeacherProfile } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { signOut } from '@/lib/sign-out';
 import { ProfileMenu } from '@/components/ProfileMenu';
 import { EditableAvatar } from '@/components/EditableAvatar';
+import { Button } from '@/components/Button';
 import { Card, ErrorState, Pill, Screen, SectionTitle } from '@/components/ui';
 import { Icon, type IconName } from '@/components/icons';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
-import { font } from '@/theme/tokens';
 
 /** "AR" for Asha Rao — same rule as the family profile / web pages. */
 function initials(firstName: string, lastName: string): string {
@@ -48,7 +48,7 @@ function ProfileRow({
         style={{
           width: 30,
           height: 30,
-          borderRadius: 9,
+          borderRadius: tokens.radius.chip,
           backgroundColor: tokens.color.surfaceMuted,
           alignItems: 'center',
           justifyContent: 'center',
@@ -57,7 +57,7 @@ function ProfileRow({
         <Icon name={icon} size={16} color={tokens.color.ink2} />
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 10.5, fontWeight: '800', letterSpacing: 0.7, color: tokens.color.sub }}>
+        <Text style={{ fontSize: 12, fontWeight: '700', letterSpacing: 0.7, textTransform: 'uppercase', color: tokens.color.sub }}>
           {label}
         </Text>
         {children}
@@ -109,7 +109,6 @@ export default function Profile() {
     }, [reloadKey]),
   );
 
-  const labelStyle = { fontSize: 11.5, fontWeight: '700' as const, color: tokens.color.sub };
   const valueStyle = { fontSize: 14, fontWeight: '600' as const, color: tokens.color.ink, marginTop: 2 };
   const mutedStyle = { fontSize: 13, color: tokens.color.sub, marginTop: 2 };
 
@@ -136,8 +135,8 @@ export default function Profile() {
             />
             <Text
               style={{
-                fontFamily: font.serif,
-                fontSize: 20,
+                fontSize: 22,
+                lineHeight: 28,
                 fontWeight: '700',
                 color: tokens.color.ink,
                 marginTop: 10,
@@ -218,22 +217,7 @@ export default function Profile() {
           is here as well as there. Styled as a quiet destructive action, not a
           primary button: it is the last thing on the screen, not the point of
           it. */}
-      <Pressable
-        testID="profile-signout"
-        accessibilityRole="button"
-        onPress={confirmSignOut}
-        style={{
-          marginTop: 4,
-          borderWidth: 1,
-          borderColor: tokens.color.red,
-          borderRadius: 12,
-          paddingVertical: 13,
-        }}
-      >
-        <Text style={{ color: tokens.color.red, fontWeight: '700', textAlign: 'center', fontSize: 14 }}>
-          Sign out
-        </Text>
-      </Pressable>
+      <Button testID="profile-signout" variant="danger" block label="Sign out" onPress={confirmSignOut} style={{ marginTop: 4 }} />
     </Screen>
   );
 }

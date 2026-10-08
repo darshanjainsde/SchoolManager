@@ -1,8 +1,9 @@
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Alert, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import { useReload } from '@/lib/query';
+import { Button } from '@/components/Button';
 import { Card, ErrorState, Pill, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { ProfileMenu } from '@/components/ProfileMenu';
@@ -110,7 +111,7 @@ export default function WorkerProfile() {
               </Text>
             </View>
             <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
-              <Text testID="worker-profile-name" style={{ fontSize: 15.5, fontWeight: '700', color: tokens.color.ink }}>
+              <Text testID="worker-profile-name" style={{ fontSize: 17, fontWeight: '700', color: tokens.color.ink }}>
                 {name || 'Your school record'}
               </Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
@@ -118,7 +119,7 @@ export default function WorkerProfile() {
               </View>
             </View>
           </View>
-          <Text style={{ paddingHorizontal: 12, paddingBottom: 12, fontSize: 12, lineHeight: 17, color: tokens.color.sub }}>
+          <Text style={{ paddingHorizontal: 12, paddingBottom: 12, fontSize: 13, lineHeight: 18, color: tokens.color.sub }}>
             Your name and role are your school&rsquo;s record. The office changes them.
           </Text>
         </Card>
@@ -139,25 +140,7 @@ export default function WorkerProfile() {
       {/* Sign out lives at the bottom of Profile because that is where every
           other app has taught people to look — and because before this it
           did not exist anywhere in this portal. */}
-      <Pressable
-        testID="profile-signout"
-        accessibilityRole="button"
-        accessibilityLabel="Sign out"
-        onPress={confirmSignOut}
-        style={{
-          marginTop: 4,
-          borderWidth: 1,
-          borderColor: tokens.color.red,
-          borderRadius: 12,
-          paddingVertical: 13,
-          minHeight: 44,
-          justifyContent: 'center',
-        }}
-      >
-        <Text style={{ color: tokens.color.red, fontWeight: '700', textAlign: 'center', fontSize: 14 }}>
-          Sign out
-        </Text>
-      </Pressable>
+      <Button testID="profile-signout" variant="danger" block label="Sign out" accessibilityLabel="Sign out" onPress={confirmSignOut} style={{ marginTop: 4 }} />
     </Screen>
   );
 }

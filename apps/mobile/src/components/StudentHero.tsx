@@ -150,9 +150,9 @@ function Cell({ on, value, label }: { on: string; value: string; label: string }
         paddingVertical: 9,
       }}
     >
-      {/* Figures in the mono face, like every figure in the app. */}
-      <Text style={{ color: on, fontFamily: font.mono, fontSize: 18, fontWeight: '700' }}>{value}</Text>
-      <Text style={{ color: on, opacity: 0.9, fontSize: 10.5, fontWeight: '600', marginTop: 1 }}>{label}</Text>
+      {/* Figures in the sans face with tabular digits, like every figure in the app. */}
+      <Text style={{ color: on, fontVariant: ['tabular-nums'], fontSize: 18, fontWeight: '700' }}>{value}</Text>
+      <Text style={{ color: on, opacity: 0.9, fontSize: 12, fontWeight: '600', marginTop: 1 }}>{label}</Text>
     </View>
   );
 }
@@ -177,7 +177,9 @@ function statusShort(status: TodayStatus): string {
   if (status === 'PRESENT') return 'Present';
   if (status === 'LATE') return 'Late';
   if (status === 'ABSENT') return 'Absent';
-  return '—';
+  // A word, never a dash: a '—' in a figure tile reads as broken, not as
+  // 'nothing yet' (v2 re-audit 2026-10-08).
+  return 'Pending';
 }
 
 /**
@@ -246,7 +248,9 @@ export function StudentHero(props: StudentHeroProps) {
       <Gradient id="shero-done" colors={accentColors}>
         <Text style={t.eyebrow}>That’s a wrap</Text>
         <Text style={t.title}>School’s done for today</Text>
-        <Text style={t.meta}>{`${classesToday} ${classesToday === 1 ? 'class' : 'classes'} today`}</Text>
+        {/* The tiles already say the count; the line under the title says
+            the thing the tiles cannot — whether today was marked. */}
+        <Text style={t.meta}>{word ?? 'Attendance not marked yet'}</Text>
         <View testID="shero-summary" style={{ flexDirection: 'row', gap: 8, marginTop: 13 }}>
           <Cell on={on} value={String(classesToday)} label="classes today" />
           <Cell on={on} value={statusShort(todayStatus)} label="attendance" />

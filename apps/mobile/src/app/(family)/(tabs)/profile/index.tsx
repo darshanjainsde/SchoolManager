@@ -7,6 +7,7 @@ import type { StudentProfile } from '@/lib/portal';
 import { signOut } from '@/lib/sign-out';
 import { ProfileMenu } from '@/components/ProfileMenu';
 import { EditableAvatar } from '@/components/EditableAvatar';
+import { Button } from '@/components/Button';
 import { Card, ErrorState, Page, Screen } from '@/components/ui';
 import { Icon, type IconName } from '@/components/icons';
 import { LoadingRows } from '@/components/Loading';
@@ -18,8 +19,8 @@ function initials(firstName: string, lastName: string): string {
   return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
 }
 
-/** A `.pfrow` value line: quiet label, the figure itself in mono so a column of them lines up. */
-function InfoRow({ label, value, first }: { label: string; value: string | null; first?: boolean }) {
+/** A `.pfrow` value line: quiet label, the value in tabular figures so a column of them lines up; `mono` for a code read character by character (the roll number). */
+function InfoRow({ label, value, first, mono }: { label: string; value: string | null; first?: boolean; mono?: boolean }) {
   const tokens = useTokens();
   return (
     <View
@@ -27,14 +28,15 @@ function InfoRow({ label, value, first }: { label: string; value: string | null;
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingVertical: 11,
-        paddingHorizontal: 13,
+        minHeight: 48,
+        paddingVertical: 10,
+        paddingHorizontal: 16,
         borderTopWidth: first ? 0 : 1,
         borderTopColor: tokens.color.line,
       }}
     >
-      <Text style={{ fontSize: 12.5, color: tokens.color.sub }}>{label}</Text>
-      <Text style={{ fontFamily: font.mono, fontSize: 12.5, fontWeight: '700', color: tokens.color.ink }}>
+      <Text style={{ fontSize: 14, color: tokens.color.sub }}>{label}</Text>
+      <Text style={{ ...(mono ? { fontFamily: font.mono } : { fontVariant: ['tabular-nums' as const] }), fontSize: 14, fontWeight: '700', color: tokens.color.ink }}>
         {value ?? '—'}
       </Text>
     </View>
@@ -64,18 +66,19 @@ function SettingRow({
       style={{
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 11,
-        paddingVertical: 11,
-        paddingHorizontal: 13,
+        gap: 12,
+        minHeight: 56,
+        paddingVertical: 10,
+        paddingHorizontal: 16,
         borderTopWidth: first ? 0 : 1,
         borderTopColor: tokens.color.line,
       }}
     >
       <View
         style={{
-          width: 30,
-          height: 30,
-          borderRadius: 9,
+          width: 32,
+          height: 32,
+          borderRadius: tokens.radius.chip,
           backgroundColor: tokens.color.surfaceMuted,
           alignItems: 'center',
           justifyContent: 'center',
@@ -83,7 +86,7 @@ function SettingRow({
       >
         <Icon name={icon} size={16} color={tokens.color.ink2} />
       </View>
-      <Text style={{ flex: 1, fontSize: 12.5, fontWeight: '600', color: tokens.color.ink }}>{label}</Text>
+      <Text style={{ flex: 1, fontSize: 16, fontWeight: '600', color: tokens.color.ink }}>{label}</Text>
       <Text style={{ color: tokens.color.sub }}>›</Text>
     </Pressable>
   );
@@ -172,10 +175,10 @@ export default function Profile() {
               />
             </View>
 
-            <Text style={{ fontFamily: font.serif, fontSize: 19, color: tokens.color.ink, marginTop: 10 }}>
+            <Text style={{ fontSize: 22, lineHeight: 28, fontWeight: '700', color: tokens.color.ink, marginTop: 10 }}>
               {profile.firstName} {profile.lastName}
             </Text>
-            <Text style={{ fontSize: 11, color: tokens.color.sub, marginTop: 1 }}>
+            <Text style={{ fontSize: 13, color: tokens.color.sub, marginTop: 2 }}>
               {profile.className ?? 'Class not set'} · roll {profile.rollNo ?? '—'}
             </Text>
 
@@ -185,15 +188,15 @@ export default function Profile() {
                 style={{
                   marginTop: 8,
                   backgroundColor: tokens.color.indigo50,
-                  borderRadius: 8,
-                  paddingHorizontal: 11,
-                  paddingVertical: 4,
+                  borderRadius: tokens.radius.chip,
+                  paddingHorizontal: 12,
+                  paddingVertical: 5,
                 }}
               >
                 <Text
                   style={{
                     fontFamily: font.mono,
-                    fontSize: 12,
+                    fontSize: 13,
                     fontWeight: '700',
                     letterSpacing: 1.4,
                     color: tokens.color.indigoDeep,
@@ -206,7 +209,7 @@ export default function Profile() {
           </View>
 
           <Page>
-            <InfoRow first label="Roll no." value={profile.rollNo} />
+            <InfoRow first mono label="Roll no." value={profile.rollNo} />
             <InfoRow label="Class" value={profile.className} />
           </Page>
         </>
@@ -239,22 +242,7 @@ export default function Profile() {
           is here as well as there. Styled as a quiet destructive action, not a
           primary button: it is the last thing on the screen, not the point of
           it. */}
-      <Pressable
-        testID="profile-signout"
-        accessibilityRole="button"
-        onPress={confirmSignOut}
-        style={{
-          marginTop: 4,
-          borderWidth: 1,
-          borderColor: tokens.color.red,
-          borderRadius: 12,
-          paddingVertical: 13,
-        }}
-      >
-        <Text style={{ color: tokens.color.red, fontWeight: '700', textAlign: 'center', fontSize: 14 }}>
-          Sign out
-        </Text>
-      </Pressable>
+      <Button testID="profile-signout" label="Sign out" onPress={confirmSignOut} variant="danger" block style={{ marginTop: 4 }} />
     </Screen>
   );
 }

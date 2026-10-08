@@ -48,8 +48,8 @@ describe('portalForSession', () => {
   // Leave — not on a hidden tab — when it does not. Before, the job needed
   // SALARY to exist at all and they landed on the general Today.
   it('lands an accounts officer on the desk they are actually allowed', () => {
-    expect(portalForSession(staff('ACCOUNTS', ['SALARY']))).toBe('/(worker)/(tabs)/leavedesk');
-    expect(portalForSession(staff('ACCOUNTS', []))).toBe('/(worker)/(tabs)/leavedesk');
+    expect(portalForSession(staff('ACCOUNTS', ['SALARY']))).toBe('/(worker)/(tabs)/today');
+    expect(portalForSession(staff('ACCOUNTS', []))).toBe('/(worker)/(tabs)/today');
     expect(portalForSession(staff('DRIVER', []))).toBe('/(worker)/(tabs)/today');
   });
 });

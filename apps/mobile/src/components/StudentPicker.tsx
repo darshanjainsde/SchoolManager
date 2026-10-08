@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Animated, Pressable, Text, TextInput, View } from 'react-native';
 import { useTokens } from '@/theme/theme-context';
+import { fieldInputStyle } from './AuthScaffold';
 import { font } from '@/theme/tokens';
 import { DUR, tokenStyle, useGesture } from '@/theme/motion';
 
@@ -133,6 +134,7 @@ export function StudentPicker({
 }) {
   const tokens = useTokens();
   const [query, setQuery] = useState('');
+  const [focused, setFocused] = useState(false);
 
   const byId = useMemo(() => new Map(students.map((s) => [s.id, s])), [students]);
 
@@ -198,19 +200,11 @@ export function StudentPicker({
         placeholderTextColor={tokens.color.placeholder}
         autoCapitalize="words"
         autoCorrect={false}
-        style={{
-          backgroundColor: tokens.color.surface,
-          // `.searchin` is outlined in the ACCENT, not the rule: the field is
-          // the one live thing in the composer, and the pitch keeps it lit
-          // whether or not it has focus.
-          borderColor: tokens.color.indigo,
-          borderWidth: 1.5,
-          borderRadius: 10,
-          paddingVertical: 11,
-          paddingHorizontal: 13,
-          fontSize: 14.5,
-          color: tokens.color.ink,
-        }}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        // Accent only while it has focus, like every other box in the kit:
+        // lit all the time it read as "already focused" (v2 crawl 2026-10-08).
+        style={fieldInputStyle(tokens, { focused })}
       />
 
       {matches.length > 0 && (

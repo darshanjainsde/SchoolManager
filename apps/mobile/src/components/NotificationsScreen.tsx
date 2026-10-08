@@ -111,7 +111,7 @@ function Row({
               {n.body}
             </Text>
           ) : null}
-          <Text style={{ fontSize: 10.5, color: tokens.color.sub, marginTop: 3, fontFamily: font.mono }}>
+          <Text style={{ fontSize: 13, color: tokens.color.sub, marginTop: 3, fontVariant: ['tabular-nums'] }}>
             {formatWhen(n.createdAt)}
           </Text>
         </View>

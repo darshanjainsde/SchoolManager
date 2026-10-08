@@ -6,10 +6,12 @@ import type { ClassLog, ClassLogNote, ClassLogTodo } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { shiftISO, todayISO } from '@/lib/attendance';
 import { Card, ErrorState, Screen, SectionTitle } from '@/components/ui';
+import { Button } from '@/components/Button';
+import { Chip, ChipRow } from '@/components/Chip';
+import { fieldInputStyle } from '@/components/Field';
 import { LoadingRows } from '@/components/Loading';
 import { Icon } from '@/components/icons';
 import { useTokens } from '@/theme/theme-context';
-import { font } from '@/theme/tokens';
 import { DASH, DUR, strokeDashoffset, useGesture } from '@/theme/motion';
 import { fmtWeekdayDate } from '@/lib/dates';
 
@@ -113,19 +115,11 @@ export default function ClassNotesHistory() {
     subjectName: string;
   }>();
 
-  const inputStyle = {
-    borderWidth: 1,
-    borderColor: tokens.color.line,
-    borderRadius: 11,
-    padding: 11,
-    fontSize: 13.5,
-    color: tokens.color.ink,
-  };
-
   const [log, setLog] = useState<ClassLog | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<Composer>('note');
   const [body, setBody] = useState('');
+  const [bodyFocused, setBodyFocused] = useState(false);
   const [adding, setAdding] = useState(false);
 
   const load = useCallback(() => {
@@ -207,12 +201,10 @@ export default function ClassNotesHistory() {
 
       {sections.map((s) => (
         <Card key={s.date} testID={`day-${s.date}`} style={{ gap: 4 }}>
-          {/* A day heading in the diary voice — the serif is what tells the
-              eye this is a page in a book of days, not a filter label. */}
+          {/* A day heading — a page in a book of days, not a filter label. */}
           <Text
             style={{
-              fontFamily: font.serif,
-              fontSize: 14,
+              fontSize: 17,
               fontWeight: '700',
               color: tokens.color.ink,
               marginBottom: 3,
@@ -226,8 +218,8 @@ export default function ClassNotesHistory() {
               testID={`note-${n.id}`}
               style={{ flexDirection: 'row', gap: 8, paddingVertical: 6 }}
             >
-              <Icon name="pin" size={15} color={tokens.color.sub} />
-              <Text style={{ fontSize: 13, color: tokens.color.ink, flex: 1 }}>{n.body}</Text>
+              <Icon name="pin" size={16} color={tokens.color.sub} />
+              <Text style={{ fontSize: 14, lineHeight: 20, color: tokens.color.ink, flex: 1 }}>{n.body}</Text>
             </View>
           ))}
           {s.todos.map((t) => (
@@ -237,20 +229,25 @@ export default function ClassNotesHistory() {
               onPress={() => void toggleTodo(t.id, !t.done)}
               // `.todo` — a full-width row with the box leading it, the way a
               // ruled list is ticked down the left margin.
-              style={{
+              style={({ pressed }) => ({
                 flexDirection: 'row',
                 alignItems: 'center',
-                gap: 10,
+                gap: 12,
+                minHeight: 56,
                 paddingVertical: 8,
+                paddingHorizontal: 16,
+                marginHorizontal: -16,
                 borderTopWidth: 1,
                 borderTopColor: tokens.color.line,
-              }}
+                opacity: pressed ? 0.8 : 1,
+              })}
               accessibilityRole="button"
               >
               <TickBox done={t.done} testID={`todo-box-${t.id}`} />
               <Text
                 style={{
-                  fontSize: 13,
+                  fontSize: 14,
+                  lineHeight: 20,
                   color: t.done ? tokens.color.sub : tokens.color.ink,
                   textDecorationLine: t.done ? 'line-through' : 'none',
                   flex: 1,
@@ -264,57 +261,13 @@ export default function ClassNotesHistory() {
       ))}
 
       {/* Composer — add a note or to-do on today. */}
-      <Card style={{ gap: 10 }}>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <Pressable
-            testID="composer-mode-note"
-            onPress={() => setMode('note')}
-            style={{
-              borderWidth: 1.5,
-              borderColor: mode === 'note' ? tokens.color.indigo : tokens.color.line,
-              backgroundColor: mode === 'note' ? tokens.color.indigo50 : tokens.color.surface,
-              borderRadius: 11,
-              paddingVertical: 8,
-              paddingHorizontal: 13,
-            }}
-            accessibilityRole="button"
-            >
-            <Text
-              style={{
-                fontSize: 12.5,
-                fontWeight: '700',
-                color: mode === 'note' ? tokens.color.indigo : tokens.color.sub,
-              }}
-            >
-              Note
-            </Text>
-          </Pressable>
-          <Pressable
-            testID="composer-mode-todo"
-            onPress={() => setMode('todo')}
-            style={{
-              borderWidth: 1.5,
-              borderColor: mode === 'todo' ? tokens.color.indigo : tokens.color.line,
-              backgroundColor: mode === 'todo' ? tokens.color.indigo50 : tokens.color.surface,
-              borderRadius: 11,
-              paddingVertical: 8,
-              paddingHorizontal: 13,
-            }}
-            accessibilityRole="button"
-            >
-            <Text
-              style={{
-                fontSize: 12.5,
-                fontWeight: '700',
-                color: mode === 'todo' ? tokens.color.indigo : tokens.color.sub,
-              }}
-            >
-              ✓ To-do
-            </Text>
-          </Pressable>
-        </View>
+      <Card style={{ gap: 12 }}>
+        <ChipRow>
+          <Chip testID="composer-mode-note" label="Note" selected={mode === 'note'} onPress={() => setMode('note')} />
+          <Chip testID="composer-mode-todo" label="To-do" selected={mode === 'todo'} onPress={() => setMode('todo')} />
+        </ChipRow>
 
-        <Text style={{ fontSize: 11, color: tokens.color.sub }}>
+        <Text style={{ fontSize: 13, lineHeight: 18, color: tokens.color.sub }}>
           {mode === 'note'
             ? 'A note records something worth remembering about this class.'
             : 'A to-do is a task you can tick off once it’s done.'}
@@ -328,8 +281,10 @@ export default function ClassNotesHistory() {
             multiline
             maxLength={1000}
             placeholder={`Write a note for ${className || 'this class'}…`}
-            placeholderTextColor={tokens.color.sub}
-            style={[inputStyle, { minHeight: 88, textAlignVertical: 'top' }]}
+            placeholderTextColor={tokens.color.placeholder}
+            onFocus={() => setBodyFocused(true)}
+            onBlur={() => setBodyFocused(false)}
+            style={fieldInputStyle(tokens, { focused: bodyFocused, multiline: true })}
           />
         ) : (
           <TextInput
@@ -338,29 +293,21 @@ export default function ClassNotesHistory() {
             onChangeText={setBody}
             maxLength={1000}
             placeholder="Add a task…"
-            placeholderTextColor={tokens.color.sub}
-            style={inputStyle}
+            placeholderTextColor={tokens.color.placeholder}
+            onFocus={() => setBodyFocused(true)}
+            onBlur={() => setBodyFocused(false)}
+            style={fieldInputStyle(tokens, { focused: bodyFocused })}
           />
         )}
 
-        <Pressable
+        <Button
           testID="composer-add"
-          onPress={() => void add()}
+          block
+          busy={adding}
           disabled={adding || body.trim().length === 0}
-          style={{
-            backgroundColor: tokens.color.indigo,
-            borderRadius: 13,
-            padding: 12,
-            alignSelf: 'flex-start',
-            paddingHorizontal: 18,
-            opacity: adding || body.trim().length === 0 ? 0.6 : 1,
-          }}
-          accessibilityRole="button"
-          >
-          <Text style={{ color: tokens.color.onBrand, fontWeight: '700', fontSize: 13 }}>
-            {adding ? 'Adding…' : mode === 'note' ? 'Add note' : 'Add to-do'}
-          </Text>
-        </Pressable>
+          label={adding ? 'Adding…' : mode === 'note' ? 'Add note' : 'Add to-do'}
+          onPress={() => void add()}
+        />
       </Card>
     </Screen>
   );

@@ -50,7 +50,7 @@ export default function Member() {
   return (
     <Screen onRefresh={card.refresh} refreshing={card.refreshing}>
       <SectionTitle title={b?.name ?? 'Reader'} actionLabel={card.data ? 'Issue a book' : undefined} onAction={card.data ? () => setIssuing(true) : undefined} />
-      {b && <Text style={{ marginHorizontal: 4, marginTop: -6, fontSize: 11.5, color: tokens.color.sub }}>{borrowerLine(b)}</Text>}
+      {b && <Text style={{ marginHorizontal: 4, marginTop: -6, fontSize: 13, color: tokens.color.sub }}>{borrowerLine(b)}</Text>}
       {card.loading && <LoadingRows label="Opening their shelf…" rows={3} />}
       {card.error && !card.data && <ErrorState error={card.error} onRetry={card.reload} />}
       {card.data && (
@@ -125,7 +125,7 @@ function IssueSheet({ reader, onClose, onIssued }: { reader: MemberCard; onClose
       footer={picked ? (
         warn ? (
           <View style={{ gap: 8 }}>
-            <Text testID="issue-warn" style={{ fontSize: 12.5, color: tokens.color.late, fontWeight: '600' }}>{warn}</Text>
+            <Text testID="issue-warn" style={{ fontSize: 14, lineHeight: 20, color: tokens.color.late, fontWeight: '600' }}>{warn}</Text>
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <View style={{ flex: 1 }}><Button variant="ghost" label="Don't issue" onPress={onClose} /></View>
               <View style={{ flex: 1 }}><Button variant="amber" testID="issue-anyway" label="Issue anyway" onPress={() => void issue(true)} busy={busy} /></View>
@@ -147,7 +147,7 @@ function IssueSheet({ reader, onClose, onIssued }: { reader: MemberCard; onClose
             ))}
           </>
         )}
-        {picked && picked.inCopies === 0 && <Text style={{ fontSize: 12.5, color: tokens.color.red }}>Every copy is out{picked.earliestBack ? ` — earliest back ${formatDate(picked.earliestBack)}` : ''}.</Text>}
+        {picked && picked.inCopies === 0 && <Text style={{ fontSize: 13, lineHeight: 18, color: tokens.color.red }}>Every copy is out{picked.earliestBack ? ` — earliest back ${formatDate(picked.earliestBack)}` : ''}.</Text>}
         {error && <Toast kind="error" message={error} />}
       </View>
     </Sheet>

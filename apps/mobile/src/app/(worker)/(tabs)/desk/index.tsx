@@ -54,7 +54,14 @@ export default function SportsToday() {
           <Page testID="desk-live-list">
             <PageHeader title="Running now" icon="sports" />
             {live.length === 0 ? (
-              <Empty icon="sports">{can(me.data, 'CREATE') ? 'No meet is live. Start one from Meets, or from the web desk for a big one.' : 'No meet is live today.'}</Empty>
+              <Empty
+                kind="first"
+                icon="sports"
+                title="No meet is live"
+                action={can(me.data, 'CREATE') ? { label: 'Open Meets', onPress: () => router.push('/(worker)/(tabs)/meets'), testID: 'desk-open-meets' } : undefined}
+              >
+                {can(me.data, 'CREATE') ? 'Start one from Meets, or from the web desk for a big one.' : 'Nothing is running today.'}
+              </Empty>
             ) : (
               live.map((t, i) => (
                 <Row key={t.id} first={i === 0} testID={`desk-meet-${t.id}`} title={t.name} sub={`${formatDate(t.startsOn)} – ${formatDate(t.endsOn)} · ${t.events} event${t.events === 1 ? '' : 's'}`} right={<Pill tone={t.published ? 'green' : 'amber'}>{t.published ? 'Published' : 'Draft'}</Pill>} onPress={() => router.push(`/(worker)/(tabs)/meets/${t.id}`)} />

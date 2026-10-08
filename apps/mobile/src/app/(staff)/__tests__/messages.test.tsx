@@ -80,7 +80,7 @@ it('shows an empty state when the teacher has no threads', async () => {
     throw new Error(`unexpected path: ${path}`);
   });
   const { findByText } = render(<StaffMessages />);
-  expect(await findByText('No student questions yet.')).toBeTruthy();
+  expect(await findByText('No questions yet')).toBeTruthy();
 });
 
 it('shows the API error message verbatim when the thread list fails', async () => {

@@ -146,7 +146,7 @@ describe('month navigation', () => {
     const { findByTestId } = render(<Attendance />);
 
     const nextBtn = await findByTestId('attendance-next-month');
-    expect(nextBtn.props.accessibilityState).toEqual({ disabled: true });
+    expect(nextBtn.props.accessibilityState).toMatchObject({ disabled: true });
     jest.useRealTimers();
   });
 
@@ -158,7 +158,7 @@ describe('month navigation', () => {
     const { findByTestId } = render(<Attendance />);
 
     const prevBtn = await findByTestId('attendance-prev-month');
-    expect(prevBtn.props.accessibilityState).toEqual({ disabled: true });
+    expect(prevBtn.props.accessibilityState).toMatchObject({ disabled: true });
     fireEvent.press(prevBtn);
     // The press must not fetch June — only the initial load happened.
     const juneCalls = (api.request as jest.Mock).mock.calls.filter((c) =>
@@ -172,7 +172,7 @@ describe('month navigation', () => {
     const { findByTestId } = render(<Attendance />);
 
     const prevBtn = await findByTestId('attendance-prev-month');
-    expect(prevBtn.props.accessibilityState).toEqual({ disabled: false });
+    expect(prevBtn.props.accessibilityState).toMatchObject({ disabled: false });
   });
 });
 

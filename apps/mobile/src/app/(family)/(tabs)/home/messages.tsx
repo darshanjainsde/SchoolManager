@@ -8,10 +8,11 @@ import {
   type MessageableTeacher,
 } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
+import { Button } from '@/components/Button';
+import { Field, fieldInputStyle } from '@/components/AuthScaffold';
 import { Card, Empty, Page, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
-import { font } from '@/theme/tokens';
 import { fmtDayTime } from '@/lib/dates';
 
 /** A real timestamp, read in the device's own local time — mirrors `(family)/notices.tsx`. */
@@ -48,15 +49,7 @@ function initialsOf(name: string): string {
  */
 export default function Messages() {
   const tokens = useTokens();
-  const inputStyle = {
-    borderWidth: 1.5,
-    borderColor: tokens.color.line,
-    backgroundColor: tokens.color.surface,
-    borderRadius: 12,
-    padding: 11,
-    fontSize: 13.5,
-    color: tokens.color.ink,
-  };
+  const [bodyFocused, setBodyFocused] = useState(false);
 
   const [threads, setThreads] = useState<MessageThreadRow[] | null>(null);
   const [threadsError, setThreadsError] = useState<string | null>(null);
@@ -136,39 +129,26 @@ export default function Messages() {
   return (
     <Screen>
       <SectionTitle title="Messages" />
-      <Text style={{ fontSize: 11, color: tokens.color.sub, marginHorizontal: 4, marginTop: -6 }}>
+      <Text style={{ fontSize: 13, color: tokens.color.sub, marginHorizontal: 4, marginTop: -6 }}>
         Only the teachers who actually teach this class.
       </Text>
 
       {!asking && (
-        <Pressable
-          testID="ask-teacher"
-          accessibilityRole="button"
-          onPress={() => setAsking(true)}
-          style={{ backgroundColor: tokens.color.indigo, borderRadius: 12, padding: 14 }}
-        >
-          <Text style={{ color: tokens.color.onBrand, fontWeight: '700', textAlign: 'center', fontSize: 13 }}>
-            Ask a teacher
-          </Text>
-        </Pressable>
+        <Button testID="ask-teacher" label="Ask a teacher" onPress={() => setAsking(true)} variant="filled" block />
       )}
 
       {asking && (
         <Card style={{ gap: 10 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={{ fontFamily: font.serif, fontSize: 13, color: tokens.color.ink }}>
+            <Text style={{ fontSize: 17, fontWeight: '700', color: tokens.color.ink }}>
               {picked ? 'New message' : 'Pick a teacher and subject'}
             </Text>
-            <Pressable testID="ask-cancel" onPress={resetAsk} hitSlop={12} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 4 }}
-              accessibilityRole="button"
-              >
-              <Text style={{ color: tokens.color.sub, fontWeight: '700', fontSize: 12 }}>Cancel</Text>
-            </Pressable>
+            <Button testID="ask-cancel" label="Cancel" onPress={resetAsk} variant="text" size="sm" />
           </View>
 
           {!picked && teachers === null && <LoadingRows label="Loading your teachers…" rows={4} bare />}
           {!picked && teachers?.length === 0 && (
-            <Text testID="no-teachers" style={{ color: tokens.color.sub, fontSize: 12.5 }}>
+            <Text testID="no-teachers" style={{ color: tokens.color.sub, fontSize: 14 }}>
               You have no subject teachers assigned this week yet.
             </Text>
           )}
@@ -182,18 +162,20 @@ export default function Messages() {
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  gap: 10,
+                  gap: 12,
+                  minHeight: 72,
                   borderWidth: 1,
                   borderColor: tokens.color.line,
                   backgroundColor: tokens.color.surface,
-                  borderRadius: 11,
-                  padding: 10,
+                  borderRadius: tokens.radius.field,
+                  paddingHorizontal: 16,
+                  paddingVertical: 10,
                 }}
               >
                 <Avatar name={t.teacherName} />
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: tokens.color.ink }}>{t.teacherName}</Text>
-                  <Text style={{ fontSize: 10.5, color: tokens.color.sub, marginTop: 1 }}>{t.subjectName}</Text>
+                  <Text style={{ fontSize: 16, fontWeight: '600', color: tokens.color.ink }}>{t.teacherName}</Text>
+                  <Text style={{ fontSize: 13, color: tokens.color.sub, marginTop: 2 }}>{t.subjectName}</Text>
                 </View>
                 <Text style={{ color: tokens.color.sub, fontSize: 16 }}>›</Text>
               </Pressable>
@@ -209,57 +191,52 @@ export default function Messages() {
                   flexDirection: 'row',
                   alignItems: 'center',
                   backgroundColor: tokens.color.indigo50,
-                  borderRadius: 11,
-                  padding: 11,
+                  borderRadius: tokens.radius.field,
+                  paddingHorizontal: 16,
+                  paddingVertical: 8,
+                  minHeight: 56,
                 }}
               >
                 <View style={{ flex: 1, paddingRight: 8 }}>
-                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: tokens.color.ink }}>
+                  <Text style={{ fontSize: 16, fontWeight: '600', color: tokens.color.ink }}>
                     {picked.teacherName}
                   </Text>
-                  <Text style={{ fontSize: 10.5, color: tokens.color.indigo, marginTop: 1 }}>
+                  <Text style={{ fontSize: 13, color: tokens.color.indigo, marginTop: 2 }}>
                     {picked.subjectName}
                   </Text>
                 </View>
-                <Pressable testID="change-teacher" onPress={() => setPicked(null)} hitSlop={8}
-                  accessibilityRole="button"
-                  >
-                  <Text style={{ color: tokens.color.indigo, fontWeight: '700', fontSize: 12 }}>Change</Text>
-                </Pressable>
+                <Button testID="change-teacher" label="Change" onPress={() => setPicked(null)} variant="text" size="sm" />
               </View>
 
-              <TextInput
-                testID="compose-body"
-                value={body}
-                onChangeText={setBody}
-                placeholder={`Ask ${picked.teacherName} about ${picked.subjectName}…`}
-                placeholderTextColor={tokens.color.placeholder}
-                multiline
-                autoFocus
-                maxLength={MESSAGE_BODY_MAX}
-                style={[inputStyle, { minHeight: 84, textAlignVertical: 'top' }]}
-              />
+              <Field label="Your question">
+                <TextInput
+                  testID="compose-body"
+                  value={body}
+                  onChangeText={setBody}
+                  placeholder={`Ask ${picked.teacherName} about ${picked.subjectName}…`}
+                  placeholderTextColor={tokens.color.placeholder}
+                  multiline
+                  autoFocus
+                  maxLength={MESSAGE_BODY_MAX}
+                  onFocus={() => setBodyFocused(true)}
+                  onBlur={() => setBodyFocused(false)}
+                  style={fieldInputStyle(tokens, { focused: bodyFocused, multiline: true })}
+                />
+              </Field>
               {sendError && (
-                <Text testID="send-error" style={{ color: tokens.color.red, fontSize: 12.5 }}>
+                <Text testID="send-error" style={{ color: tokens.color.red, fontSize: 13 }}>
                   {sendError}
                 </Text>
               )}
-              <Pressable
+              <Button
                 testID="compose-send"
-                accessibilityRole="button"
+                label={sending ? 'Sending…' : 'Send'}
                 onPress={() => void send()}
                 disabled={!canSend}
-                style={{
-                  backgroundColor: tokens.color.indigo,
-                  borderRadius: 12,
-                  padding: 13,
-                  opacity: canSend ? 1 : 0.6,
-                }}
-              >
-                <Text style={{ color: tokens.color.onBrand, fontWeight: '700', textAlign: 'center', fontSize: 13 }}>
-                  {sending ? 'Sending…' : 'Send'}
-                </Text>
-              </Pressable>
+                busy={sending}
+                variant="filled"
+                block
+              />
             </>
           )}
         </Card>
@@ -293,9 +270,10 @@ export default function Messages() {
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
-                gap: 10,
-                paddingVertical: 11,
-                paddingHorizontal: 13,
+                gap: 12,
+                minHeight: 72,
+                paddingVertical: 10,
+                paddingHorizontal: 16,
                 borderTopWidth: i === 0 ? 0 : 1,
                 borderTopColor: tokens.color.line,
               }}
@@ -303,14 +281,14 @@ export default function Messages() {
               <Avatar name={t.teacherName} />
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: tokens.color.ink }}>{t.teacherName}</Text>
-                  <Text style={{ fontFamily: font.mono, fontSize: 9.5, color: tokens.color.sub }}>
+                  <Text style={{ fontSize: 16, fontWeight: '600', color: tokens.color.ink }}>{t.teacherName}</Text>
+                  <Text style={{ fontVariant: ['tabular-nums'], fontSize: 13, color: tokens.color.sub }}>
                     {formatWhen(t.lastMessageAt)}
                   </Text>
                 </View>
-                <Text style={{ fontSize: 10.5, color: tokens.color.indigo, marginTop: 1 }}>{t.subjectName}</Text>
+                <Text style={{ fontSize: 13, color: tokens.color.indigo, marginTop: 2 }}>{t.subjectName}</Text>
                 {t.lastMessagePreview && (
-                  <Text style={{ fontSize: 10.5, color: tokens.color.sub, marginTop: 2 }} numberOfLines={1}>
+                  <Text style={{ fontSize: 13, color: tokens.color.sub, marginTop: 2 }} numberOfLines={1}>
                     {t.lastMessagePreview}
                   </Text>
                 )}
@@ -319,16 +297,16 @@ export default function Messages() {
                 <View
                   testID={`thread-unread-${t.id}`}
                   style={{
-                    minWidth: 20,
-                    height: 20,
-                    borderRadius: 10,
+                    minWidth: 22,
+                    height: 22,
+                    borderRadius: 11,
                     paddingHorizontal: 6,
                     backgroundColor: tokens.color.marginRed,
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}
                 >
-                  <Text style={{ color: tokens.color.onBrand, fontSize: 10.5, fontWeight: '800' }}>
+                  <Text style={{ color: tokens.color.onBrand, fontSize: 13, fontWeight: '800' }}>
                     {t.unreadCount}
                   </Text>
                 </View>
@@ -355,7 +333,7 @@ function Avatar({ name }: { name: string }) {
         justifyContent: 'center',
       }}
     >
-      <Text style={{ fontSize: 12, fontWeight: '800', color: tokens.color.indigo }}>{initialsOf(name)}</Text>
+      <Text style={{ fontSize: 13, fontWeight: '800', color: tokens.color.indigo }}>{initialsOf(name)}</Text>
     </View>
   );
 }

@@ -11,7 +11,7 @@ import { family } from '@/lib/family-store';
 import { session, type Session } from '@/lib/session';
 import { portalForSession } from '@/lib/roles';
 import { useTheme } from '@/theme/theme-context';
-import { brand, font, type GatePalette } from '@/theme/tokens';
+import { brand, type GatePalette } from '@/theme/tokens';
 
 /**
  * THE FRONT DOOR. Phone first (design §5): the number the school has for
@@ -166,9 +166,9 @@ export default function Login() {
       accessibilityRole="tab"
       accessibilityState={{ selected: mode === m }}
       onPress={() => { setMode(m); setError(null); }}
-      style={{ flex: 1, minHeight: 44, justifyContent: 'center', paddingVertical: 8, borderRadius: 9, alignItems: 'center', backgroundColor: mode === m ? tokens.color.surface : 'transparent' }}
+      style={{ flex: 1, minHeight: 48, justifyContent: 'center', paddingVertical: 8, borderRadius: tokens.radius.chip, alignItems: 'center', backgroundColor: mode === m ? tokens.color.surface : 'transparent' }}
     >
-      <Text style={{ fontSize: 13, fontWeight: '700', color: mode === m ? tokens.color.ink : sub }}>{label}</Text>
+      <Text style={{ fontSize: 14, fontWeight: '700', color: mode === m ? tokens.color.ink : sub }}>{label}</Text>
     </Pressable>
   );
 
@@ -187,14 +187,14 @@ export default function Login() {
               <SckoolsLogo size={22} theme={dark ? 'dark' : 'light'} />
             </View>
             <View style={{ gap: 3 }}>
-              <Text style={{ fontFamily: font.serif, fontSize: 21, fontWeight: '600', letterSpacing: -0.2, color: tokens.color.ink }}>Welcome back</Text>
-              <Text style={{ fontSize: 12, lineHeight: 17, color: sub }}>
+              <Text style={{ fontSize: 22, lineHeight: 28, fontWeight: '700', letterSpacing: -0.2, color: tokens.color.ink }}>Welcome back</Text>
+              <Text style={{ fontSize: 13, lineHeight: 18, color: sub }}>
                 {door === 'phone' ? 'Your mobile number is all it takes — a code comes on WhatsApp.' : 'Your student code (like RAF-00042) or email is all it takes — no school code.'}
               </Text>
             </View>
 
             {otpReady === true ? (
-              <View style={{ flexDirection: 'row', gap: 4, padding: 4, borderRadius: 12, backgroundColor: tokens.color.appBg }}>
+              <View style={{ flexDirection: 'row', gap: 4, padding: 4, borderRadius: tokens.radius.field, backgroundColor: tokens.color.appBg }}>
                 {modeTab('phone', 'Mobile number')}
                 {modeTab('password', 'Email & password')}
               </View>
@@ -225,7 +225,7 @@ export default function Login() {
                     onFocus={() => setFocus('code')} onBlur={() => setFocus(null)} style={fieldInputStyle(tokens, { focused: focus === 'code', mono: true })}
                   />
                 </Field>
-                <Text style={{ fontSize: 12, color: sub }}>
+                <Text style={{ fontSize: 13, lineHeight: 18, color: sub }}>
                   Sent to {req.phoneMasked} on {req.sentVia.length ? req.sentVia.map((v) => (v === 'sms' ? 'SMS' : 'WhatsApp')).join(' and ') : 'WhatsApp'}. It works for 10 minutes.
                 </Text>
                 {error ? <Toast kind="error" message={error} /> : null}
@@ -239,20 +239,20 @@ export default function Login() {
 
             {door === 'phone' && step === 'choose' && choice ? (
               <View style={{ gap: 8 }} testID="otp-choose">
-                <Text style={{ fontSize: 13.5, fontWeight: '700', color: tokens.color.ink }}>Who are you opening for?</Text>
-                <Text style={{ fontSize: 12, color: sub }}>This number is on more than one profile. The others stay one tap away on the shelf.</Text>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: tokens.color.ink }}>Who are you opening for?</Text>
+                <Text style={{ fontSize: 13, lineHeight: 18, color: sub }}>This number is on more than one profile. The others stay one tap away on the shelf.</Text>
                 {choice.profiles.map((p) => (
                   <Pressable
                     key={p.userId} testID={`otp-choice-${p.userId}`} accessibilityRole="button" accessibilityLabel={`Open as ${p.label}`}
                     disabled={busy} onPress={() => void choose(p)}
-                    style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 12, minHeight: 56, backgroundColor: pressed ? tokens.color.indigo50 : tokens.color.surface, borderWidth: 1, borderColor: tokens.color.line })}
+                    style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 16, borderRadius: tokens.radius.card, minHeight: 72, backgroundColor: pressed ? tokens.color.indigo50 : tokens.color.surface, borderWidth: 1, borderColor: tokens.color.line })}
                   >
                     <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: tokens.color.indigo, alignItems: 'center', justifyContent: 'center' }}>
                       <Text style={{ color: tokens.color.onBrand, fontWeight: '800', fontSize: 13 }}>{initials(p.label)}</Text>
                     </View>
                     <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text numberOfLines={1} style={{ fontSize: 14.5, fontWeight: '700', color: tokens.color.ink }}>{p.label}</Text>
-                      <Text numberOfLines={1} style={{ fontSize: 12, color: sub }}>{p.sub} · {p.schoolName}</Text>
+                      <Text numberOfLines={1} style={{ fontSize: 16, fontWeight: '600', color: tokens.color.ink }}>{p.label}</Text>
+                      <Text numberOfLines={1} style={{ fontSize: 13, color: sub }}>{p.sub} · {p.schoolName}</Text>
                     </View>
                   </Pressable>
                 ))}

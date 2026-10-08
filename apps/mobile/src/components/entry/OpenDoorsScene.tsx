@@ -260,8 +260,8 @@ const styles = StyleSheet.create({
   roomTag: {
     position: 'absolute',
     top: 30,
-    fontFamily: font.mono,
-    fontSize: 8,
+    fontVariant: ['tabular-nums'],
+    fontSize: 13,
     letterSpacing: 2,
   },
   knob: {
@@ -299,8 +299,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   statText: {
-    fontFamily: font.mono,
-    fontSize: 10,
+    fontVariant: ['tabular-nums'],
+    fontSize: 13,
     fontWeight: '600',
     letterSpacing: 1,
   },

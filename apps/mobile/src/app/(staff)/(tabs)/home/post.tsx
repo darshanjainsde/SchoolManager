@@ -1,14 +1,15 @@
 import { useCallback, useRef, useState, type ReactNode } from 'react';
-import { Alert, Animated, Pressable, Text, TextInput, View } from 'react-native';
+import { Alert, Animated, Text, TextInput, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import type { AnnouncementMine } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import type { MyClassSection } from '@/lib/attendance';
 import { ClassChips } from '@/components/ClassChips';
 import { Card, Screen, SectionTitle, Toast } from '@/components/ui';
+import { Button } from '@/components/Button';
+import { Field, fieldInputStyle, TextField } from '@/components/Field';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
-import { font } from '@/theme/tokens';
 import { DUR, pinStyle, useGesture } from '@/theme/motion';
 import { fmtDateTime } from '@/lib/dates';
 
@@ -33,14 +34,8 @@ function formatPostedAt(iso: string): string {
 
 export default function Post() {
   const tokens = useTokens();
-  const inputStyle = {
-    borderWidth: 1,
-    borderColor: tokens.color.line,
-    borderRadius: 11,
-    padding: 11,
-    fontSize: 13.5,
-    color: tokens.color.ink,
-  };
+  const [titleFocused, setTitleFocused] = useState(false);
+  const [bodyFocused, setBodyFocused] = useState(false);
   const [classes, setClasses] = useState<MyClassSection[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -208,7 +203,7 @@ export default function Post() {
       )}
       {classes && classes.length > 0 && (
         <Card>
-          <Text style={{ fontSize: 11.5, fontWeight: '700', color: tokens.color.sub, marginBottom: 8 }}>
+          <Text style={{ fontSize: 13, lineHeight: 18, fontWeight: '600', color: tokens.color.ink2, marginBottom: 8 }}>
             Send to — tap to select multiple
           </Text>
           <ClassChips
@@ -219,11 +214,8 @@ export default function Post() {
         </Card>
       )}
       {classes && classes.length > 0 && (
-        <Card style={{ gap: 10 }}>
-          <View>
-            <Text style={{ fontSize: 11.5, fontWeight: '700', color: tokens.color.sub, marginBottom: 5 }}>
-              Title
-            </Text>
+        <Card style={{ gap: 12 }}>
+          <Field label="Title">
             <TextInput
               testID="post-title"
               returnKeyType="next"
@@ -232,25 +224,26 @@ export default function Post() {
               value={title}
               onChangeText={setTitle}
               placeholder="e.g. Chapter 4 comprehension"
-              placeholderTextColor={tokens.color.sub}
-              style={inputStyle}
+              placeholderTextColor={tokens.color.placeholder}
+              onFocus={() => setTitleFocused(true)}
+              onBlur={() => setTitleFocused(false)}
+              style={fieldInputStyle(tokens, { focused: titleFocused })}
             />
-          </View>
-          <View>
-            <Text style={{ fontSize: 11.5, fontWeight: '700', color: tokens.color.sub, marginBottom: 5 }}>
-              Details
-            </Text>
+          </Field>
+          <Field label="Details">
             <TextInput
               testID="post-body"
               ref={postBodyRef}
               value={body}
               onChangeText={setBody}
               placeholder="Add instructions, due date…"
-              placeholderTextColor={tokens.color.sub}
+              placeholderTextColor={tokens.color.placeholder}
               multiline
-              style={[inputStyle, { minHeight: 74, textAlignVertical: 'top' }]}
+              onFocus={() => setBodyFocused(true)}
+              onBlur={() => setBodyFocused(false)}
+              style={fieldInputStyle(tokens, { focused: bodyFocused, multiline: true })}
             />
-          </View>
+          </Field>
         </Card>
       )}
       {submitError && (
@@ -264,22 +257,14 @@ export default function Post() {
         </Card>
       )}
       {classes && classes.length > 0 && (
-        <Pressable
+        <Button
           testID="post-submit"
-          onPress={submit}
+          block
+          busy={busy}
           disabled={!canSubmit}
-          style={{
-            backgroundColor: tokens.color.indigo,
-            borderRadius: 14,
-            padding: 15,
-            opacity: canSubmit ? 1 : 0.6,
-          }}
-          accessibilityRole="button"
-          >
-          <Text style={{ color: tokens.color.onBrand, fontWeight: '700', textAlign: 'center' }}>
-            {busy ? 'Posting…' : `Post to ${n} class${n === 1 ? '' : 'es'}`}
-          </Text>
-        </Pressable>
+          label={busy ? 'Posting…' : `Post to ${n} class${n === 1 ? '' : 'es'}`}
+          onPress={submit}
+        />
       )}
 
       {/* No `.seenbar` here, deliberately: `AnnouncementMine` carries no
@@ -323,42 +308,19 @@ export default function Post() {
       )}
       {mine?.map((a, i) =>
         editingId === a.id ? (
-          <Card key={a.id} style={{ gap: 10 }} testID={`mine-row-${a.id}`}>
-            <TextInput
-              testID="edit-title"
-              value={editTitle}
-              onChangeText={setEditTitle}
-              placeholderTextColor={tokens.color.sub}
-              style={inputStyle}
-            />
-            <TextInput
-              testID="edit-body"
-              value={editBody}
-              onChangeText={setEditBody}
-              placeholderTextColor={tokens.color.sub}
-              multiline
-              style={[inputStyle, { minHeight: 74, textAlignVertical: 'top' }]}
-            />
-            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 14 }}>
-              <Pressable testID="edit-cancel" onPress={cancelEdit} disabled={editBusy}
-                accessibilityRole="button"
-                >
-                <Text style={{ color: tokens.color.sub, fontWeight: '700', fontSize: 13 }}>Cancel</Text>
-              </Pressable>
-              <Pressable testID="edit-save" onPress={() => void saveEdit()} disabled={!canSaveEdit}
-                accessibilityRole="button"
-                >
-                <Text
-                  style={{
-                    color: tokens.color.indigo,
-                    fontWeight: '700',
-                    fontSize: 13,
-                    opacity: canSaveEdit ? 1 : 0.5,
-                  }}
-                >
-                  {editBusy ? 'Saving…' : 'Save'}
-                </Text>
-              </Pressable>
+          <Card key={a.id} style={{ gap: 12 }} testID={`mine-row-${a.id}`}>
+            <TextField label="Title" testID="edit-title" value={editTitle} onChangeText={setEditTitle} />
+            <TextField label="Details" testID="edit-body" value={editBody} onChangeText={setEditBody} multiline />
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
+              <Button testID="edit-cancel" variant="text" size="sm" label="Cancel" disabled={editBusy} onPress={cancelEdit} />
+              <Button
+                testID="edit-save"
+                size="sm"
+                label={editBusy ? 'Saving…' : 'Save'}
+                busy={editBusy}
+                disabled={!canSaveEdit}
+                onPress={() => void saveEdit()}
+              />
             </View>
           </Card>
         ) : (
@@ -370,7 +332,7 @@ export default function Post() {
                     uppercase` is done with letter-spacing and weight instead
                     of by rewriting the string — the class name is the
                     school's own label and must read back exactly as set. */}
-                <Text style={{ fontSize: 10.5, fontWeight: '800', letterSpacing: 0.7, color: tokens.color.indigo }}>
+                <Text style={{ fontSize: 12, fontWeight: '800', letterSpacing: 0.7, color: tokens.color.indigo }}>
                   {a.className ?? 'Whole school'}
                 </Text>
                 {/* `.postit.gone` — a withdrawn post is struck through rather
@@ -379,9 +341,8 @@ export default function Post() {
                     account of a delete that is still in flight. */}
                 <Text
                   style={{
-                    fontFamily: font.serif,
                     fontWeight: '700',
-                    fontSize: 15,
+                    fontSize: 17,
                     marginTop: 4,
                     color: deletingId === a.id ? tokens.color.sub : tokens.color.ink,
                     textDecorationLine: deletingId === a.id ? 'line-through' : 'none',
@@ -389,30 +350,22 @@ export default function Post() {
                 >
                   {a.title}
                 </Text>
-                <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 3 }}>{a.body}</Text>
-                <Text style={{ fontSize: 10.5, color: tokens.color.sub, marginTop: 4 }}>
+                <Text style={{ fontSize: 14, lineHeight: 20, color: tokens.color.ink2, marginTop: 3 }}>{a.body}</Text>
+                <Text style={{ fontSize: 13, color: tokens.color.sub, marginTop: 4 }}>
                   {formatPostedAt(a.createdAt)}
                 </Text>
               </View>
-              <View style={{ alignItems: 'flex-end', gap: 8 }}>
-                <Pressable
-                  testID={`edit-${a.id}`}
-                  onPress={() => startEdit(a)}
-                  disabled={deletingId === a.id}
-                  accessibilityRole="button"
-                  >
-                  <Text style={{ color: tokens.color.indigo, fontWeight: '700', fontSize: 12 }}>Edit</Text>
-                </Pressable>
-                <Pressable
+              <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                <Button testID={`edit-${a.id}`} variant="text" size="sm" label="Edit" disabled={deletingId === a.id} onPress={() => startEdit(a)} />
+                <Button
                   testID={`delete-${a.id}`}
-                  onPress={() => confirmDelete(a)}
+                  variant="danger"
+                  size="sm"
+                  label={deletingId === a.id ? 'Deleting…' : 'Delete'}
+                  busy={deletingId === a.id}
                   disabled={deletingId === a.id}
-                  accessibilityRole="button"
-                  >
-                  <Text style={{ color: tokens.color.red, fontWeight: '700', fontSize: 12 }}>
-                    {deletingId === a.id ? 'Deleting…' : 'Delete'}
-                  </Text>
-                </Pressable>
+                  onPress={() => confirmDelete(a)}
+                />
               </View>
             </View>
           </Card>

@@ -5,10 +5,10 @@ import { api, ApiError } from '@/lib/api';
 import { useQuery } from '@/lib/query';
 import { borrowerLine, rupees, type FineEntry, type FinesView } from '@/lib/library-desk';
 import { Empty, ErrorState, Figure, Page, PageHeader, Pill, Screen, SectionTitle, Toast } from '@/components/ui';
-import { Button, Row } from '@/components/desk';
+import { Row } from '@/components/desk';
+import { Button } from '@/components/Button';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
-import { font } from '@/theme/tokens';
 
 /**
  * FINES — what is owed, by whom, and the two things a librarian does about
@@ -78,13 +78,17 @@ export default function Fines() {
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Text numberOfLines={1} style={{ fontWeight: '700', color: tokens.color.ink, fontSize: 14 }}>{e.borrower.name}</Text>
-                      <Text numberOfLines={1} style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 1 }}>{borrowerLine(e.borrower)} · {e.title} · {e.reason === 'LOST' ? 'lost' : e.detail}</Text>
+                      <Text numberOfLines={1} style={{ fontSize: 13, color: tokens.color.sub, marginTop: 1 }}>{borrowerLine(e.borrower)} · {e.title} · {e.reason === 'LOST' ? 'lost' : e.detail}</Text>
                     </View>
-                    <Text style={{ fontFamily: font.mono, fontWeight: '700', fontSize: 15, color: tokens.color.red }}>{rupees(e.amountRupees)}</Text>
+                    <Text style={{ fontVariant: ['tabular-nums'], fontWeight: '700', fontSize: 16, color: tokens.color.red }}>{rupees(e.amountRupees)}</Text>
                   </View>
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <View style={{ flex: 1 }}><Button small variant="ghost" testID={`waive-${e.id}`} label="Waive" onPress={() => ask(e, 'waive')} busy={busy === e.id} /></View>
-                    <View style={{ flex: 1 }}><Button small testID={`collect-${e.id}`} label="Collected" onPress={() => ask(e, 'collect')} busy={busy === e.id} /></View>
+                  {/* Forty rows × a filled button is a wall (ledger:
+                      control-sized-for-the-demo). The row's action is tonal
+                      and the rarer Waive a text button, both right-aligned
+                      so the figure above and the button below share an edge. */}
+                  <View style={{ flexDirection: 'row', gap: 4, justifyContent: 'flex-end' }}>
+                    <Button variant="text" size="sm" testID={`waive-${e.id}`} label="Waive" onPress={() => ask(e, 'waive')} disabled={busy === e.id} />
+                    <Button variant="tonal" size="sm" icon="check" testID={`collect-${e.id}`} label="Collected" onPress={() => ask(e, 'collect')} busy={busy === e.id} />
                   </View>
                 </View>
               ))}

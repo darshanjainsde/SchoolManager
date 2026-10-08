@@ -86,8 +86,8 @@ function Bubble({ m, mine, senderLabel }: { m: MessageRow; mine: boolean; sender
       </Text>
       <Text
         style={{
-          fontFamily: font.mono,
-          fontSize: 10,
+          fontVariant: ['tabular-nums'],
+          fontSize: 13,
           color: mine ? tokens.color.onBrand : tokens.color.sub,
           opacity: mine ? 0.85 : 1,
           marginTop: 4,

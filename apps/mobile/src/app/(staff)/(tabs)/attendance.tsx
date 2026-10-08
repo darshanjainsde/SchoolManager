@@ -1,7 +1,7 @@
 import { useReload } from '@/lib/query';
 import { formatDate } from '@/lib/portal';
 import { useCallback, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import type { RegisterChangeRow } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
@@ -9,10 +9,10 @@ import { shiftISO, todayISO, type ClassDayStatus } from '@/lib/attendance';
 import { flush, pendingSaves, queueKey, type FlushResult } from '@/lib/offline-queue';
 import { LockedDayCard } from '@/components/LockedDayCard';
 import { Card, ErrorState, Pill, Screen, SectionTitle } from '@/components/ui';
+import { Button } from '@/components/Button';
 import { Touchable } from '@/components/Touchable';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
-import { font } from '@/theme/tokens';
 
 /** True once an APPROVED row's `expiresAt` is still in the future — absolute
  * epoch comparison, so it is correct regardless of the device's timezone.
@@ -204,9 +204,9 @@ export default function StaffAttendance() {
             : `${c.name}, ${c.total} students, not taken yet. Take attendance`
         }
         style={{
-          borderRadius: 16,
+          borderRadius: tokens.radius.card,
           padding: 12,
-          gap: 7,
+          gap: 8,
           backgroundColor: tokens.color.surface,
           borderWidth: 1,
           borderColor: tokens.color.line,
@@ -227,9 +227,9 @@ export default function StaffAttendance() {
             names one. Taken classes get the pale wash: spent, not urgent. */}
         <View
           style={{
-            width: 34,
-            height: 34,
-            borderRadius: 10,
+            width: 36,
+            height: 36,
+            borderRadius: tokens.radius.chip,
             backgroundColor: c.taken ? tokens.color.indigo50 : tokens.color.indigo,
             alignItems: 'center',
             justifyContent: 'center',
@@ -237,9 +237,8 @@ export default function StaffAttendance() {
         >
           <Text
             style={{
-              fontFamily: font.serif,
               fontWeight: '700',
-              fontSize: 14,
+              fontSize: 15,
               color: c.taken ? tokens.color.indigo : tokens.color.onBrand,
             }}
           >
@@ -247,10 +246,10 @@ export default function StaffAttendance() {
           </Text>
         </View>
         <View>
-          <Text numberOfLines={1} style={{ fontWeight: '700', fontSize: 13.5, color: tokens.color.ink }}>
+          <Text numberOfLines={1} style={{ fontWeight: '600', fontSize: 16, color: tokens.color.ink }}>
             {c.name}
           </Text>
-          <Text numberOfLines={1} style={{ fontSize: 11, color: tokens.color.sub, marginTop: 1 }}>
+          <Text numberOfLines={1} style={{ fontSize: 13, color: tokens.color.sub, marginTop: 1 }}>
             {c.taken ? `By ${c.markedBy ?? '—'}` : `${c.total} students`}
           </Text>
         </View>
@@ -271,7 +270,7 @@ export default function StaffAttendance() {
         {rejectedMessage && (
           <Text
             testID={`sync-rejected-${c.classSectionId}`}
-            style={{ color: tokens.color.red, fontSize: 11, marginTop: 2 }}
+            style={{ color: tokens.color.red, fontSize: 13, marginTop: 2 }}
           >
             {rejectedMessage}
           </Text>
@@ -315,35 +314,14 @@ export default function StaffAttendance() {
           they do, in a row that also stopped sitting flush to the page's
           margins. A control a teacher uses to walk back through a term is not
           the place to spend legibility on shape. */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: 4 }}>
-        <Pressable testID="date-prev" onPress={() => setDate((d) => shiftISO(d, -1))} hitSlop={8}
-          // A 13 px word is ~18 dp tall; the row keeps its look and the
-          // finger gets the 44 dp the app promises (re-audit 2026-10-08).
-          style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 2 }}
-          accessibilityRole="button"
-          >
-          <Text style={{ color: tokens.color.indigo, fontWeight: '700', fontSize: 13 }}>‹ Prev day</Text>
-        </Pressable>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 48, borderRadius: tokens.radius.field }}>
+        <Button testID="date-prev" variant="text" size="sm" label="‹ Prev day" onPress={() => setDate((d) => shiftISO(d, -1))} />
         {date !== today && (
-          <Pressable testID="date-today" onPress={() => setDate(today)} hitSlop={8}
-          // A 13 px word is ~18 dp tall; the row keeps its look and the
-          // finger gets the 44 dp the app promises (re-audit 2026-10-08).
-          style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 2 }}
-            accessibilityRole="button"
-            >
-            <Text style={{ color: tokens.color.sub, fontWeight: '600', fontSize: 12 }}>Jump to today</Text>
-          </Pressable>
+          <Button testID="date-today" variant="text" size="sm" label="Jump to today" onPress={() => setDate(today)} />
         )}
-        <Pressable testID="date-next" onPress={() => setDate((d) => shiftISO(d, 1))} hitSlop={8}
-          // A 13 px word is ~18 dp tall; the row keeps its look and the
-          // finger gets the 44 dp the app promises (re-audit 2026-10-08).
-          style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 2 }}
-          accessibilityRole="button"
-          >
-          <Text style={{ color: tokens.color.indigo, fontWeight: '700', fontSize: 13 }}>Next day ›</Text>
-        </Pressable>
+        <Button testID="date-next" variant="text" size="sm" label="Next day ›" onPress={() => setDate((d) => shiftISO(d, 1))} />
       </View>
-      <Text style={{ color: tokens.color.sub, fontSize: 11.5, marginHorizontal: 4 }}>
+      <Text style={{ color: tokens.color.sub, fontSize: 13, lineHeight: 18, marginHorizontal: 4 }}>
         One record per class per day. Once any teacher takes it, it locks for everyone —
         retake needs confirmation.
       </Text>
@@ -380,14 +358,14 @@ export default function StaffAttendance() {
             <>
               <View style={{ marginHorizontal: 2, gap: 5 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Text style={{ fontSize: 11.5, color: tokens.color.sub }}>
+                  <Text style={{ fontSize: 13, color: tokens.color.sub }}>
                     <Text style={{ fontWeight: '800', color: tokens.color.ink }}>
                       {`${rows.filter((c) => c.taken).length} of ${rows.length}`}
                     </Text>
                     {' registers taken'}
                   </Text>
                   {rows.some((c) => !c.taken) && (
-                    <Text style={{ fontSize: 11.5, color: tokens.color.sub }}>
+                    <Text style={{ fontSize: 13, color: tokens.color.sub }}>
                       {`${rows.filter((c) => !c.taken).length} waiting`}
                     </Text>
                   )}
@@ -452,7 +430,7 @@ function wallEyebrow(tokens: ReturnType<typeof useTokens>) {
   return {
     marginHorizontal: 4,
     marginBottom: -2,
-    fontSize: 10,
+    fontSize: 12,
     letterSpacing: 1.3,
     textTransform: 'uppercase' as const,
     fontWeight: '700' as const,

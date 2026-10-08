@@ -1,8 +1,10 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { Animated, Pressable, Text, TextInput, View } from 'react-native';
+import { Animated, Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { family, type ChildProfile } from '@/lib/family-store';
 import { session } from '@/lib/session';
+import { Button } from '@/components/Button';
+import { TextField } from '@/components/Field';
 import { Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { ProfileSwitcher } from '@/components/ProfileSwitcher';
@@ -72,7 +74,7 @@ function Spine({
         accessibilityLabel={`${child.displayName} is no longer enrolled at ${schoolLabel(child.schoolHost)}`}
         style={{
           width: '22%',
-          borderRadius: 12,
+          borderRadius: tokens.radius.field,
           borderWidth: 1,
           borderStyle: 'dashed',
           borderColor: tokens.color.line,
@@ -97,22 +99,21 @@ function Spine({
         >
           <Text style={{ color: tokens.color.sub, fontWeight: '800', fontSize: 14 }}>{initials(child.displayName)}</Text>
         </View>
-        <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: tokens.color.sub, maxWidth: '90%' }}>
+        <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '700', color: tokens.color.sub, maxWidth: '90%' }}>
           {child.displayName.split(' ')[0]}
         </Text>
-        <Text numberOfLines={2} style={{ fontSize: 8.5, color: tokens.color.sub, maxWidth: '92%', textAlign: 'center' }}>
+        <Text numberOfLines={3} style={{ fontSize: 13, color: tokens.color.sub, maxWidth: '92%', textAlign: 'center' }}>
           No longer enrolled at {schoolLabel(child.schoolHost)}
         </Text>
-        <Pressable
+        <Button
           testID={`spine-remove-${child.key}`}
-          accessibilityRole="button"
           accessibilityLabel={`Remove ${child.displayName} from the shelf`}
+          label="REMOVE"
           onPress={onRemove}
-          hitSlop={12}
-          style={{ marginTop: 6, minHeight: 32, justifyContent: 'center' }}
-        >
-          <Text style={{ fontSize: 9, fontWeight: '800', color: tokens.color.ink }}>REMOVE</Text>
-        </Pressable>
+          variant="text"
+          size="sm"
+          style={{ marginTop: 2, paddingHorizontal: 4 }}
+        />
       </View>
     );
   }
@@ -128,7 +129,7 @@ function Spine({
         onPressOut={() => move(0)}
         onPress={onPress}
         style={{
-          borderRadius: 12,
+          borderRadius: tokens.radius.field,
           borderWidth: active ? 2 : 1,
           borderColor: active ? child.accent : tokens.color.line,
           backgroundColor: tokens.color.surface,
@@ -154,14 +155,14 @@ function Spine({
             {initials(child.displayName)}
           </Text>
         </View>
-        <Text numberOfLines={1} style={{ fontSize: 11, fontWeight: '700', color: tokens.color.ink, maxWidth: '90%' }}>
+        <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink, maxWidth: '90%' }}>
           {child.displayName.split(' ')[0]}
         </Text>
-        <Text numberOfLines={1} style={{ fontSize: 8.5, color: tokens.color.sub, maxWidth: '92%' }}>
+        <Text numberOfLines={1} style={{ fontSize: 13, color: tokens.color.sub, maxWidth: '92%' }}>
           {child.schoolHost.split('.')[0]}
         </Text>
         {active && (
-          <Text style={{ fontSize: 8.5, fontWeight: '800', color: child.accent, marginTop: 2 }}>OPEN</Text>
+          <Text style={{ fontSize: 12, fontWeight: '800', letterSpacing: 0.6, color: child.accent, marginTop: 2 }}>OPEN</Text>
         )}
       </Pressable>
     </Animated.View>
@@ -237,28 +238,18 @@ export default function Shelf() {
   return (
     <Screen>
       <SectionTitle title="Your shelf" />
-      <Text style={{ marginHorizontal: 4, fontSize: 12, color: tokens.color.sub }}>
+      <Text style={{ marginHorizontal: 4, fontSize: 14, color: tokens.color.sub }}>
         One diary per child — tap to open theirs. Different schools are fine; each spine wears its school's colour.
       </Text>
 
       {children !== null && children.length > SEARCH_AFTER && (
-        <TextInput
+        <TextField
+          label="Find a child"
           testID="shelf-search"
           value={query}
           onChangeText={setQuery}
           placeholder="Find a child"
-          placeholderTextColor={tokens.color.placeholder}
           accessibilityLabel="Find a child on the shelf"
-          style={{
-            borderWidth: 1,
-            borderColor: tokens.color.line,
-            backgroundColor: tokens.color.surface,
-            borderRadius: 11,
-            paddingHorizontal: 12,
-            paddingVertical: 9,
-            fontSize: 13,
-            color: tokens.color.ink,
-          }}
         />
       )}
 
@@ -283,7 +274,7 @@ export default function Shelf() {
             style={{
               width: '22%',
               minHeight: 108,
-              borderRadius: 12,
+              borderRadius: tokens.radius.field,
               borderWidth: 1.5,
               borderStyle: 'dashed',
               borderColor: tokens.color.line,
@@ -292,12 +283,12 @@ export default function Shelf() {
             }}
           >
             <Text style={{ fontSize: 22, color: tokens.color.sub }}>＋</Text>
-            <Text style={{ fontSize: 9, fontWeight: '700', color: tokens.color.sub, marginTop: 2 }}>Add a child</Text>
+            <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.sub, marginTop: 2, textAlign: 'center' }}>Add a child</Text>
           </Pressable>
         </View>
       )}
 
-      <Text style={{ marginHorizontal: 4, fontSize: 10, color: tokens.color.sub, textAlign: 'center', marginTop: 6 }}>
+      <Text style={{ marginHorizontal: 4, fontSize: 13, color: tokens.color.sub, textAlign: 'center', marginTop: 6 }}>
         Adding a child: their school, their code (RAF-00042) and password — once.{'\n'}Each child keeps their own
         notifications, badges and data.
       </Text>

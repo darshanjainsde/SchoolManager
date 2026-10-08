@@ -1,15 +1,16 @@
 import { useReload } from '@/lib/query';
 import { useCallback, useRef, useState, useMemo } from 'react';
-import { Animated, Pressable, Text, View } from 'react-native';
+import { Animated, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import { formatDate, type AttendanceSummary } from '@/lib/portal';
 import { buildAttendanceGrid, currentMonthKey, monthKeyLabel, shiftMonthKey } from '@/lib/attendance-grid';
+import { Button } from '@/components/Button';
 import { Card, ErrorState, Pill, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { DUR, inkWidth, useGesture } from '@/theme/motion';
 import { useTokens } from '@/theme/theme-context';
-import { font, type ColorPalette } from '@/theme/tokens';
+import type { ColorPalette } from '@/theme/tokens';
 import { fmtMonthYear } from '@/lib/dates';
 
 // Monday-first, matching the web portal's `apps/web/app/portal/attendance/
@@ -78,7 +79,7 @@ function InkRule({ percent }: { percent: number }) {
 }
 
 /**
- * A supporting figure under the rule: the number in mono (so a column of them
+ * A supporting figure under the rule: the number in tabular digits (so a column of them
  * lines up), its word in the UI sans. Two nodes rather than one sentence, so
  * the figure itself stays independently addressable.
  */
@@ -101,11 +102,11 @@ function Figure({
           on this screen a family actually goes looking for. */}
       <Text
         testID={testID}
-        style={{ fontFamily: font.mono, fontSize: 17, fontWeight: '800', color: color ?? tokens.color.ink }}
+        style={{ fontVariant: ['tabular-nums'], fontSize: 17, fontWeight: '800', color: color ?? tokens.color.ink }}
       >
         {value}
       </Text>
-      <Text style={{ fontSize: 11, color: tokens.color.sub }}>{label}</Text>
+      <Text style={{ fontSize: 13, color: tokens.color.sub }}>{label}</Text>
     </View>
   );
 }
@@ -125,7 +126,7 @@ function LegendKey({ bg, border, label }: { bg: string; border?: string; label: 
           borderColor: border ?? 'transparent',
         }}
       />
-      <Text style={{ fontSize: 9.5, color: tokens.color.sub }}>{label}</Text>
+      <Text style={{ fontSize: 13, color: tokens.color.sub }}>{label}</Text>
     </View>
   );
 }
@@ -156,44 +157,41 @@ function MonthNav({
   // walking back stops at the month they were registered (or their first
   // recorded mark, whichever is earlier; the server sends the floor).
   const atEarliestMonth = !!earliestMonth && month <= earliestMonth;
-  const arrow = {
-    borderWidth: 1,
-    borderColor: tokens.color.line,
-    backgroundColor: tokens.color.surface,
-    borderRadius: 10,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-  } as const;
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: 4 }}>
-      <Pressable
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        minHeight: 48,
+        borderRadius: tokens.radius.field,
+        marginHorizontal: 4,
+      }}
+    >
+      <Button
         testID="attendance-prev-month"
-        accessibilityRole="button"
         accessibilityLabel="Previous month"
-        accessibilityState={{ disabled: atEarliestMonth }}
+        label="‹ Prev"
         disabled={atEarliestMonth}
         onPress={onPrev}
-        style={[arrow, { opacity: atEarliestMonth ? 0.4 : 1 }]}
-      >
-        <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink2 }}>‹ Prev</Text>
-      </Pressable>
+        variant="text"
+        size="sm"
+      />
       <Text
         testID="attendance-month-label"
-        style={{ fontFamily: font.serif, fontSize: 15, color: tokens.color.ink }}
+        style={{ fontSize: 16, fontWeight: '600', color: tokens.color.ink }}
       >
         {monthKeyLabel(month)}
       </Text>
-      <Pressable
+      <Button
         testID="attendance-next-month"
-        accessibilityRole="button"
         accessibilityLabel="Next month"
-        accessibilityState={{ disabled: atLatestMonth }}
+        label="Next ›"
         disabled={atLatestMonth}
         onPress={onNext}
-        style={[arrow, { opacity: atLatestMonth ? 0.4 : 1 }]}
-      >
-        <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink2 }}>Next ›</Text>
-      </Pressable>
+        variant="text"
+        size="sm"
+      />
     </View>
   );
 }
@@ -319,16 +317,16 @@ export default function Attendance() {
           {/* The pitch's `.page .attwrap`: one sheet holding the figure, the
               rule it draws, and the month itself. */}
           <Card style={{ padding: 12 }}>
-            {/* `.attkpi` — the figure set in mono so the digits line up
+            {/* `.attkpi` — the figure set in tabular digits so they line up
                 month to month, next to a quiet sans label. */}
             <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
               <Text
                 testID="stat-percent"
-                style={{ fontFamily: font.mono, fontSize: 26, fontWeight: '700', color: tokens.color.indigo }}
+                style={{ fontVariant: ['tabular-nums'], fontSize: 26, fontWeight: '700', color: tokens.color.indigo }}
               >
                 {summary.percent}%
               </Text>
-              <Text style={{ fontSize: 11, color: tokens.color.sub }}>
+              <Text style={{ fontSize: 13, color: tokens.color.sub }}>
                 present across {total} recorded {total === 1 ? 'day' : 'days'}
               </Text>
             </View>
@@ -336,7 +334,7 @@ export default function Attendance() {
             <InkRule key={month} percent={summary.percent} />
 
             {total === 0 ? (
-              <Text style={{ color: tokens.color.sub, fontSize: 12.5 }}>
+              <Text style={{ color: tokens.color.sub, fontSize: 14 }}>
                 No attendance recorded yet for {month ? monthLabel(month) : 'this month'}.
               </Text>
             ) : (
@@ -352,8 +350,9 @@ export default function Attendance() {
                       style={{
                         width: CELL_WIDTH,
                         textAlign: 'center',
-                        fontSize: 10,
+                        fontSize: 12,
                         fontWeight: '700',
+                        letterSpacing: 0.5,
                         color: tokens.color.sub,
                         marginBottom: 4,
                       }}
@@ -386,7 +385,7 @@ export default function Attendance() {
                           <View
                             style={{
                               flex: 1,
-                              borderRadius: 9,
+                              borderRadius: tokens.radius.chip,
                               backgroundColor: bg,
                               borderWidth: 1,
                               borderColor: border,
@@ -397,8 +396,9 @@ export default function Attendance() {
                             <Text
                               testID={`attn-day-${cell.day}`}
                               style={{
-                                fontFamily: font.mono,
-                                fontSize: 12,
+                                fontVariant: ['tabular-nums'],
+                                fontSize: 13,
+                                lineHeight: 15,
                                 fontWeight: cell.status && cell.status !== 'PRESENT' ? '800' : '600',
                                 color: fg,
                               }}
@@ -408,7 +408,7 @@ export default function Attendance() {
                             {glyph ? (
                               <Text
                                 testID={`attn-mark-${cell.day}`}
-                                style={{ position: 'absolute', bottom: 1, fontSize: 8, fontWeight: '800', color: fg }}
+                                style={{ position: 'absolute', bottom: 1, fontSize: 11, lineHeight: 12, fontWeight: '800', color: fg }}
                               >
                                 {glyph}
                               </Text>
@@ -430,7 +430,7 @@ export default function Attendance() {
               </>
             )}
 
-            {/* The two supporting figures, in mono under the rule — the
+            {/* The two supporting figures, in tabular digits under the rule — the
                 percentage is the headline, these are its working. */}
             <View style={{ flexDirection: 'row', gap: 18, marginTop: 12 }}>
               {/* The same three states the web portal breaks out. "school
@@ -455,12 +455,13 @@ export default function Attendance() {
                       flexDirection: 'row',
                       justifyContent: 'space-between',
                       alignItems: 'center',
+                      minHeight: 48,
                       paddingVertical: 9,
                       borderBottomWidth: 1,
                       borderBottomColor: tokens.color.line,
                     }}
                   >
-                    <Text style={{ fontFamily: font.mono, fontSize: 12, color: tokens.color.ink2 }}>{formatDate(d.date)}</Text>
+                    <Text style={{ fontVariant: ['tabular-nums'], fontSize: 13, color: tokens.color.ink2 }}>{formatDate(d.date)}</Text>
                     <Pill tone={d.status === 'PRESENT' ? 'green' : d.status === 'LATE' ? 'amber' : 'red'}>
                       {d.status === 'PRESENT' ? 'Present' : d.status === 'LATE' ? 'Late' : 'Absent'}
                     </Pill>

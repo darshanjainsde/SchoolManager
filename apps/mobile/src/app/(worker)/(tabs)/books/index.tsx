@@ -70,8 +70,8 @@ export default function Books() {
       <SearchBox testID="books-search" value={q} onChangeText={setQ} placeholder="Title, author or accession number" />
       {loading && !hits && <LoadingRows label="Searching the shelves…" rows={3} />}
       {error && <Toast kind="error" message={error} />}
-      {!hits && !loading && <Page><Empty icon="notes">Type two letters of a title or an author. An accession number finds its copy.</Empty></Page>}
-      {hits && hits.length === 0 && <Page><Empty icon="notes">Nothing on the shelves by that name. “Add title” puts it in.</Empty></Page>}
+      {!hits && !loading && <Page><Empty kind="search" title="Find a book">Two letters of a title or an author. An accession number finds its copy.</Empty></Page>}
+      {hits && hits.length === 0 && <Page><Empty kind="search" title="Nothing by that name">Check the spelling, or add the title so the next search finds it.</Empty></Page>}
       {hits && hits.length > 0 && (
         <Page testID="books-hits">
           {hits.map((t, i) => (
@@ -133,7 +133,7 @@ function AddTitleSheet({ onClose, onAdded }: { onClose: () => void; onAdded: (m:
         <TextField label="Author" testID="add-author" value={author} onChangeText={setAuthor} placeholder="R. K. Narayan" maxLength={120} />
         <TextField label="Shelf" testID="add-shelf" value={shelf} onChangeText={setShelf} placeholder="Fiction · B2" maxLength={40} />
         <TextField label="Copies" testID="add-copies" value={copies} onChangeText={(v) => setCopies(v.replace(/\D/g, ''))} keyboardType="number-pad" placeholder="1" />
-        <Text style={{ fontSize: 11.5, color: tokens.color.sub }}>ISBN and a bulk import are on the web catalogue.</Text>
+        <Text style={{ fontSize: 13, color: tokens.color.sub }}>ISBN and a bulk import are on the web catalogue.</Text>
         {error && <Toast kind="error" message={error} />}
       </View>
     </Sheet>

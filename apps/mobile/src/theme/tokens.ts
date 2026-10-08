@@ -168,8 +168,13 @@ export const font = {
   sans: Platform.select({ ios: 'System', android: 'sans-serif', default: 'System' }) as string,
 } as const;
 
-export const GAP = 11; // vertical rhythm between containers (mockup system)
-export const RADIUS = { card: 16, chip: 999, sheet: 22 } as const;
+// UI v2 (2026-10-08): the 4 dp grid. 12 between containers, 16 inside a card
+// and at the screen edge, 8 between cards in a list.
+export const GAP = 12;
+export const SPACE = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;
+// Rounder than Material's defaults, the way Google's own apps have gone:
+// card 20, field 14, chip 10, sheet 28; buttons are pills (Button.tsx).
+export const RADIUS = { card: 20, field: 14, chip: 10, sheet: 28 } as const;
 
 /**
  * Fixed brand constants that intentionally do NOT vary with the device's

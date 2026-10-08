@@ -5,11 +5,14 @@ import { useFocusEffect } from 'expo-router';
 import type { Assignment, AssignmentAttachment, AssignmentList, MyClassSection, Subject } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { shiftISO, todayISO } from '@/lib/attendance';
-import { Card, Screen, SectionTitle, Toast } from '@/components/ui';
+import { Card, Empty, Screen, SectionTitle, Toast } from '@/components/ui';
+import { Button } from '@/components/Button';
+import { Chip, ChipRow } from '@/components/Chip';
+import { Stepper } from '@/components/Stepper';
+import { Field, fieldInputStyle } from '@/components/Field';
 import { LoadingRows } from '@/components/Loading';
 import { Icon } from '@/components/icons';
 import { useTokens } from '@/theme/theme-context';
-import { font, type ColorPalette } from '@/theme/tokens';
 import { DUR, inkWidth, useGesture } from '@/theme/motion';
 import { fmtDate } from '@/lib/dates';
 
@@ -44,22 +47,11 @@ function SeenBar({ seen, of }: { seen: number; of: number }) {
           }}
         />
       </View>
-      <Text style={{ fontFamily: font.mono, fontSize: 10, color: tokens.color.sub }}>
+      <Text style={{ fontVariant: ['tabular-nums'], fontSize: 13, color: tokens.color.sub }}>
         {`opened by ${seen} of ${of}`}
       </Text>
     </View>
   );
-}
-
-function chipStyle(tokens: { color: ColorPalette }, on: boolean) {
-  return {
-    borderWidth: 1.5,
-    borderColor: on ? tokens.color.indigo : tokens.color.line,
-    backgroundColor: on ? tokens.color.indigo50 : tokens.color.surface,
-    borderRadius: 11,
-    paddingVertical: 9,
-    paddingHorizontal: 13,
-  };
 }
 
 /** `Assignment.dueDate` (`@db.Date`, `YYYY-MM-DD`) formatted for display — a plain calendar date, no time component. */
@@ -69,15 +61,10 @@ function formatDueDate(dueDate: string): string {
 
 export default function Assignments() {
   const tokens = useTokens();
-  const inputStyle = {
-    borderWidth: 1,
-    borderColor: tokens.color.line,
-    borderRadius: 11,
-    padding: 11,
-    fontSize: 13.5,
-    color: tokens.color.ink,
-  };
-  const labelStyle = { fontSize: 11.5, fontWeight: '700' as const, color: tokens.color.sub };
+  // The same 13/600 label `Field` draws, for the groups that are not a text box.
+  const labelStyle = { fontSize: 13, lineHeight: 18, fontWeight: '600' as const, color: tokens.color.ink2 };
+  const [titleFocused, setTitleFocused] = useState(false);
+  const [instructionsFocused, setInstructionsFocused] = useState(false);
 
   const [classes, setClasses] = useState<MyClassSection[] | null>(null);
   const [classesError, setClassesError] = useState<string | null>(null);
@@ -293,34 +280,36 @@ export default function Assignments() {
     <View
       key={a.id}
       testID={`assignment-${a.id}`}
-      style={{ paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: tokens.color.line }}
+      style={{ paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: tokens.color.line }}
     >
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <View style={{ flex: 1, paddingRight: 8 }}>
-          <Text style={{ fontFamily: font.serif, fontWeight: '700', fontSize: 14, color: tokens.color.ink }}>
+          <Text style={{ fontWeight: '600', fontSize: 16, color: tokens.color.ink }}>
             {a.title}
           </Text>
-          <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>
+          <Text style={{ fontSize: 13, color: tokens.color.sub, marginTop: 2 }}>
             {subjectLabel(a.subjectId)} · Due {formatDueDate(a.dueDate)} · {a.seenCount} seen
           </Text>
           {a.attachments?.length ? (
             <View style={{ marginTop: 5, gap: 4 }}>
               {a.attachments.map((att) => (
-                <Pressable key={att.url} testID={`attachment-${att.name}`} accessibilityRole="link" onPress={() => void Linking.openURL(att.url)} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                  <Icon name={att.kind === 'pdf' ? 'report' : 'diary'} size={13} color={tokens.color.indigo} />
-                  <Text numberOfLines={1} style={{ fontFamily: font.mono, fontSize: 11, fontWeight: '700', color: tokens.color.indigo, flexShrink: 1 }}>{att.name}</Text>
+                <Pressable key={att.url} testID={`attachment-${att.name}`} accessibilityRole="link" hitSlop={4} onPress={() => void Linking.openURL(att.url)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 40 }}>
+                  <Icon name={att.kind === 'pdf' ? 'report' : 'diary'} size={16} color={tokens.color.indigo} />
+                  <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '700', color: tokens.color.indigo, flexShrink: 1 }}>{att.name}</Text>
                 </Pressable>
               ))}
             </View>
           ) : null}
         </View>
-        <Pressable testID={`delete-${a.id}`} onPress={() => confirmDelete(a)} disabled={deletingId === a.id}
-          accessibilityRole="button"
-          >
-          <Text style={{ color: tokens.color.red, fontWeight: '700', fontSize: 12 }}>
-            {deletingId === a.id ? 'Deleting…' : 'Delete'}
-          </Text>
-        </Pressable>
+        <Button
+          testID={`delete-${a.id}`}
+          variant="danger"
+          size="sm"
+          label={deletingId === a.id ? 'Deleting…' : 'Delete'}
+          busy={deletingId === a.id}
+          disabled={deletingId === a.id}
+          onPress={() => confirmDelete(a)}
+        />
       </View>
       {rosterSize !== undefined && rosterSize > 0 && <SeenBar seen={a.seenCount} of={rosterSize} />}
     </View>
@@ -329,7 +318,7 @@ export default function Assignments() {
   return (
     <Screen>
       <SectionTitle title="Assignments" />
-      <Text style={{ fontSize: 11, color: tokens.color.sub, marginHorizontal: 4, marginTop: -6 }}>
+      <Text style={{ fontSize: 14, color: tokens.color.sub, marginHorizontal: 4, marginTop: -6 }}>
         Set homework for a class and see who has opened it.
       </Text>
 
@@ -350,57 +339,54 @@ export default function Assignments() {
       {ownedClasses.length > 0 && (
         <Card>
           <Text style={{ ...labelStyle, marginBottom: 8 }}>Class</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7 }}>
-            {ownedClasses.map((c) => {
-              const on = classSectionId === c.classSectionId;
-              return (
-                <Pressable
-                  key={c.classSectionId}
-                  testID={`class-${c.classSectionId}`}
-                  onPress={() => selectClass(c.classSectionId)}
-                  style={chipStyle(tokens, on)}
-                  accessibilityRole="button"
-                  >
-                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: on ? tokens.color.indigo : tokens.color.sub }}>
-                    {on ? `✓ ${c.name}` : c.name}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+          <ChipRow>
+            {ownedClasses.map((c) => (
+              <Chip
+                key={c.classSectionId}
+                testID={`class-${c.classSectionId}`}
+                label={c.name}
+                selected={classSectionId === c.classSectionId}
+                onPress={() => selectClass(c.classSectionId)}
+              />
+            ))}
+          </ChipRow>
         </Card>
+      )}
+
+      {/* Choose-first (empty kind "choose", v2 2026-10-08): until a class is
+          picked the form is hidden, and the page said so with 80% blank. */}
+      {ownedClasses.length > 0 && !classSectionId && (
+        <Empty kind="choose" icon="assignments" title="Pick a class above">
+          The form opens for that class — you can post homework to one class at a time.
+        </Empty>
       )}
 
       {classSectionId && (
         <Card style={{ gap: 10 }}>
           <View>
-            <Text style={{ fontFamily: font.serif, fontSize: 16, fontWeight: '700', color: tokens.color.ink }}>Post an assignment</Text>
-            <Text style={{ fontSize: 11, color: tokens.color.sub, marginTop: 2 }}>
+            <Text style={{ fontSize: 17, fontWeight: '700', color: tokens.color.ink }}>Post an assignment</Text>
+            <Text style={{ fontSize: 13, color: tokens.color.sub, marginTop: 2 }}>
               A title, the instructions, a due date — and up to five PDFs or images.
             </Text>
           </View>
 
-          {subjectsError && <Text style={{ color: tokens.color.red, fontSize: 12.5 }}>{subjectsError}</Text>}
-          <View>
+          {subjectsError && <Text style={{ color: tokens.color.red, fontSize: 13 }}>{subjectsError}</Text>}
+          <View style={{ gap: 6 }}>
             <Text style={labelStyle}>Subject</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 6 }}>
-              {(subjects ?? []).map((s) => {
-                const on = subjectId === s.id;
-                return (
-                  <Pressable key={s.id} testID={`subject-${s.id}`} onPress={() => setSubjectId(s.id)} style={chipStyle(tokens, on)}
-                    accessibilityRole="button"
-                    >
-                    <Text style={{ fontSize: 12.5, fontWeight: '700', color: on ? tokens.color.indigo : tokens.color.sub }}>
-                      {on ? `✓ ${s.code}` : s.code}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+            <ChipRow>
+              {(subjects ?? []).map((s) => (
+                <Chip
+                  key={s.id}
+                  testID={`subject-${s.id}`}
+                  label={s.code}
+                  selected={subjectId === s.id}
+                  onPress={() => setSubjectId(s.id)}
+                />
+              ))}
+            </ChipRow>
           </View>
 
-          <View>
-            <Text style={labelStyle}>Title</Text>
+          <Field label="Title">
             <TextInput
               testID="assign-title"
               returnKeyType="next"
@@ -409,13 +395,14 @@ export default function Assignments() {
               value={title}
               onChangeText={setTitle}
               placeholder="Worksheet 3"
-              placeholderTextColor={tokens.color.sub}
-              style={[inputStyle, { marginTop: 6 }]}
+              placeholderTextColor={tokens.color.placeholder}
+              onFocus={() => setTitleFocused(true)}
+              onBlur={() => setTitleFocused(false)}
+              style={fieldInputStyle(tokens, { focused: titleFocused })}
             />
-          </View>
+          </Field>
 
-          <View>
-            <Text style={labelStyle}>Instructions</Text>
+          <Field label="Instructions">
             <TextInput
               testID="assign-instructions"
               ref={instructionsRef}
@@ -423,94 +410,72 @@ export default function Assignments() {
               onChangeText={setInstructions}
               multiline
               placeholder="Complete questions 1-10 and show your working."
-              placeholderTextColor={tokens.color.sub}
-              style={[inputStyle, { marginTop: 6, minHeight: 74, textAlignVertical: 'top' }]}
+              placeholderTextColor={tokens.color.placeholder}
+              onFocus={() => setInstructionsFocused(true)}
+              onBlur={() => setInstructionsFocused(false)}
+              style={fieldInputStyle(tokens, { focused: instructionsFocused, multiline: true })}
+            />
+          </Field>
+
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+            <Text style={labelStyle}>Due date</Text>
+            <Stepper
+              testID="assign-due"
+              value={dueDate}
+              onPrev={() => setDueDate((d) => shiftISO(d, -1))}
+              onNext={() => setDueDate((d) => shiftISO(d, 1))}
+              prevLabel="Previous"
+              nextLabel="Next"
             />
           </View>
 
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={labelStyle}>Due date</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <Pressable testID="assign-due-prev" onPress={() => setDueDate((d) => shiftISO(d, -1))}
-                accessibilityRole="button"
-                accessibilityLabel="Previous">
-                <Text style={{ color: tokens.color.indigo, fontWeight: '700' }}>‹</Text>
-              </Pressable>
-              <Text testID="assign-due-value" style={{ fontSize: 12.5, color: tokens.color.ink, minWidth: 84, textAlign: 'center' }}>
-                {dueDate}
-              </Text>
-              <Pressable testID="assign-due-next" onPress={() => setDueDate((d) => shiftISO(d, 1))}
-                accessibilityRole="button"
-                accessibilityLabel="Next">
-                <Text style={{ color: tokens.color.indigo, fontWeight: '700' }}>›</Text>
-              </Pressable>
-            </View>
-          </View>
-
-          <View>
+          <View style={{ gap: 6 }}>
             <Text style={labelStyle}>Attachments</Text>
             {attachments.length > 0 && (
-              <View style={{ gap: 5, marginTop: 6 }}>
+              <View style={{ gap: 4 }}>
                 {attachments.map((att) => (
-                  <View key={att.url} testID={`attached-${att.name}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
-                    <Icon name={att.kind === 'pdf' ? 'report' : 'diary'} size={14} color={tokens.color.indigo} />
-                    <Text numberOfLines={1} style={{ flex: 1, fontFamily: font.mono, fontSize: 11.5, color: tokens.color.ink }}>{att.name}</Text>
-                    <Pressable testID={`attached-remove-${att.name}`} accessibilityRole="button" accessibilityLabel={`Remove ${att.name}`} hitSlop={8} onPress={() => setAttachments((prev) => prev.filter((x) => x.url !== att.url))}>
-                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: tokens.color.red }}>Remove</Text>
-                    </Pressable>
+                  <View key={att.url} testID={`attached-${att.name}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Icon name={att.kind === 'pdf' ? 'report' : 'diary'} size={16} color={tokens.color.indigo} />
+                    <Text numberOfLines={1} style={{ flex: 1, fontSize: 13, color: tokens.color.ink }}>{att.name}</Text>
+                    <Button
+                      testID={`attached-remove-${att.name}`}
+                      variant="text"
+                      size="sm"
+                      label="Remove"
+                      accessibilityLabel={`Remove ${att.name}`}
+                      onPress={() => setAttachments((prev) => prev.filter((x) => x.url !== att.url))}
+                    />
                   </View>
                 ))}
               </View>
             )}
-            <Pressable
+            <Button
               testID="assign-attach"
-              accessibilityRole="button"
+              variant="outlined"
+              icon="diary"
+              block
               disabled={uploading || attachments.length >= MAX_ATTACHMENTS}
+              busy={uploading}
+              label={uploading ? 'Uploading…' : attachments.length ? `Add another (${attachments.length} of ${MAX_ATTACHMENTS})` : 'Attach a PDF or image — optional'}
               onPress={() => void pickAttachment()}
-              style={{
-                marginTop: 6,
-                borderWidth: 1.5,
-                borderStyle: 'dashed',
-                borderColor: tokens.color.line2,
-                borderRadius: 11,
-                paddingVertical: 10,
-                paddingHorizontal: 13,
-                minHeight: 42,
-                justifyContent: 'center',
-                opacity: uploading || attachments.length >= MAX_ATTACHMENTS ? 0.5 : 1,
-              }}
-            >
-              <Text style={{ fontFamily: font.serif, fontStyle: 'italic', fontSize: 13, color: tokens.color.sub }}>
-                {uploading ? 'Uploading…' : attachments.length ? `Add another (${attachments.length} of ${MAX_ATTACHMENTS})` : 'Attach a PDF or image — optional'}
-              </Text>
-            </Pressable>
-            {attachError && <Text testID="attach-error" style={{ color: tokens.color.red, fontSize: 12, marginTop: 4 }}>{attachError}</Text>}
+            />
+            {attachError && <Text testID="attach-error" style={{ color: tokens.color.red, fontSize: 13, marginTop: 4 }}>{attachError}</Text>}
           </View>
 
           {postError && (
-            <Text testID="post-error" style={{ color: tokens.color.red, fontSize: 12.5 }}>
+            <Text testID="post-error" style={{ color: tokens.color.red, fontSize: 13 }}>
               {postError}
             </Text>
           )}
 
-          <Pressable
+          <Button
             testID="assign-submit"
+            block
             disabled={!canPost}
+            busy={posting}
+            label={posting ? 'Posting…' : 'Post assignment'}
             onPress={() => void post()}
-            style={{
-              backgroundColor: tokens.color.indigo,
-              borderRadius: 13,
-              padding: 12,
-              alignSelf: 'flex-start',
-              paddingHorizontal: 18,
-              opacity: canPost ? 1 : 0.6,
-            }}
-            accessibilityRole="button"
-            >
-            <Text style={{ color: tokens.color.onBrand, fontWeight: '700', fontSize: 13 }}>
-              {posting ? 'Posting…' : 'Post assignment'}
-            </Text>
-          </Pressable>
+          />
 
           {posted && <Toast kind="success" testID="post-success" message="Assignment posted" />}
         </Card>
@@ -518,7 +483,7 @@ export default function Assignments() {
 
       {classSectionId && (
         <Card>
-          <Text style={{ fontFamily: font.serif, fontSize: 16, fontWeight: '700', color: tokens.color.ink }}>Posted assignments</Text>
+          <Text style={{ fontSize: 17, fontWeight: '700', color: tokens.color.ink }}>Posted assignments</Text>
           {listLoading && <LoadingRows label="Loading assignments…" rows={3} bare />}
           {listError && (
             <Text testID="list-error" style={{ color: tokens.color.red, marginTop: 6 }}>

@@ -27,7 +27,7 @@ export function BackChipHeader({ title }: { title: string }) {
       style={{
         paddingTop: insets.top + 6,
         paddingBottom: 8,
-        paddingHorizontal: 14,
+        paddingHorizontal: 16,
         flexDirection: 'row',
         alignItems: 'center',
         gap: 10,
@@ -41,9 +41,9 @@ export function BackChipHeader({ title }: { title: string }) {
         onPress={() => router.back()}
         hitSlop={8}
         style={({ pressed }) => ({
-          width: 38,
-          height: 38,
-          borderRadius: 12,
+          width: 44,
+          height: 44,
+          borderRadius: 15,
           backgroundColor: tokens.color.surface,
           borderColor: tokens.color.line,
           borderWidth: 1,

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, PanResponder, Text, View } from 'react-native';
 import { DUR, play, useReduceMotion } from '@/theme/motion';
-import { font } from '@/theme/tokens';
 import { useTokens } from '@/theme/theme-context';
 
 const THUMB = 22;
@@ -209,7 +208,7 @@ export function ThresholdSlider({
       </View>
       <Text
         style={{
-          fontFamily: font.mono,
+          fontVariant: ['tabular-nums'],
           fontSize: 16,
           fontWeight: '700',
           color: tokens.color.late,

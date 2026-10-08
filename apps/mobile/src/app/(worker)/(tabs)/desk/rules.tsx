@@ -4,7 +4,6 @@ import { SPORTS, sportsByGroup, type Sport } from '@skoolos/types';
 import { Empty, Page, PageHeader, Pill, Screen, SectionTitle } from '@/components/ui';
 import { Button, Eyebrow, Row, SearchBox } from '@/components/desk';
 import { useTokens } from '@/theme/theme-context';
-import { font } from '@/theme/tokens';
 
 /**
  * THE RULES BOOK — the same text the web desk carries, in a pocket. A
@@ -35,14 +34,14 @@ export default function Rules() {
         </View>
         <Page testID="rules-summary">
           <PageHeader title="In short" icon="notes" />
-          <Text style={{ paddingHorizontal: 12, paddingVertical: 10, fontFamily: font.serif, fontSize: 14.5, lineHeight: 21, color: tokens.color.ink }}>{sport.rules.summary}</Text>
+          <Text style={{ paddingHorizontal: 12, paddingVertical: 10, fontSize: 15, lineHeight: 22, color: tokens.color.ink }}>{sport.rules.summary}</Text>
         </Page>
         {sport.rules.sections.map((sec) => (
           <Page key={sec.title}>
             <PageHeader title={sec.title} />
             {sec.points.map((p, i) => (
               <View key={p} style={{ flexDirection: 'row', gap: 9, paddingHorizontal: 12, paddingVertical: 9, borderTopWidth: i ? 1 : 0, borderTopColor: tokens.color.line }}>
-                <Text style={{ fontFamily: font.mono, fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>{i + 1}</Text>
+                <Text style={{ fontVariant: ['tabular-nums'], fontSize: 13, color: tokens.color.sub, marginTop: 2 }}>{i + 1}</Text>
                 <Text style={{ flex: 1, fontSize: 13.5, lineHeight: 20, color: tokens.color.ink }}>{p}</Text>
               </View>
             ))}

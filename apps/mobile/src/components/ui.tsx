@@ -11,6 +11,7 @@ import { isPushedRoute, titleForSegments } from '@/lib/screen-titles';
 import { BackChipHeader } from './BackChipHeader';
 import { Icon, type IconName } from './icons';
 import { Illustration, type Scene } from './Illustration';
+import { Button } from './Button';
 import { useKeepFocusedInView } from '@/lib/keyboard';
 
 /**
@@ -228,10 +229,10 @@ export function Card({
   return (
     <View
       testID={testID}
+      // UI v2: a flat white card with a 1 dp line on a cool page — no shadow,
+      // the page/surface contrast does the lifting. 16 dp inside (M3 card).
       style={[{ backgroundColor: tokens.color.surface, borderColor: tokens.color.line,
-      borderWidth: 1, borderRadius: tokens.radius.card, padding: 14,
-      shadowColor: tokens.color.ink, shadowOpacity: 0.05, shadowRadius: 34,
-      shadowOffset: { width: 0, height: 14 }, elevation: 2 }, style]}>
+      borderWidth: 1, borderRadius: tokens.radius.card, padding: 16 }, style]}>
       {children}
     </View>
   );
@@ -246,7 +247,7 @@ export function SectionTitle({ title, actionLabel, onAction, right }:
   const repeatsHeader = headerTitle !== null && headerTitle.trim().toLowerCase() === title.trim().toLowerCase();
   const action = right ?? (actionLabel ? (
     <Pressable onPress={onAction} accessibilityRole="button" hitSlop={12} style={{ minHeight: 44, justifyContent: 'center' }}>
-      <Text style={{ fontSize: 12, fontWeight: '700', color: tokens.color.indigo }}>{actionLabel}</Text>
+      <Text style={{ fontSize: 13.5, fontWeight: '700', color: tokens.color.indigo }}>{actionLabel}</Text>
     </Pressable>
   ) : null);
   if (repeatsHeader) {
@@ -260,7 +261,7 @@ export function SectionTitle({ title, actionLabel, onAction, right }:
           are set in a book face; the sans is reserved for chrome a paper
           diary would never contain (buttons, counts, meta). The pitch's 650
           weight has no RN equivalent, so serif headings land on '600'. */}
-      <Text style={{ fontSize: 15, fontFamily: font.serif, fontWeight: '600',
+      <Text style={{ fontSize: 17, lineHeight: 24, fontWeight: '700',
         letterSpacing: -0.2, color: tokens.color.ink }}>{title}</Text>
       {action}
     </View>
@@ -275,43 +276,73 @@ export function SectionTitle({ title, actionLabel, onAction, right }:
  * still reads as a page and not as a failure. Meant to sit inside a `Page`
  * (or a zero-padded `Card`), exactly as the pitch nests `.empty` in `.page`.
  */
+export type EmptyKind = 'first' | 'done' | 'choose' | 'search' | 'locked' | 'error';
+
+/**
+ * THE EMPTY STATE, IN SIX KINDS (UI v2, researched 2026-10-08).
+ *
+ * An empty screen says what happened and what comes next. The anatomy every
+ * design system agrees on: an icon (or, for first use only, a picture) → a
+ * short title that starts with a verb or a status → one line of body → at
+ * most two actions. `kind` picks the icon and tint:
+ *   first  — never had a record: the only kind that may carry a `scene`.
+ *   done   — all done / nothing due: good news, green.
+ *   choose — pick something first: amber.
+ *   search — type to find: teal.
+ *   locked — a right an admin grants: say who unlocks it.
+ *   error  — the alert triangle, never a picture.
+ * `children` is the body line, as before, so every existing caller keeps
+ * working; `title`, `action` and `secondary` are the new parts. Anchored at
+ * the top of its box, never floated in the middle of a blank screen.
+ */
 export function Empty({
   children,
   testID,
-  /**
-   * A duotone glyph drawn faintly above the line. Not decoration: an empty
-   * screen is the one screen with nothing on it to say WHICH screen it is, so
-   * a page reached by mistake reads as "no messages" rather than as a page
-   * that failed to load. Left off where the surrounding page already names
-   * itself unmistakably.
-   */
   icon,
-  /**
-   * UI v2: a picture (components/Illustration) in place of the glyph, for an
-   * empty that is GOOD news — nothing due, nothing out, nothing set. The words
-   * still carry the meaning; the picture is decorative.
-   */
   scene,
-}: PropsWithChildren<{ testID?: string; icon?: IconName; scene?: Scene }>) {
+  kind,
+  title,
+  action,
+  secondary,
+}: PropsWithChildren<{
+  testID?: string;
+  icon?: IconName;
+  scene?: Scene;
+  kind?: EmptyKind;
+  title?: string;
+  action?: { label: string; onPress: () => void; testID?: string };
+  secondary?: { label: string; onPress: () => void; testID?: string };
+}>) {
   const tokens = useTokens();
+  const c = tokens.color;
+  const tone = {
+    first: { ink: c.indigo, soft: c.indigo50, icon: 'send' as IconName },
+    done: { ink: c.green, soft: c.green50, icon: 'check' as IconName },
+    choose: { ink: c.late, soft: c.amber50, icon: 'take' as IconName },
+    search: { ink: c.indigo, soft: c.indigo50, icon: 'search' as IconName },
+    locked: { ink: c.red, soft: c.red50, icon: 'lock' as IconName },
+    error: { ink: c.red, soft: c.red50, icon: 'alert' as IconName },
+  }[kind ?? 'first'];
+  const glyph = icon ?? (kind ? tone.icon : undefined);
+  const picture = kind === 'first' || !kind ? scene : undefined;
   return (
-    <View testID={testID} style={{ paddingVertical: 20, paddingHorizontal: 14, alignItems: 'center', gap: 9 }}>
-      {scene && <Illustration scene={scene} height={130} />}
-      {!scene && icon && (
-        // Faint on purpose — it sits behind the sentence in the reading order,
-        // and an empty state that shouts is worse than one that waits.
-        <Icon name={icon} size={26} color={tokens.color.line2} fillOpacity={0.5} />
+    <View testID={testID} style={{ paddingVertical: 18, paddingHorizontal: 16, alignItems: 'flex-start', gap: 10 }}>
+      {picture && <Illustration scene={picture} height={130} />}
+      {!picture && glyph && (
+        <View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: kind ? tone.soft : c.surfaceMuted, alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name={glyph} size={24} color={kind ? tone.ink : c.sub} fillOpacity={0.18} />
+        </View>
       )}
-      <Text
-        style={{
-          color: tokens.color.sub,
-          fontSize: 13.5,
-          lineHeight: 20,
-          textAlign: 'center',
-        }}
-      >
-        {children}
-      </Text>
+      {title ? (
+        <Text style={{ color: c.ink, fontSize: 17, lineHeight: 24, fontWeight: '700', letterSpacing: -0.2 }}>{title}</Text>
+      ) : null}
+      <Text style={{ color: c.sub, fontSize: 14, lineHeight: 20, maxWidth: 340 }}>{children}</Text>
+      {action || secondary ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 2 }}>
+          {action ? <Button label={action.label} onPress={action.onPress} testID={action.testID} variant={kind === 'done' ? 'tonal' : 'filled'} /> : null}
+          {secondary ? <Button label={secondary.label} onPress={secondary.onPress} testID={secondary.testID} variant="text" /> : null}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -339,13 +370,8 @@ export function Page({
           backgroundColor: tokens.color.surface,
           borderColor: tokens.color.line,
           borderWidth: 1,
-          borderRadius: 14,
+          borderRadius: tokens.radius.card,
           overflow: 'hidden',
-          shadowColor: tokens.color.ink,
-          shadowOpacity: 0.05,
-          shadowRadius: 34,
-          shadowOffset: { width: 0, height: 14 },
-          elevation: 2,
         },
         style,
       ]}
@@ -387,27 +413,29 @@ export function PageHeader({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingTop: 9,
-        paddingHorizontal: 12,
+        paddingTop: 12,
+        paddingHorizontal: 16,
         paddingBottom: 6,
+        minHeight: 44,
       }}
     >
       {/* The pitch's 650 weight has no RN equivalent (only the 100-900
           ladder), so every serif heading in this app lands on '600'. */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-        {icon ? <Icon name={icon} size={15} color={tokens.color.ink2} /> : null}
+        {icon ? <Icon name={icon} size={18} color={tokens.color.ink2} /> : null}
         <Text
-          style={{ fontFamily: font.serif, fontSize: 14, fontWeight: '600', color: tokens.color.ink, flex: 1 }}
+          style={{ fontSize: 16, lineHeight: 24, fontWeight: '700', color: tokens.color.ink, flex: 1 }}
           numberOfLines={1}
         >
           {title}
         </Text>
       </View>
       {actionLabel && (
-        <Pressable testID={actionTestID} onPress={onAction} hitSlop={6}
+        <Pressable testID={actionTestID} onPress={onAction} hitSlop={8}
           accessibilityRole="button"
+          style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 }}
           >
-          <Text style={{ fontSize: 12, fontWeight: '700', color: tokens.color.indigo }}>{actionLabel}</Text>
+          <Text style={{ fontSize: 13.5, fontWeight: '700', color: tokens.color.indigo }}>{actionLabel}</Text>
         </Pressable>
       )}
     </View>
@@ -474,7 +502,7 @@ export interface RailRowProps {
  * "Today's classes" and the teacher's day.
  *
  * The anatomy is the pitch's, and each part is load-bearing:
- *   • a mono time column, so 09:55 and 11:35 line up as a column of figures;
+ *   • a tabular-figure time column, so 09:55 and 11:35 line up as a column of figures;
  *   • the RED MARGIN RULE — the printed line down a school exercise book,
  *     which is why the times read as being written in the margin and the
  *     lesson as being written in the body;
@@ -521,9 +549,9 @@ export function RailRow({
         style={{
           minWidth: 52,
           textAlign: 'center',
-          fontFamily: font.mono,
-          fontSize: 11,
-          lineHeight: 14,
+          fontVariant: ['tabular-nums'],
+          fontSize: 13,
+          lineHeight: 16,
           color: tokens.color.sub,
         }}
       >
@@ -599,7 +627,7 @@ export function RailStatus({ tone, children }: PropsWithChildren<{ tone: 'good' 
   const tokens = useTokens();
   const color =
     tone === 'good' ? tokens.color.green : tone === 'now' ? tokens.color.late : tokens.color.sub;
-  return <Text style={{ fontSize: 11, fontWeight: '700', color }}>{children}</Text>;
+  return <Text style={{ fontSize: 12, fontWeight: '700', color }}>{children}</Text>;
 }
 
 function pillTones(tokens: { color: ColorPalette }) {
@@ -627,8 +655,8 @@ export function Pill({ tone, children }: PropsWithChildren<{ tone: keyof ReturnT
   const t = tones[tone] ?? tones.neutral;
   return (
     <View style={{ backgroundColor: t.bg, borderRadius: tokens.radius.chip,
-      paddingHorizontal: 11, paddingVertical: 5, alignSelf: 'flex-start' }}>
-      <Text style={{ color: t.fg, fontSize: 11, fontWeight: '700' }}>{children}</Text>
+      paddingHorizontal: 10, paddingVertical: 5, alignSelf: 'flex-start' }}>
+      <Text maxFontSizeMultiplier={1.3} style={{ color: t.fg, fontSize: 12, fontWeight: '700' }}>{children}</Text>
     </View>
   );
 }
@@ -780,9 +808,9 @@ export function ErrorState({
 }
 
 /**
- * A FIGURE — the mono big-number tile, shared. Was Home's private KpiTile;
+ * A FIGURE — the big-number tile, shared. Was Home's private KpiTile;
  * fees ("You owe"), sports ("Best mark") and library ("Due in 3 days") all
- * wanted it. Figures are set in the mono face so a percentage and a mark out
+ * wanted it. Figures are set in sans with tabular digits so a percentage and a mark out
  * of fifty line up as numbers, not as words.
  *
  * The number WRAPS. ₹2,25,77,600 at 17px is wider than a half-row on a
@@ -824,7 +852,7 @@ export function Figure({
       <Text style={{ fontSize: 10.5, fontWeight: '600', color: tokens.color.sub }}>{label}</Text>
       <Text
         style={{
-          fontFamily: font.mono,
+          fontVariant: ['tabular-nums'],
           fontSize: 17,
           fontWeight: '700',
           color: tone ? toneColor[tone] : tokens.color.ink,
