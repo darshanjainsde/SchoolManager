@@ -10,6 +10,7 @@ import { LoadingRows } from '@/components/Loading';
 import { DUR, inkWidth, useGesture } from '@/theme/motion';
 import { useTokens } from '@/theme/theme-context';
 import { font, type ColorPalette } from '@/theme/tokens';
+import { fmtMonthYear } from '@/lib/dates';
 
 // Monday-first, matching the web portal's `apps/web/app/portal/attendance/
 // page.tsx` ordering (and the timetable's day axis, both here and on the
@@ -207,10 +208,7 @@ function MonthNav({
 function monthLabel(key: string): string {
   const year = Number(key.slice(0, 4));
   const monthIndex = Number(key.slice(5, 7)) - 1;
-  return new Date(year, monthIndex, 1).toLocaleDateString(undefined, {
-    month: 'long',
-    year: 'numeric',
-  });
+  return fmtMonthYear(year, monthIndex);
 }
 
 /**

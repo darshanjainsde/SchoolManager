@@ -1,3 +1,4 @@
+import { fmtDate, fmtDay, fmtWeekdayShort } from '@/lib/dates';
 export type {
   Announcement,
   AttendanceDay,
@@ -21,13 +22,13 @@ export function holidayDateParts(iso: string): { day: string; weekday: string } 
   const d = new Date(iso);
   return {
     day: String(d.getUTCDate()),
-    weekday: d.toLocaleDateString('en-IN', { weekday: 'short', timeZone: 'UTC' }),
+    weekday: fmtWeekdayShort(iso.slice(0, 10)),
   };
 }
 
 /** Medium-length localized date, e.g. "3 Aug 2026" — mirrors the web portal's `formatDate`. */
 export function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { dateStyle: 'medium' });
+  return fmtDate(/^\d{4}-\d{2}-\d{2}(T00:00:00(\.000)?Z)?$/.test(iso) ? iso : new Date(iso));
 }
 
 /**
@@ -66,5 +67,5 @@ export function relativeTime(iso: string): string {
   if (hr < 24) return `${hr}h ago`;
   const day = Math.floor(hr / 24);
   if (day < 7) return `${day}d ago`;
-  return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  return fmtDay(new Date(iso));
 }

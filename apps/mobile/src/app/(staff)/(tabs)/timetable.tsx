@@ -1,8 +1,8 @@
 import { useReload } from '@/lib/query';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Text } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import type { TimetableSlot } from '@skoolos/types';
+import type { TeacherDay, TimetableSlot } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { minutesOfDay } from '@/lib/teacher-day';
 import { useNowMinutes } from '@/lib/use-now-minutes';
@@ -33,6 +33,47 @@ import { useTokens } from '@/theme/theme-context';
 function todayDayOfWeek(): number {
   const js = new Date().getDay(); // 0 = Sun … 6 = Sat
   return js === 0 ? 7 : js;
+}
+
+/**
+ * The local calendar date (YYYY-MM-DD) of `dayOfWeek` in the CURRENT week —
+ * the week the day strip shows. Local fields, never toISOString (see above).
+ */
+export function dateOfWeekday(dayOfWeek: number, today: Date = new Date()): string {
+  const js = today.getDay();
+  const todayDow = js === 0 ? 7 : js;
+  const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + (dayOfWeek - todayDow));
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/**
+ * The selected day's rows, from the SAME source the teacher's Home reads
+ * (`/manage/timetable/my-day`): every period the school runs that day,
+ * breaks and free periods included, plus any cover. Built from the week's own
+ * slots alone, a period the teacher never teaches in all week (VII) and every
+ * break simply vanished, so Timetable and Home disagreed about today
+ * (re-audit 2026-10-08).
+ */
+export function rowsFromDay(day: TeacherDay): TimetableRow[] {
+  return day.entries.map((e, i) => {
+    const period: GridPeriodRow = { id: e.periodId, label: e.label, startTime: e.startTime, endTime: e.endTime, order: i };
+    if (e.kind === 'BREAK') return { period, slot: null, kind: 'BREAK' as const };
+    const slot = e.kind === 'CLASS' && e.slot
+      ? {
+          id: `${day.date}:${e.periodId}`,
+          dayOfWeek: day.dayOfWeek,
+          periodId: e.periodId,
+          periodLabel: e.label,
+          startTime: e.startTime,
+          endTime: e.endTime,
+          periodOrder: i,
+          className: e.slot.className,
+          subjectName: e.slot.covering ? `${e.slot.subjectName} · cover` : e.slot.subjectName,
+        }
+      : null;
+    return { period, slot };
+  });
 }
 
 /**
@@ -97,12 +138,33 @@ export default function Timetable() {
   // Ticks on the minute — the "now" rule moves down the day on its own
   // rather than freezing wherever the screen happened to be opened.
   const now = useNowMinutes();
-  const currentPeriodId = isViewingToday ? findCurrentPeriodId(shape.periods, now) : null;
 
-  const rows: TimetableRow[] = shape.periods.map((period) => ({
+  // The selected day, read the way Home reads it. Until it lands (or if it
+  // fails) the week's own rows stand in, so the list never blinks empty.
+  const [day, setDay] = useState<TeacherDay | null>(null);
+  const selectedDate = selectedDay !== null ? dateOfWeekday(selectedDay) : null;
+  useEffect(() => {
+    if (!selectedDate) return;
+    let cancelled = false;
+    api
+      .request<TeacherDay>(`/manage/timetable/my-day?date=${encodeURIComponent(selectedDate)}`)
+      .then((d) => {
+        if (!cancelled) setDay(d);
+      })
+      .catch(() => {
+        if (!cancelled) setDay(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDate, reloadKey]);
+
+  const weekRows: TimetableRow[] = shape.periods.map((period) => ({
     period,
     slot: selectedDay !== null ? (shape.cells.get(cellKey(selectedDay, period.id)) ?? null) : null,
   }));
+  const rows: TimetableRow[] = day && day.date === selectedDate && day.entries.length > 0 ? rowsFromDay(day) : weekRows;
+  const currentPeriodId = isViewingToday ? findCurrentPeriodId(rows.filter((r) => r.kind !== 'BREAK').map((r) => r.period), now) : null;
 
   return (
     <Screen onRefresh={reload}>

@@ -16,6 +16,7 @@ import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 import { DUR, inkWidth, play, stampStyle, useGesture, useReduceMotion } from '@/theme/motion';
+import { fmtDateTime } from '@/lib/dates';
 
 /**
  * THE INK LINE (`.mprog`) — a rule drawing itself along as the sheet fills.
@@ -407,7 +408,7 @@ export default function ExamResults() {
           </View>
           {alreadyPublished && publishedAt && (
             <Text testID="published-at" style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 6 }}>
-              Published {new Date(publishedAt).toLocaleString()}
+              Published {fmtDateTime(publishedAt)}
             </Text>
           )}
         </Card>

@@ -9,6 +9,7 @@ import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 import { DUR, pinStyle, useGesture } from '@/theme/motion';
+import { holidayTypeLabel } from '@/lib/labels';
 
 const TYPE_TONE = { PUBLIC: 'green', FESTIVAL: 'amber', SCHOOL: 'indigo' } as const;
 
@@ -108,7 +109,7 @@ export default function Holidays() {
                 <Text style={{ fontSize: 13, fontWeight: '600', color: tokens.color.ink }}>{h.name}</Text>
                 <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>{weekday}</Text>
               </View>
-              <Pill tone={typeTone(h.type)}>{h.type}</Pill>
+              <Pill tone={typeTone(h.type)}>{holidayTypeLabel(h.type)}</Pill>
             </Card>
           </PinnedNotice>
         );

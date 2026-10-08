@@ -22,6 +22,7 @@ import { StudentHero } from '@/components/StudentHero';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 import { DUR, pinStyle, useGesture } from '@/theme/motion';
+import { fmtLongDay } from '@/lib/dates';
 
 /** How many of the most recent announcements the home screen surfaces (the full list lives on Notices). */
 const LATEST_ANNOUNCEMENTS_COUNT = 3;
@@ -43,11 +44,7 @@ function fullTeacherName(t: { firstName: string; lastName: string }): string {
  */
 function Dateline() {
   const tokens = useTokens();
-  const today = new Date().toLocaleDateString('en-IN', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  });
+  const today = fmtLongDay(new Date());
   return (
     <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8, marginHorizontal: 2 }}>
       <Text
@@ -347,7 +344,7 @@ export default function Home() {
             <Figure
               label="This month"
               value={attendanceMarked > 0 ? `${attendance?.percent}%` : 'No records'}
-              hint={attendanceMarked > 0 ? `${attendance?.present} of ${attendanceMarked} days present` : undefined}
+              hint={attendanceMarked > 0 ? `${attendance?.present} of ${attendanceMarked} ${attendanceMarked === 1 ? 'day' : 'days'} present` : undefined}
               tone={attendance && attendanceMarked > 0 && attendance.percent < 75 ? 'warn' : undefined}
               onPress={() => router.push('/(family)/attendance')}
             />

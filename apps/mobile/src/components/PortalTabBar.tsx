@@ -1,6 +1,7 @@
 import { Pressable, Text, View } from 'react-native';
 import { Icon, type IconName } from './icons';
 import { useTokens } from '@/theme/theme-context';
+import { useKeyboardVisible } from '@/lib/keyboard';
 
 /**
  * The slice of `@react-navigation/bottom-tabs`' `BottomTabBarProps` this bar
@@ -120,6 +121,9 @@ function TabButton({
 export function PortalTabBar({ tabs, state, navigation, insets }: PortalTabBarProps) {
   const tokens = useTokens();
   const activeName = state.routes[state.index]?.name;
+  // The bar steps aside while someone types: it would otherwise ride on top
+  // of the keyboard and take 64 dp from the box being typed into.
+  const typing = useKeyboardVisible();
 
   function go(name: string) {
     const route = state.routes.find((r) => r.name === name);
@@ -129,6 +133,8 @@ export function PortalTabBar({ tabs, state, navigation, insets }: PortalTabBarPr
       navigation.navigate(name);
     }
   }
+
+  if (typing) return null;
 
   return (
     <View

@@ -13,6 +13,7 @@ import { SegmentedField } from '@/components/Field';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
+import { sportsGroupLine } from '@/lib/labels';
 
 interface Settings { grouping: 'BANDS' | 'AGE'; bands: Band[] }
 
@@ -29,6 +30,9 @@ export default function Records() {
   const verify = can(me.data, 'VERIFY');
   const enter = can(me.data, 'ENTER');
   const book = useQuery<{ records: RecordView[]; pending: number }>('/sports/records');
+  // The school's own band names, so a group reads "Junior boys", not "jun Boys".
+  const groupSettings = useQuery<Settings>('/sports/settings');
+  const bands = groupSettings.data?.bands;
   const attempts = useQuery<AttemptView[]>(verify ? '/sports/records/attempts' : null);
   const [logging, setLogging] = useState(false);
   const [deciding, setDeciding] = useState<string | null>(null);
@@ -54,7 +58,7 @@ export default function Records() {
       } finally { setDeciding(null); }
     };
     if (approve) {
-      Alert.alert('Approve as a school record?', `${a.student.name} · ${a.sportName} ${a.groupKey} ${a.category} · ${a.text}`, [
+      Alert.alert('Approve as a school record?', `${a.student.name} · ${a.sportName} ${sportsGroupLine(a.groupKey, a.category, bands)} · ${a.text}`, [
         { text: 'Not yet', style: 'cancel' },
         { text: 'Approve', onPress: () => void go() },
       ]);
@@ -83,7 +87,7 @@ export default function Records() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text numberOfLines={1} style={{ fontWeight: '700', color: tokens.color.ink, fontSize: 14 }}>{a.student.name}{a.student.classLabel ? ` · ${a.student.classLabel}` : ''}</Text>
-                  <Text numberOfLines={1} style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 1 }}>{a.sportName} · {a.groupKey} {a.category} · {a.source === 'TRIAL' ? 'trial' : 'practice'}{a.witnessed ? ' · witnessed' : ''} · {formatDate(a.createdAt)}</Text>
+                  <Text numberOfLines={1} style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 1 }}>{a.sportName} · {sportsGroupLine(a.groupKey, a.category, bands)} · {a.source === 'TRIAL' ? 'trial' : 'practice'}{a.witnessed ? ' · witnessed' : ''} · {formatDate(a.createdAt)}</Text>
                 </View>
                 <Text style={{ fontFamily: font.mono, fontWeight: '700', fontSize: 15, color: tokens.color.ink }}>{a.text}</Text>
               </View>
@@ -102,7 +106,7 @@ export default function Records() {
           <Eyebrow>{sport}</Eyebrow>
           <Page>
             {rows.map((r, i) => (
-              <Row key={r.id} first={i === 0} testID={`record-${r.id}`} title={`${r.groupKey} ${r.category}`} sub={`${r.holderName} · since ${r.sinceYear}`} right={<Text style={{ fontFamily: font.mono, fontWeight: '700', color: tokens.color.ink }}>{r.text}</Text>} />
+              <Row key={r.id} first={i === 0} testID={`record-${r.id}`} title={sportsGroupLine(r.groupKey, r.category, bands)} sub={`${r.holderName} · since ${r.sinceYear}`} right={<Text style={{ fontFamily: font.mono, fontWeight: '700', color: tokens.color.ink }}>{r.text}</Text>} />
             ))}
           </Page>
         </View>

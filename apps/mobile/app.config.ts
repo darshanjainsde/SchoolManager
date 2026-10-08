@@ -26,6 +26,14 @@ const config: ExpoConfig = {
   },
   android: {
     package: 'com.sckools.app',
+    // EDGE-TO-EDGE ON EVERY ANDROID, not only where Android forces it.
+    // Left unset, Expo writes `windowOptOutEdgeToEdgeEnforcement`, which
+    // Android 15 obeys and Android 16 ignores (we target 36) — so one build
+    // looked two ways, and Play flagged it on vc24. Every screen already pads
+    // for the system bars (Screen, ListScreen, the tab bar, Sheet), and the
+    // keyboard is made room for natively by plugins/with-keyboard-insets.
+    // Guarded by src/__tests__/android-keyboard.test.ts.
+    edgeToEdgeEnabled: true,
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
       backgroundColor: '#4F46E5',
@@ -100,6 +108,11 @@ const config: ExpoConfig = {
     // has no other back path: without this every back press closed the app.
     // Details and the removal condition in the plugin itself.
     './plugins/with-legacy-back',
+    // Edge-to-edge stops Android resizing the window for the keyboard, and RN
+    // 0.79 cannot see the keyboard without a resize: without this the keyboard
+    // covered the login form and every note on Android 16 (vc24). Pads the
+    // content by the keyboard natively. Details in the plugin itself.
+    './plugins/with-keyboard-insets',
     // Google Play requires targeting Android 16 (API 36) from 2026-08-31.
     // Expo SDK 53 defaults to API 35, so bump compile+target here. AGP 8.8.2
     // (RN 0.79) can build against 36 (emits a "tested up to 35" warning).

@@ -12,15 +12,11 @@ import { Card, Empty, Page, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
+import { fmtDayTime } from '@/lib/dates';
 
 /** A real timestamp, read in the device's own local time — mirrors `(family)/notices.tsx`. */
 function formatWhen(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  return fmtDayTime(iso);
 }
 
 /** "MR" for Ms Rao — the letters on the `.mrow` avatar disc. */
@@ -163,7 +159,7 @@ export default function Messages() {
             <Text style={{ fontFamily: font.serif, fontSize: 13, color: tokens.color.ink }}>
               {picked ? 'New message' : 'Pick a teacher and subject'}
             </Text>
-            <Pressable testID="ask-cancel" onPress={resetAsk} hitSlop={6}
+            <Pressable testID="ask-cancel" onPress={resetAsk} hitSlop={12} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 4 }}
               accessibilityRole="button"
               >
               <Text style={{ color: tokens.color.sub, fontWeight: '700', fontSize: 12 }}>Cancel</Text>

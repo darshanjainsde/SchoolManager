@@ -29,13 +29,13 @@ it('renders each holiday with its day number, weekday, and type pill', async () 
 
   expect(await findByText('Independence Day')).toBeTruthy();
   expect(await findByText('15')).toBeTruthy();
-  expect(await findByText('PUBLIC')).toBeTruthy();
+  expect(await findByText('Public')).toBeTruthy();
 
   expect(await findByText('Diwali')).toBeTruthy();
-  expect(await findByText('FESTIVAL')).toBeTruthy();
+  expect(await findByText('Festival')).toBeTruthy();
 
   expect(await findByText('Founders Day')).toBeTruthy();
-  expect(await findByText('SCHOOL')).toBeTruthy();
+  expect(await findByText('School')).toBeTruthy();
 
   expect(await findByText('Configured by your school admin on the web portal.')).toBeTruthy();
 });
@@ -66,5 +66,5 @@ it('renders a holiday with an unrecognized type instead of crashing the screen',
   const { findByText } = render(<Holidays />);
 
   expect(await findByText('Mystery Day')).toBeTruthy();
-  expect(await findByText('SOME_FUTURE_TYPE')).toBeTruthy();
+  expect(await findByText('Some future type')).toBeTruthy();
 });

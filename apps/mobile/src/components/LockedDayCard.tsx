@@ -3,6 +3,7 @@ import { Pressable, Text, TextInput, View } from 'react-native';
 import type { ClassDayStatus } from '@skoolos/types';
 import { Card, Pill } from './ui';
 import { useTokens } from '@/theme/theme-context';
+import { fmtWeekdayDate } from '@/lib/dates';
 
 export interface LockedDayCardProps {
   /**
@@ -79,7 +80,7 @@ export function LockedDayCard({
   return (
     <Card testID={testID}>
       <Text style={{ fontWeight: '700', fontSize: 14, color: tokens.color.ink }}>
-        {className} · {date} is closed
+        {className} · {fmtWeekdayDate(date)} is closed
       </Text>
       <Text style={{ color: tokens.color.sub, fontSize: 11.5, marginTop: 4 }}>
         Past days close once they pass so the record can be trusted. Ask your admin to reopen this

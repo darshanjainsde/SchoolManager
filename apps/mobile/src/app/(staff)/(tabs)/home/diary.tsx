@@ -426,12 +426,18 @@ export default function StaffDiary() {
         }}
       >
         <Pressable testID="diary-prev" onPress={() => setDate((d) => shiftISO(d, -1))} hitSlop={8}
+          // A 13 px word is ~18 dp tall; the row keeps its look and the
+          // finger gets the 44 dp the app promises (re-audit 2026-10-08).
+          style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 2 }}
           accessibilityRole="button"
           >
           <Text style={{ color: tokens.color.indigo, fontWeight: '700', fontSize: 13 }}>‹ Prev day</Text>
         </Pressable>
         {!isToday && (
           <Pressable testID="diary-today" onPress={() => setDate(today)} hitSlop={8}
+          // A 13 px word is ~18 dp tall; the row keeps its look and the
+          // finger gets the 44 dp the app promises (re-audit 2026-10-08).
+          style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 2 }}
             accessibilityRole="button"
             >
             <Text style={{ color: tokens.color.sub, fontWeight: '600', fontSize: 12 }}>Jump to today</Text>
@@ -441,6 +447,9 @@ export default function StaffDiary() {
           testID="diary-next"
           onPress={() => setDate((d) => (d < today ? shiftISO(d, 1) : d))}
           hitSlop={8}
+          // A 13 px word is ~18 dp tall; the row keeps its look and the
+          // finger gets the 44 dp the app promises (re-audit 2026-10-08).
+          style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 2 }}
           accessibilityRole="button"
           >
           <Text

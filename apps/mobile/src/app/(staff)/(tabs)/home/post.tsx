@@ -10,6 +10,7 @@ import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 import { DUR, pinStyle, useGesture } from '@/theme/motion';
+import { fmtDateTime } from '@/lib/dates';
 
 /**
  * THE PIN (`.postit.pin`) — an announcement is a thing you PUT UP, so it
@@ -27,13 +28,7 @@ function Pinned({ index, children }: { index: number; children: ReactNode }) {
 
 /** Mirrors `formatDateTime` in `(staff)/requests.tsx` — a real timestamp, read in the device's own local time. */
 function formatPostedAt(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  return fmtDateTime(iso);
 }
 
 export default function Post() {
@@ -51,6 +46,8 @@ export default function Post() {
 
   const [selected, setSelected] = useState<string[]>([]);
   const [title, setTitle] = useState('');
+  // The keyboard's Next moves from the one-line title to the details box.
+  const postBodyRef = useRef<TextInput>(null);
   const [body, setBody] = useState('');
   const [busy, setBusy] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -229,6 +226,9 @@ export default function Post() {
             </Text>
             <TextInput
               testID="post-title"
+              returnKeyType="next"
+              submitBehavior="submit"
+              onSubmitEditing={() => postBodyRef.current?.focus()}
               value={title}
               onChangeText={setTitle}
               placeholder="e.g. Chapter 4 comprehension"
@@ -242,6 +242,7 @@ export default function Post() {
             </Text>
             <TextInput
               testID="post-body"
+              ref={postBodyRef}
               value={body}
               onChangeText={setBody}
               placeholder="Add instructions, due date…"

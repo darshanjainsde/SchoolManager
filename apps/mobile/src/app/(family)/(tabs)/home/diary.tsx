@@ -9,18 +9,20 @@ import { Empty, ErrorState, Page, Pill, RowWash, Screen, SectionTitle, Toast } f
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 import { DASH, DUR, pinStyle, strokeDashoffset, useGesture } from '@/theme/motion';
+import { fmtWeekdayDay } from '@/lib/dates';
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 
 /** `2026-08-03` → `Mon, 3 Aug` — the header on a diary page. */
 function dayLabel(iso: string, today: string): string {
   if (iso === today) return 'Today';
-  const d = new Date(`${iso}T00:00:00`);
-  return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+  return fmtWeekdayDay(iso);
 }
 
 function todayISO(): string {
-  return new Date().toLocaleDateString('en-CA');
+  // Local fields, not Intl (lib/dates.ts): YYYY-MM-DD on the phone's own day.
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 /**

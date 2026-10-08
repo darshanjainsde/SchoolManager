@@ -62,10 +62,13 @@ const TAB_NAMES_BY_JOB: Record<WorkerJob, readonly string[]> = {
   // Five tabs: PortalTabBar tightens the labels past four.
   SPORTS: ['desk', 'meets', 'records', 'houses', 'profile'],
   LIBRARIAN: ['counter', 'hall', 'books', 'fines', 'profile'],
-  // The standing-up half of the desk: what the month costs, and the leave
-  // waiting on a decision. Running a pay run is a sitting-down job and stays
+  // The standing-up half of the desk: the leave waiting on a decision, and
+  // what the month costs. Leave comes FIRST: it is the job every accounts
+  // officer has, while Pay needs a right an admin grants — opening on Pay
+  // landed a new officer on "You do not have the right to see pay yet"
+  // (re-audit 2026-10-08). Running a pay run is a sitting-down job and stays
   // on the web, the same way the library's Settings does.
-  ACCOUNTS: ['paydesk', 'leavedesk', 'profile'],
+  ACCOUNTS: ['leavedesk', 'paydesk', 'profile'],
 };
 
 type NavSession = Pick<Session, 'staffRole' | 'features'> | null | undefined;
