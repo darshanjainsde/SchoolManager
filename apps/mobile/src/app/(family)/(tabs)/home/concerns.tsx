@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import {
@@ -9,7 +9,6 @@ import { api, ApiError } from '@/lib/api';
 import { Card, Empty, ErrorState, Page, Pill, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
-import { font } from '@/theme/tokens';
 
 /**
  * THE FAMILY'S COMPLAINT BOX on the phone.
@@ -32,6 +31,8 @@ export default function FamilyConcerns() {
   const [form, setForm] = useState<{ audience: ConcernAudience; category: ConcernCategory; title: string; body: string }>({
     audience: 'OFFICE', category: 'OTHER', title: '', body: '',
   });
+  // The keyboard's Next moves from the one-line title to the details box.
+  const concernBodyRef = useRef<TextInput>(null);
 
   const load = useCallback(async () => {
     try {
@@ -73,7 +74,7 @@ export default function FamilyConcerns() {
 
   return (
     <Screen onRefresh={() => void load()}>
-      <Text style={{ fontFamily: font.serif, fontSize: 24, color: tokens.color.ink }}>Complaint Box</Text>
+      {/* No second "Complaint Box": the back-chip header already says it (re-audit 2026-10-08). */}
       <Text style={{ fontSize: 13.5, color: tokens.color.sub, marginTop: 4, lineHeight: 19 }}>
         Tell the school something that needs looking at. You choose who sees it, and you can follow what happens here.
         {classTeacher ? ` Your class teacher is ${classTeacher}.` : ''}
@@ -122,6 +123,9 @@ export default function FamilyConcerns() {
             placeholderTextColor={tokens.color.sub}
             value={form.title}
             onChangeText={(t) => setForm({ ...form, title: t })}
+            returnKeyType="next"
+            submitBehavior="submit"
+            onSubmitEditing={() => concernBodyRef.current?.focus()}
             maxLength={160}
             style={inputStyle}
           />
@@ -131,6 +135,7 @@ export default function FamilyConcerns() {
             placeholderTextColor={tokens.color.sub}
             value={form.body}
             onChangeText={(t) => setForm({ ...form, body: t })}
+            ref={concernBodyRef}
             maxLength={4000}
             multiline
             style={{ ...inputStyle, minHeight: 96, textAlignVertical: 'top' }}

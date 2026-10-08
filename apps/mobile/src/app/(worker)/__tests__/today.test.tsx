@@ -70,10 +70,10 @@ it('renders the identity greeting, stat boxes, and recent days from the real MyS
   expect(screen.getByText(formatDate('2026-07-01'))).toBeTruthy();
 });
 
-it('always renders the honest "leave not available yet" note — v1 has no staff-leave path', async () => {
+it('shows no dead-end leave card while staff cannot apply (re-audit 2026-10-08)', async () => {
   (api.request as jest.Mock).mockResolvedValue(attendance());
   render(<Today />);
-  expect(
-    await screen.findByText(/Applying for leave isn.t available here yet/),
-  ).toBeTruthy();
+  await screen.findByText('No attendance has been recorded for you yet this month.');
+  expect(screen.queryByText(/Applying for leave isn.t available here yet/)).toBeNull();
+  expect(screen.queryByText('Leave')).toBeNull();
 });

@@ -11,6 +11,7 @@ import { Icon } from '@/components/icons';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 import { DASH, DUR, strokeDashoffset, useGesture } from '@/theme/motion';
+import { fmtWeekdayDate } from '@/lib/dates';
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 
@@ -64,13 +65,7 @@ function dayLabel(date: string): string {
   const today = todayISO();
   if (date === today) return 'Today';
   if (date === shiftISO(today, -1)) return 'Yesterday';
-  const [y, m, d] = date.split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
+  return fmtWeekdayDate(date);
 }
 
 interface DaySection {

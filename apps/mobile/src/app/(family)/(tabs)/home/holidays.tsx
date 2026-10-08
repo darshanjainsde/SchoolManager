@@ -8,6 +8,7 @@ import { Card, Empty, ErrorState, Page, Pill, Screen, SectionTitle } from '@/com
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
+import { holidayTypeLabel } from '@/lib/labels';
 
 const TYPE_TONE = { PUBLIC: 'green', FESTIVAL: 'amber', SCHOOL: 'indigo' } as const;
 
@@ -109,7 +110,7 @@ export default function Holidays() {
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 12.5, fontWeight: '600', color: tokens.color.ink }}>{h.name}</Text>
                 </View>
-                <Pill tone={typeTone(h.type)}>{h.type}</Pill>
+                <Pill tone={typeTone(h.type)}>{holidayTypeLabel(h.type)}</Pill>
               </View>
             );
           })}

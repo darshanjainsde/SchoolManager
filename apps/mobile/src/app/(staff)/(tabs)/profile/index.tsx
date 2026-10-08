@@ -161,13 +161,14 @@ export default function Profile() {
                 <Text style={mutedStyle}>Not on file</Text>
               )}
             </ProfileRow>
-            <ProfileRow icon="phone" label="Phone">
-              {profile.phone ? (
+            {/* Shown only when there is one: "Phone · Not on file" sat right
+                above "My WhatsApp number", two places for one fact (re-audit
+                2026-10-08). The menu row is where a number is added. */}
+            {profile.phone ? (
+              <ProfileRow icon="phone" label="Phone">
                 <Text style={valueStyle}>{profile.phone}</Text>
-              ) : (
-                <Text style={mutedStyle}>Not on file</Text>
-              )}
-            </ProfileRow>
+              </ProfileRow>
+            ) : null}
             <ProfileRow icon="library" label="Subjects taught">
               {profile.subjects.length > 0 ? (
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>

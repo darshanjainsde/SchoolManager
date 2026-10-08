@@ -1,10 +1,10 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import {
   Animated,
-  
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   Text,
   View,
   type TextStyle, useWindowDimensions } from 'react-native';
@@ -68,66 +68,73 @@ export function AuthScaffold({
         <Circle cx={width * 0.12} cy={height * 0.9} r={width * 0.5} fill={brand.authGlowIndigo} opacity={0.18} />
       </Svg>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1, justifyContent: 'center', padding: 24 }}
-      >
-        <Animated.View
-          style={{ alignItems: 'center', marginBottom: 30, opacity: logoFade, transform: [{ scale: logoScale }] }}
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        {/* It SCROLLS. The card is centred while there is room, and once the
+            keyboard takes the bottom half of a small phone the person can
+            still reach the last box and the button — a centred View with no
+            scroll simply cut them off (keyboard audit 2026-10-08). */}
+        <ScrollView
+          testID="auth-scroll"
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 24 }}
         >
-          {/* The pitch's splash: "the S draws itself · the tassel is the '!'".
-              This is the one screen where the mark is the subject rather than
-              a header ornament, so it gets the full pen-draw and then keeps
-              the slow tassel swing while the person types. */}
-          <SckoolsLogo size={54} theme="dark" draw swing />
-        </Animated.View>
-
-        <Animated.View style={{ transform: [{ translateY: slide }] }}>
-          <Text
-            style={{
-              color: brand.onHero,
-              fontFamily: font.serif,
-              fontSize: 27,
-              fontWeight: '600',
-              letterSpacing: -0.3,
-              textAlign: 'center',
-            }}
+          <Animated.View
+            style={{ alignItems: 'center', marginBottom: 30, opacity: logoFade, transform: [{ scale: logoScale }] }}
           >
-            {title}
-          </Text>
-          {subtitle ? (
+            {/* The pitch's splash: "the S draws itself · the tassel is the '!'".
+                This is the one screen where the mark is the subject rather than
+                a header ornament, so it gets the full pen-draw and then keeps
+                the slow tassel swing while the person types. */}
+            <SckoolsLogo size={54} theme="dark" draw swing />
+          </Animated.View>
+
+          <Animated.View style={{ transform: [{ translateY: slide }] }}>
             <Text
               style={{
                 color: brand.onHero,
-                opacity: 0.78,
-                fontSize: 15,
-                lineHeight: 21,
+                fontFamily: font.serif,
+                fontSize: 27,
+                fontWeight: '600',
+                letterSpacing: -0.3,
                 textAlign: 'center',
-                marginTop: 10,
-                paddingHorizontal: 8,
               }}
             >
-              {subtitle}
+              {title}
             </Text>
-          ) : null}
+            {subtitle ? (
+              <Text
+                style={{
+                  color: brand.onHero,
+                  opacity: 0.78,
+                  fontSize: 15,
+                  lineHeight: 21,
+                  textAlign: 'center',
+                  marginTop: 10,
+                  paddingHorizontal: 8,
+                }}
+              >
+                {subtitle}
+              </Text>
+            ) : null}
 
-          <View
-            style={{
-              backgroundColor: tokens.color.surface,
-              borderRadius: 22,
-              padding: 20,
-              marginTop: 26,
-              gap: 14,
-              shadowColor: brand.authCardShadow,
-              shadowOpacity: 0.25,
-              shadowRadius: 24,
-              shadowOffset: { width: 0, height: 12 },
-              elevation: 10,
-            }}
-          >
-            {children}
-          </View>
-        </Animated.View>
+            <View
+              style={{
+                backgroundColor: tokens.color.surface,
+                borderRadius: 22,
+                padding: 20,
+                marginTop: 26,
+                gap: 14,
+                shadowColor: brand.authCardShadow,
+                shadowOpacity: 0.25,
+                shadowRadius: 24,
+                shadowOffset: { width: 0, height: 12 },
+                elevation: 10,
+              }}
+            >
+              {children}
+            </View>
+          </Animated.View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </View>
   );

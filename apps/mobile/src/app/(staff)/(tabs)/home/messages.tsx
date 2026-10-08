@@ -7,6 +7,7 @@ import { Card, Empty, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
+import { fmtDayTime } from '@/lib/dates';
 
 /** "AS" for Aarav Sharma — the pitch's `.mrow .av` initials disc. */
 function initials(name: string): string {
@@ -18,12 +19,7 @@ function initials(name: string): string {
 }
 
 function formatWhen(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  return fmtDayTime(iso);
 }
 
 /**

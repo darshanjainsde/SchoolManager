@@ -9,6 +9,8 @@ import { Button, Eyebrow, Row } from '@/components/desk';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
+import { fmtDay, fmtSchoolTime, fmtWeekdayDay } from '@/lib/dates';
+import { leaveTypeLabel } from '@/lib/labels';
 
 interface LeaveRow {
   id: string;
@@ -43,9 +45,8 @@ interface Candidate {
   coversThatDay: number;
 }
 
-const day = (iso: string) => new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
-const weekday = (iso: string) =>
-  new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+const day = (iso: string) => fmtDay(iso.slice(0, 10));
+const weekday = (iso: string) => fmtWeekdayDay(iso.slice(0, 10));
 
 /** "Half day · morning" — an old half day with no half says just "Half day". */
 const halfDayLabel = (r: Pick<LeaveRow, 'halfDay' | 'halfDayPart'>) =>
@@ -57,8 +58,7 @@ const span = (r: Pick<LeaveRow, 'startDate' | 'endDate' | 'halfDay' | 'halfDayPa
       : `${day(r.startDate)} – ${day(r.endDate)}`;
 
 /** "8:10 am", in the school's time. */
-const seenAt = (iso: string) =>
-  new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' }).toLowerCase().replace(/\s+/g, ' ');
+const seenAt = (iso: string) => fmtSchoolTime(iso);
 
 /** A 409 means another desk moved first: the server's sentence says how, and the screen must look again. */
 const isConflict = (e: unknown) => e instanceof ApiError && e.status === 409;
@@ -123,7 +123,7 @@ function Waiting() {
             <Row
               first={i === 0}
               title={r.teacherName}
-              sub={`${r.type} · ${span(r)}${r.reason ? ` · ${r.reason}` : ''}`}
+              sub={`${leaveTypeLabel(r.type)} · ${span(r)}${r.reason ? ` · ${r.reason}` : ''}`}
               right={<Pill tone="amber">Pending</Pill>}
             />
             <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 12, paddingBottom: 10 }}>
@@ -321,13 +321,16 @@ export default function LeaveDesk() {
     >
       <SectionTitle title="Leave" />
       <Page>
-        <SegmentedField
-          label="Show"
-          testID="leavedesk-view"
-          value={view}
-          onChange={setView}
-          options={[{ value: 'waiting', label: 'Waiting' }, { value: 'coverage', label: 'Coverage' }]}
-        />
+        {/* Inset like every other Page child: the label sat on the card's edge. */}
+        <View style={{ paddingHorizontal: 12, paddingTop: 10 }}>
+          <SegmentedField
+            label="Show"
+            testID="leavedesk-view"
+            value={view}
+            onChange={setView}
+            options={[{ value: 'waiting', label: 'Waiting' }, { value: 'coverage', label: 'Coverage' }]}
+          />
+        </View>
         <View key={nonce}>{view === 'waiting' ? <Waiting /> : <Coverage />}</View>
       </Page>
     </Screen>

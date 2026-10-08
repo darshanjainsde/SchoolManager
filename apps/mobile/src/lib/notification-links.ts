@@ -1,5 +1,6 @@
 import type { Href } from 'expo-router';
 import type { NotificationRow } from '@skoolos/types';
+import { fmtDayTime } from '@/lib/dates';
 
 /**
  * Everything two notification surfaces have to agree on: the icon a kind
@@ -92,10 +93,5 @@ export function routeFor(group: NotificationGroup, n: NotificationRow): Href | n
 }
 
 export function formatWhen(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  return fmtDayTime(iso);
 }

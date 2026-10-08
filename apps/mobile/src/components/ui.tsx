@@ -1,4 +1,4 @@
-import { useRef, type PropsWithChildren, type ReactNode } from 'react';
+import { createContext, useContext, useRef, type PropsWithChildren, type ReactNode } from 'react';
 import { Animated, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, type ViewStyle, FlatList } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
@@ -10,6 +10,16 @@ import { DASH, DUR, inkWidth, strokeDashoffset, useGesture } from '@/theme/motio
 import { isPushedRoute, titleForSegments } from '@/lib/screen-titles';
 import { BackChipHeader } from './BackChipHeader';
 import { Icon, type IconName } from './icons';
+import { useKeepFocusedInView } from '@/lib/keyboard';
+
+/**
+ * The title the back-chip header is already showing on a pushed screen, or
+ * null on a tab screen. A `SectionTitle` with the same words steps aside:
+ * every inner page used to say its name twice ("Holidays" in the header,
+ * "Holidays" again as the first line) — about 50 dp of a small screen spent
+ * on repetition (re-audit 2026-10-08).
+ */
+const HeaderTitleContext = createContext<string | null>(null);
 
 /**
  * THE LIST FORM OF `Screen`. Same chrome — top inset, back chip, the school's
@@ -51,8 +61,13 @@ export function ListScreen<T>({
   const insets = useSafeAreaInsets();
   const segments: string[] = typeof useSegments === 'function' ? useSegments() : [];
   const pushed = isPushedRoute(segments);
+  // The box being typed in, and the button under it, stay above the keyboard.
+  const listRef = useRef<FlatList<T>>(null);
+  const keepInView = useKeepFocusedInView(listRef as never);
   const list = (
     <FlatList
+      ref={listRef}
+      {...keepInView}
       testID={testID}
       data={data as T[]}
       renderItem={({ item, index }) => renderItem(item, index)}
@@ -87,7 +102,7 @@ export function ListScreen<T>({
         ) : undefined
       }
       contentContainerStyle={{
-        paddingTop: pushed ? 4 : insets.top + 10,
+        paddingTop: pushed ? 4 : 10,
         paddingHorizontal: 14,
         // Never less than the system bar: Android 16 forces edge-to-edge, and
         // a pushed screen (no tab bar) with 3-button navigation has a 48 dp bar
@@ -97,11 +112,15 @@ export function ListScreen<T>({
       }}
     />
   );
-  if (!pushed) return list;
+  // The status bar is a fixed band the list scrolls UNDER-NOT-THROUGH: the
+  // inset belongs to the frame, not to the content. With edge-to-edge on
+  // every Android, a padded content start scrolled rows straight through the
+  // clock and battery (re-audit 2026-10-08).
+  if (!pushed) return <View style={{ flex: 1, paddingTop: insets.top, backgroundColor: tokens.color.appBg }}>{list}</View>;
   return (
     <View style={{ flex: 1, backgroundColor: tokens.color.appBg }}>
       <BackChipHeader title={titleForSegments(segments)} />
-      {list}
+      <HeaderTitleContext.Provider value={titleForSegments(segments)}>{list}</HeaderTitleContext.Provider>
     </View>
   );
 }
@@ -136,8 +155,14 @@ export function Screen({
   // rendered before the chip existed.
   const segments: string[] = typeof useSegments === 'function' ? useSegments() : [];
   const pushed = isPushedRoute(segments);
+  // The box being typed in, and the button under it, stay above the keyboard
+  // (Android scrolls only the box itself into view).
+  const scrollRef = useRef<ScrollView>(null);
+  const keepInView = useKeepFocusedInView(scrollRef);
   const scroll = (
     <ScrollView
+      ref={scrollRef}
+      {...keepInView}
       testID="screen-scroll"
       // While an input is focused RN's default swallows the next tap to
       // dismiss the keyboard — a teacher entering 40 marks tapped 80 times,
@@ -159,7 +184,7 @@ export function Screen({
         ) : undefined
       }
       contentContainerStyle={{
-        paddingTop: pushed ? 4 : insets.top + 10,
+        paddingTop: pushed ? 4 : 10,
         paddingHorizontal: 14,
         gap: tokens.gap,
         // Never less than the system bar: Android 16 forces edge-to-edge, and
@@ -171,11 +196,13 @@ export function Screen({
       {children}
     </ScrollView>
   );
-  if (!pushed) return scroll;
+  // See ListScreen: the status-bar inset is on the frame so nothing scrolls
+  // through the clock.
+  if (!pushed) return <View style={{ flex: 1, paddingTop: insets.top, backgroundColor: tokens.color.appBg }}>{scroll}</View>;
   return (
     <View style={{ flex: 1, backgroundColor: tokens.color.appBg }}>
       <BackChipHeader title={titleForSegments(segments)} />
-      {scroll}
+      <HeaderTitleContext.Provider value={titleForSegments(segments)}>{scroll}</HeaderTitleContext.Provider>
     </View>
   );
 }
@@ -212,6 +239,18 @@ export function Card({
 export function SectionTitle({ title, actionLabel, onAction, right }:
   { title: string; actionLabel?: string; onAction?: () => void; right?: ReactNode }) {
   const tokens = useTokens();
+  const headerTitle = useContext(HeaderTitleContext);
+  // Same words as the back-chip header above: say them once. An action or a
+  // right-hand node still has to be reachable, so it keeps a row of its own.
+  const repeatsHeader = headerTitle !== null && headerTitle.trim().toLowerCase() === title.trim().toLowerCase();
+  const action = right ?? (actionLabel ? (
+    <Pressable onPress={onAction} accessibilityRole="button" hitSlop={12} style={{ minHeight: 44, justifyContent: 'center' }}>
+      <Text style={{ fontSize: 12, fontWeight: '700', color: tokens.color.indigo }}>{actionLabel}</Text>
+    </Pressable>
+  ) : null);
+  if (repeatsHeader) {
+    return action ? <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginHorizontal: 4, marginBottom: -3 }}>{action}</View> : null;
+  }
   return (
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
       marginHorizontal: 4, marginTop: 6, marginBottom: -3 }}>
@@ -222,13 +261,7 @@ export function SectionTitle({ title, actionLabel, onAction, right }:
           weight has no RN equivalent, so serif headings land on '600'. */}
       <Text style={{ fontSize: 15, fontFamily: font.serif, fontWeight: '600',
         letterSpacing: -0.2, color: tokens.color.ink }}>{title}</Text>
-      {right ?? (actionLabel && (
-        <Pressable onPress={onAction}
-          accessibilityRole="button"
-          >
-          <Text style={{ fontSize: 12, fontWeight: '700', color: tokens.color.indigo }}>{actionLabel}</Text>
-        </Pressable>
-      ))}
+      {action}
     </View>
   );
 }

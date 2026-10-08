@@ -65,3 +65,13 @@ describe('the home tile grid', () => {
     expect(screen.getByLabelText('Diary')).toBeTruthy();
   });
 });
+
+describe('toolColumns — never one tile alone on a row (re-audit 2026-10-08)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { toolColumns } = require('../HomeToolGrid') as { toolColumns: (n: number) => number };
+  it.each([[1, 4], [4, 4], [5, 3], [6, 4], [7, 4], [8, 4], [9, 3], [12, 4]])('%i tiles → %i columns', (n, cols) => {
+    expect(toolColumns(n)).toBe(cols);
+    const lastRow = n % cols;
+    if (n > cols) expect(lastRow).not.toBe(1);
+  });
+});

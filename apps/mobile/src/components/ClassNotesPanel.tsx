@@ -4,6 +4,7 @@ import type { ClassNoteRow, ClassTodoRow } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { Card } from './ui';
 import { useTokens } from '@/theme/theme-context';
+import { fmtTime } from '@/lib/dates';
 
 interface ClassNotesData {
   notes: ClassNoteRow[];
@@ -11,7 +12,7 @@ interface ClassNotesData {
 }
 
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  return fmtTime(iso);
 }
 
 export interface ClassNotesPanelProps {

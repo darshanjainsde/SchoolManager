@@ -194,3 +194,52 @@ it('renders a free-period row for a day missing a period that exists on other da
   expect(screen.getByTestId('period-row-free-p2')).toBeTruthy();
   expect(within(screen.getByTestId('period-row-p2')).getByText('Free')).toBeTruthy();
 });
+
+// ── The day reads like Home (re-audit 2026-10-08) ──────────────────────────
+// Built from the week's slots alone, a period the teacher never teaches all
+// week (VII) and every break vanished, so Timetable disagreed with Home. The
+// selected day now comes from /manage/timetable/my-day, Home's own source.
+import { dateOfWeekday, rowsFromDay } from '../(tabs)/timetable';
+import type { TeacherDay } from '@skoolos/types';
+
+const WED_29_JUL: TeacherDay = {
+  date: '2026-07-29',
+  dayOfWeek: 3,
+  entries: [
+    { periodId: 'p1', label: 'Period 1', startTime: '08:00', endTime: '08:45', kind: 'CLASS', slot: { classSectionId: 'c1', className: '7-B', subjectId: 'sub1', subjectName: 'Mathematics', covering: false, coveringFor: null }, register: null },
+    { periodId: 'brk', label: 'Break', startTime: '08:45', endTime: '08:50', kind: 'BREAK', slot: null, register: null },
+    { periodId: 'p2', label: 'Period 2', startTime: '08:50', endTime: '09:35', kind: 'CLASS', slot: { classSectionId: 'c1', className: '7-B', subjectId: 'sub2', subjectName: 'Science', covering: false, coveringFor: null }, register: null },
+    { periodId: 'p7', label: 'Period 7', startTime: '12:50', endTime: '13:35', kind: 'FREE', slot: null, register: null },
+  ],
+};
+
+it('dateOfWeekday: the date of a weekday in the current Monday-first week, from local fields', () => {
+  const wed = new Date(2026, 6, 29, 23, 30); // Wed 29 Jul, late evening local
+  expect(dateOfWeekday(3, wed)).toBe('2026-07-29');
+  expect(dateOfWeekday(1, wed)).toBe('2026-07-27');
+  expect(dateOfWeekday(7, wed)).toBe('2026-08-02');
+  const sun = new Date(2026, 6, 26, 10, 0); // a Sunday is day 7 of ITS week
+  expect(dateOfWeekday(1, sun)).toBe('2026-07-20');
+});
+
+it('rowsFromDay keeps breaks, free periods and covers, in the order the school runs them', () => {
+  const rows = rowsFromDay({
+    ...WED_29_JUL,
+    entries: [...WED_29_JUL.entries, { periodId: 'p8', label: 'Period 8', startTime: '13:35', endTime: '14:20', kind: 'CLASS', slot: { classSectionId: 'c9', className: '9-A', subjectId: 'sub3', subjectName: 'English', covering: true, coveringFor: 'Sunita Rao' }, register: null }],
+  });
+  expect(rows.map((r) => r.period.label)).toEqual(['Period 1', 'Break', 'Period 2', 'Period 7', 'Period 8']);
+  expect(rows[1].kind).toBe('BREAK');
+  expect(rows[3].slot).toBeNull();
+  expect(rows[4].slot?.subjectName).toBe('English · cover');
+});
+
+it('shows the break and a period the teacher never teaches all week — what Home shows', async () => {
+  setNow(2026, 6, 29, 8, 20); // Wednesday
+  (api.request as jest.Mock).mockImplementation((path: string) =>
+    Promise.resolve(path.startsWith('/manage/timetable/my-day') ? WED_29_JUL : WEEK),
+  );
+  render(<Timetable />);
+  expect(await screen.findByTestId('period-row-break-brk')).toBeTruthy();
+  expect(screen.getByTestId('period-row-free-p7')).toBeTruthy();
+  expect(api.request).toHaveBeenCalledWith('/manage/timetable/my-day?date=2026-07-29');
+});

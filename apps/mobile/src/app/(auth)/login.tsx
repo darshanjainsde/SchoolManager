@@ -51,6 +51,9 @@ export default function Login() {
   // The password door is what shows while we ask; if someone has already
   // started typing into it, a late "yes" adds the tabs but does not move them.
   const typedEarly = useRef(false);
+  // The keyboard's own Next/Go key walks the form: code or email → password →
+  // log in, without reaching past the keyboard for the button.
+  const pwRef = useRef<TextInput>(null);
   useEffect(() => {
     if (otpReady === true && typedEarly.current) setMode('password');
   }, [otpReady]);
@@ -203,6 +206,7 @@ export default function Login() {
                   <TextInput
                     value={phone} onChangeText={setPhone} placeholder="98765 43210" placeholderTextColor={tokens.color.placeholder}
                     keyboardType="phone-pad" autoComplete="tel" textContentType="telephoneNumber" testID="otp-phone"
+                    returnKeyType="send" onSubmitEditing={() => { if (!busy && phone.trim()) void sendCode(); }}
                     onFocus={() => setFocus('phone')} onBlur={() => setFocus(null)} style={fieldInputStyle(tokens, { focused: focus === 'phone' })}
                   />
                 </Field>
@@ -217,6 +221,7 @@ export default function Login() {
                   <TextInput
                     value={code} onChangeText={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))} placeholder="482911" placeholderTextColor={tokens.color.placeholder}
                     keyboardType="number-pad" autoComplete="one-time-code" textContentType="oneTimeCode" maxLength={6} autoFocus testID="otp-code"
+                    returnKeyType="go" onSubmitEditing={() => { if (!busy && code.length === 6) void verifyCode(); }}
                     onFocus={() => setFocus('code')} onBlur={() => setFocus(null)} style={fieldInputStyle(tokens, { focused: focus === 'code', mono: true })}
                   />
                 </Field>
@@ -262,13 +267,15 @@ export default function Login() {
                   <TextInput
                     value={identifier} onChangeText={(v) => { if (otpReady !== true) typedEarly.current = true; setIdentifier(v); }} placeholder="RAF-00042" placeholderTextColor={tokens.color.placeholder}
                     autoCapitalize="none" autoCorrect={false} keyboardType="email-address" autoComplete="username" textContentType="username" testID="login-id"
+                    returnKeyType="next" submitBehavior="submit" onSubmitEditing={() => pwRef.current?.focus()}
                     onFocus={() => setFocus('id')} onBlur={() => setFocus(null)} style={fieldInputStyle(tokens, { focused: focus === 'id' })}
                   />
                 </Field>
                 <Field label="Password">
                   <TextInput
                     value={password} onChangeText={(v) => { if (otpReady !== true) typedEarly.current = true; setPassword(v); }} placeholder="••••••••" placeholderTextColor={tokens.color.placeholder}
-                    secureTextEntry autoComplete="password" textContentType="password" testID="login-pw"
+                    ref={pwRef} secureTextEntry autoComplete="password" textContentType="password" testID="login-pw"
+                    returnKeyType="go" onSubmitEditing={() => { if (canSubmitPassword) void submitPassword(); }}
                     onFocus={() => setFocus('pw')} onBlur={() => setFocus(null)} style={fieldInputStyle(tokens, { focused: focus === 'pw' })}
                   />
                 </Field>

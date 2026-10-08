@@ -5,12 +5,14 @@ import { api, ApiError } from '@/lib/api';
 import { useQuery } from '@/lib/query';
 import { useSession } from '@/lib/use-session';
 import { borrowerLine, dueWord, rupees, type Dashboard, type IssueCard, type MemberHit } from '@/lib/library-desk';
-import { formatDate } from '@/lib/portal';
 import { Empty, ErrorState, Figure, Page, PageHeader, Pill, Screen, SectionTitle } from '@/components/ui';
 import { Row, SearchBox } from '@/components/desk';
 import { LoadingRows } from '@/components/Loading';
 import { NotificationBell } from '@/components/NotificationBell';
 import { useTokens } from '@/theme/theme-context';
+// The due date leads: it is the fact the row is sorted by, and the end of a
+// long line is what a narrow phone cuts ("due Jul 21, 2…", re-audit 2026-10-08).
+import { fmtDay } from '@/lib/dates';
 
 /**
  * THE COUNTER — the librarian's Today. One search line at the top, because
@@ -73,7 +75,7 @@ export default function Counter() {
                 <PageHeader title="Due soonest" icon="library" />
                 {soon.length === 0 ? <Empty icon="library">Nothing is out. The shelves are full.</Empty> : soon.map((c: IssueCard, i) => {
                   const w = dueWord(c.dueOn, today);
-                  return <Row key={c.id} first={i === 0} testID={`soon-${c.id}`} title={c.title} sub={`${c.borrower.name} · ${borrowerLine(c.borrower)} · due ${formatDate(c.dueOn)}`} right={<Pill tone={w.tone}>{w.text}</Pill>} onPress={() => router.push(`/(worker)/(tabs)/counter/member/${c.borrower.kind.toLowerCase()}/${c.borrower.id}`)} />;
+                  return <Row key={c.id} first={i === 0} testID={`soon-${c.id}`} title={c.title} sub={`due ${fmtDay(c.dueOn)} · ${c.borrower.name} · ${borrowerLine(c.borrower)}`} right={<Pill tone={w.tone}>{w.text}</Pill>} onPress={() => router.push(`/(worker)/(tabs)/counter/member/${c.borrower.kind.toLowerCase()}/${c.borrower.id}`)} />;
                 })}
               </Page>
             </>

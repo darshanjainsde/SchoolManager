@@ -33,6 +33,18 @@ export interface HomeTool {
  * `live` is a property of the day, not of a tool: the register tile lights
  * because a register is open, and goes quiet the moment the day is clean.
  */
+/**
+ * Columns for `n` tiles: four, unless four would strand ONE tile alone on its
+ * last row — then three (5 → 3+2, 9 → 3+3+3). The family Home's five "Needs
+ * you today" tiles left Fees alone on a second row (re-audit 2026-10-08; the
+ * UI ledger's figure-row-orphans-a-tile rule).
+ */
+export function toolColumns(n: number): number {
+  if (n <= 4) return 4;
+  if (n % 4 === 1 && n % 3 !== 1) return 3;
+  return 4;
+}
+
 export function HomeToolGrid({
   tools,
   testID,
@@ -41,6 +53,7 @@ export function HomeToolGrid({
   testID?: string;
 }): React.JSX.Element {
   const tokens = useTokens();
+  const cols = toolColumns(tools.length);
 
   function hue(tone: MoreTone | undefined): string {
     if (tone === 'amber') return tokens.color.late;
@@ -56,7 +69,7 @@ export function HomeToolGrid({
       {tools.map((tool) => {
         const badge = tool.badge && tool.badge > 0 ? tool.badge : undefined;
         return (
-          <View key={tool.label} style={{ width: '25%', alignItems: 'center' }}>
+          <View key={tool.label} style={{ width: `${100 / cols}%`, alignItems: 'center' }}>
             <Touchable
               testID={`hometool-${tool.label}`}
               accessibilityLabel={
