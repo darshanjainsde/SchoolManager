@@ -139,7 +139,7 @@ export default function Fees() {
             />
           ) : (
             <Page>
-              <Empty icon="fees">
+              <Empty icon="fees" scene={d.planReady ? 'feesPaid' : undefined}>
                 {!d.planReady
                   ? `The school hasn’t set up fees for ${d.student.className ?? 'this class'} this year yet. There’s nothing to pay.`
                   : d.balanceMinor < 0

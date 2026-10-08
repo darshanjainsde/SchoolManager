@@ -8,12 +8,18 @@ function mount(node: React.ReactElement) {
 }
 
 describe('Empty', () => {
-  it('says its sentence in the diary hand, not in system grey', () => {
+  it('says its sentence plainly, upright and readable (UI v2)', () => {
     mount(<Empty>No upcoming holidays.</Empty>);
     const line = screen.getByText('No upcoming holidays.');
-    // A page with nothing on it should still read as a page. The serif italic
-    // is what does that — drop it and an empty diary reads as a failed load.
-    expect(line.props.style.fontStyle).toBe('italic');
+    // v2 dropped the diary italic: upright text at 13.5 scans faster, and the
+    // `sub` tone now clears 4.5:1 (theme/__tests__/paper-light.test.ts).
+    expect(line.props.style.fontStyle).toBeUndefined();
+    expect(line.props.style.fontSize).toBeGreaterThanOrEqual(13.5);
+  });
+
+  it('draws the picture for a good-news empty when a scene is given, not the glyph', () => {
+    mount(<Empty icon="fees" scene="feesPaid">Nothing due.</Empty>);
+    expect(screen.getByTestId('illustration-feesPaid')).toBeTruthy();
   });
 
   it('draws nothing extra when no glyph was asked for', () => {

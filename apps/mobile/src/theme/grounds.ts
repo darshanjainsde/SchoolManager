@@ -14,7 +14,7 @@ import type { ColorPalette } from './tokens';
  * mean their app stopped looking like their school. Ground is texture; accent
  * is identity.
  */
-export type GroundName = 'classic' | 'cream' | 'sand' | 'oat' | 'linen' | 'sage' | 'blue';
+export type GroundName = 'fresh' | 'classic' | 'cream' | 'sand' | 'oat' | 'linen' | 'sage' | 'blue';
 
 export interface GroundTones {
   appBg: string;
@@ -38,9 +38,19 @@ export interface Ground {
  * a person opts in, or a later release changes the default deliberately.
  */
 export const GROUNDS: Record<GroundName, Ground> = {
+  // UI v2 (2026-10-08): the default. A cool off-white page with WHITE cards,
+  // so colour belongs to the tinted tiles and the one main action instead of
+  // to the paper. The paper grounds below stay in Appearance for schools that
+  // prefer them.
+  fresh: {
+    label: 'Fresh',
+    hint: 'Clean white cards — the new default',
+    light: { appBg: '#F5F6FA', surface: '#FFFFFF', surfaceMuted: '#EEF0F6', line: '#E4E6F0', line2: '#D3D7E6' },
+    dark: { appBg: '#0F1220', surface: '#171B2E', surfaceMuted: '#0B0E1A', line: '#2A3048', line2: '#363D5A' },
+  },
   classic: {
-    label: 'Classic',
-    hint: 'What the app ships with',
+    label: 'Classic paper',
+    hint: 'The original diary paper',
     light: { appBg: '#FBF9F4', surface: '#FFFDF8', surfaceMuted: '#F3F0E7', line: '#E7E3D6', line2: '#D9D4C4' },
     dark: { appBg: '#141224', surface: '#1B1830', surfaceMuted: '#100E1E', line: '#2B2847', line2: '#37335A' },
   },

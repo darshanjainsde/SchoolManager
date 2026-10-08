@@ -10,6 +10,7 @@ import { DASH, DUR, inkWidth, strokeDashoffset, useGesture } from '@/theme/motio
 import { isPushedRoute, titleForSegments } from '@/lib/screen-titles';
 import { BackChipHeader } from './BackChipHeader';
 import { Icon, type IconName } from './icons';
+import { Illustration, type Scene } from './Illustration';
 import { useKeepFocusedInView } from '@/lib/keyboard';
 
 /**
@@ -285,11 +286,18 @@ export function Empty({
    * itself unmistakably.
    */
   icon,
-}: PropsWithChildren<{ testID?: string; icon?: IconName }>) {
+  /**
+   * UI v2: a picture (components/Illustration) in place of the glyph, for an
+   * empty that is GOOD news — nothing due, nothing out, nothing set. The words
+   * still carry the meaning; the picture is decorative.
+   */
+  scene,
+}: PropsWithChildren<{ testID?: string; icon?: IconName; scene?: Scene }>) {
   const tokens = useTokens();
   return (
     <View testID={testID} style={{ paddingVertical: 20, paddingHorizontal: 14, alignItems: 'center', gap: 9 }}>
-      {icon && (
+      {scene && <Illustration scene={scene} height={130} />}
+      {!scene && icon && (
         // Faint on purpose — it sits behind the sentence in the reading order,
         // and an empty state that shouts is worse than one that waits.
         <Icon name={icon} size={26} color={tokens.color.line2} fillOpacity={0.5} />
@@ -297,10 +305,8 @@ export function Empty({
       <Text
         style={{
           color: tokens.color.sub,
-          fontSize: 13,
-          lineHeight: 19,
-          fontStyle: 'italic',
-          fontFamily: font.serif,
+          fontSize: 13.5,
+          lineHeight: 20,
           textAlign: 'center',
         }}
       >

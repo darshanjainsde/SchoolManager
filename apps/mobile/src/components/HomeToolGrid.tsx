@@ -1,9 +1,9 @@
 import { Text, View } from 'react-native';
-import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { router } from 'expo-router';
 import { Touchable } from './Touchable';
 import { Icon, isIconName } from './icons';
-import { useTokens } from '@/theme/theme-context';
+import { useTheme, useTokens } from '@/theme/theme-context';
+import { familyTone } from '@/theme/families';
 import type { MoreTone } from '@/lib/staff-nav';
 
 export interface HomeTool {
@@ -54,12 +54,8 @@ export function HomeToolGrid({
 }): React.JSX.Element {
   const tokens = useTokens();
   const cols = toolColumns(tools.length);
-
-  function hue(tone: MoreTone | undefined): string {
-    if (tone === 'amber') return tokens.color.late;
-    if (tone === 'green') return tokens.color.green;
-    return tokens.color.indigo;
-  }
+  const { scheme } = useTheme();
+  const tone = (t: HomeTool) => familyTone(t.icon, scheme);
 
   return (
     <View
@@ -77,66 +73,32 @@ export function HomeToolGrid({
               }
               // A filled tile is the urgent one, so its tap gets the firmer tick.
               haptic={tool.live ? 'medium' : 'light'}
-              // The raised dome presses DOWN (pitch's translateY), not just
-              // smaller — the artifact's `:active` made this the whole feel.
-              pressTranslateY={2.5}
               onPress={() => router.push(tool.route as never)}
               style={{ alignItems: 'center', gap: 8, paddingVertical: 2 }}
             >
               <View>
-                {/* Pitch №3: the raised dome. A real drop shadow + elevation
-                    lifts every tile off the page; Touchable's press-in scale
-                    is what pushes it back down under the thumb. The live tile
-                    keeps the amber fill and throws a warmer shadow, so "act
-                    now" is lit AND raised highest. */}
+                {/* UI v2: a tinted squircle in the tool's FAMILY colour
+                    (theme/families.ts) — learning indigo, money blue, care
+                    amber… The tile that needs you now is FILLED with that ink:
+                    one bold shape per screen, the Material 3 Expressive finding
+                    that the main action is found up to 4x faster. */}
                 <View
                   testID={tool.live ? `hometool-live-${tool.label}` : undefined}
                   style={{
-                    width: 56,
-                    height: 56,
-                    borderRadius: 28,
+                    width: 58,
+                    height: 58,
+                    borderRadius: 20,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    borderWidth: 1,
-                    borderColor: tool.live ? tokens.color.amber : tokens.color.line,
-                    backgroundColor: tool.live ? tokens.color.amber : tokens.color.surface,
-                    shadowColor: tool.live ? tokens.color.amber : tokens.color.ink,
-                    shadowOpacity: tool.live ? 0.45 : 0.16,
-                    shadowRadius: tool.live ? 10 : 8,
-                    shadowOffset: { width: 0, height: 5 },
-                    elevation: tool.live ? 7 : 5,
-                    overflow: 'hidden',
+                    backgroundColor: tool.live ? tone(tool).ink : tone(tool).soft,
                   }}
                 >
-                  {/* The dome shading from the approved artifact: light top →
-                      the theme's darker shade at the bottom (`--g-hi`→`--g-lo`).
-                      A flat fill read as a sticker; this reads as a dome. The
-                      live tile keeps its solid amber — its fill IS the signal.
-                      (overflow hidden clips the gradient to the circle; the
-                      drop shadow lives on this same View so it survives.) */}
-                  {!tool.live && (
-                    <Svg
-                      width={56}
-                      height={56}
-                      style={{ position: 'absolute', top: 0, left: 0 }}
-                      pointerEvents="none"
-                    >
-                      <Defs>
-                        <LinearGradient id={`dome-${tool.label}`} x1="0" y1="0" x2="0" y2="1">
-                          <Stop offset="0" stopColor={tokens.color.surface} />
-                          <Stop offset="1" stopColor={tokens.color.surfaceMuted} />
-                        </LinearGradient>
-                      </Defs>
-                      <Circle cx={28} cy={28} r={28} fill={`url(#dome-${tool.label})`} />
-                    </Svg>
-                  )}
                   {isIconName(tool.icon) && (
                     <Icon
                       name={tool.icon}
-                      size={24}
-                      color={tool.live ? tokens.color.ink : hue(tool.tone)}
-                      // On a filled tile a 20% body vanishes into the fill.
-                      fillOpacity={tool.live ? 0.34 : 0.2}
+                      size={26}
+                      color={tool.live ? tokens.color.onBrand : tone(tool).ink}
+                      fillOpacity={tool.live ? 0.3 : 0.18}
                     />
                   )}
                 </View>
@@ -173,11 +135,11 @@ export function HomeToolGrid({
                 numberOfLines={2}
                 maxFontSizeMultiplier={1.3}
                 style={{
-                  fontSize: 10.5,
-                  lineHeight: 13,
+                  fontSize: 12,
+                  lineHeight: 15,
                   textAlign: 'center',
-                  color: tool.live ? tokens.color.ink : tokens.color.sub,
-                  fontWeight: tool.live ? '700' : '500',
+                  color: tokens.color.ink,
+                  fontWeight: tool.live ? '700' : '600',
                 }}
               >
                 {tool.label}

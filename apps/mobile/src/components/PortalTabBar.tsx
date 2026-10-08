@@ -75,9 +75,7 @@ function TabButton({
   tight?: boolean;
 }) {
   const tokens = useTokens();
-  // On the dark bar the accent system stays out (a school's maroon on ink
-  // would be mud): active = near-white, and the amber indicator above the
-  // icon is what says "you are here".
+  // UI v2: a light bar; the selected tab is the school colour on its own tint.
   const color = focused ? tokens.color.barActive : tokens.color.barInactive;
   return (
     <Pressable
@@ -88,19 +86,22 @@ function TabButton({
       onPress={onPress}
       style={{ flex: 1, minWidth: 0, alignItems: 'center', justifyContent: 'center', gap: 3, paddingVertical: 6 }}
     >
+      {/* UI v2: the Material 3 selected PILL behind the icon (a tint of the
+          school colour), instead of a 3 dp line above it — a target a thumb
+          can see, on a light bar. */}
       <View
         testID={focused ? `tab-indicator-${name}` : undefined}
         style={{
-          position: 'absolute',
-          top: 0,
-          width: 26,
-          height: 3,
-          borderRadius: 3,
+          width: 56,
+          height: 30,
+          borderRadius: 15,
+          alignItems: 'center',
+          justifyContent: 'center',
           backgroundColor: focused ? tokens.color.barIndicator : 'transparent',
         }}
-      />
-      {/* The focused glyph fills a little more, the way the live dome does. */}
-      <Icon name={icon} size={22} color={color} fillOpacity={focused ? 0.34 : 0.18} />
+      >
+        <Icon name={icon} size={22} color={color} fillOpacity={focused ? 0.3 : 0.14} />
+      </View>
       {/* Capped: this label lives under an icon in a fixed-height bar. Content
           elsewhere scales freely — see theme/__tests__/text-scaling.test.ts. */}
       <Text
@@ -110,7 +111,7 @@ function TabButton({
             // fifth tab tightens the type instead of clipping the word
             // (UI audit 2026-09-22, #23).
             maxFontSizeMultiplier={tight ? 1.15 : 1.3}
-            style={{ fontSize: tight ? 9.5 : 10, fontWeight: '700', color }}
+            style={{ fontSize: tight ? 10.5 : 11.5, fontWeight: focused ? '700' : '500', color }}
           >
         {title}
       </Text>
@@ -145,7 +146,7 @@ export function PortalTabBar({ tabs, state, navigation, insets }: PortalTabBarPr
         // THE BAR IS THE THEME'S DARK FORM in both schemes — chrome, not
         // another card on the paper (see tokens.ts barBg note).
         backgroundColor: tokens.color.barBg,
-        borderTopColor: tokens.color.barBg,
+        borderTopColor: tokens.color.line,
         borderTopWidth: 1,
         paddingHorizontal: 4,
         paddingTop: 6,

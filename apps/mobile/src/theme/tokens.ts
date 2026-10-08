@@ -69,40 +69,42 @@ export interface ColorPalette {
 }
 
 const light: ColorPalette = {
-  indigo: '#4F46E5',
+  indigo: '#4338CA',
   indigoDark: '#818CF8',
   indigo50: '#EEF0FF',
   amber: '#F59E0B',
   amberDark: '#FBBF24',
   amber50: '#FDE9C8',
   late: '#7A4E06',
-  ink: '#211D45',
-  sub: '#8A87A0',
-  line: '#E7E3D6',
+  ink: '#12142B',
+  // UI v2: #8A87A0 was ~3.4:1 on white — under WCAG's 4.5:1 for small text.
+  sub: '#5E6480',
+  line: '#E4E6F0',
   green: '#178A5B',
   green50: '#E3F4EC',
   red: '#C4453F',
   red50: '#FBE9E8',
-  appBg: '#FBF9F4',
+  appBg: '#F5F6FA',
   // Paper, not white. This was #FFFFFF — the one value in the light scheme
   // outside the warm family it shares with appBg, surfaceMuted and line — so
   // every card read as a cold rectangle on a warm ground, which is why the
   // light theme felt wrong while the dark one did not. Still lighter than
   // appBg, because that difference is what makes a card read as a card.
-  surface: '#FFFDF8',
-  surfaceMuted: '#F3F0E7',
+  surface: '#FFFFFF',
+  surfaceMuted: '#EEF0F6',
   onBrand: '#FFFFFF',
-  placeholder: '#A6A3B8',
-  ink2: '#4B4768',
-  line2: '#D9D4C4',
+  placeholder: '#8F94AE',
+  ink2: '#3E4360',
+  line2: '#D3D7E6',
   indigoDeep: '#3730A3',
   marginRed: '#E86A6A',
   // The dark scheme's surface/sub/amber, worn in light mode — see the
   // interface note: the bar is the theme's dark form everywhere.
-  barBg: '#1B1830',
-  barActive: '#FFFFFF',
-  barInactive: '#807DA0',
-  barIndicator: '#F5B23C',
+  // UI v2: a light bar with a tinted pill under the selected tab (Material 3).
+  barBg: '#FFFFFF',
+  barActive: '#4338CA',
+  barInactive: '#5E6480',
+  barIndicator: '#EEF0FF',
 };
 
 // Values lifted from apps/web/app/sk-theme.css's `@media (prefers-color-scheme:
@@ -119,18 +121,18 @@ const dark: ColorPalette = {
   late: '#F5CE8A',
   ink: '#EDEBFA',
   sub: '#807DA0',
-  line: '#2B2847',
+  line: '#2A3048',
   green: '#4CC08E',
   green50: '#173327',
   red: '#E0656F',
   red50: '#3A1B1E',
-  appBg: '#141224',
-  surface: '#1B1830',
-  surfaceMuted: '#100E1E',
+  appBg: '#0F1220',
+  surface: '#171B2E',
+  surfaceMuted: '#0B0E1A',
   onBrand: '#07130E',
   placeholder: '#7A789E',
   ink2: '#B9B6D0',
-  line2: '#37335A',
+  line2: '#363D5A',
   indigoDeep: '#A5A1FF',
   marginRed: '#E86A6A',
   // One step darker than the page (surfaceMuted family) so the bar still
@@ -157,7 +159,10 @@ export type ColorScheme = keyof typeof palette;
  * alias is Noto Serif.
  */
 export const font = {
-  serif: Platform.select({ ios: 'Palatino', android: 'serif', default: 'serif' }) as string,
+  // UI v2: headings are the clean platform sans (Roboto on Android), set
+  // heavier — the diary serif read as old and was hard to scan. The KEY keeps
+  // its name so the 78 callers did not have to change.
+  serif: Platform.select({ ios: 'System', android: 'sans-serif', default: 'System' }) as string,
   mono: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }) as string,
   /** The UI face — RN's platform default, named here so callers never guess. */
   sans: Platform.select({ ios: 'System', android: 'sans-serif', default: 'System' }) as string,

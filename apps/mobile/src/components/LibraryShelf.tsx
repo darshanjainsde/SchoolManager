@@ -93,7 +93,7 @@ export function LibraryShelf() {
           <Page>
             <PageHeader title="On my shelf" actionLabel={d.holdings.length ? `${d.holdings.length} of ${d.limit}` : undefined} />
             {d.holdings.length === 0 ? (
-              <Empty icon="library">{`Nothing out right now. You can take ${d.limit} book${d.limit === 1 ? '' : 's'} for ${d.loanDays} days each — ask at the counter.`}</Empty>
+              <Empty icon="library" scene="nothingOut">{`Nothing out right now. You can take ${d.limit} book${d.limit === 1 ? '' : 's'} for ${d.loanDays} days each — ask at the counter.`}</Empty>
             ) : (
               d.holdings.map((h, i) => {
                 const w = dueWord(h);

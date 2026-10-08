@@ -312,3 +312,25 @@ describe('NowCard', () => {
     });
   });
 });
+
+describe('the wrap-up is honest about open registers (re-audit 2026-10-08)', () => {
+  it('says registers are still open, with one big Take register, instead of "Day complete"', () => {
+    const onTake = jest.fn();
+    render(
+        <NowCard entry={null} elapsed={0} total={0} nextEntry={null} onTakeAttendance={onTake} onOpenClass={jest.fn()}
+          summary={{ classesTaught: 3, studentsMarked: 0, pendingRegisters: 3, firstPendingClassId: 'c-vc' }} />
+    );
+    expect(screen.queryByText('Day complete')).toBeNull();
+    expect(screen.getByText('3 registers still open')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('now-take-open-c-vc'));
+    expect(onTake).toHaveBeenCalledWith('c-vc');
+  });
+
+  it('says "Day complete" once every register is in', () => {
+    render(
+        <NowCard entry={null} elapsed={0} total={0} nextEntry={null} onTakeAttendance={jest.fn()} onOpenClass={jest.fn()}
+          summary={{ classesTaught: 3, studentsMarked: 80, pendingRegisters: 0 }} />
+    );
+    expect(screen.getByText('Day complete')).toBeTruthy();
+  });
+});

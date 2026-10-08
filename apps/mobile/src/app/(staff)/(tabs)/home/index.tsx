@@ -259,7 +259,7 @@ export default function Today() {
             nextEntry={nextEntry}
             onTakeAttendance={goToAttendance}
             onOpenClass={goToClass}
-            summary={{ classesTaught: classes.length, studentsMarked }}
+            summary={{ classesTaught: classes.length, studentsMarked, pendingRegisters: pending, firstPendingClassId: needsInk[0]?.slot?.classSectionId }}
             notesCount={periodCounts.notes}
             todosLeft={periodCounts.todosLeft}
             onOpenNotes={liveSlot ? () => setSheet('notes') : undefined}

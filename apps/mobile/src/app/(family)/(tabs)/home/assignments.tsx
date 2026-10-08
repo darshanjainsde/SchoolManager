@@ -165,7 +165,7 @@ export default function Assignments() {
       )}
       {list !== null && !error && upcoming.length === 0 && past.length === 0 && (
         <Card style={{ padding: 0 }}>
-          <Empty icon="assignments">No assignments yet.</Empty>
+          <Empty icon="assignments" scene="noHomework">No assignments yet.</Empty>
         </Card>
       )}
       {upcoming.length > 0 && (

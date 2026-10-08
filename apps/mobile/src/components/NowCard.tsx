@@ -16,6 +16,13 @@ export interface NowCardSummary {
   classesTaught: number;
   /** Sum of `register.present` across the day's classes. */
   studentsMarked: number;
+  /**
+   * Registers still open once the day's periods are over, and the first
+   * class among them. The wrap-up said "Day complete" with three registers
+   * still open (re-audit 2026-10-08): the day is not complete until they are.
+   */
+  pendingRegisters?: number;
+  firstPendingClassId?: string;
 }
 
 export interface NowCardProps {
@@ -439,6 +446,27 @@ export function NowCard({
   if (!entry) {
     if (!nextEntry) {
       const s = summary ?? { classesTaught: 0, studentsMarked: 0 };
+      const open = s.pendingRegisters ?? 0;
+      if (open > 0 && s.firstPendingClassId) {
+        const first = s.firstPendingClassId;
+        return (
+          <GradientHero id="hero-open" colors={accentColors} testID="now-card">
+            <Text style={hero.eyebrow}>Periods are over</Text>
+            <Text style={hero.title}>{open === 1 ? '1 register still open' : `${open} registers still open`}</Text>
+            <Text style={hero.meta}>Families see who was in class once you take it.</Text>
+            {/* THE one big action (UI v2): a full-width white pill, the
+                biggest target on the screen, for the thing the day still owes. */}
+            <Pressable
+              testID={`now-take-open-${first}`}
+              onPress={() => onTakeAttendance(first)}
+              accessibilityRole="button"
+              style={{ marginTop: 14, minHeight: 52, borderRadius: 26, backgroundColor: on, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Text style={{ color: tokens.color.indigoDeep, fontWeight: '800', fontSize: 16 }}>Take register</Text>
+            </Pressable>
+          </GradientHero>
+        );
+      }
       return (
         <GradientHero id="hero-done" colors={accentColors} testID="now-card">
           <Text style={hero.eyebrow}>That&apos;s a wrap</Text>
