@@ -1,4 +1,5 @@
 import type { AttendanceSummary, AttendanceStatusValue } from '@skoolos/types';
+import { fmtMonthYear } from '@/lib/dates';
 
 export interface AttendanceCell {
   day: number | null;
@@ -49,7 +50,7 @@ export function shiftMonthKey(key: string, delta: number): string {
 export function monthKeyLabel(key: string): string {
   const year = Number(key.slice(0, 4));
   const monthIndex = Number(key.slice(5, 7)) - 1;
-  return new Date(year, monthIndex, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  return fmtMonthYear(year, monthIndex);
 }
 
 /** `YYYY-MM` for the device's current local month — used to disable "Next" at the latest month. */

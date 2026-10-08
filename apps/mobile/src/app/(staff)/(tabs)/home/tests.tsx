@@ -9,6 +9,7 @@ import { Card, Pill, Screen, SectionTitle, Toast } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font, type ColorPalette } from '@/theme/tokens';
+import { fmtDateTime, fmtWeekdayDay } from '@/lib/dates';
 
 function chipStyle(tokens: { color: ColorPalette }, on: boolean) {
   return {
@@ -193,7 +194,7 @@ export default function Tests() {
       >
       <Text style={{ fontFamily: font.serif, fontWeight: '700', fontSize: 14, color: tokens.color.ink }}>{exam.title}</Text>
       <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>
-        {subjectLabel(exam.subjectId)} · {new Date(exam.scheduledAt).toLocaleString()} · out of{' '}
+        {subjectLabel(exam.subjectId)} · {fmtDateTime(exam.scheduledAt)} · out of{' '}
         {exam.maxMarks}
       </Text>
       {exam.syllabus && (
@@ -431,7 +432,7 @@ function daysTo(iso: string): number {
 function ResultDayCard({ window }: { window: { id: string; name: string; resultDay: string } }) {
   const tokens = useTokens();
   const d = daysTo(window.resultDay);
-  const when = new Date(window.resultDay).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const when = fmtWeekdayDay(window.resultDay.slice(0, 10));
   const tone = d < 0 ? 'red' : d <= 3 ? 'amber' : 'indigo';
   const word = d < 0 ? `${-d} day${d === -1 ? '' : 's'} over` : d === 0 ? 'Today' : `${d} day${d === 1 ? '' : 's'}`;
   return (

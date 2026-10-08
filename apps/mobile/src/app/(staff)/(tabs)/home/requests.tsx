@@ -16,6 +16,7 @@ import { CalendarSheet } from '@/components/CalendarSheet';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font, type ColorPalette } from '@/theme/tokens';
+import { fmtDate, fmtDateTime } from '@/lib/dates';
 
 const LEAVE_TYPE_LABEL: Record<LeaveTypeValue, string> = {
   SICK: 'Sick leave',
@@ -52,25 +53,14 @@ function isExpired(expiresAt: string | null): boolean {
  * `startDate.toISOString()`.
  */
 function formatDateOnly(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
-  });
+  return fmtDate(iso.slice(0, 10));
 }
 
 /** A real timestamp (unlike the calendar dates above) — read in the
  * device's own local time, since `expiresAt` genuinely means a moment on
  * this device's clock. */
 function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  return fmtDateTime(iso);
 }
 
 type RequestItem =
@@ -541,7 +531,8 @@ export default function Requests() {
                           testID={`cancel-${item.id}`}
                           disabled={cancelling}
                           onPress={() => confirmCancel(item.id)}
-                          style={{ opacity: cancelling ? 0.6 : 1 }}
+                          hitSlop={12}
+                          style={{ opacity: cancelling ? 0.6 : 1, minHeight: 44, justifyContent: 'center', alignItems: 'flex-end' }}
                           accessibilityRole="button"
                           >
                           <Text style={{ color: tokens.color.red, fontWeight: '700', fontSize: 12 }}>

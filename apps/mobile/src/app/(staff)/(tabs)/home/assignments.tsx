@@ -11,6 +11,7 @@ import { Icon } from '@/components/icons';
 import { useTokens } from '@/theme/theme-context';
 import { font, type ColorPalette } from '@/theme/tokens';
 import { DUR, inkWidth, useGesture } from '@/theme/motion';
+import { fmtDate } from '@/lib/dates';
 
 /** Same caps as the web teacher page and the API (Vercel's ~4.5 MB body). */
 const MAX_ATTACHMENT_BYTES = 4 * 1024 * 1024;
@@ -63,8 +64,7 @@ function chipStyle(tokens: { color: ColorPalette }, on: boolean) {
 
 /** `Assignment.dueDate` (`@db.Date`, `YYYY-MM-DD`) formatted for display — a plain calendar date, no time component. */
 function formatDueDate(dueDate: string): string {
-  const [y, m, d] = dueDate.split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  return fmtDate(dueDate);
 }
 
 export default function Assignments() {
@@ -91,6 +91,8 @@ export default function Assignments() {
 
   const [subjectId, setSubjectId] = useState('');
   const [title, setTitle] = useState('');
+  // The keyboard's Next moves from the one-line title to the details box.
+  const instructionsRef = useRef<TextInput>(null);
   const [instructions, setInstructions] = useState('');
   const [dueDate, setDueDate] = useState(todayISO());
   // Attachments (second edition): uploaded one at a time to
@@ -401,6 +403,9 @@ export default function Assignments() {
             <Text style={labelStyle}>Title</Text>
             <TextInput
               testID="assign-title"
+              returnKeyType="next"
+              submitBehavior="submit"
+              onSubmitEditing={() => instructionsRef.current?.focus()}
               value={title}
               onChangeText={setTitle}
               placeholder="Worksheet 3"
@@ -413,6 +418,7 @@ export default function Assignments() {
             <Text style={labelStyle}>Instructions</Text>
             <TextInput
               testID="assign-instructions"
+              ref={instructionsRef}
               value={instructions}
               onChangeText={setInstructions}
               multiline

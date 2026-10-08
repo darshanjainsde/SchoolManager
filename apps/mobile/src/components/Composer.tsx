@@ -2,6 +2,7 @@ import { KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from './icons';
 import { useTokens } from '@/theme/theme-context';
+import { useKeyboardVisible } from '@/lib/keyboard';
 
 /**
  * THE MESSAGE COMPOSER — one pill: the line you write on and the button that
@@ -35,17 +36,23 @@ export function Composer({
 }) {
   const tokens = useTokens();
   const insets = useSafeAreaInsets();
+  // With the keyboard up the gesture strip is under the keyboard, not under
+  // the pill: keep the pill on the keyboard instead of a bar's height above it.
+  const typing = useKeyboardVisible();
   const canSend = !disabled && !sending && value.trim().length > 0;
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+    // iOS lifts the pill here. On Android the content already ends at the
+    // keyboard (plugins/with-keyboard-insets.js); a second, 'height' lift on
+    // top of that squeezed the pill itself while the two measured each other.
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View
         style={{
           paddingHorizontal: 10,
           paddingTop: 4,
           // Clear the home indicator / gesture strip, where a tap belongs to
           // the OS and never reaches the button.
-          paddingBottom: Math.max(insets.bottom, 10),
+          paddingBottom: typing ? 8 : Math.max(insets.bottom, 10),
         }}
       >
         <View

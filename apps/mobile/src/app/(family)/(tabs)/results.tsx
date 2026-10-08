@@ -122,7 +122,11 @@ function ResultRow({ r, first }: { r: PublishedResult; first: boolean }) {
   const reveal = useReveal(open);
 
   const diff = Math.round((r.marks - r.classAverage) * 10) / 10;
-  const tone = diff > 0 ? 'green' : diff < 0 ? 'amber' : 'neutral';
+  // Neutral either way. This screen is read by the CHILD as well as the
+  // guardian (one shared login); an amber "below average" on every weaker
+  // subject put a comparison with classmates in front of a child as a warning
+  // (re-audit 2026-10-08). The number stays — the colour no longer judges.
+  const tone = 'neutral' as const;
   const diffLabel =
     diff > 0 ? `${diff} above average` : diff < 0 ? `${Math.abs(diff)} below average` : 'Exactly average';
 

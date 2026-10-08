@@ -317,18 +317,27 @@ export default function StaffAttendance() {
           the place to spend legibility on shape. */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: 4 }}>
         <Pressable testID="date-prev" onPress={() => setDate((d) => shiftISO(d, -1))} hitSlop={8}
+          // A 13 px word is ~18 dp tall; the row keeps its look and the
+          // finger gets the 44 dp the app promises (re-audit 2026-10-08).
+          style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 2 }}
           accessibilityRole="button"
           >
           <Text style={{ color: tokens.color.indigo, fontWeight: '700', fontSize: 13 }}>‹ Prev day</Text>
         </Pressable>
         {date !== today && (
           <Pressable testID="date-today" onPress={() => setDate(today)} hitSlop={8}
+          // A 13 px word is ~18 dp tall; the row keeps its look and the
+          // finger gets the 44 dp the app promises (re-audit 2026-10-08).
+          style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 2 }}
             accessibilityRole="button"
             >
             <Text style={{ color: tokens.color.sub, fontWeight: '600', fontSize: 12 }}>Jump to today</Text>
           </Pressable>
         )}
         <Pressable testID="date-next" onPress={() => setDate((d) => shiftISO(d, 1))} hitSlop={8}
+          // A 13 px word is ~18 dp tall; the row keeps its look and the
+          // finger gets the 44 dp the app promises (re-audit 2026-10-08).
+          style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 2 }}
           accessibilityRole="button"
           >
           <Text style={{ color: tokens.color.indigo, fontWeight: '700', fontSize: 13 }}>Next day ›</Text>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { api, ApiError } from '@/lib/api';
 import { Card, Toast } from '@/components/ui';
@@ -26,6 +26,9 @@ export function ChangePasswordCard() {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [focus, setFocus] = useState<'cur' | 'new' | 'confirm' | null>(null);
+  // Next → Next → Done on the keyboard walks the three boxes and submits.
+  const nextRef = useRef<TextInput>(null);
+  const confirmRef = useRef<TextInput>(null);
 
   // Local refusals, decided before any request: the button stays enabled so
   // tapping it can EXPLAIN what is missing rather than sitting inert.
@@ -85,6 +88,9 @@ export function ChangePasswordCard() {
         <TextInput
           {...inputProps}
           testID="pw-current"
+          returnKeyType="next"
+          submitBehavior="submit"
+          onSubmitEditing={() => nextRef.current?.focus()}
           value={current}
           onChangeText={setCurrent}
           onFocus={() => setFocus('cur')}
@@ -95,7 +101,11 @@ export function ChangePasswordCard() {
       <Field label="New password">
         <TextInput
           {...inputProps}
+          ref={nextRef}
           testID="pw-new"
+          returnKeyType="next"
+          submitBehavior="submit"
+          onSubmitEditing={() => confirmRef.current?.focus()}
           value={next}
           onChangeText={setNext}
           onFocus={() => setFocus('new')}
@@ -106,7 +116,10 @@ export function ChangePasswordCard() {
       <Field label="New password, again">
         <TextInput
           {...inputProps}
+          ref={confirmRef}
           testID="pw-confirm"
+          returnKeyType="done"
+          onSubmitEditing={() => { if (!busy) void submit(); }}
           value={confirm}
           onChangeText={setConfirm}
           onFocus={() => setFocus('confirm')}

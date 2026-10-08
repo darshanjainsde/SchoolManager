@@ -218,18 +218,11 @@ export default function Today() {
         </>
       )}
 
-      {/* Honest placeholder — see apps/web/app/staff/page.tsx's matching
-          note for why: LeaveApplication is Teacher-row-scoped only today,
-          and a Staff-row leave path is real schema work, not a focused diff
-          to bolt on alongside an attendance view. Drawn as a page with nothing
-          written on it, which is exactly what it is. */}
-      <Page>
-        <PageHeader title="Leave" icon="requests" />
-        <Empty>
-          Applying for leave isn&rsquo;t available here yet — ask your school admin in the meantime. It&rsquo;s
-          planned for a future update.
-        </Empty>
-      </Page>
+      {/* No Leave card until staff can apply. The placeholder said "isn't
+          available here yet" on the one desk where leave is the main reason
+          to open the app — a dead end on every visit (re-audit 2026-10-08).
+          LeaveApplication is Teacher-row-scoped; a Staff-row path is real
+          schema work, tracked as its own feature. */}
     </Screen>
   );
 }

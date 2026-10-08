@@ -7,6 +7,12 @@ export interface TimetableRow {
   period: GridPeriodRow;
   /** The slot in this row's day+period cell, or null for a free period. */
   slot: GridSlot | null;
+  /**
+   * A school break (or lunch). It is a row of the day like any other — the
+   * teacher's Home lists it, and a Timetable that dropped it disagreed with
+   * Home about what today looks like (re-audit 2026-10-08).
+   */
+  kind?: 'BREAK';
 }
 
 export interface TimetableListProps {
@@ -84,10 +90,24 @@ export function TimetableList({ rows, currentPeriodId, nowMinutes, lead = 'class
 
   return (
     <Page testID="timetable-list">
-      {rows.map(({ period, slot }, i) => {
+      {rows.map(({ period, slot, kind }, i) => {
         const isCurrent = !!slot && period.id === currentPeriodId;
         const isPast =
           nowMinutes != null && !isCurrent && !!period.endTime && nowMinutes >= minutesOfDay(period.endTime);
+        if (kind === 'BREAK') {
+          return (
+            <RailRow
+              key={period.id}
+              testID={`period-row-break-${period.id}`}
+              first={i === 0}
+              state={isPast ? 'done' : 'upcoming'}
+              startTime={period.startTime ?? period.label}
+              endTime={period.endTime ?? ''}
+              title={period.label}
+              right={<RailStatus tone="muted">Break</RailStatus>}
+            />
+          );
+        }
         const state: RailState = isCurrent ? 'now' : !slot ? 'free' : isPast ? 'done' : 'upcoming';
         const follows = slot ? (lead === 'class' ? slot.subjectName : slot.className) : null;
         return (

@@ -51,7 +51,7 @@ it('renders name, email, phone, subjects and class-teacher-of from GET /manage/t
   expect((api.request as jest.Mock).mock.calls[0][0]).toBe('/manage/teachers/me');
 });
 
-it('shows "Not on file" for a missing email or phone, and honest empty states for no subjects / not a class teacher', async () => {
+it('shows "Not on file" for a missing email, no Phone row without a number (My WhatsApp number adds it), and honest empty states for no subjects / not a class teacher', async () => {
   (api.request as jest.Mock).mockResolvedValue({
     id: 't2',
     firstName: 'Vikram',
@@ -65,7 +65,7 @@ it('shows "Not on file" for a missing email or phone, and honest empty states fo
   const { findAllByText, findByText } = render(<Profile />);
 
   expect(await findByText('Vikram Singh')).toBeTruthy();
-  expect(await findAllByText('Not on file')).toHaveLength(2);
+  expect(await findAllByText('Not on file')).toHaveLength(1);
   expect(await findByText('No subjects assigned')).toBeTruthy();
   expect(await findByText('Not a class teacher')).toBeTruthy();
 });

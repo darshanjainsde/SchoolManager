@@ -188,10 +188,10 @@ describe('Waiting', () => {
       leave('d', 'Lata Iyer', { endDate: '2026-10-10T00:00:00.000Z' }),
     ];
     render(<LeaveDesk />);
-    expect(await screen.findByText('CASUAL · 8 Oct · Half day · morning')).toBeTruthy();
-    expect(screen.getByText('CASUAL · 8 Oct · Half day · afternoon')).toBeTruthy();
-    expect(screen.getByText('CASUAL · 8 Oct · Half day')).toBeTruthy();
-    expect(screen.getByText('CASUAL · 8 Oct – 10 Oct')).toBeTruthy();
+    expect(await screen.findByText('Casual leave · 8 Oct · Half day · morning')).toBeTruthy();
+    expect(screen.getByText('Casual leave · 8 Oct · Half day · afternoon')).toBeTruthy();
+    expect(screen.getByText('Casual leave · 8 Oct · Half day')).toBeTruthy();
+    expect(screen.getByText('Casual leave · 8 Oct – 10 Oct')).toBeTruthy();
   });
 
   it('a decision asks again, so the decided row leaves (a 30 s cache must not keep it)', async () => {

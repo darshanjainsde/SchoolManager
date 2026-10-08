@@ -1,4 +1,5 @@
 import type { ReportCardSnapshot } from '@skoolos/types';
+import { fmtDate } from '@/lib/dates';
 
 const esc = (v: unknown) =>
   String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string);
@@ -10,7 +11,7 @@ const esc = (v: unknown) =>
  * serial at the foot: the printed form the office already issues.
  */
 export function reportCardHtml(snap: ReportCardSnapshot, serial: string, issuedAt: string): string {
-  const issued = new Date(issuedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
+  const issued = fmtDate(new Date(issuedAt));
   const rows = snap.subjects
     .map(
       (s) => `<tr><td>${esc(s.subjectName)}</td><td class="n">${s.marks == null ? '—' : `${s.marks}/${s.countedMax ?? s.maxMarks}`}</td><td class="n">${s.pct == null ? '—' : Math.round(s.pct)}</td><td class="n b">${esc(s.grade ?? '—')}</td></tr>`,

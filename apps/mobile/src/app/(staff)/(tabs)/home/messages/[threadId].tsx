@@ -14,14 +14,11 @@ import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 import { DUR, useGesture } from '@/theme/motion';
+import { usePinToEnd } from '@/lib/keyboard';
+import { fmtDayTime } from '@/lib/dates';
 
 function formatWhen(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', {
-    day: 'numeric',
-    month: 'short',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  return fmtDayTime(iso);
 }
 
 /**
@@ -73,6 +70,7 @@ export default function StaffThread() {
   const [detail, setDetail] = useState<MessageThreadDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
+  const pinToEnd = usePinToEnd(scrollRef);
 
   const load = useCallback(() => {
     if (!threadId) return Promise.resolve();
@@ -126,6 +124,7 @@ export default function StaffThread() {
       <BackChipHeader title="Messages" />
       <ScrollView
         ref={scrollRef}
+        {...pinToEnd}
         testID="thread-scroll"
         // The reply box sits under this list: a tap on a message while the
         // keyboard is up must land, not merely close the keyboard.

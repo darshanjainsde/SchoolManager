@@ -8,11 +8,11 @@ import { Card, Empty, ErrorState, Page, Screen, SectionTitle } from '@/component
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
+import { fmtDate } from '@/lib/dates';
 
 /** `StudentAssignment.dueDate` (`@db.Date`, `YYYY-MM-DD`) — a plain calendar date, no time component. */
 function formatDueDate(dueDate: string): string {
-  const [y, m, d] = dueDate.split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  return fmtDate(dueDate);
 }
 
 /**

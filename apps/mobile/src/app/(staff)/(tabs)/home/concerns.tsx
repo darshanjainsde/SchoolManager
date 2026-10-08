@@ -6,7 +6,6 @@ import { api, ApiError } from '@/lib/api';
 import { Empty, ErrorState, Page, Pill, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
-import { font } from '@/theme/tokens';
 
 /**
  * A CLASS TEACHER'S COMPLAINT BOX on the phone.
@@ -41,7 +40,7 @@ export default function StaffConcerns() {
 
   return (
     <Screen onRefresh={() => void load(showAll)}>
-      <Text style={{ fontFamily: font.serif, fontSize: 24, color: tokens.color.ink }}>Complaint Box</Text>
+      {/* No second "Complaint Box": the back-chip header already says it (re-audit 2026-10-08). */}
       <Text style={{ fontSize: 13.5, color: tokens.color.sub, marginTop: 4, lineHeight: 19 }}>
         What the families of your class raised with you. Opening one marks it read — you can answer, or send it to the office.
       </Text>
