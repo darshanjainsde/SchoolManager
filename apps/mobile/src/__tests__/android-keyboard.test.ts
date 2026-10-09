@@ -35,7 +35,7 @@ const read = (f: string) => fs.readFileSync(f, 'utf8');
 // Anything a person types into: the RN primitive and every wrapper we ship.
 const TYPES_INTO = /<(TextInput|TextField|MoneyField|SearchBox|NumberBox|Composer|ChangePasswordCard|ClassNotesPanel|LockedDayCard|StudentPicker|ConcernThread)\b/;
 // What lets the focused box scroll into the space above the keyboard.
-const SCROLLS = /<(Screen|ListScreen|ScrollView|FlatList|SectionList|AuthScaffold|Sheet)\b/;
+const SCROLLS = /<(Screen|ListScreen|ScrollView|FlatList|SectionList|GateSheet|Sheet)\b/;
 
 describe('Android keyboard — app config', () => {
   it('is edge-to-edge on every Android version, so one build looks one way', () => {
@@ -140,7 +140,7 @@ describe('Android keyboard — every screen with a box can scroll it into view',
 describe('Android keyboard — the containers that count as "scrolls" really do', () => {
   // The screen check above trusts these by name, so each must own a scroller.
   it.each([
-    ['components/AuthScaffold.tsx', /<ScrollView\b/],
+    ['components/entry/GateSheet.tsx', /<ScrollView\b/],
     ['components/Sheet.tsx', /<ScrollView\b/],
     ['components/ui.tsx', /<ScrollView\b[\s\S]*<FlatList\b|<FlatList\b[\s\S]*<ScrollView\b/],
   ])('%s', (file, scroller) => {

@@ -77,7 +77,8 @@ export function ThemeProvider({ children }: PropsWithChildren) {
   // actual phone; that has now been decided, so the app opens on warm cream
   // with feint ruling. Anyone who had already chosen something keeps it — the
   // stored value wins over these on the next tick.
-  const [ground, setGroundState] = useState<GroundName>('cream');
+  // UI v2: Fresh is the default; a stored choice still wins (below).
+  const [ground, setGroundState] = useState<GroundName>('fresh');
   // 'school' is the default so an app still looks like the place a person goes;
   // choosing a named accent is an opt-out, not the starting point.
   const [accent, setAccentState] = useState<AccentName>('school');

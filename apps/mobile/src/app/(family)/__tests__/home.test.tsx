@@ -1,6 +1,6 @@
 import { store } from '@/lib/cache-store';
 import { FRESH_MS } from '@/lib/query';
-import { render, fireEvent, act } from '@testing-library/react-native';
+import { render, fireEvent, act, within } from '@testing-library/react-native';
 import Home from '../(tabs)/home/index';
 import { api, ApiError } from '@/lib/api';
 import { todayISO } from '@/lib/attendance';
@@ -333,43 +333,68 @@ describe('fetch states', () => {
 });
 
 describe('diary remarks', () => {
-  // Pitch №4: the banner card became the Diary dome in "Needs you today" —
-  // lit amber (the one lit thing on this screen) with the waiting count as
-  // its badge.
-  it('unsigned remarks light the Diary dome and badge it with the count', async () => {
+  // 9 Oct 2026: the two grids became ONE menu; the asks ride on the hero's
+  // quick actions as badges (Diary, Ask teacher, Fees), and the menu does not
+  // draw them a second time.
+  it('unsigned remarks badge the hero\'s Diary action with the count', async () => {
     mockEndpoints({ '/me/diary': { entries: [], unsignedCount: 2 } });
-    const { findByTestId, getByTestId } = render(<Home />);
-
-    expect(await findByTestId('hometool-live-Diary')).toBeTruthy();
-    expect(getByTestId('hometool-badge-Diary')).toBeTruthy();
+    const { findByLabelText } = render(<Home />);
+    expect(await findByLabelText('Diary, 2 waiting')).toBeTruthy();
   });
 
-  it('the dome is quiet when nothing is waiting to be signed', async () => {
+  it('the Diary action is quiet when nothing is waiting to be signed', async () => {
     mockEndpoints();
-    const { queryByTestId, findByTestId } = render(<Home />);
-
+    const { findByTestId, queryByLabelText, getByLabelText } = render(<Home />);
     await findByTestId('screen-scroll');
-    expect(queryByTestId('hometool-live-Diary')).toBeNull();
-    expect(queryByTestId('hometool-badge-Diary')).toBeNull();
+    expect(getByLabelText('Diary')).toBeTruthy();
+    expect(queryByLabelText(/^Diary, \d+ waiting$/)).toBeNull();
   });
 
-  it('tapping the Diary dome opens the diary', async () => {
+  it('tapping the Diary action opens the diary', async () => {
     mockEndpoints({ '/me/diary': { entries: [], unsignedCount: 1 } });
     const { findByTestId } = render(<Home />);
-
-    fireEvent.press(await findByTestId('hometool-Diary'));
+    fireEvent.press(await findByTestId('hero-act-diary'));
     expect(mockPush).toHaveBeenCalledWith('/(family)/(tabs)/home/diary');
   });
 
-  it('unread messages badge the Messages dome', async () => {
+  it('unread messages badge Ask teacher', async () => {
     mockEndpoints({ '/me/messages/unread-count': { count: 3 } });
+    const { findByLabelText } = render(<Home />);
+    expect(await findByLabelText('Ask teacher, 3 waiting')).toBeTruthy();
+  });
+});
+
+describe('one menu', () => {
+  it('draws ONE menu card, not "Needs you today" + "Go to"', async () => {
+    mockEndpoints();
+    const { findByTestId, queryByTestId, queryByText } = render(<Home />);
+    expect(await findByTestId('home-menu')).toBeTruthy();
+    expect(queryByTestId('grid-needs')).toBeNull();
+    expect(queryByTestId('grid-goto')).toBeNull();
+    expect(queryByText(/needs you today/i)).toBeNull();
+  });
+
+  it('never repeats a hero action inside the menu', async () => {
+    mockEndpoints();
     const { findByTestId } = render(<Home />);
-    expect(await findByTestId('hometool-badge-Messages')).toBeTruthy();
+    const menu = await findByTestId('home-menu');
+    for (const label of ['Diary', 'Messages', 'Assignments', 'Fees']) {
+      expect(within(menu).queryByTestId(`hometool-${label}`)).toBeNull();
+    }
+  });
+
+  it('puts the badged doors first', async () => {
+    mockEndpoints({ '/me/exams': [{ id: 'e1', title: 'Unit test', subjectName: 'Maths', scheduledAt: new Date(Date.now() + 86_400_000).toISOString(), maxMarks: 20, syllabus: '' }] });
+    const { findByTestId } = render(<Home />);
+    await findByTestId('hometool-badge-Results');
+    const grid = await findByTestId('home-menu-grid');
+    const first = grid.findAll((n: { props: { testID?: unknown } }) => typeof n.props.testID === 'string' && n.props.testID.startsWith('hometool-') && !n.props.testID.includes('badge') && !n.props.testID.includes('live'))[0];
+    expect(first.props.testID).toBe('hometool-Results');
   });
 });
 
 describe('second edition — the doors the web portal had first', () => {
-  it('the Fees dome joins "Needs you today" and badges the count of LATE bills', async () => {
+  it('the hero\'s Fees action badges the count of LATE bills', async () => {
     mockEndpoints({
       '/me/fees': {
         student: { id: 's', name: 'Aarav Sharma', admissionNo: 'A123', className: 'Grade 5-B' },
@@ -380,14 +405,11 @@ describe('second edition — the doors the web portal had first', () => {
         ],
       },
     });
-    const { findByTestId } = render(<Home />);
-    expect(await findByTestId('hometool-Fees')).toBeTruthy();
-    const badge = await findByTestId('hometool-badge-Fees');
-    expect(badge).toBeTruthy();
-    expect(badge.props.children.props.children).toBe(1);
+    const { findByLabelText } = render(<Home />);
+    expect(await findByLabelText('Fees, 1 waiting')).toBeTruthy();
   });
 
-  it('the four new tools sit in "Go to" for a school that has the modules', async () => {
+  it('the four new tools sit in the menu for a school that has the modules', async () => {
     mockEndpoints();
     const { findByTestId } = render(<Home />);
     for (const label of ['Sports', 'Library', 'Report cards', 'Birthdays']) {

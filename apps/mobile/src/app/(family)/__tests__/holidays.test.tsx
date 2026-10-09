@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react-native';
+import { render, within } from '@testing-library/react-native';
 import Holidays from '../(tabs)/home/holidays';
 import { api, ApiError } from '@/lib/api';
 
@@ -38,6 +38,17 @@ it('renders each holiday with its day number, weekday, and type pill', async () 
   expect(await findByText('School')).toBeTruthy();
 
   expect(await findByText('Configured by your school admin on the web portal.')).toBeTruthy();
+});
+
+it('names the MONTH on every date cell — "FRI 25" alone never said which month (9 Oct 2026)', async () => {
+  (api.request as jest.Mock).mockResolvedValue([
+    { id: 'h1', name: 'Christmas', type: 'FESTIVAL', startDate: '2026-12-25T00:00:00.000Z', endDate: null },
+  ]);
+  const { findByTestId } = render(<Holidays />);
+  const row = await findByTestId('holiday-h1');
+  expect(within(row).getByText('DEC')).toBeTruthy();
+  expect(within(row).getByText('25')).toBeTruthy();
+  expect(within(row).getByText('Fri')).toBeTruthy();
 });
 
 it('shows the empty state when there are no upcoming holidays', async () => {

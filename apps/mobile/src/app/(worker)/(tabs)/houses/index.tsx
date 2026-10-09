@@ -11,7 +11,6 @@ import { Sheet } from '@/components/Sheet';
 import { TextField } from '@/components/Field';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
-import { font } from '@/theme/tokens';
 
 /**
  * HOUSES — the table as the school reads it (leader first, ties share a
@@ -50,7 +49,7 @@ export default function Houses() {
               right={
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                   <Swatch color={h.color} />
-                  <Text style={{ fontFamily: font.mono, fontWeight: '700', fontSize: 15, color: tokens.color.ink }}>{h.points}</Text>
+                  <Text style={{ fontVariant: ['tabular-nums'], fontWeight: '700', fontSize: 15, color: tokens.color.ink }}>{h.points}</Text>
                   {may && <Button small variant="ghost" testID={`award-${h.id}`} label="Award" onPress={() => setAwarding(h)} />}
                 </View>
               }
@@ -62,7 +61,7 @@ export default function Houses() {
         <Page testID="house-ledger">
           <PageHeader title="Recent points" icon="report" />
           {ledger.data.slice(0, 30).map((p, i) => (
-            <Row key={p.id} first={i === 0} title={p.reason} sub={`${nameOf.get(p.houseId)?.name ?? 'House'} · ${formatDate(p.createdAt)}`} right={<Text style={{ fontFamily: font.mono, fontWeight: '700', color: p.points < 0 ? tokens.color.red : tokens.color.green }}>{p.points > 0 ? `+${p.points}` : p.points}</Text>} />
+            <Row key={p.id} first={i === 0} title={p.reason} sub={`${nameOf.get(p.houseId)?.name ?? 'House'} · ${formatDate(p.createdAt)}`} right={<Text style={{ fontVariant: ['tabular-nums'], fontWeight: '700', color: p.points < 0 ? tokens.color.red : tokens.color.green }}>{p.points > 0 ? `+${p.points}` : p.points}</Text>} />
           ))}
         </Page>
       )}

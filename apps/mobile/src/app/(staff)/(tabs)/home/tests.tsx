@@ -1,38 +1,31 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import type { Exam, ExamList, MyClassSection, Subject } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
-import { shiftISO, todayISO } from '@/lib/attendance';
-import { DEFAULT_SCHEDULE_TIME, isValidMaxMarks, shiftTime, toScheduledAtISO } from '@/lib/exams';
-import { Card, Pill, Screen, SectionTitle, Toast } from '@/components/ui';
+import { todayISO } from '@/lib/attendance';
+import { DEFAULT_SCHEDULE_TIME, isValidMaxMarks, toScheduledAtISO } from '@/lib/exams';
+import { Card, Empty, Pill, Screen, SectionTitle, Toast } from '@/components/ui';
+import { Button } from '@/components/Button';
+import { DateField, SelectField, TextField } from '@/components/Field';
+import { addDays, classOptions, onlyOwnSubject, subjectOptions, useMySubjectNames } from '@/lib/subject-options';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
-import { font, type ColorPalette } from '@/theme/tokens';
 import { fmtDateTime, fmtWeekdayDay } from '@/lib/dates';
 
-function chipStyle(tokens: { color: ColorPalette }, on: boolean) {
-  return {
-    borderWidth: 1.5,
-    borderColor: on ? tokens.color.indigo : tokens.color.line,
-    backgroundColor: on ? tokens.color.indigo50 : tokens.color.surface,
-    borderRadius: 11,
-    paddingVertical: 9,
-    paddingHorizontal: 13,
-  };
-}
+/** Quarter-hours across a school day, labelled the way people say them. */
+const TIME_OPTIONS = Array.from({ length: (17 - 7) * 4 + 1 }, (_, i) => {
+  const h = 7 + Math.floor(i / 4);
+  const m = (i % 4) * 15;
+  const id = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  const h12 = ((h + 11) % 12) + 1;
+  return { id, label: `${h12}:${String(m).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}` };
+});
 
 export default function Tests() {
   const tokens = useTokens();
-  const inputStyle = {
-    borderWidth: 1,
-    borderColor: tokens.color.line,
-    borderRadius: 11,
-    padding: 11,
-    fontSize: 13.5,
-    color: tokens.color.ink,
-  };
-  const labelStyle = { fontSize: 11.5, fontWeight: '700' as const, color: tokens.color.sub };
+  // The same 13/600 label `Field` draws, for the groups that are not a text box.
+  const labelStyle = { fontSize: 13, lineHeight: 18, fontWeight: '600' as const, color: tokens.color.ink2 };
   const [classes, setClasses] = useState<MyClassSection[] | null>(null);
   const [classesError, setClassesError] = useState<string | null>(null);
   const [subjects, setSubjects] = useState<Subject[] | null>(null);
@@ -44,6 +37,7 @@ export default function Tests() {
   const [examsLoading, setExamsLoading] = useState(false);
 
   const [subjectId, setSubjectId] = useState('');
+  const mySubjects = useMySubjectNames();
   const [title, setTitle] = useState('');
   const [date, setDate] = useState(todayISO());
   const [time, setTime] = useState(DEFAULT_SCHEDULE_TIME);
@@ -131,6 +125,19 @@ export default function Tests() {
     setScheduled(false);
     setScheduleError(null);
   };
+  // One class? It is the class. One subject of their own? Pre-pick it.
+  useEffect(() => {
+    if (!classSectionId && classes && classes.length === 1) selectClass(classes[0].classSectionId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classes]);
+  useEffect(() => {
+    if (!subjectId && subjects) {
+      const only = onlyOwnSubject(subjects, mySubjects);
+      if (only) setSubjectId(only);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subjects, mySubjects]);
+
 
   const maxMarksOk = isValidMaxMarks(maxMarksRaw);
   const canSchedule =
@@ -153,7 +160,7 @@ export default function Tests() {
           maxMarks: Number(maxMarksRaw),
         },
       });
-      setSubjectId('');
+      setSubjectId(onlyOwnSubject(subjects ?? [], mySubjects) ?? '');
       setTitle('');
       setDate(todayISO());
       setTime(DEFAULT_SCHEDULE_TIME);
@@ -185,20 +192,25 @@ export default function Tests() {
       key={exam.id}
       testID={`exam-${exam.id}`}
       onPress={() => openResults(exam)}
-      style={{
-        paddingVertical: 9,
+      style={({ pressed }) => ({
+        minHeight: 72,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        marginHorizontal: -16,
+        justifyContent: 'center',
         borderBottomWidth: 1,
         borderBottomColor: tokens.color.line,
-      }}
+        opacity: pressed ? 0.8 : 1,
+      })}
       accessibilityRole="button"
       >
-      <Text style={{ fontFamily: font.serif, fontWeight: '700', fontSize: 14, color: tokens.color.ink }}>{exam.title}</Text>
-      <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>
+      <Text style={{ fontWeight: '600', fontSize: 16, color: tokens.color.ink }}>{exam.title}</Text>
+      <Text style={{ fontSize: 13, color: tokens.color.sub, marginTop: 2 }}>
         {subjectLabel(exam.subjectId)} · {fmtDateTime(exam.scheduledAt)} · out of{' '}
         {exam.maxMarks}
       </Text>
       {exam.syllabus && (
-        <Text style={{ fontSize: 11, color: tokens.color.sub, marginTop: 2 }} numberOfLines={1}>
+        <Text style={{ fontSize: 13, color: tokens.color.sub, marginTop: 2 }} numberOfLines={1}>
           {exam.syllabus}
         </Text>
       )}
@@ -209,7 +221,7 @@ export default function Tests() {
     <Screen>
       <SectionTitle title="Tests" />
       {nextDue && <ResultDayCard window={nextDue} />}
-      <Text style={{ fontSize: 11, color: tokens.color.sub, marginHorizontal: 4, marginTop: -6 }}>
+      <Text style={{ fontSize: 14, color: tokens.color.sub, marginHorizontal: 4, marginTop: -6 }}>
         Schedule a test and the class&apos;s students and guardians get an email straight away.
       </Text>
 
@@ -229,155 +241,136 @@ export default function Tests() {
 
       {classes && classes.length > 0 && (
         <Card>
-          <Text style={{ ...labelStyle, marginBottom: 8 }}>Class</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7 }}>
-            {classes.map((c) => {
-              const on = classSectionId === c.classSectionId;
-              return (
-                <Pressable
-                  key={c.classSectionId}
-                  testID={`class-${c.classSectionId}`}
-                  onPress={() => selectClass(c.classSectionId)}
-                  style={chipStyle(tokens, on)}
-                  accessibilityRole="button"
-                  >
-                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: on ? tokens.color.indigo : tokens.color.sub }}>
-                    {on ? `✓ ${c.name}` : c.name}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+          <SelectField
+            label="Class"
+            testID="test-class"
+            optionTestID={(id) => `class-${id}`}
+            placeholder="Choose a class"
+            value={classSectionId || null}
+            options={classOptions(classes)}
+            onChange={selectClass}
+          />
         </Card>
+      )}
+
+      {/* Choose-first (empty kind "choose", v2 2026-10-08): until a class is
+          picked the form is hidden, and the page said so with 80% blank. */}
+      {classes && classes.length > 0 && !classSectionId && (
+        <Empty kind="choose" icon="results" title="Choose a class above">
+          The form opens for that class — you can schedule a test for one class at a time.
+        </Empty>
       )}
 
       {classSectionId && (
         <Card style={{ gap: 10 }}>
           <View>
-            <Text style={{ fontFamily: font.serif, fontSize: 16, fontWeight: '700', color: tokens.color.ink }}>Schedule a test</Text>
-            <Text style={{ fontSize: 11, color: tokens.color.sub, marginTop: 2 }}>
+            <Text style={{ fontSize: 17, fontWeight: '700', color: tokens.color.ink }}>Schedule a test</Text>
+            <Text style={{ fontSize: 13, color: tokens.color.sub, marginTop: 2 }}>
               Students and guardians are emailed as soon as you save.
             </Text>
           </View>
 
-          {subjectsError && <Text style={{ color: tokens.color.red, fontSize: 12.5 }}>{subjectsError}</Text>}
-          <View>
-            <Text style={labelStyle}>Subject</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 6 }}>
-              {(subjects ?? []).map((s) => {
-                const on = subjectId === s.id;
-                return (
-                  <Pressable key={s.id} testID={`subject-${s.id}`} onPress={() => setSubjectId(s.id)} style={chipStyle(tokens, on)}
-                    accessibilityRole="button"
-                    >
-                    <Text style={{ fontSize: 12.5, fontWeight: '700', color: on ? tokens.color.indigo : tokens.color.sub }}>
-                      {on ? `✓ ${s.code}` : s.code}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+          {subjectsError && <Text style={{ color: tokens.color.red, fontSize: 13 }}>{subjectsError}</Text>}
+          <SelectField
+            label="Subject"
+            testID="test-subject"
+            optionTestID={(id) => `subject-${id}`}
+            placeholder="Choose a subject"
+            value={subjectId || null}
+            options={subjectOptions(subjects ?? [], mySubjects)}
+            onChange={setSubjectId}
+          />
+
+          <TextField
+            label="Title"
+            testID="test-title"
+            value={title}
+            onChangeText={setTitle}
+            placeholder="Unit test 1"
+          />
+
+          {/* Date on a calendar with its weekday; time from a list of
+              quarter-hours — no more tapping ‹ › once per day or per 15 min. */}
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <View style={{ flex: 3 }}>
+              <DateField
+                label="Date"
+                testID="test-date"
+                value={date}
+                minDate={todayISO()}
+                onChange={setDate}
+              />
+            </View>
+            <View style={{ flex: 2 }}>
+              <SelectField
+                label="Time"
+                testID="test-time"
+                sheetTitle="Start time"
+                searchable={false}
+                value={time}
+                options={TIME_OPTIONS}
+                onChange={setTime}
+              />
             </View>
           </View>
-
-          <View>
-            <Text style={labelStyle}>Title</Text>
-            <TextInput
-              testID="test-title"
-              value={title}
-              onChangeText={setTitle}
-              placeholder="Unit test 1"
-              placeholderTextColor={tokens.color.sub}
-              style={[inputStyle, { marginTop: 6 }]}
-            />
-          </View>
-
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={labelStyle}>Date</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <Pressable testID="test-date-prev" accessibilityRole="button" accessibilityLabel="Previous day" hitSlop={12} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }} onPress={() => setDate((d) => shiftISO(d, -1))}>
-                <Text style={{ color: tokens.color.indigo, fontWeight: '700', fontSize: 18 }}>‹</Text>
-              </Pressable>
-              <Text testID="test-date-value" style={{ fontSize: 12.5, color: tokens.color.ink, minWidth: 84, textAlign: 'center' }}>
-                {date}
-              </Text>
-              <Pressable testID="test-date-next" accessibilityRole="button" accessibilityLabel="Next day" hitSlop={12} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }} onPress={() => setDate((d) => shiftISO(d, 1))}>
-                <Text style={{ color: tokens.color.indigo, fontWeight: '700', fontSize: 18 }}>›</Text>
-              </Pressable>
-            </View>
-          </View>
-
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={labelStyle}>Time</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <Pressable testID="test-time-prev" onPress={() => setTime((t) => shiftTime(t, -15))}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: -2 }}>
+            {[
+              { label: 'Tomorrow', iso: addDays(todayISO(), 1) },
+              { label: 'In a week', iso: addDays(todayISO(), 7) },
+              { label: 'In two weeks', iso: addDays(todayISO(), 14) },
+            ].map((q) => (
+              <Pressable
+                key={q.label}
+                testID={`test-date-quick-${q.label.replace(/\s+/g, '-').toLowerCase()}`}
                 accessibilityRole="button"
-                accessibilityLabel="Previous">
-                <Text style={{ color: tokens.color.indigo, fontWeight: '700' }}>‹</Text>
+                accessibilityState={{ selected: date === q.iso }}
+                onPress={() => setDate(q.iso)}
+                style={{ height: 36, paddingHorizontal: 14, borderRadius: 999, justifyContent: 'center', backgroundColor: date === q.iso ? tokens.color.indigo : tokens.color.indigo50 }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '600', color: date === q.iso ? tokens.color.onBrand : tokens.color.indigo }}>{q.label}</Text>
               </Pressable>
-              <Text testID="test-time-value" style={{ fontSize: 12.5, color: tokens.color.ink, minWidth: 60, textAlign: 'center' }}>
-                {time}
-              </Text>
-              <Pressable testID="test-time-next" onPress={() => setTime((t) => shiftTime(t, 15))}
-                accessibilityRole="button"
-                accessibilityLabel="Next">
-                <Text style={{ color: tokens.color.indigo, fontWeight: '700' }}>›</Text>
-              </Pressable>
-            </View>
+            ))}
           </View>
 
           <View>
-            <Text style={labelStyle}>Max marks</Text>
-            <TextInput
+            <TextField
+              label="Max marks"
               testID="test-max-marks"
               value={maxMarksRaw}
               onChangeText={(v) => setMaxMarksRaw(v.replace(/\D/g, ''))}
               keyboardType="numeric"
-              style={[inputStyle, { marginTop: 6 }]}
             />
             {maxMarksRaw.length > 0 && !maxMarksOk && (
-              <Text testID="max-marks-error" style={{ color: tokens.color.red, fontSize: 11.5, marginTop: 4 }}>
+              <Text testID="max-marks-error" style={{ color: tokens.color.red, fontSize: 13, marginTop: 4 }}>
                 Max marks must be a whole number greater than 0.
               </Text>
             )}
           </View>
 
-          <View>
-            <Text style={labelStyle}>Syllabus (optional)</Text>
-            <TextInput
-              testID="test-syllabus"
-              value={syllabus}
-              onChangeText={setSyllabus}
-              multiline
-              placeholder="Chapters 1–4, plus the worksheet from last week."
-              placeholderTextColor={tokens.color.sub}
-              style={[inputStyle, { marginTop: 6, minHeight: 64, textAlignVertical: 'top' }]}
-            />
-          </View>
+          <TextField
+            label="Syllabus"
+            optional
+            testID="test-syllabus"
+            value={syllabus}
+            onChangeText={setSyllabus}
+            multiline
+            placeholder="Chapters 1–4, plus the worksheet from last week."
+          />
 
           {scheduleError && (
-            <Text testID="schedule-error" style={{ color: tokens.color.red, fontSize: 12.5 }}>
+            <Text testID="schedule-error" style={{ color: tokens.color.red, fontSize: 13 }}>
               {scheduleError}
             </Text>
           )}
 
-          <Pressable
+          <Button
             testID="schedule-submit"
+            block
             disabled={!canSchedule}
+            busy={scheduling}
+            label={scheduling ? 'Scheduling…' : 'Schedule test'}
             onPress={() => void schedule()}
-            style={{
-              backgroundColor: tokens.color.indigo,
-              borderRadius: 13,
-              padding: 12,
-              alignSelf: 'flex-start',
-              paddingHorizontal: 18,
-              opacity: canSchedule ? 1 : 0.6,
-            }}
-            accessibilityRole="button"
-            >
-            <Text style={{ color: tokens.color.onBrand, fontWeight: '700', fontSize: 13 }}>
-              {scheduling ? 'Scheduling…' : 'Schedule test'}
-            </Text>
-          </Pressable>
+          />
 
           {scheduled && (
             <Toast
@@ -391,7 +384,7 @@ export default function Tests() {
 
       {classSectionId && (
         <Card>
-          <Text style={{ fontFamily: font.serif, fontSize: 16, fontWeight: '700', color: tokens.color.ink }}>Scheduled tests</Text>
+          <Text style={{ fontSize: 17, fontWeight: '700', color: tokens.color.ink }}>Scheduled tests</Text>
           {examsLoading && <LoadingRows label="Loading tests…" rows={3} bare />}
           {examsError && (
             <Text testID="exams-error" style={{ color: tokens.color.red, marginTop: 6 }}>
@@ -438,8 +431,8 @@ function ResultDayCard({ window }: { window: { id: string; name: string; resultD
   return (
     <Card testID="result-day" style={{ flexDirection: 'row', alignItems: 'center', gap: 10, borderColor: d <= 3 ? tokens.color.amber : tokens.color.line }}>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={{ fontSize: 10.5, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', color: tokens.color.sub }}>Marks due</Text>
-        <Text style={{ fontFamily: font.serif, fontSize: 15, fontWeight: '600', color: tokens.color.ink, marginTop: 1 }} numberOfLines={1}>
+        <Text style={{ fontSize: 12, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', color: tokens.color.sub }}>Marks due</Text>
+        <Text style={{ fontSize: 16, fontWeight: '600', color: tokens.color.ink, marginTop: 1 }} numberOfLines={1}>
           {window.name} · {when}
         </Text>
       </View>

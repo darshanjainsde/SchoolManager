@@ -15,9 +15,10 @@ import { relativeTime } from '@/lib/portal';
 import { Card, ErrorState, Figure, Page, PageHeader, RailRow, RailStatus, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { NotificationBell } from '@/components/NotificationBell';
-import { HomeToolGrid } from '@/components/HomeToolGrid';
+import { HomeMenu } from '@/components/HomeToolGrid';
 import { Touchable } from '@/components/Touchable';
 import { Icon, isIconName } from '@/components/icons';
+import { HeroDeck } from '@/components/HeroDeck';
 import { StudentHero } from '@/components/StudentHero';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
@@ -57,8 +58,8 @@ function Dateline() {
           fontSize: 9.5,
           fontWeight: '800',
           letterSpacing: 0.95,
-          color: tokens.color.late,
-          backgroundColor: tokens.color.amber50,
+          color: tokens.color.indigo,
+          backgroundColor: tokens.color.indigo50,
           borderRadius: 5,
           paddingHorizontal: 7,
           paddingVertical: 2,
@@ -276,6 +277,21 @@ export default function Home() {
           </Text>
 
           <StudentHero
+            deck={
+              <HeroDeck
+                actions={[
+                  // The asks ride here now, as badges: an unsigned diary
+                  // remark, an unread message, a late bill. Fees only for a
+                  // school that runs fees on Sckools (it was drawn for all).
+                  { label: 'Ask teacher', icon: 'messages', testID: 'hero-act-ask', badge: unreadMsgs, onPress: () => router.push('/(family)/(tabs)/home/messages') },
+                  { label: 'Diary', icon: 'diary', testID: 'hero-act-diary', badge: diary?.unsignedCount ?? 0, onPress: () => router.push('/(family)/(tabs)/home/diary') },
+                  { label: 'Homework', icon: 'assignments', testID: 'hero-act-homework', onPress: () => router.push('/(family)/(tabs)/home/assignments') },
+                  hasFeature(s, 'FEES')
+                    ? { label: 'Fees', icon: 'fees', testID: 'hero-act-fees', badge: lateBills, onPress: () => router.push('/(family)/(tabs)/fees') }
+                    : { label: 'Results', icon: 'results', testID: 'hero-act-results', badge: nextExam ? 1 : 0, onPress: () => router.push('/(family)/results') },
+                ]}
+              />
+            }
             current={
               currentSlot
                 ? {
@@ -304,38 +320,24 @@ export default function Home() {
             monthPercent={attendanceMarked > 0 ? (attendance?.percent ?? null) : null}
           />
 
-          {/* NEEDS YOU TODAY (pitch №4) — the family's asks as badged domes,
-              replacing the old diary banner card + next-test notice row. An
-              unsigned remark still outranks everything: the Diary dome is the
-              one LIT thing on this screen while any wait, and its badge is the
-              count. Next test rides as the Results badge — the fact stays
-              tappable, the full detail (date, syllabus, marks) lives one tap
-              away on Results where it always did. */}
-          <Text style={familyEyebrow(tokens)}>Needs you today</Text>
-          <HomeToolGrid
-            testID="grid-needs"
+          {/* THE MENU — one card instead of "Needs you today" + "Go to" (user,
+              9 Oct 2026: "make that menu together"). The asks moved into the
+              hero's quick actions as badges; every other door is here, badged
+              ones first. Hero doors are not repeated. */}
+          <HomeMenu
             tools={[
-              {
-                label: 'Diary',
-                icon: 'diary',
-                route: '/(family)/(tabs)/home/diary',
-                tone: 'amber',
-                badge: diary?.unsignedCount ?? 0,
-                live: (diary?.unsignedCount ?? 0) > 0,
-              },
-              { label: 'Messages', icon: 'messages', route: '/(family)/(tabs)/home/messages', tone: 'amber', badge: unreadMsgs },
-              { label: 'Assignments', icon: 'assignments', route: '/(family)/(tabs)/home/assignments' },
-              { label: 'Results', icon: 'results', route: '/(family)/results', badge: nextExam ? 1 : 0 },
-              // Fees asks only when a bill is LATE — the badge is the count of
-              // late bills, and the dome's fill stays reserved for the diary.
-              ...(hasFeature(s, 'FEES')
-                ? [{ label: 'Fees', icon: 'fees', route: '/(family)/(tabs)/fees', tone: 'amber' as const, badge: lateBills }]
-                : []),
+              // Results is a hero action when the school has no fees module.
+              ...(hasFeature(s, 'FEES') ? [{ label: 'Results', icon: 'results', route: '/(family)/results', badge: nextExam ? 1 : 0 }] : []),
+              { label: 'Timetable', icon: 'timetable', route: '/(family)/(tabs)/home/timetable' },
+              { label: 'Notices', icon: 'notices', route: '/(family)/(tabs)/home/notices' },
+              { label: 'Holidays', icon: 'holidays', route: '/(family)/(tabs)/home/holidays' },
+              // A paid module's door is drawn only for a school that has it;
+              // the Complaint Box is free, so always (nav-reachability.test).
+              ...MORE_ITEMS.filter((t) => ['Sports', 'Library', 'Report cards', 'Birthdays', 'Complaint Box'].includes(t.label))
+                .filter((t) => !t.feature || hasFeature(s, t.feature))
+                .map((t) => ({ label: t.label, icon: t.icon, route: t.route })),
             ]}
           />
-
-          {/* The rule between "asked of you" and "merely available". */}
-          <View style={{ borderTopWidth: 1, borderTopColor: tokens.color.line, marginHorizontal: 2 }} />
 
           {/* At-a-glance KPIs. Only two — "today" is already the hero's status
               chip and "next test" is the notice above, so repeating them would
@@ -391,26 +393,6 @@ export default function Home() {
             </>
           )}
 
-          {/* GO TO — everything merely available, the family twin of the
-              staff block. The four tools with asks moved up to Needs-you-today. */}
-          <Text style={familyEyebrow(tokens)}>Go to</Text>
-          <HomeToolGrid
-            testID="grid-goto"
-            tools={[
-              { label: 'Timetable', icon: 'timetable', route: '/(family)/(tabs)/home/timetable' },
-              { label: 'Notices', icon: 'notices', route: '/(family)/(tabs)/home/notices', tone: 'amber' },
-              { label: 'Holidays', icon: 'holidays', route: '/(family)/(tabs)/home/holidays', tone: 'green' },
-              // The four the web portal had first (second edition), then the
-              // Complaint Box — free, so always drawn: it was missing from this
-              // grid, and families could reach it only from a notification
-              // (guard: lib/__tests__/nav-reachability.test.ts). A paid
-              // module's tool is drawn only for a school that has it.
-              ...MORE_ITEMS.filter((t) => ['Sports', 'Library', 'Report cards', 'Birthdays', 'Complaint Box'].includes(t.label))
-                .filter((t) => !t.feature || hasFeature(s, t.feature))
-                .map((t) => ({ label: t.label, icon: t.icon, route: t.route, tone: t.tone })),
-            ]}
-          />
-
           <SectionTitle title="Latest announcements" />
           {latestAnnouncements.length === 0 ? (
             <Card>
@@ -433,19 +415,6 @@ export default function Home() {
       )}
     </Screen>
   );
-}
-
-/** The small letter-spaced label that titles a block on Home. */
-function familyEyebrow(tokens: ReturnType<typeof useTokens>) {
-  return {
-    marginHorizontal: 4,
-    marginBottom: -2,
-    fontSize: 10,
-    letterSpacing: 1.3,
-    textTransform: 'uppercase' as const,
-    fontWeight: '700' as const,
-    color: tokens.color.sub,
-  };
 }
 
 /** Does the wall carry a row for THIS child? The wall has no ids by design — match on the name and class the app already knows. */

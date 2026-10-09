@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { Alert, Pressable, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import type {
   LeaveApplication,
@@ -12,11 +12,14 @@ import { LEAVE_TYPES } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { todayISO } from '@/lib/attendance';
 import { Card, Empty, Pill, Screen, SectionTitle, Toast } from '@/components/ui';
+import { Button } from '@/components/Button';
+import { Field, fieldInputStyle, TextField } from '@/components/Field';
 import { CalendarSheet } from '@/components/CalendarSheet';
+import { ChevronDown, SelectField, weekdayDate } from '@/components/Field';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
-import { font, type ColorPalette } from '@/theme/tokens';
 import { fmtDate, fmtDateTime } from '@/lib/dates';
+import { ask } from '@/components/ConfirmSheet';
 
 const LEAVE_TYPE_LABEL: Record<LeaveTypeValue, string> = {
   SICK: 'Sick leave',
@@ -90,7 +93,11 @@ function toLeaveItem(a: LeaveApplication): RequestItem {
     kind: 'leave',
     id: a.id,
     title: LEAVE_TYPE_LABEL[a.type] ?? a.type,
-    detail: `${formatDateOnly(a.startDate)} – ${formatDateOnly(a.endDate)}`,
+    // One day reads once ("Fri, 9 Oct 2026"), not "9 Oct 2026 – 9 Oct 2026".
+    detail:
+      a.startDate.slice(0, 10) === a.endDate.slice(0, 10)
+        ? formatDateOnly(a.startDate)
+        : `${formatDateOnly(a.startDate)} – ${formatDateOnly(a.endDate)}`,
     reason: a.reason,
     status: a.status,
     createdAt: a.createdAt,
@@ -130,28 +137,10 @@ function registerStatusDisplay(item: Extract<RequestItem, { kind: 'register' }>)
   return { label: 'Rejected', tone: 'red' };
 }
 
-function chipStyle(tokens: { color: ColorPalette }, on: boolean) {
-  return {
-    borderWidth: 1.5,
-    borderColor: on ? tokens.color.indigo : tokens.color.line,
-    backgroundColor: on ? tokens.color.indigo50 : tokens.color.surface,
-    borderRadius: 11,
-    paddingVertical: 9,
-    paddingHorizontal: 13,
-  };
-}
-
 export default function Requests() {
   const tokens = useTokens();
-  const inputStyle = {
-    borderWidth: 1,
-    borderColor: tokens.color.line,
-    borderRadius: 11,
-    padding: 11,
-    fontSize: 13.5,
-    color: tokens.color.ink,
-  };
-  const labelStyle = { fontSize: 11.5, fontWeight: '700' as const, color: tokens.color.sub };
+  // The same 13/600 label `Field` draws, for the groups that are not a text box.
+  const labelStyle = { fontSize: 13, lineHeight: 18, fontWeight: '600' as const, color: tokens.color.ink2 };
   // ── Queue: two independent fetches, each with its own settled state — a
   // failure on one side must never blank out data that already loaded on
   // the other (see the partial-failure requirement in the task brief).
@@ -251,10 +240,10 @@ export default function Requests() {
 
   function confirmCancel(id: string) {
     if (cancellingRef.current) return;
-    Alert.alert('Cancel this leave?', 'Your classes and attendance for the cancelled dates will be restored.', [
+    ask('Cancel this leave?', 'Your classes and attendance for the cancelled dates will be restored.', [
       { text: 'No', style: 'cancel' },
       { text: 'Yes, cancel leave', style: 'destructive', onPress: () => void doCancel(id) },
-    ]);
+    ], { icon: 'requests' });
   }
 
   // ── Apply for leave ──────────────────────────────────────────────────────
@@ -305,29 +294,32 @@ export default function Requests() {
   return (
     <Screen>
       <SectionTitle title="Requests" />
-      <Text style={{ fontSize: 11, color: tokens.color.sub, marginHorizontal: 4, marginTop: -6 }}>
+      <Text style={{ fontSize: 14, color: tokens.color.sub, marginHorizontal: 4, marginTop: -6 }}>
         Leave applications and register-change requests, in one place.
       </Text>
 
-      <Card style={{ gap: 10 }}>
-        <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>Apply for leave</Text>
+      <Card style={{ gap: 12 }}>
+        <Text style={{ fontSize: 17, fontWeight: '700', color: tokens.color.ink }}>Apply for leave</Text>
 
         <View>
-          <Text style={[labelStyle, { marginBottom: 6 }]}>Type</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7 }}>
-            {LEAVE_TYPES.map((t) => {
-              const on = type === t;
-              return (
-                <Pressable key={t} testID={`apply-type-${t}`} onPress={() => setType(t)} style={chipStyle(tokens, on)}
-                  accessibilityRole="button"
-                  >
-                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: on ? tokens.color.indigo : tokens.color.sub }}>
-                    {on ? `✓ ${LEAVE_TYPE_LABEL[t]}` : LEAVE_TYPE_LABEL[t]}
-                  </Text>
-                </Pressable>
-              );
+          {/* A dropdown, each type with its balance (user, 9 Oct 2026). */}
+          <SelectField
+            label="Type"
+            testID="apply-type"
+            optionTestID={(t) => `apply-type-${t}`}
+            sheetTitle="Type of leave"
+            subInField={false}
+            value={type}
+            options={LEAVE_TYPES.map((t) => {
+              const bal = balances?.balances.find((b) => b.builtin === t);
+              return {
+                id: t,
+                label: LEAVE_TYPE_LABEL[t],
+                sub: bal && bal.remaining !== null ? `${bal.remaining} ${bal.remaining === 1 ? 'day' : 'days'} left` : undefined,
+              };
             })}
-          </View>
+            onChange={(t) => setType(t as typeof type)}
+          />
           {(() => {
             const bal = balances?.balances.find((b) => b.builtin === type);
             if (!bal || bal.remaining === null) return null;
@@ -335,7 +327,7 @@ export default function Requests() {
               <Text
                 testID="apply-balance"
                 style={{
-                  fontSize: 11.5,
+                  fontSize: 13,
                   marginTop: 6,
                   color: bal.remaining <= 0 ? tokens.color.red : tokens.color.sub,
                 }}
@@ -357,34 +349,30 @@ export default function Requests() {
             ]
           ).map((f) => (
             <View key={f.key} style={{ flex: 1 }}>
-              <Text style={[labelStyle, { marginBottom: 6 }]}>{f.label}</Text>
-              <Pressable
-                testID={f.testID}
-                accessibilityRole="button"
-                accessibilityLabel={`${f.label} date: ${f.value}. Opens a calendar.`}
-                disabled={applySubmitting}
-                onPress={() => setPickerFor(f.key)}
-                style={{
-                  borderWidth: 1,
-                  borderColor: tokens.color.line,
-                  borderRadius: 10,
-                  backgroundColor: tokens.color.surface,
-                  paddingVertical: 10,
-                  paddingHorizontal: 12,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                }}
-              >
-                <Text style={{ fontSize: 12.5, color: tokens.color.ink }}>{formatDateOnly(f.value)}</Text>
-                <Text style={{ fontSize: 12, color: tokens.color.indigo, fontWeight: '700' }}>▾</Text>
-              </Pressable>
+              <Field label={f.label}>
+                {/* The kit's field box, pressed instead of typed: the accent
+                    rule inks in while its calendar sheet is up. */}
+                <Pressable
+                  testID={f.testID}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${f.label} date: ${f.value}. Opens a calendar.`}
+                  disabled={applySubmitting}
+                  onPress={() => setPickerFor(f.key)}
+                  style={[
+                    fieldInputStyle(tokens, { focused: pickerFor === f.key }),
+                    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', opacity: applySubmitting ? 0.6 : 1 },
+                  ]}
+                >
+                  <Text numberOfLines={1} style={{ fontSize: 15, color: tokens.color.ink, flexShrink: 1 }}>{weekdayDate(f.value)}</Text>
+                  <ChevronDown color={tokens.color.sub} />
+                </Pressable>
+              </Field>
             </View>
           ))}
         </View>
 
         {dateOrderInvalid && (
-          <Text testID="apply-date-order-error" style={{ color: tokens.color.red, fontSize: 12 }}>
+          <Text testID="apply-date-order-error" style={{ color: tokens.color.red, fontSize: 13 }}>
             The end date must be on or after the start date.
           </Text>
         )}
@@ -405,43 +393,31 @@ export default function Requests() {
           onClose={() => setPickerFor(null)}
         />
 
-        <View>
-          <Text style={[labelStyle, { marginBottom: 6 }]}>Reason (optional)</Text>
-          <TextInput
-            testID="apply-reason"
-            value={reason}
-            onChangeText={setReason}
-            placeholder="A short note for your admin"
-            placeholderTextColor={tokens.color.sub}
-            editable={!applySubmitting}
-            multiline
-            style={[inputStyle, { minHeight: 64, textAlignVertical: 'top' }]}
-          />
-        </View>
+        <TextField
+          label="Reason"
+          optional
+          testID="apply-reason"
+          value={reason}
+          onChangeText={setReason}
+          placeholder="A short note for your admin"
+          editable={!applySubmitting}
+          multiline
+        />
 
         {applyError && (
-          <Text testID="apply-error" style={{ color: tokens.color.red, fontSize: 12.5 }}>
+          <Text testID="apply-error" style={{ color: tokens.color.red, fontSize: 13 }}>
             {applyError}
           </Text>
         )}
 
-        <Pressable
+        <Button
           testID="apply-submit"
+          block
+          busy={applySubmitting}
           disabled={!canApply}
+          label={applySubmitting ? 'Submitting…' : 'Submit request'}
           onPress={submitApply}
-          style={{
-            backgroundColor: tokens.color.indigo,
-            borderRadius: 13,
-            padding: 11,
-            alignSelf: 'flex-start',
-            opacity: canApply ? 1 : 0.6,
-          }}
-          accessibilityRole="button"
-          >
-          <Text style={{ color: tokens.color.onBrand, fontWeight: '700', fontSize: 13 }}>
-            {applySubmitting ? 'Submitting…' : 'Submit request'}
-          </Text>
-        </Pressable>
+        />
 
         {applySuccess && (
           <Toast kind="success" testID="apply-success" message="Leave request submitted — your admin will review it." />
@@ -450,8 +426,8 @@ export default function Requests() {
 
       <Card style={{ gap: 4 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>My requests</Text>
-          <Text style={{ fontSize: 11, color: tokens.color.sub }}>{items.length} total</Text>
+          <Text style={{ fontSize: 17, fontWeight: '700', color: tokens.color.ink }}>My requests</Text>
+          <Text style={{ fontSize: 13, color: tokens.color.sub }}>{items.length} total</Text>
         </View>
       </Card>
 
@@ -499,21 +475,20 @@ export default function Requests() {
                       <Pill tone="indigo">{item.kind === 'leave' ? 'Leave' : 'Register change'}</Pill>
                       <Text
                         style={{
-                          fontFamily: font.serif,
                           fontWeight: '700',
-                          fontSize: 15,
+                          fontSize: 17,
                           color: tokens.color.ink,
                           marginTop: 6,
                         }}
                       >
                         {item.title}
                       </Text>
-                      <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>
+                      <Text style={{ fontSize: 13, color: tokens.color.sub, marginTop: 2 }}>
                         {item.detail}
                         {item.reason ? ` · ${item.reason}` : ''}
                       </Text>
                       {showsDeadline && item.kind === 'register' && item.expiresAt && (
-                        <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>
+                        <Text style={{ fontSize: 13, color: tokens.color.sub, marginTop: 2 }}>
                           Expires {formatDateTime(item.expiresAt)}
                         </Text>
                       )}
@@ -527,18 +502,15 @@ export default function Requests() {
                           be unambiguous here. */}
                       <Pill tone={pill.tone}>{pill.label}</Pill>
                       {item.kind === 'leave' && item.cancellable && (
-                        <Pressable
+                        <Button
                           testID={`cancel-${item.id}`}
+                          variant="danger"
+                          size="sm"
+                          label={cancelling ? 'Cancelling…' : 'Cancel'}
+                          busy={cancelling}
                           disabled={cancelling}
                           onPress={() => confirmCancel(item.id)}
-                          hitSlop={12}
-                          style={{ opacity: cancelling ? 0.6 : 1, minHeight: 44, justifyContent: 'center', alignItems: 'flex-end' }}
-                          accessibilityRole="button"
-                          >
-                          <Text style={{ color: tokens.color.red, fontWeight: '700', fontSize: 12 }}>
-                            {cancelling ? 'Cancelling…' : 'Cancel'}
-                          </Text>
-                        </Pressable>
+                        />
                       )}
                     </View>
                   </View>

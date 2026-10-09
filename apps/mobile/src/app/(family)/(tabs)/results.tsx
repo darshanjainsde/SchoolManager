@@ -8,7 +8,6 @@ import { Card, ErrorState, Page, Pill, Screen, SectionTitle } from '@/components
 import { LoadingRows } from '@/components/Loading';
 import { DUR, inkWidth, play, useReduceMotion } from '@/theme/motion';
 import { useTokens } from '@/theme/theme-context';
-import { font } from '@/theme/tokens';
 
 /** marks/maxMarks as a 0-100 percentage, guarding a zero/absent denominator — ported from apps/web/app/portal/results/page.tsx. */
 function pct(marks: number, maxMarks: number): number {
@@ -17,7 +16,7 @@ function pct(marks: number, maxMarks: number): number {
 }
 
 /** Height of the expanded `.det` drawer — two labelled bars and their gaps. */
-const DETAIL_HEIGHT = 64;
+const DETAIL_HEIGHT = 76;
 
 /**
  * The `.det` reveal: a drawer that rolls open on tap rather than appearing.
@@ -46,18 +45,18 @@ function NextTestCard({ exam }: { exam: UpcomingExam }) {
   return (
     <Card testID="next-test-card" style={{ gap: 4 }}>
       <Text
-        style={{ fontSize: 9.5, fontWeight: '800', letterSpacing: 1, color: tokens.color.indigo }}
+        style={{ fontSize: 12, fontWeight: '800', letterSpacing: 1, color: tokens.color.indigo }}
       >
         NEXT TEST
       </Text>
-      <Text style={{ fontFamily: font.serif, fontSize: 16, color: tokens.color.ink }}>
+      <Text style={{ fontSize: 17, fontWeight: '700', color: tokens.color.ink }}>
         {exam.subjectName} · {exam.title}
       </Text>
-      <Text style={{ fontFamily: font.mono, fontSize: 11, color: tokens.color.sub, marginTop: 1 }}>
+      <Text style={{ fontVariant: ['tabular-nums'], fontSize: 13, color: tokens.color.sub, marginTop: 2 }}>
         {formatDate(exam.scheduledAt)} · out of {exam.maxMarks}
       </Text>
       {exam.syllabus && (
-        <Text style={{ fontSize: 12, color: tokens.color.ink2 }}>Syllabus: {exam.syllabus}</Text>
+        <Text style={{ fontSize: 14, color: tokens.color.ink2 }}>Syllabus: {exam.syllabus}</Text>
       )}
     </Card>
   );
@@ -81,8 +80,8 @@ function ScoreBar({
   return (
     <>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6, marginBottom: 3 }}>
-        <Text style={{ fontSize: 9, color: tokens.color.sub }}>{label}</Text>
-        <Text style={{ fontFamily: font.mono, fontSize: 9, color: tokens.color.sub }}>{value}</Text>
+        <Text style={{ fontSize: 13, color: tokens.color.sub }}>{label}</Text>
+        <Text style={{ fontVariant: ['tabular-nums'], fontSize: 13, color: tokens.color.sub }}>{value}</Text>
       </View>
       <View
         style={{
@@ -136,25 +135,26 @@ function ResultRow({ r, first }: { r: PublishedResult; first: boolean }) {
       accessibilityRole="button"
       onPress={() => setOpen((o) => !o)}
       style={{
-        paddingVertical: 11,
-        paddingHorizontal: 13,
+        minHeight: 72,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
         borderTopWidth: first ? 0 : 1,
         borderTopColor: tokens.color.line,
       }}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>{r.subjectName}</Text>
-          <Text style={{ fontSize: 12, color: tokens.color.sub, marginTop: 1 }}>{r.title}</Text>
+          <Text style={{ fontSize: 16, fontWeight: '600', color: tokens.color.ink }}>{r.subjectName}</Text>
+          <Text style={{ fontSize: 13, color: tokens.color.sub, marginTop: 2 }}>{r.title}</Text>
         </View>
-        <Text style={{ fontSize: 16, fontWeight: '800', color: tokens.color.ink }}>
+        <Text style={{ fontSize: 17, fontWeight: '800', color: tokens.color.ink }}>
           {r.marks}
-          <Text style={{ fontSize: 12, fontWeight: '600', color: tokens.color.sub }}>/{r.maxMarks}</Text>
+          <Text style={{ fontSize: 13, fontWeight: '600', color: tokens.color.sub }}>/{r.maxMarks}</Text>
         </Text>
       </View>
 
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 7, flexWrap: 'wrap' }}>
-        <Text style={{ fontSize: 11, color: tokens.color.sub }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+        <Text style={{ fontSize: 13, color: tokens.color.sub }}>
           Class average: {r.classAverage}/{r.maxMarks}
         </Text>
         <Pill tone={tone}>{diffLabel}</Pill>
@@ -245,7 +245,7 @@ export default function Results() {
             </Card>
           ) : (
             <>
-              <Text style={{ fontSize: 11, color: tokens.color.sub, marginHorizontal: 4, marginTop: -4 }}>
+              <Text style={{ fontSize: 13, color: tokens.color.sub, marginHorizontal: 4, marginTop: -4 }}>
                 Tap a result to see it against the class.
               </Text>
               {/* One sheet of paper, ruled between results — the pitch's

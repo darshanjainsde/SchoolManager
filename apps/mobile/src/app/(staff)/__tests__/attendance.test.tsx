@@ -347,16 +347,38 @@ describe('past dates', () => {
 });
 
 describe('future dates', () => {
-  it('a future date is blocked client-side with no request fired', async () => {
+  it('a future date cannot be reached: Next is disabled on today and fires no request', async () => {
     mockApi({ status: { [TODAY]: [PENDING] } });
-    const { getByTestId, findByTestId, findByText } = render(<StaffAttendance />);
+    const { getByTestId, findByTestId, queryByText } = render(<StaffAttendance />);
     await findByTestId('take-cs-pending');
     const callsBefore = (api.request as jest.Mock).mock.calls.length;
 
+    expect(getByTestId('date-next').props.accessibilityState?.disabled).toBe(true);
     fireEvent.press(getByTestId('date-next'));
 
-    expect(await findByText(/cannot take attendance for a future date/i)).toBeTruthy();
+    expect(queryByText(/cannot take attendance for a future date/i)).toBeNull();
     await waitFor(() => expect((api.request as jest.Mock).mock.calls.length).toBe(callsBefore));
+  });
+});
+
+describe('back to today (user, 9 Oct 2026)', () => {
+  it('away from today the title row carries a back button that returns to today', async () => {
+    mockApi({ status: { [TODAY]: [PENDING], [YESTERDAY]: [] }, mine: [] });
+    const { getByTestId, findByTestId, queryByTestId } = render(<StaffAttendance />);
+    await findByTestId('take-cs-pending');
+    expect(queryByTestId('date-back-today')).toBeNull();
+
+    fireEvent.press(getByTestId('date-prev'));
+    fireEvent.press(await findByTestId('date-back-today'));
+
+    await findByTestId('take-cs-pending');
+    expect(queryByTestId('date-back-today')).toBeNull();
+  });
+
+  it('a waiting class card names its action', async () => {
+    mockApi({ status: { [TODAY]: [PENDING] } });
+    const { findByText } = render(<StaffAttendance />);
+    expect(await findByText('Take register')).toBeTruthy();
   });
 });
 

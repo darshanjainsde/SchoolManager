@@ -1,6 +1,6 @@
 import { useReload } from '@/lib/query';
 import { useCallback, useState } from 'react';
-import { Pressable, Text, View, type TextStyle, Alert } from 'react-native';
+import { Pressable, Text, View, type TextStyle } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import type { NotificationRow } from '@skoolos/types';
 import { ApiError } from '@/lib/api';
@@ -12,6 +12,7 @@ import { Card, Empty, Page, Screen, SectionTitle, ListScreen, ErrorState } from 
 import { useTokens } from '@/theme/theme-context';
 import { font, type ColorPalette } from '@/theme/tokens';
 import { DUR, pinStyle, useGesture } from '@/theme/motion';
+import { ask } from '@/components/ConfirmSheet';
 
 type Group = NotificationGroup;
 
@@ -111,7 +112,7 @@ function Row({
               {n.body}
             </Text>
           ) : null}
-          <Text style={{ fontSize: 10.5, color: tokens.color.sub, marginTop: 3, fontFamily: font.mono }}>
+          <Text style={{ fontSize: 13, color: tokens.color.sub, marginTop: 3, fontVariant: ['tabular-nums'] }}>
             {formatWhen(n.createdAt)}
           </Text>
         </View>
@@ -203,7 +204,7 @@ export function NotificationsScreen({ group }: { group: Group }) {
   // put the list back rather than letting it empty and silently refill on the
   // next focus (UI audit 2026-09-22, #14).
   const clearAll = () => {
-    Alert.alert('Clear all notifications?', 'They are removed for you. Nothing is deleted at the school.', [
+    ask('Clear all notifications?', 'They are removed for you. Nothing is deleted at the school.', [
       { text: 'Keep them', style: 'cancel' },
       {
         text: 'Clear all',
@@ -217,7 +218,7 @@ export function NotificationsScreen({ group }: { group: Group }) {
           });
         },
       },
-    ]);
+    ], { icon: 'bell' });
   };
 
   const open = (n: NotificationRow) => {

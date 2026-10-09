@@ -7,11 +7,11 @@ import { palette } from '../tokens';
  * them restyles nobody who has not asked.
  */
 describe('the grounds', () => {
-  it('leaves the existing app untouched — classic IS today’s palette', () => {
+  it('the default ground IS the base palette — fresh (UI v2)', () => {
     // The guarantee that shipping this feature cannot restyle an install that
     // never opts in. If someone edits tokens.ts and forgets grounds.ts, this
     // fails rather than quietly drifting.
-    const { light, dark } = GROUNDS.classic;
+    const { light, dark } = GROUNDS.fresh;
     expect(light.appBg).toBe(palette.light.appBg);
     expect(light.surface).toBe(palette.light.surface);
     expect(light.surfaceMuted).toBe(palette.light.surfaceMuted);
@@ -68,7 +68,7 @@ describe('the grounds', () => {
     // Classic is only ~4 steps apart, which is the bug. Every ground we ADD
     // has to do better than the thing it is fixing.
     const gap = (g: { appBg: string; surface: string }) => lum(g.surface) - lum(g.appBg);
-    for (const name of GROUND_NAMES.filter((n) => n !== 'classic')) {
+    for (const name of GROUND_NAMES.filter((n) => n !== 'classic' && n !== 'fresh')) {
       const g = GROUNDS[name].light;
       expect(`${name} separates more than classic: ${gap(g) > gap(GROUNDS.classic.light)}`).toBe(
         `${name} separates more than classic: true`,
@@ -120,8 +120,8 @@ describe('choosing a ground', () => {
     expect(out.line2).toBe(GROUNDS.blue.light.line2);
   });
 
-  it('applying classic is a no-op on the neutrals', () => {
-    const out = applyGround(palette.light, GROUNDS.classic.light);
+  it('applying fresh (the default) is a no-op on the neutrals', () => {
+    const out = applyGround(palette.light, GROUNDS.fresh.light);
     expect(out).toEqual(palette.light);
   });
 });

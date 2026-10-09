@@ -7,6 +7,7 @@ import { Empty, ErrorState, Page, PageHeader, Pill, Screen, SectionTitle } from 
 import { SegmentedField } from '@/components/Field';
 import { Button, Eyebrow, Row } from '@/components/desk';
 import { LoadingRows } from '@/components/Loading';
+import { LeaveRequestCard } from '@/components/LeaveRequestCard';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 import { fmtDay, fmtSchoolTime, fmtWeekdayDay } from '@/lib/dates';
@@ -79,7 +80,7 @@ function Waiting() {
   const [error, setError] = useState<string | null>(null);
 
   if (q.error instanceof ApiError && (q.error.status === 403 || q.error.status === 404)) {
-    return <Empty icon="take">You do not have the right to decide leave.</Empty>;
+    return <Empty kind="locked" title="Leave decisions need a right">The school admin grants it under Settings → Leave. Ask them, and this list fills in.</Empty>;
   }
   if (q.error && !q.data) return <ErrorState error={q.error} onRetry={q.reload} />;
   if (!q.data) return <LoadingRows label="leave waiting" />;
@@ -113,25 +114,30 @@ function Waiting() {
         <Text testID="leavedesk-error" style={{ paddingHorizontal: 12, paddingBottom: 10, fontFamily: font.sans, fontSize: 12, color: tokens.color.red }}>{error}</Text>
       ) : null}
       {rows.length === 0 ? (
-        <Empty icon="take">
-          No leave is waiting. Anything still undecided is left out of the month&apos;s pay, so this being
-          empty is what keeps a pay run unblocked.
+        <Empty kind="done" title="No leave requests waiting">
+          New requests land here and ring the bell. Anything undecided is left out of the month&apos;s pay, so an
+          empty list is what keeps the pay run unblocked.
         </Empty>
       ) : (
-        rows.map((r, i) => (
-          <View key={r.id}>
-            <Row
-              first={i === 0}
-              title={r.teacherName}
-              sub={`${leaveTypeLabel(r.type)} · ${span(r)}${r.reason ? ` · ${r.reason}` : ''}`}
-              right={<Pill tone="amber">Pending</Pill>}
+        <View style={{ gap: 8, padding: 8 }}>
+          {rows.map((r) => (
+            <LeaveRequestCard
+              key={r.id}
+              id={r.id}
+              name={r.teacherName}
+              role={r.personKind === 'STAFF' ? 'Staff' : 'Teacher'}
+              type={r.type}
+              startDate={r.startDate}
+              endDate={r.endDate}
+              halfDay={r.halfDay}
+              halfDayPart={r.halfDayPart}
+              reason={r.reason}
+              busy={busy === r.id}
+              onApprove={() => decide(r.id, 'approve')}
+              onReject={() => decide(r.id, 'reject')}
             />
-            <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 12, paddingBottom: 10 }}>
-              <Button label="Approve" small onPress={() => decide(r.id, 'approve')} disabled={busy === r.id} testID={`approve-${r.id}`} />
-              <Button label="Reject" variant="ghost" small onPress={() => decide(r.id, 'reject')} disabled={busy === r.id} testID={`reject-${r.id}`} />
-            </View>
-          </View>
-        ))
+          ))}
+        </View>
       )}
     </>
   );
@@ -147,7 +153,7 @@ function Candidates({ gapId, disabled, onPick, onRetry }: { gapId: string; disab
   const tokens = useTokens();
   const q = useQuery<Candidate[]>(`/manage/substitution/${gapId}/candidates`);
   const note = (text: string, color: string, testID: string) => (
-    <Text testID={testID} style={{ paddingHorizontal: 12, paddingVertical: 8, fontFamily: font.sans, fontSize: 12, color }}>{text}</Text>
+    <Text testID={testID} style={{ paddingHorizontal: 12, paddingVertical: 8, fontFamily: font.sans, fontSize: 13, color }}>{text}</Text>
   );
 
   if (q.error && !q.data) {
@@ -163,14 +169,14 @@ function Candidates({ gapId, disabled, onPick, onRetry }: { gapId: string; disab
   if (!q.data) return note('Finding who is free…', tokens.color.sub, `candidates-loading-${gapId}`);
   if (q.data.length === 0) return note('Nobody is free that period', tokens.color.sub, `candidates-empty-${gapId}`);
   return (
-    <View style={{ marginHorizontal: 12, marginBottom: 10, borderWidth: 1, borderColor: tokens.color.line, borderRadius: 12 }}>
+    <View style={{ marginHorizontal: 12, marginBottom: 10, borderWidth: 1, borderColor: tokens.color.line, borderRadius: tokens.radius.field }}>
       {q.data.map((c, i) => (
         <Row
           key={c.id}
           first={i === 0}
           title={c.name}
           sub={c.teachesSubject ? 'Teaches this subject' : c.coversThatDay > 0 ? `${c.coversThatDay} ${c.coversThatDay === 1 ? 'cover' : 'covers'} that day` : 'No other covers that day'}
-          right={<Text style={{ fontFamily: font.sans, fontSize: 12, fontWeight: '700', color: tokens.color.indigo }}>Pick</Text>}
+          right={<Text style={{ fontFamily: font.sans, fontSize: 14, fontWeight: '700', color: tokens.color.indigo }}>Pick</Text>}
           onPress={() => { if (!disabled) onPick(c.id); }}
           accessibilityLabel={`Give the period to ${c.name}`}
           testID={`candidate-${gapId}-${c.id}`}
@@ -224,7 +230,7 @@ function Coverage() {
   }
 
   if (q.error instanceof ApiError && (q.error.status === 403 || q.error.status === 404)) {
-    return <Empty icon="timetable">You do not have the right to cover classes.</Empty>;
+    return <Empty kind="locked" title="Cover needs a right">The school admin grants it under Settings → Leave.</Empty>;
   }
   if (q.error && !q.data) return <ErrorState error={q.error} onRetry={q.reload} />;
   if (!q.data) return <LoadingRows label="classes to cover" />;
@@ -280,7 +286,7 @@ function Coverage() {
                       ) : null}
                     </View>
                     {error?.gapId === g.id ? (
-                      <Text testID={`coverage-error-${g.id}`} style={{ paddingHorizontal: 12, paddingBottom: 10, fontFamily: font.sans, fontSize: 12, color: tokens.color.red }}>{error.text}</Text>
+                      <Text testID={`coverage-error-${g.id}`} style={{ paddingHorizontal: 12, paddingBottom: 10, fontFamily: font.sans, fontSize: 13, color: tokens.color.red }}>{error.text}</Text>
                     ) : null}
                     {picking === g.id ? (
                       <Candidates

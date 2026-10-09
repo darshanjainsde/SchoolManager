@@ -69,7 +69,7 @@ export default function Hall() {
           </View>
 
           {!d.section ? (
-            <Page><Empty icon="take">No class picked. Tap “Pick class” to take the roll for a visit.</Empty></Page>
+            <Page><Empty kind="choose" title="Which class is in?" action={{ label: 'Pick class', onPress: () => setPicking(true), testID: 'hall-pick-empty' }}>Pick the class visiting the hall to take the roll for this visit.</Empty></Page>
           ) : (
             <Page testID="hall-roll">
               <PageHeader title="Roll" icon="take" actionLabel={d.savedVisit ? 'Saved today' : d.teacherRegister?.taken ? `From ${d.teacherRegister.takenBy ?? 'the register'}` : undefined} />
@@ -78,9 +78,9 @@ export default function Hall() {
                 const s = marks[r.studentId] ?? r.status;
                 return (
                   <Pressable key={r.studentId} testID={`roll-${r.studentId}`} accessibilityRole="button" accessibilityLabel={`${r.name}, ${WORD[s]}. Tap to change.`} onPress={() => setMarks({ ...marks, [r.studentId]: cycleStatus(s) })}
-                    style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 12, minHeight: 48, borderTopWidth: i ? 1 : 0, borderTopColor: tokens.color.line, backgroundColor: pressed ? tokens.color.indigo50 : 'transparent' })}>
-                    <Text style={{ width: 28, fontFamily: font.mono, fontSize: 12, color: tokens.color.sub }}>{r.rollNo ?? '·'}</Text>
-                    <Text numberOfLines={1} style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: '600', color: tokens.color.ink }}>{r.name}</Text>
+                    style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 16, minHeight: 56, borderTopWidth: i ? 1 : 0, borderTopColor: tokens.color.line, backgroundColor: pressed ? tokens.color.indigo50 : 'transparent' })}>
+                    <Text style={{ width: 28, fontFamily: font.mono, fontSize: 13, color: tokens.color.sub }}>{r.rollNo ?? '·'}</Text>
+                    <Text numberOfLines={1} style={{ flex: 1, minWidth: 0, fontSize: 15, fontWeight: '600', color: tokens.color.ink }}>{r.name}</Text>
                     <Pill tone={TONE[s]}>{WORD[s]}</Pill>
                   </Pressable>
                 );

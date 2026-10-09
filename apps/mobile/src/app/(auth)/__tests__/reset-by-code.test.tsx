@@ -11,10 +11,12 @@ async function settled(assertion: () => void) {
 
 const mockReplace = jest.fn();
 const mockBack = jest.fn();
+const mockCanGoBack = jest.fn(() => true);
 jest.mock('expo-router', () => ({
   router: {
     replace: (...a: unknown[]) => mockReplace(...a),
     back: (...a: unknown[]) => mockBack(...a),
+    canGoBack: () => mockCanGoBack(),
     push: jest.fn(),
   },
 }));
@@ -102,4 +104,53 @@ it('surfaces a rate-limit / server refusal instead of pretending it sent', async
 
   await settled(() => expect(getByText('Too many attempts.')).toBeTruthy());
   expect(queryByTestId('reset-result')).toBeNull();
+});
+
+describe('the latest UI — the login card, not the old gradient (9 Oct 2026)', () => {
+  it('sits in the same gate card as login, with a key and a round back button', () => {
+    const { getByTestId, getByText } = render(<ResetByCode />);
+    expect(getByTestId('gate-sheet')).toBeTruthy();
+    expect(getByTestId('gate-icon')).toBeTruthy();
+    expect(getByText('Forgot the password?')).toBeTruthy();
+    const back = getByTestId('reset-back-top');
+    const st = back.props.style;
+    expect(st.width).toBeGreaterThanOrEqual(44);
+    expect(st.height).toBeGreaterThanOrEqual(44);
+  });
+
+  it('the back button returns to login — and still gets there when there is no history', () => {
+    const { getByTestId } = render(<ResetByCode />);
+    fireEvent.press(getByTestId('reset-back-top'));
+    expect(mockBack).toHaveBeenCalled();
+    mockCanGoBack.mockReturnValueOnce(false);
+    fireEvent.press(getByTestId('reset-cancel'));
+    expect(mockReplace).toHaveBeenCalledWith('/(auth)/login');
+  });
+
+  it('the keyboard Send key sends too', async () => {
+    (api.resetByCode as jest.Mock).mockResolvedValue({ ok: true, emailMasked: 'p•••a@gmail.com' });
+    const { getByTestId } = render(<ResetByCode />);
+    fireEvent.changeText(getByTestId('reset-code'), 'RAF-00042');
+    fireEvent(getByTestId('reset-code'), 'submitEditing');
+    await settled(() => expect(api.resetByCode).toHaveBeenCalledWith('raffles.sckools.com', 'RAF-00042'));
+  });
+
+  it('after a link is sent, "Use a different code" starts again with an empty field', async () => {
+    (api.resetByCode as jest.Mock).mockResolvedValue({ ok: true, emailMasked: 'p•••a@gmail.com' });
+    const { getByTestId, findByTestId, getByText } = render(<ResetByCode />);
+    fireEvent.changeText(getByTestId('reset-code'), 'RAF-00042');
+    fireEvent.press(getByTestId('reset-send'));
+    fireEvent.press(await findByTestId('reset-again'));
+    expect((await findByTestId('reset-code')).props.value).toBe('');
+  });
+
+  it('no email on file reads as its own amber answer, never "Check the inbox"', async () => {
+    (api.resetByCode as jest.Mock).mockResolvedValue({ ok: true, emailMasked: null });
+    const { getByTestId, findByText, queryByText, queryByTestId } = render(<ResetByCode />);
+    fireEvent.changeText(getByTestId('reset-code'), 'RAF-00042');
+    fireEvent.press(getByTestId('reset-send'));
+    expect(await findByText('No email on file')).toBeTruthy();
+    expect(queryByText('Check the inbox')).toBeNull();
+    expect(queryByTestId('reset-again')).toBeNull();
+  });
 });

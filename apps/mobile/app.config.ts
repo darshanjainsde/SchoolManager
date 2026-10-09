@@ -9,8 +9,14 @@ const config: ExpoConfig = {
   slug: 'sckools',
   owner: 'darshanjainsdes-team',
   scheme: 'sckools',
-  version: '0.1.0',
-  orientation: 'portrait',
+  // 0.2.0 = the UI v2 release (Oct 2026).
+  version: '0.2.0',
+  // No orientation lock. Play (release 24, "Remove resizability and orientation
+  // restrictions"): Android 16 ignores a portrait lock on screens >= 600 dp
+  // anyway, so a lock only made tablets and foldables behave differently from
+  // what we tested. Every screen is a vertical scroller with a capped width,
+  // checked in landscape on the emulator (9 Oct 2026).
+  orientation: 'default',
   userInterfaceStyle: 'automatic',
   // Opt OUT of the New Architecture (default-on in SDK 53). The app was only
   // unit-tested, never run on a device, and a native module that isn't
@@ -113,6 +119,10 @@ const config: ExpoConfig = {
     // covered the login form and every note on Android 16 (vc24). Pads the
     // content by the keyboard natively. Details in the plugin itself.
     './plugins/with-keyboard-insets',
+    // NOT './plugins/with-r8-optimize': Play (release 24) recommends R8
+    // optimisation, but `proguard-android-optimize.txt` broke every request
+    // on the release build ("Could not reach the school server", RN view
+    // setters stripped) — measured 9 Oct 2026. Shrink + obfuscate only.
     // Google Play requires targeting Android 16 (API 36) from 2026-08-31.
     // Expo SDK 53 defaults to API 35, so bump compile+target here. AGP 8.8.2
     // (RN 0.79) can build against 36 (emits a "tested up to 35" warning).

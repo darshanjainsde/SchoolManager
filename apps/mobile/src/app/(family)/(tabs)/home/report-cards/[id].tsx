@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { useLocalSearchParams } from 'expo-router';
@@ -7,6 +7,7 @@ import type { PressSnapshot, ReportCardSnapshot } from '@skoolos/types';
 import { useQuery } from '@/lib/query';
 import { formatDate } from '@/lib/portal';
 import { reportCardHtml } from '@/lib/report-card-html';
+import { Button } from '@/components/Button';
 import { Toast } from '@/components/ui';
 import { ErrorState, Figure, Page, Screen } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
@@ -18,7 +19,7 @@ interface MyReportCardDetail { id: string; serial: string; issuedAt: string; sna
 /**
  * ONE REPORT CARD, as issued. Rendered from the snapshot the office pressed
  * — never recomputed from live marks, so what the family sees is what was
- * signed. School header in the serif, the subject table in mono figures, the
+ * signed. School header in the serif, the subject table in tabular figures, the
  * remark in the diary's italic, the serial at the foot like a printed form.
  */
 export default function ReportCard() {
@@ -59,17 +60,17 @@ export default function ReportCard() {
       {q.error && !q.data && <ErrorState error={q.error} onRetry={q.reload} />}
       {q.data && snap && (
         <>
-          <Page testID="report-card" style={{ paddingHorizontal: 14, paddingVertical: 14, gap: 10 }}>
+          <Page testID="report-card" style={{ paddingHorizontal: 16, paddingVertical: 16, gap: 10 }}>
             <View style={{ alignItems: 'center', gap: 2 }}>
-              <Text style={{ fontFamily: font.serif, fontSize: 19, fontWeight: '700', color: tokens.color.ink, textAlign: 'center' }}>{snap.school.name}</Text>
-              {snap.school.addressLine ? <Text style={{ fontSize: 10.5, color: tokens.color.sub, textAlign: 'center' }}>{snap.school.addressLine}</Text> : null}
-              <Text style={{ fontSize: 11, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', color: tokens.color.indigoDeep, marginTop: 6 }}>
+              <Text style={{ fontSize: 20, lineHeight: 26, fontWeight: '700', color: tokens.color.ink, textAlign: 'center' }}>{snap.school.name}</Text>
+              {snap.school.addressLine ? <Text style={{ fontSize: 13, color: tokens.color.sub, textAlign: 'center' }}>{snap.school.addressLine}</Text> : null}
+              <Text style={{ fontSize: 12, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', color: tokens.color.indigoDeep, marginTop: 6 }}>
                 {snap.windowName} · {snap.academicYearName}
               </Text>
             </View>
             <View style={{ borderTopWidth: 1, borderTopColor: tokens.color.line, paddingTop: 8, gap: 2 }}>
-              <Text style={{ fontFamily: font.serif, fontSize: 16, fontWeight: '600', color: tokens.color.ink }}>{snap.student.name}</Text>
-              <Text style={{ fontSize: 11.5, color: tokens.color.sub }}>
+              <Text style={{ fontSize: 17, fontWeight: '700', color: tokens.color.ink }}>{snap.student.name}</Text>
+              <Text style={{ fontSize: 13, color: tokens.color.sub }}>
                 {snap.classLabel}{snap.student.rollNo ? ` · Roll ${snap.student.rollNo}` : ''} · Adm. {snap.student.admissionNo}
               </Text>
             </View>
@@ -84,10 +85,10 @@ export default function ReportCard() {
               {snap.subjects.map((s, i) => (
                 <View key={s.subjectId} testID={`rc-subject-${s.subjectId}`} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 7, borderBottomWidth: i === snap.subjects.length - 1 ? 0 : 1, borderBottomColor: tokens.color.line }}>
                   {/* 158 dp of FIXED figure columns left "Social Science" ~144 dp
-                      on a 360 dp phone and clipped it, while the mono marks
+                      on a 360 dp phone and clipped it, while the marks
                       overflowed their own box at a large font (UI audit #12).
                       The figures now grow and the subject wraps instead. */}
-                  <Text style={{ flex: 1, minWidth: 0, fontSize: 13, color: tokens.color.ink, paddingRight: 6 }} numberOfLines={2}>{s.subjectName}</Text>
+                  <Text style={{ flex: 1, minWidth: 0, fontSize: 14, color: tokens.color.ink, paddingRight: 6 }} numberOfLines={2}>{s.subjectName}</Text>
                   <Text style={[num(tokens), { minWidth: 62, flexShrink: 0 }]}>{s.marks == null ? '—' : `${s.marks}/${s.countedMax ?? s.maxMarks}`}</Text>
                   <Text style={[num(tokens), { minWidth: 34, flexShrink: 0 }]}>{s.pct == null ? '—' : `${Math.round(s.pct)}`}</Text>
                   <Text style={[num(tokens), { minWidth: 36, flexShrink: 0, fontWeight: '700' }]}>{s.grade ?? '—'}</Text>
@@ -102,26 +103,25 @@ export default function ReportCard() {
 
             {snap.remark ? (
               <View style={{ borderTopWidth: 1, borderTopColor: tokens.color.line, paddingTop: 8 }}>
-                <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', color: tokens.color.sub }}>Remark</Text>
+                <Text style={{ fontSize: 12, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', color: tokens.color.sub }}>Remark</Text>
                 <Text style={{ fontFamily: font.serif, fontStyle: 'italic', fontSize: 14, lineHeight: 20, color: tokens.color.ink2, marginTop: 3 }}>{snap.remark}</Text>
-                {snap.classTeacherName ? <Text style={{ fontSize: 11, color: tokens.color.sub, marginTop: 4 }}>— {snap.classTeacherName}, class teacher</Text> : null}
+                {snap.classTeacherName ? <Text style={{ fontSize: 13, color: tokens.color.sub, marginTop: 4 }}>— {snap.classTeacherName}, class teacher</Text> : null}
               </View>
             ) : null}
 
-            <Text style={{ fontFamily: font.mono, fontSize: 10, color: tokens.color.sub, textAlign: 'center', marginTop: 6 }}>
-              {q.data.serial} · issued {formatDate(q.data.issuedAt)}
+            <Text style={{ fontVariant: ['tabular-nums'], fontSize: 13, color: tokens.color.sub, textAlign: 'center', marginTop: 6 }}>
+              <Text style={{ fontFamily: font.mono }}>{q.data.serial}</Text> · issued {formatDate(q.data.issuedAt)}
             </Text>
           </Page>
-          <Pressable
+          <Button
             testID="report-card-share"
-            accessibilityRole="button"
-            accessibilityState={{ disabled: sharing }}
-            disabled={sharing}
+            label={sharing ? 'Making the PDF…' : 'Share as PDF'}
             onPress={() => void share()}
-            style={({ pressed }) => ({ minHeight: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: tokens.color.indigo, opacity: sharing ? 0.6 : pressed ? 0.8 : 1 })}
-          >
-            <Text style={{ color: tokens.color.onBrand, fontWeight: '700', fontSize: 14 }}>{sharing ? 'Making the PDF…' : 'Share as PDF'}</Text>
-          </Pressable>
+            disabled={sharing}
+            busy={sharing}
+            variant="filled"
+            block
+          />
           {shareProblem && <Toast kind="error" message={shareProblem} testID="report-card-share-error" />}
         </>
       )}
@@ -129,5 +129,5 @@ export default function ReportCard() {
   );
 }
 
-const hdr = (t: ReturnType<typeof useTokens>) => ({ fontSize: 9.5, fontWeight: '700' as const, letterSpacing: 0.8, textTransform: 'uppercase' as const, color: t.color.sub });
-const num = (t: ReturnType<typeof useTokens>) => ({ fontFamily: font.mono, fontSize: 12.5, color: t.color.ink, textAlign: 'right' as const });
+const hdr = (t: ReturnType<typeof useTokens>) => ({ fontSize: 12, fontWeight: '700' as const, letterSpacing: 0.8, textTransform: 'uppercase' as const, color: t.color.sub });
+const num = (t: ReturnType<typeof useTokens>) => ({ fontVariant: ['tabular-nums' as const], fontSize: 13, color: t.color.ink, textAlign: 'right' as const });

@@ -1,11 +1,13 @@
 import { useCallback, useState, type ReactNode } from 'react';
-import { Animated, Pressable, Text, TextInput, View } from 'react-native';
+import { Animated, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { useFocusEffect } from 'expo-router';
 import type { DiarySignResult, StudentDiaryEntry, StudentDiaryResult } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { useReload } from '@/lib/query';
 import { Empty, ErrorState, Page, Pill, RowWash, Screen, SectionTitle, Toast } from '@/components/ui';
+import { Button } from '@/components/Button';
+import { TextField } from '@/components/Field';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 import { DASH, DUR, pinStyle, strokeDashoffset, useGesture } from '@/theme/motion';
@@ -116,9 +118,9 @@ function DiaryItem({
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <Text
             style={{
-              fontSize: 10.5,
+              fontSize: 12,
               fontWeight: '800',
-              letterSpacing: 0.5,
+              letterSpacing: 0.6,
               color: red ? tokens.color.red : tokens.color.indigo,
             }}
           >
@@ -135,7 +137,7 @@ function DiaryItem({
             >
               <Text
                 style={{
-                  fontSize: 9,
+                  fontSize: 12,
                   fontWeight: '800',
                   letterSpacing: 0.8,
                   color: tokens.color.onBrand,
@@ -159,7 +161,7 @@ function DiaryItem({
           {entry.body}
         </Text>
 
-        <Text style={{ color: tokens.color.sub, fontSize: 11, marginTop: 2 }}>
+        <Text style={{ color: tokens.color.sub, fontSize: 13, marginTop: 2 }}>
           {entry.teacherName}
           {entry.personal ? ' · for you' : ' · whole class'}
           {red ? ' · emailed home' : ''}
@@ -282,8 +284,7 @@ export default function FamilyDiary() {
           <Text
             style={{
               fontSize: 13,
-              fontFamily: font.serif,
-              fontStyle: 'italic',
+              fontWeight: '600',
               color: tokens.color.sub,
               marginLeft: 4,
               marginTop: 4,
@@ -312,37 +313,27 @@ export default function FamilyDiary() {
                       >
                         <SignatureMark />
                         <Text
-                          style={{ color: tokens.color.green, fontSize: 11, fontWeight: '700' }}
+                          style={{ color: tokens.color.green, fontSize: 13, fontWeight: '700' }}
                         >
                           Signed
                         </Text>
-                        <Text style={{ color: tokens.color.sub, fontSize: 11.5 }}>
+                        <Text style={{ color: tokens.color.sub, fontSize: 13 }}>
                           by {e.signedName}
                         </Text>
                       </View>
                     ) : (
                       <View style={{ gap: 8, marginTop: 7 }}>
-                        <Text style={{ color: tokens.color.sub, fontSize: 11.5 }}>
+                        <Text style={{ color: tokens.color.sub, fontSize: 14, lineHeight: 20 }}>
                           A copy has already been emailed home. Sign to tell the teacher it was
                           read.
                         </Text>
-                        <TextInput
+                        <TextField
+                          label="Signed by"
                           testID={`sign-name-${e.id}`}
                           value={drafts[e.id] ?? ''}
                           onChangeText={(v) => setDrafts((d) => ({ ...d, [e.id]: v }))}
                           placeholder="Who is signing?"
-                          placeholderTextColor={tokens.color.placeholder}
                           autoCapitalize="words"
-                          style={{
-                            backgroundColor: tokens.color.surface,
-                            borderColor: tokens.color.line,
-                            borderWidth: 1.5,
-                            borderRadius: 11,
-                            paddingVertical: 10,
-                            paddingHorizontal: 12,
-                            fontSize: 14,
-                            color: tokens.color.ink,
-                          }}
                         />
                         {/* Signing IS this screen's primary action — it is the
                             only thing anyone at home is being asked to do, and
@@ -350,29 +341,15 @@ export default function FamilyDiary() {
                             to a 30dp outlined chip pushed to the left margin,
                             under the minimum comfortable touch target. Full
                             width, filled, and at button size. */}
-                        <Pressable
+                        <Button
                           testID={`sign-${e.id}`}
+                          label={signing === e.id ? 'Signing…' : 'Sign this remark'}
                           onPress={() => sign(e)}
                           disabled={busy}
-                          style={({ pressed }) => ({
-                            backgroundColor: tokens.color.red,
-                            opacity: busy ? 0.45 : pressed ? 0.85 : 1,
-                            borderRadius: 12,
-                            paddingVertical: 11,
-                          })}
-                          accessibilityRole="button"
-                          >
-                          <Text
-                            style={{
-                              color: tokens.color.onBrand,
-                              fontWeight: '700',
-                              textAlign: 'center',
-                              fontSize: 13.5,
-                            }}
-                          >
-                            {signing === e.id ? 'Signing…' : 'Sign this remark'}
-                          </Text>
-                        </Pressable>
+                          busy={signing === e.id}
+                          variant="filled"
+                          block
+                        />
                       </View>
                     ))}
                 </DiaryItem>

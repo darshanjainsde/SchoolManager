@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
-import { Animated, Pressable, Text, TextInput, View } from 'react-native';
+import { Animated, Text, TextInput, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import type {
   DiaryEntryRow,
@@ -11,6 +11,12 @@ import { api, ApiError } from '@/lib/api';
 import { useReload } from '@/lib/query';
 import { shiftISO, todayISO } from '@/lib/attendance';
 import { Card, Empty, ErrorState, Page, RowWash, Screen, SectionTitle, Toast } from '@/components/ui';
+import { Button } from '@/components/Button';
+import { Chip, ChipRow } from '@/components/Chip';
+import { DayControl } from '@/components/DayControl';
+import { SelectField } from '@/components/Field';
+import { classOptions } from '@/lib/subject-options';
+import { fieldInputStyle } from '@/components/Field';
 import { StudentPicker, type PickableStudent } from '@/components/StudentPicker';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
@@ -85,7 +91,7 @@ function DiaryItem({
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <Text
             style={{
-              fontSize: 10.5,
+              fontSize: 12,
               fontWeight: '800',
               letterSpacing: 0.5,
               color: red ? tokens.color.red : tokens.color.indigo,
@@ -104,7 +110,7 @@ function DiaryItem({
             >
               <Text
                 style={{
-                  fontSize: 9,
+                  fontSize: 12,
                   fontWeight: '800',
                   letterSpacing: 0.8,
                   color: tokens.color.onBrand,
@@ -144,19 +150,19 @@ function DiaryItem({
                   paddingHorizontal: 8,
                 }}
               >
-                <Text style={{ color: tokens.color.sub, fontSize: 11, fontWeight: '600' }}>{s.name}</Text>
+                <Text style={{ color: tokens.color.sub, fontSize: 13, fontWeight: '600' }}>{s.name}</Text>
               </View>
             ))}
           </View>
         ) : null}
 
-        <Text style={{ color: tokens.color.sub, fontSize: 11, marginTop: 5 }}>
+        <Text style={{ color: tokens.color.sub, fontSize: 13, marginTop: 5 }}>
           {entry.authorName}
           {entry.students.length > 0 ? '' : ' · Whole class'}
         </Text>
         <Text
           style={{
-            fontSize: 11,
+            fontSize: 13,
             marginTop: 2,
             fontWeight: red ? '700' : '400',
             color: red
@@ -210,7 +216,7 @@ function EmailPreview({
         {
           borderColor: tokens.color.line,
           borderWidth: 1.5,
-          borderRadius: 12,
+          borderRadius: tokens.radius.field,
           backgroundColor: tokens.color.surface,
           paddingVertical: 11,
           paddingHorizontal: 12,
@@ -226,7 +232,7 @@ function EmailPreview({
     >
       <Text
         style={{
-          fontSize: 10.5,
+          fontSize: 12,
           fontWeight: '800',
           letterSpacing: 0.5,
           color: tokens.color.green,
@@ -234,10 +240,10 @@ function EmailPreview({
       >
         {`EMAIL SENT · ${names.length} ${names.length === 1 ? 'family' : 'families'}`}
       </Text>
-      <Text style={{ fontSize: 12.5, fontWeight: '700', marginTop: 5, color: tokens.color.ink }}>
+      <Text style={{ fontSize: 14, fontWeight: '700', marginTop: 5, color: tokens.color.ink }}>
         {`Subject: A remark in ${first}’s diary${subject ? ` — ${subject}` : ''}`}
       </Text>
-      <Text style={{ fontSize: 12, color: tokens.color.ink2, marginTop: 3, lineHeight: 18 }}>
+      <Text style={{ fontSize: 14, color: tokens.color.ink2, marginTop: 3, lineHeight: 20 }}>
         {`${author} wrote today: `}
         <Text
           style={{
@@ -250,7 +256,7 @@ function EmailPreview({
         </Text>
         {'\nOpen the diary to sign.'}
       </Text>
-      <Text style={{ fontSize: 10, color: tokens.color.sub, marginTop: 5 }}>
+      <Text style={{ fontSize: 13, color: tokens.color.sub, marginTop: 5 }}>
         Sent the moment it’s pinned — signing can’t suppress it. Also bell + push.
       </Text>
     </Animated.View>
@@ -284,6 +290,7 @@ export default function StaffDiary() {
 
   const [kind, setKind] = useState<Kind>('ITEM');
   const [body, setBody] = useState('');
+  const [bodyFocused, setBodyFocused] = useState(false);
   const [chosen, setChosen] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [sent, setSent] = useState<string | null>(null);
@@ -417,85 +424,23 @@ export default function StaffDiary() {
           one — so pressing "previous" twice did nothing the second time, and
           a teacher could no longer walk back past six days at all. A relative
           shift with no window limit is the whole point of this control. */}
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginHorizontal: 4,
-        }}
-      >
-        <Pressable testID="diary-prev" onPress={() => setDate((d) => shiftISO(d, -1))} hitSlop={8}
-          // A 13 px word is ~18 dp tall; the row keeps its look and the
-          // finger gets the 44 dp the app promises (re-audit 2026-10-08).
-          style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 2 }}
-          accessibilityRole="button"
-          >
-          <Text style={{ color: tokens.color.indigo, fontWeight: '700', fontSize: 13 }}>‹ Prev day</Text>
-        </Pressable>
-        {!isToday && (
-          <Pressable testID="diary-today" onPress={() => setDate(today)} hitSlop={8}
-          // A 13 px word is ~18 dp tall; the row keeps its look and the
-          // finger gets the 44 dp the app promises (re-audit 2026-10-08).
-          style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 2 }}
-            accessibilityRole="button"
-            >
-            <Text style={{ color: tokens.color.sub, fontWeight: '600', fontSize: 12 }}>Jump to today</Text>
-          </Pressable>
-        )}
-        <Pressable
-          testID="diary-next"
-          onPress={() => setDate((d) => (d < today ? shiftISO(d, 1) : d))}
-          hitSlop={8}
-          // A 13 px word is ~18 dp tall; the row keeps its look and the
-          // finger gets the 44 dp the app promises (re-audit 2026-10-08).
-          style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 2 }}
-          accessibilityRole="button"
-          >
-          <Text
-            style={{
-              color: isToday ? tokens.color.placeholder : tokens.color.indigo,
-              fontWeight: '700',
-              fontSize: 13,
-            }}
-          >
-            Next day ›
-          </Text>
-        </Pressable>
-      </View>
+      <DayControl
+        date={date}
+        today={today}
+        onChange={setDate}
+        ids={{ prev: 'diary-prev', next: 'diary-next', pick: 'diary-pick', today: 'diary-today' }}
+      />
 
+      {/* The class as a dropdown with its roll size (user, 9 Oct 2026). */}
       {classes && classes.length > 1 && (
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7 }}>
-          {classes.map((c) => {
-            const on = c.classSectionId === classId;
-            return (
-              <Pressable
-                key={c.classSectionId}
-                testID={`diary-class-${c.classSectionId}`}
-                onPress={() => setClassId(c.classSectionId)}
-                style={{
-                  borderWidth: 1.5,
-                  borderColor: on ? tokens.color.indigo : tokens.color.line,
-                  backgroundColor: on ? tokens.color.indigo50 : tokens.color.surface,
-                  borderRadius: 11,
-                  paddingVertical: 8,
-                  paddingHorizontal: 12,
-                }}
-                accessibilityRole="button"
-                >
-                <Text
-                  style={{
-                    fontSize: 12.5,
-                    fontWeight: '700',
-                    color: on ? tokens.color.indigo : tokens.color.sub,
-                  }}
-                >
-                  {c.name}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+        <SelectField
+          label="Class"
+          testID="diary-class"
+          optionTestID={(id) => `diary-class-${id}`}
+          value={classId}
+          options={classOptions(classes)}
+          onChange={setClassId}
+        />
       )}
 
       {error && page !== null && <Toast kind="error" message={error} />}
@@ -507,46 +452,22 @@ export default function StaffDiary() {
               entry and a remark are the same act of writing with a different
               pen, not two different features. `.sg.rem.on` turns the whole
               control red the moment the pen changes. */}
-          <View style={{ flexDirection: 'row', gap: 6, marginBottom: 11 }}>
-            {(['ITEM', 'REMARK'] as const).map((k) => {
-              const on = kind === k;
-              const red = k === 'REMARK';
-              return (
-                <Pressable
-                  key={k}
-                  testID={`diary-kind-${k}`}
-                  onPress={() => {
-                    setKind(k);
-                    setEmailed(null);
-                  }}
-                  style={{
-                    flex: 1,
-                    alignItems: 'center',
-                    paddingVertical: 9,
-                    borderRadius: 10,
-                    borderWidth: 1.5,
-                    borderColor: on ? (red ? tokens.color.red : tokens.color.indigo) : tokens.color.line,
-                    backgroundColor: on
-                      ? red
-                        ? tokens.color.red50
-                        : tokens.color.indigo50
-                      : tokens.color.surface,
-                  }}
-                  accessibilityRole="button"
-                  >
-                  <Text
-                    style={{
-                      fontSize: 12.5,
-                      fontWeight: '700',
-                      color: on ? (red ? tokens.color.red : tokens.color.indigo) : tokens.color.sub,
-                    }}
-                  >
-                    {k === 'ITEM' ? 'Diary entry' : 'Remark'}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+          <ChipRow style={{ marginBottom: 12 }}>
+            {(['ITEM', 'REMARK'] as const).map((k) => (
+              <Chip
+                key={k}
+                testID={`diary-kind-${k}`}
+                label={k === 'ITEM' ? 'Diary entry' : 'Remark'}
+                selected={kind === k}
+                tone={k === 'REMARK' ? 'red' : 'indigo'}
+                style={{ flex: 1, justifyContent: 'center' }}
+                onPress={() => {
+                  setKind(k);
+                  setEmailed(null);
+                }}
+              />
+            ))}
+          </ChipRow>
 
           <TextInput
             testID="diary-body"
@@ -562,20 +483,18 @@ export default function StaffDiary() {
                 : 'Homework, what to bring tomorrow, a note home…'
             }
             placeholderTextColor={tokens.color.placeholder}
-            style={{
-              minHeight: 88,
-              textAlignVertical: 'top',
-              backgroundColor: isRemark ? tokens.color.red50 : tokens.color.surface,
-              borderColor: isRemark ? tokens.color.red : tokens.color.line,
-              borderWidth: 1.5,
-              borderRadius: 11,
-              padding: 13,
-              fontSize: 14.5,
-              color: isRemark ? tokens.color.red : tokens.color.ink,
-            }}
+            onFocus={() => setBodyFocused(true)}
+            onBlur={() => setBodyFocused(false)}
+            // The kit's box; a remark keeps its red pen (fill, rule and ink).
+            style={[
+              fieldInputStyle(tokens, { focused: bodyFocused, multiline: true }),
+              isRemark
+                ? { backgroundColor: tokens.color.red50, borderColor: tokens.color.red, color: tokens.color.red }
+                : null,
+            ]}
           />
 
-          <Text style={{ color: tokens.color.sub, fontSize: 11.5, marginTop: 9, marginBottom: 7 }}>
+          <Text style={{ color: tokens.color.sub, fontSize: 13, lineHeight: 18, marginTop: 9, marginBottom: 7 }}>
             {isRemark
               ? 'A remark is always emailed to the parents of the children you name — signing it in the app does not replace that.'
               : 'Leave the names empty and the whole class gets it. Name someone and only they do.'}
@@ -589,36 +508,24 @@ export default function StaffDiary() {
             placeholder={isRemark ? 'Who is this about?' : 'Only for… (optional)'}
           />
 
-          <Pressable
+          <Button
             testID="diary-send"
-            onPress={send}
+            block
+            busy={saving}
             disabled={!canSend}
-            style={({ pressed }) => ({
-              marginTop: 12,
-              backgroundColor: isRemark ? tokens.color.red : tokens.color.indigo,
-              opacity: !canSend ? 0.45 : pressed ? 0.85 : 1,
-              borderRadius: 11,
-              paddingVertical: 13,
-            })}
-            accessibilityRole="button"
-            >
-            <Text
-              style={{
-                color: tokens.color.onBrand,
-                fontWeight: '700',
-                textAlign: 'center',
-                fontSize: 14,
-              }}
-            >
-              {saving
+            // The remark keeps its red pen: the one filled button that is not brand.
+            style={{ marginTop: 12, ...(isRemark ? { backgroundColor: tokens.color.red, borderColor: tokens.color.red } : null) }}
+            label={
+              saving
                 ? 'Saving…'
                 : isRemark
                   ? `Write remark${chosen.length ? ` · ${chosen.length}` : ''}`
                   : needsNames
                     ? `Add for ${chosen.length}`
-                    : 'Add for the whole class'}
-            </Text>
-          </Pressable>
+                    : 'Add for the whole class'
+            }
+            onPress={send}
+          />
 
           {emailed && (
             <EmailPreview
@@ -665,18 +572,15 @@ export default function StaffDiary() {
           {page.entries.map((e, i) => (
             <DiaryItem key={e.id} entry={e} index={i} first={i === 0}>
               {e.editable && (
-                <Pressable
+                <Button
                   testID={`diary-remove-${e.id}`}
-                  accessibilityRole="button"
+                  variant="danger"
+                  size="sm"
+                  label="Strike out"
                   accessibilityLabel="Strike out this entry"
-                  hitSlop={10}
+                  style={{ marginTop: 8 }}
                   onPress={() => remove(e)}
-                  style={{ alignSelf: 'flex-start', marginTop: 7, minHeight: 32, justifyContent: 'center' }}
-                >
-                  <Text style={{ color: tokens.color.red, fontSize: 12, fontWeight: '700' }}>
-                    Strike out
-                  </Text>
-                </Pressable>
+                />
               )}
             </DiaryItem>
           ))}

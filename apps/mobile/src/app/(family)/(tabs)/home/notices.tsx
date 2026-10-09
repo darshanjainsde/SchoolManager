@@ -53,12 +53,12 @@ function NoticeRow({ a, index }: { a: Announcement; index: number }) {
         accessibilityState={{ expanded }}
         onPress={() => setExpanded((e) => !e)}
       >
-        <Card style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 11 }}>
+        <Card style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12, minHeight: 72 }}>
           <View
             style={{
-              width: 34,
-              height: 34,
-              borderRadius: 10,
+              width: 36,
+              height: 36,
+              borderRadius: tokens.radius.chip,
               backgroundColor: tokens.color.indigo50,
               alignItems: 'center',
               justifyContent: 'center',
@@ -67,13 +67,13 @@ function NoticeRow({ a, index }: { a: Announcement; index: number }) {
             <Icon name="notices" size={17} color={tokens.color.indigo} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>{a.title}</Text>
-            <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>
+            <Text style={{ fontSize: 16, fontWeight: '600', color: tokens.color.ink }}>{a.title}</Text>
+            <Text style={{ fontSize: 13, color: tokens.color.sub, marginTop: 2 }}>
               {a.classSectionId ? 'Your class' : 'Whole school'} · {relativeTime(a.createdAt)}
             </Text>
             <Text
               testID={`notice-body-${a.id}`}
-              style={{ fontSize: 12.5, color: tokens.color.ink, marginTop: 6, lineHeight: 17 }}
+              style={{ fontSize: 14, color: tokens.color.ink, marginTop: 6, lineHeight: 20 }}
               numberOfLines={expanded ? undefined : 2}
               // A one-line notice used to invite a tap that changed nothing
               // (UI audit 2026-09-22, #27) — measure once, then offer it only
@@ -85,7 +85,7 @@ function NoticeRow({ a, index }: { a: Announcement; index: number }) {
               {a.body}
             </Text>
             {overflows ? (
-              <Text style={{ fontSize: 11, fontWeight: '700', color: tokens.color.indigo, marginTop: 4 }}>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.indigo, marginTop: 6 }}>
                 {expanded ? 'Show less' : 'Show more'}
               </Text>
             ) : null}
@@ -126,7 +126,7 @@ export default function Notices() {
   return (
     <Screen onRefresh={reload}>
       <SectionTitle title="Notices" />
-      <Text style={{ fontSize: 11, color: tokens.color.sub, marginHorizontal: 4, marginTop: -6 }}>
+      <Text style={{ fontSize: 13, color: tokens.color.sub, marginHorizontal: 4, marginTop: -6 }}>
         School circulars — the diary holds the personal ones.
       </Text>
       {error && <ErrorState error={error} onRetry={reload} />}

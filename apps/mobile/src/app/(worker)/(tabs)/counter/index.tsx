@@ -8,6 +8,7 @@ import { borrowerLine, dueWord, rupees, type Dashboard, type IssueCard, type Mem
 import { Empty, ErrorState, Figure, Page, PageHeader, Pill, Screen, SectionTitle } from '@/components/ui';
 import { Row, SearchBox } from '@/components/desk';
 import { LoadingRows } from '@/components/Loading';
+import { RoleHero } from '@/components/HeroDeck';
 import { NotificationBell } from '@/components/NotificationBell';
 import { useTokens } from '@/theme/theme-context';
 // The due date leads: it is the fact the row is sorted by, and the end of a
@@ -66,11 +67,25 @@ export default function Counter() {
           {dash.error && !dash.data && <ErrorState error={dash.error} onRetry={dash.reload} />}
           {dash.data && (
             <>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <Figure testID="counter-out" label="Out now" value={String(dash.data.counts.outNow)} hint="books with readers" />
-                <Figure testID="counter-due" label="Due this week" value={String(dash.data.counts.dueSoon)} hint="back by next week" tone={dash.data.counts.dueSoon ? 'warn' : undefined} />
-                <Figure testID="counter-fines" label="Fines due" value={rupees(dash.data.counts.finesDueRupees)} hint="to collect" tone={dash.data.counts.finesDueRupees ? 'bad' : undefined} onPress={() => router.push('/(worker)/(tabs)/fines')} />
-              </View>
+              {/* THE HERO (9 Oct 2026): the counter's day + its quick actions. */}
+              <RoleHero
+                testID="counter-hero"
+                quiet={dash.data.counts.dueSoon === 0}
+                eyebrow="Library counter"
+                title={`${dash.data.counts.outNow} ${dash.data.counts.outNow === 1 ? 'book' : 'books'} out`}
+                line={dash.data.counts.dueSoon ? `${dash.data.counts.dueSoon} due back this week` : 'Nothing due back this week'}
+                figures={[
+                  { testID: 'counter-out', value: String(dash.data.counts.outNow), label: 'out now' },
+                  { testID: 'counter-due', value: String(dash.data.counts.dueSoon), label: 'due this week' },
+                  { testID: 'counter-fines', value: rupees(dash.data.counts.finesDueRupees), label: 'fines due', onPress: () => router.push('/(worker)/(tabs)/fines') },
+                ]}
+                actions={[
+                  { label: 'Books', icon: 'library', testID: 'hero-act-books', onPress: () => router.push('/(worker)/(tabs)/books') },
+                  { label: 'Hall', icon: 'take', testID: 'hero-act-hall', onPress: () => router.push('/(worker)/(tabs)/hall') },
+                  { label: 'Fines', icon: 'fees', testID: 'hero-act-fines', onPress: () => router.push('/(worker)/(tabs)/fines') },
+                  { label: 'My pay', icon: 'report', testID: 'hero-act-mypay', onPress: () => router.push('/(worker)/(tabs)/profile/salary') },
+                ]}
+              />
               <Page testID="counter-soon">
                 <PageHeader title="Due soonest" icon="library" />
                 {soon.length === 0 ? <Empty icon="library">Nothing is out. The shelves are full.</Empty> : soon.map((c: IssueCard, i) => {

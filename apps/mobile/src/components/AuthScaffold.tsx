@@ -1,144 +1,9 @@
-import { useEffect, useRef, type ReactNode } from 'react';
-import {
-  Animated,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-  type TextStyle, useWindowDimensions } from 'react-native';
-import Svg, { Defs, LinearGradient, Rect, Stop, Circle } from 'react-native-svg';
-import { SckoolsLogo } from '@/components/SckoolsLogo';
+import { type ReactNode } from 'react';
+import { Pressable, Text, View, type TextStyle } from 'react-native';
+import { Button } from '@/components/Button';
 import { useTokens } from '@/theme/theme-context';
-import { brand, font } from '@/theme/tokens';
+import { font } from '@/theme/tokens';
 
-/**
- * Branded auth scaffold shared by the Connect + Login screens.
- * Indigo brand gradient hero with a floating white form card, and a staggered
- * entrance animation (logo springs in, then the card fades/slides up). Uses
- * react-native's built-in Animated (no extra native deps) and react-native-svg
- * for the gradient (already a dependency).
- */
-export function AuthScaffold({
-  title,
-  subtitle,
-  children,
-}: {
-  title: string;
-  subtitle?: string;
-  children: ReactNode;
-}) {
-  const tokens = useTokens();
-  // useWindowDimensions SUBSCRIBES; Dimensions.get() is a one-off read that
-  // goes stale the moment the window changes — split-screen, a foldable
-  // unfolding, or the keyboard resizing the view on Android.
-  const { width, height } = useWindowDimensions();
-  const slide = useRef(new Animated.Value(28)).current;
-  const logoScale = useRef(new Animated.Value(0.82)).current;
-  const logoFade = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    // Logo fades + springs in (non-interactive, safe to fade). The form block
-    // only SLIDES up (opacity stays 1) so its inputs/button are always visible
-    // and tappable — a fade-from-0 there can stall on slow devices and leave
-    // the primary button briefly untappable.
-    Animated.sequence([
-      Animated.parallel([
-        Animated.timing(logoFade, { toValue: 1, duration: 420, useNativeDriver: true }),
-        Animated.spring(logoScale, { toValue: 1, friction: 6, tension: 80, useNativeDriver: true }),
-      ]),
-      Animated.spring(slide, { toValue: 0, friction: 9, tension: 70, useNativeDriver: true }),
-    ]).start();
-  }, [slide, logoScale, logoFade]);
-
-  return (
-    <View style={{ flex: 1, backgroundColor: brand.authGradientEnd }}>
-      <Svg width={width} height={height} style={{ position: 'absolute', top: 0, left: 0 }}>
-        <Defs>
-          <LinearGradient id="authbg" x1="0" y1="0" x2="0.7" y2="1">
-            <Stop offset="0" stopColor={brand.authGradientStart} />
-            <Stop offset="0.55" stopColor={brand.authGradientMid} />
-            <Stop offset="1" stopColor={brand.authGradientEnd} />
-          </LinearGradient>
-        </Defs>
-        <Rect width={width} height={height} fill="url(#authbg)" />
-        {/* soft amber brand glow, top-right */}
-        <Circle cx={width * 0.9} cy={height * 0.12} r={width * 0.42} fill={brand.authGlowAmber} opacity={0.12} />
-        <Circle cx={width * 0.12} cy={height * 0.9} r={width * 0.5} fill={brand.authGlowIndigo} opacity={0.18} />
-      </Svg>
-
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        {/* It SCROLLS. The card is centred while there is room, and once the
-            keyboard takes the bottom half of a small phone the person can
-            still reach the last box and the button — a centred View with no
-            scroll simply cut them off (keyboard audit 2026-10-08). */}
-        <ScrollView
-          testID="auth-scroll"
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 24 }}
-        >
-          <Animated.View
-            style={{ alignItems: 'center', marginBottom: 30, opacity: logoFade, transform: [{ scale: logoScale }] }}
-          >
-            {/* The pitch's splash: "the S draws itself · the tassel is the '!'".
-                This is the one screen where the mark is the subject rather than
-                a header ornament, so it gets the full pen-draw and then keeps
-                the slow tassel swing while the person types. */}
-            <SckoolsLogo size={54} theme="dark" draw swing />
-          </Animated.View>
-
-          <Animated.View style={{ transform: [{ translateY: slide }] }}>
-            <Text
-              style={{
-                color: brand.onHero,
-                fontFamily: font.serif,
-                fontSize: 27,
-                fontWeight: '600',
-                letterSpacing: -0.3,
-                textAlign: 'center',
-              }}
-            >
-              {title}
-            </Text>
-            {subtitle ? (
-              <Text
-                style={{
-                  color: brand.onHero,
-                  opacity: 0.78,
-                  fontSize: 15,
-                  lineHeight: 21,
-                  textAlign: 'center',
-                  marginTop: 10,
-                  paddingHorizontal: 8,
-                }}
-              >
-                {subtitle}
-              </Text>
-            ) : null}
-
-            <View
-              style={{
-                backgroundColor: tokens.color.surface,
-                borderRadius: 22,
-                padding: 20,
-                marginTop: 26,
-                gap: 14,
-                shadowColor: brand.authCardShadow,
-                shadowOpacity: 0.25,
-                shadowRadius: 24,
-                shadowOffset: { width: 0, height: 12 },
-                elevation: 10,
-              }}
-            >
-              {children}
-            </View>
-          </Animated.View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </View>
-  );
-}
 
 // ── The gate's form vocabulary (`.fld`, `.savebtn`, `.linkish`, `.gatesub`,
 //    `.resetok`) ────────────────────────────────────────────────────────────
@@ -163,22 +28,46 @@ export function AuthScaffold({
  * mistype. Tracked small-caps is also the register-book way to head a column,
  * which is the voice this whole app is written in.
  */
-export function Field({ label, children }: { label: string; children: ReactNode }) {
+export function Field({
+  label,
+  children,
+  hint,
+  error,
+  optional,
+  counter,
+}: {
+  label: string;
+  children: ReactNode;
+  /** The line under the box: what to type, or the format. */
+  hint?: string;
+  /** Replaces the hint in the SAME line, so nothing jumps (Material 3). */
+  error?: string | null;
+  /** "(optional)" after the label — mark optional, not only required (Baymard). */
+  optional?: boolean;
+  /** "41 / 200", shown past 75% of the limit by the caller. */
+  counter?: string;
+}) {
   const tokens = useTokens();
+  // UI v2: the label is a sentence above the box at 13/600 — readable, not a
+  // tracked small-cap — and the supporting line is always reserved.
   return (
-    <View style={{ gap: 5 }}>
-      <Text
-        style={{
-          fontSize: 10,
-          fontWeight: '800',
-          letterSpacing: 0.8,
-          textTransform: 'uppercase',
-          color: tokens.color.sub,
-        }}
-      >
+    <View style={{ gap: 6 }}>
+      <Text style={{ fontSize: 13, lineHeight: 18, fontWeight: '600', color: tokens.color.ink2 }}>
         {label}
+        {optional ? <Text style={{ fontWeight: '500', color: tokens.color.sub }}> (optional)</Text> : null}
       </Text>
       {children}
+      {hint || error || counter ? (
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8, minHeight: 16 }}>
+          <Text
+            accessibilityLiveRegion={error ? 'polite' : 'none'}
+            style={{ flex: 1, fontSize: 12, lineHeight: 16, color: error ? tokens.color.red : tokens.color.sub }}
+          >
+            {error ?? hint ?? ''}
+          </Text>
+          {counter ? <Text style={{ fontSize: 12, lineHeight: 16, color: tokens.color.sub, fontVariant: ['tabular-nums'] }}>{counter}</Text> : null}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -194,20 +83,25 @@ export function Field({ label, children }: { label: string; children: ReactNode 
  * proportional type makes that check harder than it needs to be.
  */
 export function fieldInputStyle(
-  tokens: { color: { appBg: string; indigo: string; line: string; ink: string } },
-  opts: { focused?: boolean; mono?: boolean } = {},
+  tokens: { color: { appBg: string; surface?: string; indigo: string; line: string; line2?: string; ink: string; red?: string } },
+  opts: { focused?: boolean; mono?: boolean; error?: boolean; multiline?: boolean } = {},
 ): TextStyle {
+  // UI v2: a white box, 56 dp, 14 dp corners; 1 dp line at rest, 2 dp accent
+  // on focus, 2 dp error colour when wrong. Input at 16 sp (Material 3).
+  const border = opts.error ? (tokens.color.red ?? tokens.color.indigo) : opts.focused ? tokens.color.indigo : (tokens.color.line2 ?? tokens.color.line);
   return {
-    backgroundColor: tokens.color.appBg,
-    borderColor: opts.focused ? tokens.color.indigo : tokens.color.line,
-    borderWidth: 1.5,
-    borderRadius: 11,
-    paddingVertical: 12,
-    paddingHorizontal: 13,
+    backgroundColor: tokens.color.surface ?? tokens.color.appBg,
+    borderColor: border,
+    borderWidth: opts.focused || opts.error ? 2 : 1,
+    borderRadius: 14,
+    minHeight: opts.multiline ? 96 : 56,
+    paddingVertical: opts.multiline ? 14 : 0,
+    paddingHorizontal: opts.focused || opts.error ? 15 : 16,
     color: tokens.color.ink,
+    textAlignVertical: opts.multiline ? 'top' : 'center',
     ...(opts.mono
-      ? { fontFamily: font.mono, fontSize: 15, letterSpacing: 1.5 }
-      : { fontSize: 14.5 }),
+      ? { fontFamily: font.mono, fontSize: 16, letterSpacing: 1.2 }
+      : { fontSize: 16 }),
   };
 }
 
@@ -231,26 +125,8 @@ export function AuthButton({
   disabled?: boolean;
   testID?: string;
 }) {
-  const tokens = useTokens();
-  return (
-    <Pressable
-      testID={testID}
-      onPress={onPress}
-      disabled={disabled}
-      accessibilityRole="button"
-      style={({ pressed }) => ({
-        backgroundColor: tokens.color.indigo,
-        borderRadius: 11,
-        paddingVertical: 14,
-        opacity: disabled ? 0.45 : 1,
-        transform: [{ scale: pressed && !disabled ? 0.965 : 1 }],
-      })}
-    >
-      <Text style={{ color: tokens.color.onBrand, fontWeight: '700', textAlign: 'center', fontSize: 15 }}>
-        {label}
-      </Text>
-    </Pressable>
-  );
+  // UI v2: the one Button, filled and full width (components/Button.tsx).
+  return <Button label={label} onPress={onPress} disabled={disabled} testID={testID} block />;
 }
 
 /**
@@ -277,15 +153,15 @@ export function AuthLink({
       onPress={onPress}
       accessibilityRole="link"
       hitSlop={10}
-      // 12.5px of text plus 8 of slop was a 33dp target; padding and slop together clear 44.
-      style={({ pressed }) => ({ paddingVertical: 6, transform: [{ scale: pressed ? 0.965 : 1 }] })}
+      // A 44 dp row: the words are small, the target is not.
+      style={({ pressed }) => ({ minHeight: 44, justifyContent: 'center', paddingVertical: 6, transform: [{ scale: pressed ? 0.965 : 1 }] })}
     >
       <Text
         style={{
           color: tone === 'accent' ? tokens.color.indigo : tokens.color.sub,
           fontWeight: '700',
           textAlign: 'center',
-          fontSize: 12.5,
+          fontSize: 14,
         }}
       >
         {label}
@@ -303,7 +179,7 @@ export function AuthLink({
 export function AuthNote({ children }: { children: ReactNode }) {
   const tokens = useTokens();
   return (
-    <Text style={{ fontSize: 11.5, lineHeight: 16, color: tokens.color.sub, marginTop: -4 }}>{children}</Text>
+    <Text style={{ fontSize: 13, lineHeight: 18, color: tokens.color.sub, marginTop: -8 }}>{children}</Text>
   );
 }
 
@@ -336,12 +212,12 @@ export function AuthSlip({
         borderWidth: 1.5,
         borderColor: tone === 'good' ? tokens.color.green : tokens.color.amber,
         backgroundColor: bg,
-        borderRadius: 11,
-        paddingVertical: 11,
-        paddingHorizontal: 13,
+        borderRadius: 16,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
       }}
     >
-      <Text testID={testID} style={{ color: fg, fontSize: 13, lineHeight: 19, fontWeight: '600' }}>
+      <Text testID={testID} style={{ color: fg, fontSize: 14, lineHeight: 20, fontWeight: '600' }}>
         {children}
       </Text>
     </View>

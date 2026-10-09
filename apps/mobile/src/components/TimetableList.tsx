@@ -59,7 +59,7 @@ export interface TimetableListProps {
  * make "nothing scheduled" indistinguishable from "the data didn't load".
  *
  * The row anatomy comes from `RailRow`, the shared object the family home and
- * the teacher's day are also drawn from: a mono time column in the margin, the
+ * the teacher's day are also drawn from: a tabular-figure time column in the margin, the
  * red margin rule, and then the lesson in the body. What the row is doing to
  * the day decides how it is inked — the live period takes the amber highlighter
  * wash, a free period the green one, a finished period drops to .55 so it stays
@@ -100,10 +100,13 @@ export function TimetableList({ rows, currentPeriodId, nowMinutes, lead = 'class
               key={period.id}
               testID={`period-row-break-${period.id}`}
               first={i === 0}
-              state={isPast ? 'done' : 'upcoming'}
+              // Quiet like a free period: only a class is a dark row (same
+              // rule as Home's timeline, 9 Oct 2026).
+              state="free"
               startTime={period.startTime ?? period.label}
               endTime={period.endTime ?? ''}
               title={period.label}
+              subtitle="No class"
               right={<RailStatus tone="muted">Break</RailStatus>}
             />
           );

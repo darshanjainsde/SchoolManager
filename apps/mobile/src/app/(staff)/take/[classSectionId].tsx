@@ -1,7 +1,7 @@
 import { useReload } from '@/lib/query';
 import { formatDate } from '@/lib/portal';
 import { useCallback, useState, useMemo } from 'react';
-import { Alert, Animated, Pressable, Text, View } from 'react-native';
+import { Animated, Text, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { type AttendanceStatusValue, type SaveAttendanceResponse } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
@@ -9,11 +9,13 @@ import { buildMarksPayload, todayISO } from '@/lib/attendance';
 import { enqueueSave, flush } from '@/lib/offline-queue';
 import { WhoNeedsAWord } from '@/components/WhoNeedsAWord';
 import { Card, ErrorState, Screen, SectionTitle, Toast } from '@/components/ui';
+import { Button } from '@/components/Button';
 import { Touchable } from '@/components/Touchable';
 import { LoadingGrid } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font, type ColorPalette } from '@/theme/tokens';
 import { DUR, stampStyle, useGesture } from '@/theme/motion';
+import { ask } from '@/components/ConfirmSheet';
 
 interface RosterRow {
   studentId: string;
@@ -116,7 +118,7 @@ function SavedStamp() {
           {
             borderWidth: 2.5,
             borderColor: tokens.color.green,
-            borderRadius: 10,
+            borderRadius: tokens.radius.chip,
             paddingVertical: 6,
             paddingHorizontal: 16,
           },
@@ -125,9 +127,8 @@ function SavedStamp() {
       >
         <Text
           style={{
-            fontFamily: font.serif,
             fontWeight: '700',
-            fontSize: 15,
+            fontSize: 17,
             color: tokens.color.green,
           }}
         >
@@ -136,6 +137,14 @@ function SavedStamp() {
       </Animated.View>
     </View>
   );
+}
+
+const CELL_GAP = 8;
+/** The largest cell ≥ 48 dp that fills `width` with whole columns. */
+export function cellSize(width: number, min = 48, gap = CELL_GAP): number {
+  if (width <= 0) return min;
+  const cols = Math.max(1, Math.floor((width + gap) / (min + gap)));
+  return Math.floor((width - gap * (cols - 1)) / cols);
 }
 
 export default function TakeAttendance() {
@@ -160,6 +169,8 @@ export default function TakeAttendance() {
   // Try again / pull-to-refresh for this screen's own focus effect.
   const [reloadKey, reload] = useReload();
   const [roster, setRoster] = useState<RosterRow[] | null>(null);
+  const [gridW, setGridW] = useState(0);
+  const cell = cellSize(gridW);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmation, setConfirmation] = useState<SaveAttendanceResponse | null>(null);
@@ -299,7 +310,7 @@ export default function TakeAttendance() {
     if (takenBy) {
       const when = date === todayISO() ? 'today' : `on ${date}`;
       const ok = await new Promise<boolean>((resolve) => {
-        Alert.alert(
+        ask(
           `Replace ${name ?? 'this class'}'s register?`,
           `${takenBy} already marked it ${when}. Saving replaces that record for ` +
             `every teacher. The previous version stays in the audit log.`,
@@ -307,7 +318,7 @@ export default function TakeAttendance() {
             { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
             { text: 'Replace', style: 'destructive', onPress: () => resolve(true) },
           ],
-          { onDismiss: () => resolve(false) },
+          { onDismiss: () => resolve(false), icon: 'take' },
         );
       });
       if (!ok) return;
@@ -350,12 +361,11 @@ export default function TakeAttendance() {
     }
   };
 
-  // `.regstat .n` — the pitch sets every countable figure in the mono face so
+  // `.regstat .n` — every countable figure in sans with tabular digits so
   // the three numerals line up as a column of figures would in a paper
-  // register. Only the NUMBERS are mono; the words stay in the UI sans, per
-  // the type rule in theme/tokens.ts.
+  // register. Only the NUMBERS get the tabular treatment; the words stay plain.
   const statNumber = (color: string) => ({
-    fontFamily: font.mono,
+    fontVariant: ['tabular-nums' as const],
     fontSize: 17,
     fontWeight: '700' as const,
     color,
@@ -364,7 +374,9 @@ export default function TakeAttendance() {
   return (
     <Screen onRefresh={reload}>
       <SectionTitle
-        title={`${name ?? 'Class'} · Attendance${date === todayISO() ? '' : ` · ${formatDate(date)}`}`}
+        // The header already says "Attendance"; this line names the class
+        // (and the day, when it is not today) instead of saying it twice.
+        title={`${name ?? 'Class'}${date === todayISO() ? ' · today' : ` · ${formatDate(date)}`}`}
       />
       {confirmation && <SavedStamp />}
       {confirmation && (
@@ -387,16 +399,16 @@ export default function TakeAttendance() {
       {roster === null && !error && (
         <LoadingGrid label="Loading roster…" cells={30} />
       )}
-      {/* `.regstats` — the running count, mono numerals on paper. Kept as ONE
+      {/* `.regstats` — the running count, tabular numerals on paper. Kept as ONE
           text run (rather than the pitch's three separate tiles) because that
-          exact sentence is this screen's published summary; the mono/colour
+          exact sentence is this screen's published summary; the weight/colour
           treatment per figure is what carries the tile idea across. */}
       {/* The web shows "Taken by X" above the roster for the same reason: you
           can look at a marked register freely, but you should know whose work
           you are about to change before you change it. */}
       {takenBy && (
         <Card style={{ paddingVertical: 9 }}>
-          <Text style={{ fontSize: 11.5, color: tokens.color.sub, textAlign: 'center' }}>
+          <Text style={{ fontSize: 13, color: tokens.color.sub, textAlign: 'center' }}>
             Taken by {takenBy}. Saving replaces that record.
           </Text>
         </Card>
@@ -412,7 +424,7 @@ export default function TakeAttendance() {
         <Card style={{ paddingVertical: 9, alignItems: 'center' }}>
           <Text
             style={{
-              fontSize: 12,
+              fontSize: 13,
               fontWeight: '700',
               color: tokens.color.sub,
               textAlign: 'center',
@@ -431,12 +443,14 @@ export default function TakeAttendance() {
         testID="mark-all-present"
         style={{
           backgroundColor: tokens.color.indigo50,
-          borderRadius: 11,
-          padding: 11,
+          borderRadius: 24,
+          minHeight: 48,
+          justifyContent: 'center',
+          paddingHorizontal: 20,
           opacity: busy || rows.length === 0 ? 0.6 : 1,
         }}
       >
-        <Text style={{ color: tokens.color.indigo, fontWeight: '700', textAlign: 'center', fontSize: 13 }}>
+        <Text style={{ color: tokens.color.indigo, fontWeight: '700', textAlign: 'center', fontSize: 15 }}>
           Mark all present
         </Text>
       </Touchable>
@@ -453,7 +467,14 @@ export default function TakeAttendance() {
           a screen reader still announces "Asha Rao, roll 1, present". */}
       {rows.length > 0 && (
         <Card style={{ paddingVertical: 12 }}>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5 }}>
+          {/* Cells are sized from the card's own width so the grid fills it
+              edge to edge — fixed 46 dp cells left an empty strip on the right
+              at phone width — and never fall under the 48 dp touch floor. */}
+          <View
+            testID="register-grid"
+            onLayout={(e) => setGridW(e.nativeEvent.layout.width)}
+            style={{ flexDirection: 'row', flexWrap: 'wrap', gap: CELL_GAP }}
+          >
             {rows.map((r) => {
               const tone = CELL[r.status];
               return (
@@ -480,9 +501,9 @@ export default function TakeAttendance() {
                     // instead of on whatever happens to be outermost today.
                     testID={`cell-body-${r.studentId}`}
                     style={{
-                      width: 46,
-                      height: 46,
-                      borderRadius: 9,
+                      width: cell,
+                      height: cell,
+                      borderRadius: tokens.radius.chip,
                       alignItems: 'center',
                       justifyContent: 'center',
                       backgroundColor: tone.bg,
@@ -497,7 +518,7 @@ export default function TakeAttendance() {
                     <Text
                       style={{
                         fontFamily: font.mono,
-                        fontSize: 12,
+                        fontSize: 13,
                         fontWeight: '700',
                         color: tone.ink,
                       }}
@@ -524,31 +545,20 @@ export default function TakeAttendance() {
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 10,
-            minHeight: 20,
+            gap: 4,
+            minHeight: 40,
             marginTop: -4,
           }}
         >
           {lastMark ? (
             <>
-              <Text style={{ fontSize: 11.5, color: tokens.color.ink2 }}>
+              <Text style={{ fontSize: 13, color: tokens.color.ink2 }}>
                 {lastMark.name} · {STATUS_LABEL[lastMark.to].toLowerCase()}
               </Text>
-              <Pressable testID="register-undo" accessibilityRole="button" onPress={undoLastMark}>
-                <Text
-                  style={{
-                    fontSize: 11.5,
-                    fontWeight: '700',
-                    color: tokens.color.indigo,
-                    textDecorationLine: 'underline',
-                  }}
-                >
-                  Undo
-                </Text>
-              </Pressable>
+              <Button testID="register-undo" variant="text" size="sm" label="Undo" onPress={undoLastMark} />
             </>
           ) : (
-            <Text style={{ fontSize: 10.5, color: tokens.color.sub, textAlign: 'center' }}>
+            <Text style={{ fontSize: 13, color: tokens.color.sub, textAlign: 'center' }}>
               Everyone starts present — tap the absentees. Tap again for late.
             </Text>
           )}
@@ -560,9 +570,9 @@ export default function TakeAttendance() {
         testID="submit-attendance"
         // Closing the register is the firmest tap on the screen.
         haptic="medium"
-        style={{ backgroundColor: tokens.color.indigo, borderRadius: 11, padding: 14, opacity: busy || rows.length === 0 ? 0.6 : 1 }}
+        style={{ backgroundColor: tokens.color.indigo, borderRadius: 24, minHeight: 48, justifyContent: 'center', paddingHorizontal: 20, opacity: busy || rows.length === 0 ? 0.6 : 1 }}
       >
-        <Text style={{ color: tokens.color.onBrand, fontWeight: '700', textAlign: 'center' }}>
+        <Text style={{ color: tokens.color.onBrand, fontWeight: '700', textAlign: 'center', fontSize: 15 }}>
           {busy ? 'Submitting…' : 'Submit attendance'}
         </Text>
       </Touchable>

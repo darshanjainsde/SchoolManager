@@ -4,6 +4,7 @@ import { useQuery } from '@/lib/query';
 import { rupees } from '@/components/MyPay';
 import { Empty, ErrorState, Page, PageHeader, Pill, Screen, SectionTitle } from '@/components/ui';
 import { Row } from '@/components/desk';
+import { Icon, type IconName } from '@/components/icons';
 import { LoadingRows } from '@/components/Loading';
 import { NotificationBell } from '@/components/NotificationBell';
 import { useTokens } from '@/theme/theme-context';
@@ -37,9 +38,30 @@ export default function PayDesk() {
       <Screen>
         <SectionTitle title="Pay" />
         <Page>
-          <Empty icon="fees">
-            You do not have the right to see pay yet. An admin grants it under Pay → Settings.
+          <Empty kind="locked" title="Pay opens when the admin allows it">
+            Payroll for the school shows here once the admin grants you Pay under Settings → Pay. You get a bell when it is on.
           </Empty>
+        </Page>
+        {/* A locked door still shows what is behind it (empty-state kind
+            "locked", v2 2026-10-08): the page is not 80% blank, and the
+            officer knows what to ask the admin for. */}
+        <Page testID="paydesk-preview">
+          <PageHeader title="What Pay shows" icon="fees" />
+          {[
+            ['fees', 'The month in one figure', 'What the school pays this month, by grade, and whether it is worked out yet'],
+            ['requests', 'Leave that changes pay', 'Every undecided leave is listed before the month can close'],
+            ['person', 'Each person\u2019s payslip', 'Basic, allowances, deductions and the net, as it will be paid'],
+          ].map(([icon, title, sub], i) => (
+            <View key={title} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 72, paddingVertical: 8, paddingHorizontal: 16, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: tokens.color.line }}>
+              <View style={{ width: 40, height: 40, borderRadius: tokens.radius.field, backgroundColor: tokens.color.surfaceMuted, alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name={icon as IconName} size={20} color={tokens.color.sub} />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ fontSize: 15, fontWeight: '600', color: tokens.color.ink }}>{title}</Text>
+                <Text style={{ fontSize: 13, lineHeight: 18, color: tokens.color.sub }}>{sub}</Text>
+              </View>
+            </View>
+          ))}
         </Page>
       </Screen>
     );
@@ -79,8 +101,8 @@ export default function PayDesk() {
                 {d.cost.headcount} on the payroll
               </Text>
             </View>
-            <Row first title="To their banks" right={<Text style={{ fontFamily: font.mono, color: tokens.color.ink }}>{rupees(d.cost.netMinor)}</Text>} />
-            <Row title="School’s own share" right={<Text style={{ fontFamily: font.mono, color: tokens.color.ink }}>{rupees(d.cost.employerCostMinor)}</Text>} />
+            <Row first title="To their banks" right={<Text style={{ fontVariant: ['tabular-nums'], fontWeight: '600', color: tokens.color.ink }}>{rupees(d.cost.netMinor)}</Text>} />
+            <Row title="School’s own share" right={<Text style={{ fontVariant: ['tabular-nums'], fontWeight: '600', color: tokens.color.ink }}>{rupees(d.cost.employerCostMinor)}</Text>} />
           </Page>
 
           <Page>

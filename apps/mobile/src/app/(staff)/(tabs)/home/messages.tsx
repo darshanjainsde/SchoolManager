@@ -6,7 +6,6 @@ import { api, ApiError } from '@/lib/api';
 import { Card, Empty, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
-import { font } from '@/theme/tokens';
 import { fmtDayTime } from '@/lib/dates';
 
 /** "AS" for Aarav Sharma — the pitch's `.mrow .av` initials disc. */
@@ -73,7 +72,7 @@ export default function StaffMessages() {
       )}
       {threads?.length === 0 && !error && (
         <Card style={{ padding: 0 }}>
-          <Empty icon="messages">No student questions yet.</Empty>
+          <Empty kind="first" icon="messages" title="No questions yet">When a family in your classes writes to you, it lands here and rings the bell. Only the classes you teach can reach you.</Empty>
         </Card>
       )}
       {sorted.map((t) => (
@@ -82,36 +81,37 @@ export default function StaffMessages() {
           testID={`thread-${t.id}`}
           onPress={() => router.push(`/(staff)/(tabs)/home/messages/${t.id}`)}
           accessibilityRole="button"
+          style={({ pressed }) => ({ minHeight: 72, borderRadius: tokens.radius.card, opacity: pressed ? 0.8 : 1 })}
           >
           {/* `.mrow` — an initials disc, the thread, and the unread count. A
               conversation is with a PERSON, and a disc bearing their initials
               is the cheapest way to say so on a list of otherwise identical
               rows. */}
-          <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 11 }}>
+          <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 72 }}>
             <View
               style={{
-                width: 34,
-                height: 34,
-                borderRadius: 17,
+                width: 36,
+                height: 36,
+                borderRadius: 999,
                 backgroundColor: tokens.color.indigo50,
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
             >
-              <Text style={{ fontSize: 12, fontWeight: '800', color: tokens.color.indigo }}>
+              <Text style={{ fontSize: 13, fontWeight: '800', color: tokens.color.indigo }}>
                 {initials(t.studentName)}
               </Text>
             </View>
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={{ fontFamily: font.serif, fontSize: 14, fontWeight: '700', color: tokens.color.ink }}>
+                <Text style={{ fontSize: 16, fontWeight: '600', color: tokens.color.ink }}>
                   {t.studentName}
                 </Text>
-                <Text style={{ fontSize: 11, color: tokens.color.sub }}>{formatWhen(t.lastMessageAt)}</Text>
+                <Text style={{ fontSize: 13, color: tokens.color.sub }}>{formatWhen(t.lastMessageAt)}</Text>
               </View>
-              <Text style={{ fontSize: 11.5, color: tokens.color.indigo, marginTop: 1 }}>{t.subjectName}</Text>
+              <Text style={{ fontSize: 13, color: tokens.color.indigo, marginTop: 1 }}>{t.subjectName}</Text>
               {t.lastMessagePreview && (
-                <Text style={{ fontSize: 12, color: tokens.color.sub, marginTop: 3 }} numberOfLines={1}>
+                <Text style={{ fontSize: 13, color: tokens.color.sub, marginTop: 3 }} numberOfLines={1}>
                   {t.lastMessagePreview}
                 </Text>
               )}
@@ -120,16 +120,16 @@ export default function StaffMessages() {
               <View
                 testID={`thread-unread-${t.id}`}
                 style={{
-                  minWidth: 22,
-                  height: 22,
-                  borderRadius: 11,
+                  minWidth: 24,
+                  height: 24,
+                  borderRadius: 999,
                   paddingHorizontal: 6,
                   backgroundColor: tokens.color.indigo,
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
               >
-                <Text style={{ color: tokens.color.onBrand, fontSize: 11, fontWeight: '800' }}>{t.unreadCount}</Text>
+                <Text style={{ color: tokens.color.onBrand, fontSize: 13, fontWeight: '800' }}>{t.unreadCount}</Text>
               </View>
             )}
           </Card>

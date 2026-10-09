@@ -6,6 +6,10 @@ import {
   type ConcernAudience, type ConcernCategory, type ConcernRow, type Profile,
 } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
+import { Button } from '@/components/Button';
+import { Chip, ChipRow } from '@/components/Chip';
+import { SelectField } from '@/components/Field';
+import { Field, fieldInputStyle } from '@/components/AuthScaffold';
 import { Card, Empty, ErrorState, Page, Pill, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
@@ -31,6 +35,8 @@ export default function FamilyConcerns() {
   const [form, setForm] = useState<{ audience: ConcernAudience; category: ConcernCategory; title: string; body: string }>({
     audience: 'OFFICE', category: 'OTHER', title: '', body: '',
   });
+  const [titleFocused, setTitleFocused] = useState(false);
+  const [bodyFocused, setBodyFocused] = useState(false);
   // The keyboard's Next moves from the one-line title to the details box.
   const concernBodyRef = useRef<TextInput>(null);
 
@@ -67,15 +73,12 @@ export default function FamilyConcerns() {
     }
   };
 
-  const inputStyle = {
-    borderWidth: 1.5, borderColor: tokens.color.line, backgroundColor: tokens.color.surface,
-    borderRadius: 12, padding: 11, color: tokens.color.ink, fontSize: 14,
-  } as const;
+  const eyebrow = { fontSize: 12, fontWeight: '700', letterSpacing: 0.6, color: tokens.color.sub } as const;
 
   return (
     <Screen onRefresh={() => void load()}>
       {/* No second "Complaint Box": the back-chip header already says it (re-audit 2026-10-08). */}
-      <Text style={{ fontSize: 13.5, color: tokens.color.sub, marginTop: 4, lineHeight: 19 }}>
+      <Text style={{ fontSize: 14, color: tokens.color.sub, marginTop: 4, lineHeight: 20 }}>
         Tell the school something that needs looking at. You choose who sees it, and you can follow what happens here.
         {classTeacher ? ` Your class teacher is ${classTeacher}.` : ''}
       </Text>
@@ -83,83 +86,79 @@ export default function FamilyConcerns() {
       {error && rows !== null ? <Text style={{ marginTop: 10, fontSize: 13, color: tokens.color.red }}>{error}</Text> : null}
 
       {!writing && (
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => setWriting(true)}
-          style={{ marginTop: 14, minHeight: 50, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: tokens.color.indigo }}
-        >
-          <Text style={{ color: tokens.color.onBrand, fontWeight: '700', fontSize: 15 }}>Raise a concern</Text>
-        </Pressable>
+        <Button label="Raise a concern" onPress={() => setWriting(true)} variant="filled" block style={{ marginTop: 14 }} />
       )}
 
       {writing && (
         <Card style={{ marginTop: 14, gap: 12 }}>
           <View style={{ gap: 6 }}>
-            <Text style={{ fontSize: 12, fontWeight: '700', color: tokens.color.sub }}>WHO SHOULD SEE THIS</Text>
-            <View accessibilityRole="radiogroup" accessibilityLabel="Who should see this" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              <Choice label="School office" on={form.audience === 'OFFICE'} onPress={() => setForm({ ...form, audience: 'OFFICE' })} />
-              {classTeacher && (
-                <Choice
-                  label={`Class teacher · ${classTeacher}`}
-                  on={form.audience === 'CLASS_TEACHER'}
-                  onPress={() => setForm({ ...form, audience: 'CLASS_TEACHER' })}
-                />
-              )}
+            <Text style={eyebrow}>WHO SHOULD SEE THIS</Text>
+            <View accessibilityRole="radiogroup" accessibilityLabel="Who should see this">
+              <ChipRow>
+                <Chip label="School office" selected={form.audience === 'OFFICE'} onPress={() => setForm({ ...form, audience: 'OFFICE' })} />
+                {classTeacher && (
+                  <Chip
+                    label={`Class teacher · ${classTeacher}`}
+                    selected={form.audience === 'CLASS_TEACHER'}
+                    onPress={() => setForm({ ...form, audience: 'CLASS_TEACHER' })}
+                  />
+                )}
+              </ChipRow>
             </View>
           </View>
 
-          <View style={{ gap: 6 }}>
-            <Text style={{ fontSize: 12, fontWeight: '700', color: tokens.color.sub }}>WHAT IS IT ABOUT</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {CONCERN_CATEGORIES.map((k) => (
-                <Choice key={k} label={CONCERN_CATEGORY_LABEL[k]} on={form.category === k} onPress={() => setForm({ ...form, category: k })} />
-              ))}
-            </View>
-          </View>
+          {/* Seven topics: a dropdown, not a wall of chips (9 Oct 2026). */}
+          <SelectField
+            label="What is it about"
+            testID="concern-category"
+            optionTestID={(k) => `concern-category-${k}`}
+            value={form.category}
+            options={CONCERN_CATEGORIES.map((k) => ({ id: k, label: CONCERN_CATEGORY_LABEL[k] }))}
+            onChange={(k) => setForm({ ...form, category: k as typeof form.category })}
+          />
 
-          <TextInput
-            accessibilityLabel="In one line"
-            placeholder="The bus was late twice this week"
-            placeholderTextColor={tokens.color.sub}
-            value={form.title}
-            onChangeText={(t) => setForm({ ...form, title: t })}
-            returnKeyType="next"
-            submitBehavior="submit"
-            onSubmitEditing={() => concernBodyRef.current?.focus()}
-            maxLength={160}
-            style={inputStyle}
-          />
-          <TextInput
-            accessibilityLabel="What happened"
-            placeholder="Tell us what happened, and when."
-            placeholderTextColor={tokens.color.sub}
-            value={form.body}
-            onChangeText={(t) => setForm({ ...form, body: t })}
-            ref={concernBodyRef}
-            maxLength={4000}
-            multiline
-            style={{ ...inputStyle, minHeight: 96, textAlignVertical: 'top' }}
-          />
+          <Field label="In one line">
+            <TextInput
+              accessibilityLabel="In one line"
+              placeholder="The bus was late twice this week"
+              placeholderTextColor={tokens.color.placeholder}
+              value={form.title}
+              onChangeText={(t) => setForm({ ...form, title: t })}
+              returnKeyType="next"
+              submitBehavior="submit"
+              onSubmitEditing={() => concernBodyRef.current?.focus()}
+              maxLength={160}
+              onFocus={() => setTitleFocused(true)}
+              onBlur={() => setTitleFocused(false)}
+              style={fieldInputStyle(tokens, { focused: titleFocused })}
+            />
+          </Field>
+          <Field label="What happened">
+            <TextInput
+              accessibilityLabel="What happened"
+              placeholder="Tell us what happened, and when."
+              placeholderTextColor={tokens.color.placeholder}
+              value={form.body}
+              onChangeText={(t) => setForm({ ...form, body: t })}
+              ref={concernBodyRef}
+              maxLength={4000}
+              multiline
+              onFocus={() => setBodyFocused(true)}
+              onBlur={() => setBodyFocused(false)}
+              style={fieldInputStyle(tokens, { focused: bodyFocused, multiline: true })}
+            />
+          </Field>
 
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Pressable
-              accessibilityRole="button"
-              disabled={busy || form.title.trim().length < 3 || form.body.trim().length < 3}
+            <Button
+              label={busy ? 'Sending…' : 'Send it'}
               onPress={() => void send()}
-              style={{
-                flex: 1, minHeight: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
-                backgroundColor: form.title.trim().length >= 3 && form.body.trim().length >= 3 ? tokens.color.indigo : tokens.color.line,
-              }}
-            >
-              <Text style={{ color: tokens.color.onBrand, fontWeight: '700', fontSize: 14.5 }}>{busy ? 'Sending…' : 'Send it'}</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setWriting(false)}
-              style={{ minHeight: 48, paddingHorizontal: 16, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: tokens.color.line }}
-            >
-              <Text style={{ color: tokens.color.ink, fontWeight: '700', fontSize: 14.5 }}>Not now</Text>
-            </Pressable>
+              disabled={busy || form.title.trim().length < 3 || form.body.trim().length < 3}
+              busy={busy}
+              variant="filled"
+              style={{ flex: 1 }}
+            />
+            <Button label="Not now" onPress={() => setWriting(false)} variant="outlined" />
           </View>
         </Card>
       )}
@@ -176,17 +175,17 @@ export default function FamilyConcerns() {
               testID={`concern-${r.id}`}
               onPress={() => router.push(`/(family)/(tabs)/home/concerns/${r.id}`)}
               style={{
-                padding: 13, gap: 4, minHeight: 64,
+                paddingHorizontal: 16, paddingVertical: 12, gap: 4, minHeight: 72, justifyContent: 'center',
                 borderTopWidth: i === 0 ? 0 : 1, borderTopColor: tokens.color.line,
               }}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Text style={{ flex: 1, fontSize: 14.5, fontWeight: '600', color: tokens.color.ink }} numberOfLines={1}>{r.title}</Text>
+                <Text style={{ flex: 1, fontSize: 16, fontWeight: '600', color: tokens.color.ink }} numberOfLines={1}>{r.title}</Text>
                 <Pill tone={r.status === 'RESOLVED' ? 'green' : r.status === 'IN_PROGRESS' ? 'amber' : 'indigo'}>
                   {CONCERN_STATUS_LABEL[r.status]}
                 </Pill>
               </View>
-              <Text style={{ fontSize: 12, color: tokens.color.sub }}>
+              <Text style={{ fontSize: 13, color: tokens.color.sub }}>
                 {CONCERN_CATEGORY_LABEL[r.category]} · {r.audience === 'CLASS_TEACHER' && r.assignedTeacher ? r.assignedTeacher.name : 'school office'}
               </Text>
             </Pressable>
@@ -194,24 +193,5 @@ export default function FamilyConcerns() {
         </Page>
       )}
     </Screen>
-  );
-}
-
-function Choice({ label, on, onPress }: { label: string; on: boolean; onPress: () => void }) {
-  const tokens = useTokens();
-  return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityState={{ selected: on }}
-      accessibilityLabel={label}
-      onPress={onPress}
-      style={{
-        minHeight: 40, paddingHorizontal: 13, borderRadius: 999, justifyContent: 'center',
-        borderWidth: 1.5, borderColor: on ? tokens.color.indigo : tokens.color.line,
-        backgroundColor: on ? tokens.color.indigo50 : tokens.color.surface,
-      }}
-    >
-      <Text style={{ fontSize: 13, fontWeight: on ? '700' : '500', color: on ? tokens.color.indigo : tokens.color.ink }}>{label}</Text>
-    </Pressable>
   );
 }

@@ -51,7 +51,7 @@ export function contrastRatio(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-function mix(hex: string, toward: string, amount: number): string {
+export function mix(hex: string, toward: string, amount: number): string {
   const a = hexToRgb(hex);
   const b = hexToRgb(toward);
   if (!a || !b) return hex;

@@ -68,7 +68,8 @@ const TAB_NAMES_BY_JOB: Record<WorkerJob, readonly string[]> = {
   // landed a new officer on "You do not have the right to see pay yet"
   // (re-audit 2026-10-08). Running a pay run is a sitting-down job and stays
   // on the web, the same way the library's Settings does.
-  ACCOUNTS: ['leavedesk', 'paydesk', 'profile'],
+  // UI v2: Today first — one home with what awaits them, then the desks.
+  ACCOUNTS: ['today', 'leavedesk', 'paydesk', 'profile'],
 };
 
 type NavSession = Pick<Session, 'staffRole' | 'features'> | null | undefined;

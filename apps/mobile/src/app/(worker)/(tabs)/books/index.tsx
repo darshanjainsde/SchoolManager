@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import { type TitleView } from '@/lib/library-desk';
@@ -10,6 +10,7 @@ import { Sheet } from '@/components/Sheet';
 import { TextField } from '@/components/Field';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
+import { ask } from '@/components/ConfirmSheet';
 
 /**
  * BOOKS — the catalogue, searched. A title opens to its copies, each with
@@ -70,8 +71,8 @@ export default function Books() {
       <SearchBox testID="books-search" value={q} onChangeText={setQ} placeholder="Title, author or accession number" />
       {loading && !hits && <LoadingRows label="Searching the shelves…" rows={3} />}
       {error && <Toast kind="error" message={error} />}
-      {!hits && !loading && <Page><Empty icon="notes">Type two letters of a title or an author. An accession number finds its copy.</Empty></Page>}
-      {hits && hits.length === 0 && <Page><Empty icon="notes">Nothing on the shelves by that name. “Add title” puts it in.</Empty></Page>}
+      {!hits && !loading && <Page><Empty kind="search" title="Find a book">Two letters of a title or an author. An accession number finds its copy.</Empty></Page>}
+      {hits && hits.length === 0 && <Page><Empty kind="search" title="Nothing by that name">Check the spelling, or add the title so the next search finds it.</Empty></Page>}
       {hits && hits.length > 0 && (
         <Page testID="books-hits">
           {hits.map((t, i) => (
@@ -82,7 +83,7 @@ export default function Books() {
       {toast && <Toast kind={toast.kind} message={toast.message} />}
 
       <Sheet open={!!open} onClose={() => setOpenId(null)} title={open?.title ?? ''} subtitle={open ? `${open.author}${open.shelf ? ` · shelf ${open.shelf}` : ''}` : undefined} testID="book-sheet"
-        footer={open ? <Button variant="ghost" testID="book-add-copy" label="Add a copy" onPress={() => Alert.alert('Add a copy?', `A new accession number for ${open.title}.`, [{ text: 'No', style: 'cancel' }, { text: 'Add', onPress: () => void addCopy(open) }])} /> : undefined}>
+        footer={open ? <Button variant="ghost" testID="book-add-copy" label="Add a copy" onPress={() => ask('Add a copy?', `A new accession number for ${open.title}.`, [{ text: 'No', style: 'cancel' }, { text: 'Add', onPress: () => void addCopy(open) }], { icon: 'library' })} /> : undefined}>
         {open && open.copies.length === 0 && <Empty>No copies yet.</Empty>}
         {open?.copies.map((c, i) => (
           <Row key={c.id} first={i === 0} mono testID={`copy-${c.id}`} title={c.accessionNo}
@@ -133,7 +134,7 @@ function AddTitleSheet({ onClose, onAdded }: { onClose: () => void; onAdded: (m:
         <TextField label="Author" testID="add-author" value={author} onChangeText={setAuthor} placeholder="R. K. Narayan" maxLength={120} />
         <TextField label="Shelf" testID="add-shelf" value={shelf} onChangeText={setShelf} placeholder="Fiction · B2" maxLength={40} />
         <TextField label="Copies" testID="add-copies" value={copies} onChangeText={(v) => setCopies(v.replace(/\D/g, ''))} keyboardType="number-pad" placeholder="1" />
-        <Text style={{ fontSize: 11.5, color: tokens.color.sub }}>ISBN and a bulk import are on the web catalogue.</Text>
+        <Text style={{ fontSize: 13, color: tokens.color.sub }}>ISBN and a bulk import are on the web catalogue.</Text>
         {error && <Toast kind="error" message={error} />}
       </View>
     </Sheet>
