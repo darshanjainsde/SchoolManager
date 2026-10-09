@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useDeferredValue, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import type {
@@ -67,7 +67,12 @@ export function WhoNeedsAWord({
 
   const students = data?.students ?? [];
   const marked = students.filter((s) => s.total > 0);
-  const below = marked.filter((s) => s.percent < threshold);
+  // The thumb follows the finger on every move; the 27-row list below it
+  // re-filters on the NEXT idle frame instead (useDeferredValue), so a drag
+  // is one render of the label, not one render of the list per pixel — the
+  // stutter the user saw on the emulator (2026-10-08).
+  const shown = useDeferredValue(threshold);
+  const below = marked.filter((s) => s.percent < shown);
   const inCooldown = (s: AttendanceRateRow) =>
     s.lastNoticeAt !== null && daysSince(s.lastNoticeAt) < COOLDOWN_DAYS;
   const willNotify = below.filter((s) => !excluded.has(s.studentId) && !inCooldown(s));
@@ -143,8 +148,8 @@ export function WhoNeedsAWord({
 
             <Text style={{ fontSize: 11.5, color: tokens.color.sub }}>
               {below.length === 0
-                ? `Everyone in ${className} is above ${threshold}%, over ${data.daysMarked} marked days.`
-                : `${below.length} of ${marked.length} in ${className} below ${threshold}%, over ${data.daysMarked} marked days. Each family hears only about their own child — never a list.`}
+                ? `Everyone in ${className} is above ${shown}%, over ${data.daysMarked} marked days.`
+                : `${below.length} of ${marked.length} in ${className} below ${shown}%, over ${data.daysMarked} marked days. Each family hears only about their own child — never a list.`}
             </Text>
 
             {below.map((s, i) => {
