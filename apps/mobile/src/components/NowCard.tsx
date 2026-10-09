@@ -6,7 +6,8 @@ import { Card } from './ui';
 import { Icon, type IconName } from './icons';
 import { Touchable } from './Touchable';
 import { CountUp } from './CountUp';
-import { useTokens } from '@/theme/theme-context';
+import { useTheme, useTokens } from '@/theme/theme-context';
+import { heroStops } from '@/theme/families';
 import { brand, font } from '@/theme/tokens';
 import { DUR, inkWidth, useGesture, useReduceMotion } from '@/theme/motion';
 
@@ -56,6 +57,8 @@ export interface NowCardProps {
    */
   notesCount?: number;
   todosLeft?: number;
+  /** Figures + quick actions at the foot of every hero state (components/HeroDeck). */
+  deck?: ReactNode;
   onOpenNotes?: () => void;
   onOpenTodos?: () => void;
 }
@@ -428,14 +431,18 @@ export function NowCard({
   todosLeft = 0,
   onOpenNotes,
   onOpenTodos,
+  deck,
 }: NowCardProps) {
   const tokens = useTokens();
   // Pitch №3: the wrap and live heroes paint with the CHOSEN accent — the
   // fill→deep gradient and its own on-fill ink — so they follow the person's
   // Profile choice, the school brand and the colour scheme. The free hero
   // stays the fixed green below: there, green MEANS "you're free".
-  const accentColors = [tokens.color.indigo, tokens.color.indigoDeep] as const;
-  const on = tokens.color.onBrand;
+  // Heroes follow the active accent and stay legible under white text in dark (families.ts).
+  const { scheme } = useTheme();
+  const accentColors = heroStops(tokens.color, scheme);
+  // White on every hero: heroStops guarantees 4.5:1 in both schemes.
+  const on: string = brand.onHero;
   const hero = heroStyles(on);
 
   // Nothing is current: either the day is over (a wrap-up hero) or we're before
@@ -461,6 +468,7 @@ export function NowCard({
             >
               <Text style={{ color: tokens.color.indigoDeep, fontWeight: '800', fontSize: 16 }}>Take register</Text>
             </Pressable>
+            {deck}
           </GradientHero>
         );
       }
@@ -475,43 +483,30 @@ export function NowCard({
             <SummaryCell on={on} testID="summary-classes" value={s.classesTaught} label="classes taught" />
             <SummaryCell on={on} testID="summary-marked" value={s.studentsMarked} label="students marked" />
           </View>
-        </GradientHero>
+          {deck}
+          </GradientHero>
       );
     }
     return (
-      <Card testID="now-card">
-        <Text style={{ fontSize: 11, fontWeight: '700', color: tokens.color.sub, textTransform: 'uppercase' }}>
-          Right now
-        </Text>
-        <Text style={{ fontFamily: font.serif, fontSize: 17, fontWeight: '600', color: tokens.color.ink, marginTop: 4 }}>
-          Nothing on right now
-        </Text>
-        <Text style={{ fontSize: 12.5, color: tokens.color.sub, marginTop: 3 }}>
-          {`Next up: ${entryLabel(nextEntry)} at ${nextEntry.startTime}`}
-        </Text>
-      </Card>
+      <GradientHero id="hero-gap" colors={heroStops(tokens.color, scheme, 'quiet')} testID="now-card">
+        <Text style={hero.eyebrow}>Right now</Text>
+        <Text style={hero.title}>Nothing on right now</Text>
+        <Text style={hero.meta}>{`Next up: ${entryLabel(nextEntry)} at ${nextEntry.startTime}`}</Text>
+        {deck}
+      </GradientHero>
     );
   }
 
   if (entry.kind === 'BREAK') {
     return (
-      <Card testID="now-card">
-        <Text style={{ fontSize: 11, fontWeight: '700', color: tokens.color.sub, textTransform: 'uppercase' }}>
-          Right now
+      <GradientHero id="hero-break" colors={heroStops(tokens.color, scheme, 'quiet')} testID="now-card">
+        <Text style={hero.eyebrow}>Right now</Text>
+        <Text style={hero.title}>{entry.label}</Text>
+        <Text style={hero.meta}>
+          {nextEntry ? `Next up: ${entryLabel(nextEntry)} at ${nextEntry.startTime}` : 'Nothing scheduled after this.'}
         </Text>
-        <Text style={{ fontFamily: font.serif, fontSize: 17, fontWeight: '600', color: tokens.color.ink, marginTop: 4 }}>
-          {entry.label}
-        </Text>
-        {nextEntry ? (
-          <Text style={{ fontSize: 12.5, color: tokens.color.sub, marginTop: 3 }}>
-            {`Next up: ${entryLabel(nextEntry)} at ${nextEntry.startTime}`}
-          </Text>
-        ) : (
-          <Text style={{ fontSize: 12.5, color: tokens.color.sub, marginTop: 3 }}>
-            Nothing scheduled after this.
-          </Text>
-        )}
-      </Card>
+        {deck}
+      </GradientHero>
     );
   }
 
@@ -521,7 +516,7 @@ export function NowCard({
     // which can be dark ink and would vanish on this gradient.
     const freeHero = heroStyles(brand.onHero);
     return (
-      <GradientHero id="hero-green" colors={brand.hero.green} testID="now-card">
+      <GradientHero id="hero-green" colors={heroStops(tokens.color, scheme, 'quiet')} testID="now-card">
         <Text style={freeHero.eyebrow}>{`${entry.label} · Free period`}</Text>
         <Text style={freeHero.title}>{`You're free — ${remaining} min`}</Text>
         <Text style={freeHero.meta}>
@@ -532,7 +527,8 @@ export function NowCard({
         <View style={{ marginTop: 12 }}>
           <HeroChip on={brand.onHero}>Use it to prep or catch up</HeroChip>
         </View>
-      </GradientHero>
+        {deck}
+          </GradientHero>
     );
   }
 
@@ -649,7 +645,8 @@ export function NowCard({
           )}
         </View>
       )}
-    </GradientHero>
+      {deck}
+          </GradientHero>
   );
 
   if (!openable) return card;

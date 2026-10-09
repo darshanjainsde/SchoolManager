@@ -351,7 +351,7 @@ it('in a gap between periods, says nothing is on and names the next class', asyn
   expect(screen.getByText(/at 10:00/)).toBeTruthy();
 });
 
-it('dims periods before the current one under "Earlier today" in the timeline', async () => {
+it('groups periods before the current one under "Earlier today" without fading them', async () => {
   setNow(9, 20); // inside P2, so P1 and Break are earlier
   mockDay(DAY);
   render(<Today />);
@@ -359,7 +359,8 @@ it('dims periods before the current one under "Earlier today" in the timeline', 
   expect(await screen.findByText('Earlier today')).toBeTruthy();
   // .55, not .5 — the pitch's `.rail.done` (see DayTimeline.test.tsx).
   const earlierRow = screen.getByTestId(`timeline-row-${DAY.entries[0].periodId}`);
-  expect(earlierRow.props.style).toEqual(expect.objectContaining({ opacity: 0.55 }));
+  // Finished periods stay DARK (user, 9 Oct 2026); they sit under "Earlier today" instead of fading.
+  expect(earlierRow.props.style.opacity).toBeUndefined();
 });
 
 it('tapping Take attendance in the hero navigates to the take screen with the class name', async () => {

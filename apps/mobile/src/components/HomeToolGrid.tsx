@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 import { Touchable } from './Touchable';
 import { Icon, isIconName } from './icons';
 import { useTheme, useTokens } from '@/theme/theme-context';
-import { familyTone } from '@/theme/families';
+import { useFamilyTone } from '@/theme/families';
 import type { MoreTone } from '@/lib/staff-nav';
 
 export interface HomeTool {
@@ -54,8 +54,8 @@ export function HomeToolGrid({
 }): React.JSX.Element {
   const tokens = useTokens();
   const cols = toolColumns(tools.length);
-  const { scheme } = useTheme();
-  const tone = (t: HomeTool) => familyTone(t.icon, scheme);
+  const familyTone = useFamilyTone();
+  const tone = (t: HomeTool) => familyTone(t.icon);
 
   return (
     <View

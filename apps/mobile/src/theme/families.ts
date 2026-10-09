@@ -1,4 +1,7 @@
-import type { ColorScheme } from './tokens';
+import type { ColorPalette, ColorScheme } from './tokens';
+import { useMemo } from 'react';
+import { contrastRatio, mix } from './school-brand';
+import { useTheme } from './theme-context';
 
 /**
  * ICON FAMILIES (UI v2, 2026-10-08). A tool's tint says which part of school
@@ -44,4 +47,70 @@ export function familyOf(icon: string): Family {
 
 export function familyTone(icon: string, scheme: ColorScheme): FamilyTone {
   return FAMILIES[familyOf(icon)][scheme];
+}
+
+// ── FAMILIES THAT FOLLOW THE ACCENT (9 Oct 2026) ─────────────────────────
+// The user picks an accent in Appearance (or the school's colour applies);
+// every decorative colour — tool tiles, empty pictures, profile squares, the
+// home hero — is a SHADE of that one colour, so a navy school gets a navy
+// app, not navy buttons beside indigo tiles. Each ink is pushed until it
+// clears 4.5:1 on its own tint in both schemes.
+
+function legible(ink: string, bg: string, toward: string): string {
+  let out = ink;
+  for (let i = 0; i < 24 && contrastRatio(out, bg) < 4.5; i++) out = mix(out, toward, 0.12);
+  return out;
+}
+
+export function deriveFamilies(c: ColorPalette, scheme: ColorScheme): Record<Family, FamilyTone> {
+  const F = c.indigo;
+  const D = c.indigoDeep;
+  if (scheme === 'dark') {
+    const base = c.surface;
+    const tone = (ink: string, softFrom: string, k: number): FamilyTone => {
+      const soft = mix(softFrom, base, k);
+      return { ink: legible(ink, soft, '#FFFFFF'), soft };
+    };
+    return {
+      learn: tone(F, F, 0.78),
+      money: tone(mix(F, '#FFFFFF', 0.25), D, 0.72),
+      care: tone(F, D, 0.8),
+      people: tone(mix(F, '#FFFFFF', 0.15), F, 0.84),
+      sport: tone(F, D, 0.76),
+      school: tone(mix(F, '#FFFFFF', 0.3), F, 0.74),
+    };
+  }
+  const W = '#FFFFFF';
+  const tone = (ink: string, softFrom: string, k: number): FamilyTone => {
+    const soft = mix(softFrom, W, k);
+    return { ink: legible(ink, soft, '#000000'), soft };
+  };
+  return {
+    learn: tone(F, F, 0.9),
+    money: tone(D, D, 0.88),
+    care: tone(mix(F, D, 0.5), F, 0.86),
+    people: tone(D, F, 0.92),
+    sport: tone(F, D, 0.92),
+    school: tone(mix(D, '#000000', 0.2), F, 0.88),
+  };
+}
+
+/** Gradient stops for a hero card that always carries WHITE text. */
+export function heroStops(c: ColorPalette, scheme: ColorScheme, kind: 'live' | 'quiet' = 'live'): readonly [string, string] {
+  // In dark the accent tokens are light (made for dark paper), so the hero
+  // takes them down toward night; a "quiet" hero (free period, holiday) is
+  // the deep shade of the same colour.
+  const night = '#0B0D14';
+  const F = scheme === 'dark' ? mix(c.indigo, night, 0.55) : c.indigo;
+  const D = scheme === 'dark' ? mix(c.indigoDeep, night, 0.6) : c.indigoDeep;
+  const pair: [string, string] = kind === 'quiet' ? [mix(D, night, 0.35), D] : [F, D];
+  // Never let white fall under 4.5:1 on the lighter stop.
+  return [legible(pair[0], '#FFFFFF', night), legible(pair[1], '#FFFFFF', night)] as const;
+}
+
+/** The tone for a tool's glyph, from the ACTIVE accent. Use this, not the static FAMILIES. */
+export function useFamilyTone(): (icon: string) => FamilyTone {
+  const { scheme, tokens } = useTheme();
+  const fam = useMemo(() => deriveFamilies(tokens.color, scheme), [tokens.color, scheme]);
+  return (icon: string) => fam[familyOf(icon)];
 }

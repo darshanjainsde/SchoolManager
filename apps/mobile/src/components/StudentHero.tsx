@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from 'react';
 import { Text, View, type TextStyle } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
-import { useTokens } from '@/theme/theme-context';
+import { useTheme, useTokens } from '@/theme/theme-context';
+import { heroStops } from '@/theme/families';
 import { brand, font } from '@/theme/tokens';
 
 /** The class a student is in right now. */
@@ -21,6 +22,8 @@ export interface StudentHeroNext {
 export type TodayStatus = 'PRESENT' | 'ABSENT' | 'LATE' | null;
 
 export interface StudentHeroProps {
+  /** Quick actions at the foot of the hero (components/HeroDeck). */
+  deck?: ReactNode;
   /** The current class, or null when nothing is on right now. */
   current: StudentHeroCurrent | null;
   /** Minutes into `current`; ignored when `current` is null. */
@@ -196,18 +199,21 @@ export function StudentHero(props: StudentHeroProps) {
   const tokens = useTokens();
   // The chosen accent paints the live/next/done heroes (pitch №4); the
   // no-school hero below stays fixed green + white — semantic, not decor.
-  const accentColors = [tokens.color.indigo, tokens.color.indigoDeep] as const;
-  const on = tokens.color.onBrand;
+  const { scheme } = useTheme();
+  const accentColors = heroStops(tokens.color, scheme);
+  // White on every hero: heroStops guarantees 4.5:1 in both schemes.
+  const on: string = brand.onHero;
   const t = heroText(on);
   const word = statusWord(todayStatus);
 
   if (!hasSchoolToday) {
     const holi = heroText(brand.onHero);
     return (
-      <Gradient id="shero-holi" colors={brand.hero.green}>
+      <Gradient id="shero-holi" colors={heroStops(tokens.color, scheme, 'quiet')}>
         <Text style={holi.eyebrow}>No school today</Text>
         <Text style={holi.title}>Enjoy the day off</Text>
         <Text style={holi.meta}>No classes are scheduled for today.</Text>
+        {props.deck}
       </Gradient>
     );
   }
@@ -236,6 +242,7 @@ export function StudentHero(props: StudentHeroProps) {
           <Text style={t.meta}>{`${remaining} min left`}</Text>
         </View>
         {word && <Chip on={on} testID="shero-status">{word}</Chip>}
+        {props.deck}
       </Gradient>
     );
   }
@@ -253,6 +260,7 @@ export function StudentHero(props: StudentHeroProps) {
           <Cell on={on} value={statusShort(todayStatus)} label="attendance" />
           <Cell on={on} value={monthPercent != null ? `${monthPercent}%` : '—'} label="this month" />
         </View>
+        {props.deck}
       </Gradient>
     );
   }
@@ -263,6 +271,7 @@ export function StudentHero(props: StudentHeroProps) {
       <Text style={t.title}>{next.subjectName}</Text>
       <Text style={t.meta}>{`${next.teacherName} · at ${next.startTime}`}</Text>
       {word && <Chip on={on} testID="shero-status">{word}</Chip>}
-    </Gradient>
+      {props.deck}
+      </Gradient>
   );
 }

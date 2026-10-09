@@ -68,7 +68,7 @@ function Row({
     )
   ) : isFree ? (
     <View testID={`timeline-free-${entry.periodId}`}>
-      <RailStatus tone="now">Free</RailStatus>
+      <RailStatus tone="muted">Free</RailStatus>
     </View>
   ) : (
     <Pill tone="neutral">Break</Pill>

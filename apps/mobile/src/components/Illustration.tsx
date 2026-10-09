@@ -1,7 +1,8 @@
 import { View } from 'react-native';
 import Svg, { Circle, Ellipse, G, Path, Rect, Text as SvgText } from 'react-native-svg';
 import { useTheme } from '@/theme/theme-context';
-import { FAMILIES } from '@/theme/families';
+import { deriveFamilies, type Family } from '@/theme/families';
+import { useTokens } from '@/theme/theme-context';
 import { ART } from '@/theme/illustration';
 
 /**
@@ -28,7 +29,9 @@ export function Illustration({ scene, height = 150, testID }: { scene: Scene; he
 
 function Picture({ scene, height }: { scene: Scene; height: number }) {
   const { scheme } = useTheme();
-  const f = (k: keyof typeof FAMILIES) => FAMILIES[k][scheme];
+  const tokens = useTokens();
+  const fam = deriveFamilies(tokens.color, scheme);
+  const f = (k: Family) => fam[k];
   const white = scheme === 'dark' ? ART.paperDark : ART.white;
   const faint = scheme === 'dark' ? ART.faintDark : ART.faint;
   const common = {

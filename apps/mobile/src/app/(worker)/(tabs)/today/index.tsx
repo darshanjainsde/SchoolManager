@@ -13,6 +13,7 @@ import { Button } from '@/components/Button';
 import { Icon } from '@/components/icons';
 import { Card, Empty, ErrorState, Pill, Screen } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
+import { RoleHero } from '@/components/HeroDeck';
 import { NotificationBell } from '@/components/NotificationBell';
 import { useTokens } from '@/theme/theme-context';
 
@@ -192,19 +193,31 @@ function StaffToday() {
 
       {summary && !error && (
         <>
-          {/* Today's standing: the hero. */}
-          <View style={{ backgroundColor: todayStatus === 'PRESENT' ? c.green50 : todayStatus === 'ABSENT' ? c.red50 : c.indigo50, borderRadius: tokens.radius.card, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-            <View style={{ width: 52, height: 52, borderRadius: 18, backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center' }}>
-              <Icon name={todayStatus === 'PRESENT' ? 'check' : 'take'} size={28} color={todayStatus === 'PRESENT' ? c.green : todayStatus === 'ABSENT' ? c.red : c.indigo} fillOpacity={0.2} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 12, fontWeight: '700', letterSpacing: 0.6, color: c.sub }}>TODAY</Text>
-              <Text testID="today-standing" style={{ fontSize: 19, lineHeight: 26, fontWeight: '700', color: c.ink }}>
-                {todayStatus ? `Marked ${STATUS_LABEL[todayStatus].toLowerCase()}` : 'Not marked yet'}
-              </Text>
-              <Text style={{ fontSize: 12.5, color: c.sub }}>{todayStatus ? 'By the office' : 'The office marks staff attendance during the day'}</Text>
-            </View>
-          </View>
+          {/* Today's standing: the hero (9 Oct 2026 — bigger, with the month
+              in figures and the quick actions this person has). */}
+          <RoleHero
+            testID="today-hero"
+            titleTestID="today-standing"
+            quiet={!todayStatus}
+            eyebrow="Today"
+            title={todayStatus ? `Marked ${STATUS_LABEL[todayStatus].toLowerCase()}` : 'Not marked yet'}
+            line={todayStatus ? 'By the office' : 'The office marks staff attendance during the day'}
+            figures={
+              marked === 0
+                ? []
+                : [
+                    { testID: 'stat-percent', value: `${summary.percent}%`, label: 'this month' },
+                    { testID: 'stat-present', value: String(summary.present), label: 'days present' },
+                    { testID: 'stat-absent', value: String(summary.absent), label: 'absent' },
+                  ]
+            }
+            actions={[
+              { label: 'My pay', icon: 'fees', testID: 'hero-act-mypay', onPress: () => router.push('/(worker)/(tabs)/profile/salary') },
+              { label: 'Password', icon: 'key', testID: 'hero-act-password', onPress: () => router.push('/(worker)/(tabs)/profile/password') },
+              { label: 'WhatsApp', icon: 'phone', testID: 'hero-act-phone', onPress: () => router.push('/(worker)/(tabs)/profile/phone') },
+              { label: 'Profile', icon: 'person', testID: 'hero-act-profile', onPress: () => router.push('/(worker)/(tabs)/profile') },
+            ]}
+          />
 
           {marked === 0 ? (
             <Card style={{ padding: 0 }}>
@@ -214,11 +227,6 @@ function StaffToday() {
             </Card>
           ) : (
             <>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <Figure testID="stat-percent" value={`${summary.percent}%`} label="this month" color={c.green} />
-                <Figure testID="stat-present" value={String(summary.present)} label="days present" color={c.ink} />
-                <Figure testID="stat-absent" value={String(summary.absent)} label="absent" color={summary.absent ? c.red : c.ink} />
-              </View>
               <Card style={{ gap: 10 }} testID="recent-days">
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
                   <Text style={{ fontSize: 12, fontWeight: '700', letterSpacing: 0.6, color: c.sub }}>{fmtMonthYear(y, m - 1).toUpperCase()}</Text>

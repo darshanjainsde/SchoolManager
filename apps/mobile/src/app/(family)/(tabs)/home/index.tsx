@@ -18,6 +18,7 @@ import { NotificationBell } from '@/components/NotificationBell';
 import { HomeToolGrid } from '@/components/HomeToolGrid';
 import { Touchable } from '@/components/Touchable';
 import { Icon, isIconName } from '@/components/icons';
+import { HeroDeck } from '@/components/HeroDeck';
 import { StudentHero } from '@/components/StudentHero';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
@@ -276,6 +277,16 @@ export default function Home() {
           </Text>
 
           <StudentHero
+            deck={
+              <HeroDeck
+                actions={[
+                  { label: 'Ask teacher', icon: 'messages', testID: 'hero-act-ask', onPress: () => router.push('/(family)/(tabs)/home/messages') },
+                  { label: 'Diary', icon: 'diary', testID: 'hero-act-diary', onPress: () => router.push('/(family)/(tabs)/home/diary') },
+                  { label: 'Homework', icon: 'assignments', testID: 'hero-act-homework', onPress: () => router.push('/(family)/(tabs)/home/assignments') },
+                  { label: 'Fees', icon: 'fees', testID: 'hero-act-fees', onPress: () => router.push('/(family)/(tabs)/fees') },
+                ]}
+              />
+            }
             current={
               currentSlot
                 ? {

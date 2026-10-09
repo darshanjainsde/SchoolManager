@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, Text, View, type ViewStyle } from 'react-native';
 import { useTheme, useTokens } from '@/theme/theme-context';
-import { familyTone } from '@/theme/families';
+import { useFamilyTone } from '@/theme/families';
 import { useReduceMotion } from '@/theme/motion';
 import { ART } from '@/theme/illustration';
 import { Icon, type IconName } from './icons';
@@ -92,7 +92,8 @@ export function EmptyArt({ scene, icon, testID }: { scene: ArtScene; icon?: Icon
   const tokens = useTokens();
   const { scheme } = useTheme();
   const c = tokens.color;
-  const tone = familyTone(icon ?? glyphOf(scene), scheme);
+  const familyTone = useFamilyTone();
+  const tone = familyTone(icon ?? glyphOf(scene));
   const t = useRef(new Animated.Value(0)).current;
   const reduced = useReduceMotion();
 

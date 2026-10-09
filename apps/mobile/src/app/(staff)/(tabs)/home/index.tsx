@@ -2,6 +2,7 @@ import { fetchCached, useReload } from '@/lib/query';
 import { useCallback, useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
+import { HeroDeck } from '@/components/HeroDeck';
 import type { ClassNoteRow, ClassTodoRow, TeacherDay, TeacherDayEntry } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { session } from '@/lib/session';
@@ -264,6 +265,29 @@ export default function Today() {
             todosLeft={periodCounts.todosLeft}
             onOpenNotes={liveSlot ? () => setSheet('notes') : undefined}
             onOpenTodos={liveSlot ? () => setSheet('todos') : undefined}
+            deck={
+              <HeroDeck
+                figures={[
+                  { value: `${taken}/${classes.length}`, label: 'registers', testID: 'hero-fig-registers' },
+                  { value: String(studentsMarked), label: 'marked', testID: 'hero-fig-marked' },
+                  { value: String(unreadMsgs), label: unreadMsgs === 1 ? 'message' : 'messages', testID: 'hero-fig-messages' },
+                ]}
+                // The hero DOES (quick verbs); the tiles below GO (places).
+                actions={[
+                  {
+                    label: 'Register',
+                    icon: 'take',
+                    testID: 'hero-act-register',
+                    badge: needsInk.length,
+                    onPress: () =>
+                      needsInk[0]?.slot ? goToAttendance(needsInk[0].slot.classSectionId) : router.push('/(staff)/(tabs)/attendance'),
+                  },
+                  { label: 'Homework', icon: 'assignments', testID: 'hero-act-homework', onPress: () => router.push('/(staff)/(tabs)/home/assignments') },
+                  { label: 'Notice', icon: 'notices', testID: 'hero-act-notice', onPress: () => router.push('/(staff)/(tabs)/home/post') },
+                  { label: 'Test', icon: 'results', testID: 'hero-act-test', onPress: () => router.push('/(staff)/(tabs)/home/tests') },
+                ]}
+              />
+            }
           />
 
           {liveSlot && (

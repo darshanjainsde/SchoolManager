@@ -55,26 +55,25 @@ describe('DayTimeline', () => {
     expect(screen.queryByText('Take now')).toBeNull();
   });
 
-  it('marks rows before currentIndex as dimmed under "Earlier today"', () => {
+  it('finished periods sit under "Earlier today" but stay DARK — never faded (user, 9 Oct 2026)', () => {
     render(<DayTimeline entries={DAY} currentIndex={2} onTakeAttendance={jest.fn()} />);
     expect(screen.getByText('Earlier today')).toBeTruthy();
-
-    // .55, not .5 — the pitch's `.rail.done`: a finished period stays
-    // readable (it is the record of the day) but stops competing.
-    const dimmedRow = screen.getByTestId(`timeline-row-${DAY[0].periodId}`);
-    expect(dimmedRow.props.style).toEqual(expect.objectContaining({ opacity: 0.55 }));
-    const brightRow = screen.getByTestId(`timeline-row-${DAY[2].periodId}`);
-    expect(brightRow.props.style).toEqual(expect.objectContaining({ opacity: 1 }));
+    const earlier = screen.getByTestId(`timeline-row-${DAY[0].periodId}`);
+    expect(earlier.props.style.opacity).toBeUndefined();
   });
 
-  it('with currentIndex === -1 renders every row as upcoming, none dimmed', () => {
+  it('with currentIndex === -1 there is no "Earlier today" and no row is faded', () => {
     render(<DayTimeline entries={DAY} currentIndex={-1} onTakeAttendance={jest.fn()} />);
     expect(screen.queryByText('Earlier today')).toBeNull();
     for (const e of DAY) {
-      expect(screen.getByTestId(`timeline-row-${e.periodId}`).props.style).toEqual(
-        expect.objectContaining({ opacity: 1 }),
-      );
+      expect(screen.getByTestId(`timeline-row-${e.periodId}`).props.style.opacity).toBeUndefined();
     }
+  });
+
+  it('a class is set in bold ink, a free period in the quiet sub tone', () => {
+    render(<DayTimeline entries={[...DAY, freeEntry]} currentIndex={-1} onTakeAttendance={jest.fn()} />);
+    const free = screen.getAllByText('Free period');
+    for (const f of free) expect(f.props.style.fontWeight).toBe('400');
   });
 
   it('renders an explicit empty state, not a blank card, when entries is empty', () => {

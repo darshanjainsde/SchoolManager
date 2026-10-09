@@ -3,8 +3,8 @@ import { Pressable, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { EditableAvatar } from './EditableAvatar';
 import { Icon, type IconName } from './icons';
-import { useTheme, useTokens } from '@/theme/theme-context';
-import { familyTone } from '@/theme/families';
+import { useTokens } from '@/theme/theme-context';
+import { useFamilyTone } from '@/theme/families';
 
 /**
  * THE PROFILE RECIPE (sckools-ui-standards §6, approved 9 Oct 2026).
@@ -90,8 +90,8 @@ export function ProfileGroup({ label, children, testID }: PropsWithChildren<{ la
 
 function Square({ icon, danger }: { icon: IconName; danger?: boolean }) {
   const tokens = useTokens();
-  const { scheme } = useTheme();
-  const tone = danger ? { ink: tokens.color.red, soft: tokens.color.red50 } : familyTone(icon, scheme);
+  const familyTone = useFamilyTone();
+  const tone = danger ? { ink: tokens.color.red, soft: tokens.color.red50 } : familyTone(icon);
   return (
     <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: tone.soft, alignItems: 'center', justifyContent: 'center' }}>
       <Icon name={icon} size={20} color={tone.ink} fillOpacity={0.18} />

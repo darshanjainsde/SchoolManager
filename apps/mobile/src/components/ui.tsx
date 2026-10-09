@@ -540,14 +540,15 @@ export function RailRow({
         minHeight: 56,
         borderTopWidth: first ? 0 : 1,
         borderTopColor: tokens.color.line,
-        opacity: state === 'done' ? 0.55 : 1,
         ...style,
       }}
     >
       {/* One colour family (sckools-ui-standards §7): "now" is a brand tint,
           a free period a quiet muted one — neither borrows a second hue. */}
+      {/* Teaching periods are the DARK rows (user, 9 Oct 2026: "add darks to
+          the day which is not free"); a free period is the quiet one. Only the
+          period happening now gets a wash. */}
       {state === 'now' && <RowWash color={tokens.color.indigo50} />}
-      {state === 'free' && <RowWash color={tokens.color.surfaceMuted} />}
 
       {/* The margin figures stay at the list's own reading size. The repaint
           shipped these at 9px, which is below the smallest size iOS and
@@ -567,10 +568,29 @@ export function RailRow({
         {'\n'}
         {endTime}
       </Text>
-      <View style={{ width: 1.5, alignSelf: 'stretch', backgroundColor: tokens.color.indigo, opacity: 0.25 }} />
+      {/* The rail: a solid brand bar beside a class, a hairline beside a
+          free period. */}
+      <View
+        style={{
+          width: state === 'free' ? 1 : 3,
+          alignSelf: 'stretch',
+          marginVertical: state === 'free' ? 0 : 8,
+          borderRadius: 2,
+          backgroundColor: state === 'free' ? tokens.color.line : tokens.color.indigo,
+          opacity: state === 'done' ? 0.45 : 1,
+        }}
+      />
 
       <View style={{ flex: 1, minWidth: 0, paddingVertical: 8, paddingHorizontal: 10 }}>
-        <Text numberOfLines={1} style={{ fontSize: 15, lineHeight: 20, fontWeight: '600', color: tokens.color.ink }}>
+        <Text
+          numberOfLines={1}
+          style={{
+            fontSize: 15,
+            lineHeight: 20,
+            fontWeight: state === 'free' ? '400' : '700',
+            color: state === 'free' ? tokens.color.sub : tokens.color.ink,
+          }}
+        >
           {title}
         </Text>
         {subtitle ? (

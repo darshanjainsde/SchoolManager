@@ -7,6 +7,7 @@ import { fmtDay, fmtLongDay, fmtWeekdayDay } from '@/lib/dates';
 import { leaveTypeLabel } from '@/lib/labels';
 import { Button } from './Button';
 import { Icon } from './icons';
+import { RoleHero } from './HeroDeck';
 import { NotificationBell } from './NotificationBell';
 import { LoadingRows } from './Loading';
 import { Card, Empty, Screen } from './ui';
@@ -59,6 +60,27 @@ export function AccountsToday({ firstName }: { firstName: string }) {
         </View>
         <NotificationBell group="(worker)" />
       </View>
+
+      {/* THE HERO (9 Oct 2026): the desk's day in one card — what waits,
+          what needs cover, and the four things this desk does from Home. */}
+      <RoleHero
+        testID="accounts-hero"
+        quiet={waiting.length === 0}
+        eyebrow="Leave desk"
+        title={waiting.length === 0 ? 'Nothing waiting on you' : waiting.length === 1 ? '1 request waiting' : `${waiting.length} requests waiting`}
+        line={gapsTomorrow.length ? `${gapsTomorrow.length} ${gapsTomorrow.length === 1 ? 'class' : 'classes'} tomorrow need a teacher` : 'Every class is covered tomorrow'}
+        figures={[
+          { value: String(waiting.length), label: 'waiting', onPress: () => router.push('/(worker)/(tabs)/leavedesk') },
+          { value: String(gaps.length), label: 'need cover', onPress: () => router.push('/(worker)/(tabs)/leavedesk') },
+          { value: payLocked ? 'Locked' : 'Open', label: 'pay', onPress: () => router.push('/(worker)/(tabs)/paydesk') },
+        ]}
+        actions={[
+          { label: 'Decide', icon: 'requests', badge: waiting.length, testID: 'hero-act-decide', onPress: () => router.push('/(worker)/(tabs)/leavedesk') },
+          { label: 'Cover', icon: 'timetable', testID: 'hero-act-cover', onPress: () => router.push('/(worker)/(tabs)/leavedesk') },
+          { label: 'Pay', icon: 'fees', testID: 'hero-act-pay', onPress: () => router.push('/(worker)/(tabs)/paydesk') },
+          { label: 'My pay', icon: 'report', testID: 'hero-act-mypay', onPress: () => router.push('/(worker)/(tabs)/profile/salary') },
+        ]}
+      />
 
       {/* Awaiting you */}
       <Card style={{ padding: 0, gap: 0 }}>

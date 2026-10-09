@@ -14,7 +14,9 @@ import type { ColorPalette } from './tokens';
  * (see school-brand.ts). Touching a different set here would let a named accent
  * and a school brand paint different parts of the same screen.
  */
-export type AccentName = 'school' | 'navy' | 'green' | 'teal' | 'oxblood' | 'indigo';
+export type AccentName =
+  | 'school' | 'navy' | 'green' | 'teal' | 'oxblood' | 'indigo'
+  | 'plum' | 'ocean' | 'leaf' | 'saffron' | 'rose' | 'charcoal';
 
 export interface AccentTone {
   /** The fill itself — buttons, active tabs, the Now card. */
@@ -71,6 +73,44 @@ export const ACCENTS: Record<AccentName, Accent> = {
     hint: 'What the app shipped with',
     light: { fill: '#4F46E5', deep: '#3730A3', tint: '#E7E5FB', onFill: '#FFFFFF' },
     dark: { fill: '#8B87FF', deep: '#6A64D6', tint: '#232052', onFill: '#0E1114' },
+  },
+  // Six more (user, 9 Oct 2026: "can we add more colors to appearance").
+  // Each is one hue the whole app is then built from (theme/families.ts).
+  plum: {
+    label: 'Plum',
+    hint: 'House purple',
+    light: { fill: '#5B2A86', deep: '#431E63', tint: '#EDE4F5', onFill: '#FFFFFF' },
+    dark: { fill: '#C3A2E6', deep: '#A47FCC', tint: '#2A1F38', onFill: '#0E1114' },
+  },
+  ocean: {
+    label: 'Ocean blue',
+    hint: 'Clear sky blue',
+    light: { fill: '#0B5C8C', deep: '#08456A', tint: '#E0EEF6', onFill: '#FFFFFF' },
+    dark: { fill: '#79BDE6', deep: '#559FCB', tint: '#14283A', onFill: '#0E1114' },
+  },
+  leaf: {
+    label: 'Leaf green',
+    hint: 'Playground green',
+    light: { fill: '#2F6B2F', deep: '#214D21', tint: '#E3EFE1', onFill: '#FFFFFF' },
+    dark: { fill: '#8FCB8A', deep: '#6DAE68', tint: '#18301A', onFill: '#0E1114' },
+  },
+  saffron: {
+    label: 'Saffron',
+    hint: 'Warm marigold',
+    light: { fill: '#9A4A07', deep: '#733705', tint: '#F7E9DC', onFill: '#FFFFFF' },
+    dark: { fill: '#F0A867', deep: '#D88B45', tint: '#36261A', onFill: '#0E1114' },
+  },
+  rose: {
+    label: 'Rose',
+    hint: 'Deep pink',
+    light: { fill: '#A3194B', deep: '#7A1238', tint: '#F7E1EA', onFill: '#FFFFFF' },
+    dark: { fill: '#F08FB1', deep: '#D66F94', tint: '#3A1C28', onFill: '#0E1114' },
+  },
+  charcoal: {
+    label: 'Charcoal',
+    hint: 'Quiet grey',
+    light: { fill: '#374151', deep: '#1F2937', tint: '#E6E8EC', onFill: '#FFFFFF' },
+    dark: { fill: '#AAB4C3', deep: '#8A95A6', tint: '#22262D', onFill: '#0E1114' },
   },
 };
 

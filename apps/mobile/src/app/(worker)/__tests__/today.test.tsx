@@ -63,9 +63,9 @@ it('renders the identity greeting, stat boxes, and recent days from the real MyS
 
   expect(await screen.findByText('Hi, Sam')).toBeTruthy();
   expect(screen.getByText(/Office staff/)).toBeTruthy();
-  expect(screen.getByTestId('stat-percent')).toHaveTextContent('67%');
-  expect(screen.getByTestId('stat-present')).toHaveTextContent('2');
-  expect(screen.getByTestId('stat-absent')).toHaveTextContent('1');
+  expect(screen.getByTestId('stat-percent')).toHaveTextContent(/^67%/);
+  expect(screen.getByTestId('stat-present')).toHaveTextContent(/^2/);
+  expect(screen.getByTestId('stat-absent')).toHaveTextContent(/^1/);
   // UI v2: the month is a strip of day squares; the latest day is named in words.
   expect(screen.getByTestId('recent-days')).toHaveTextContent(/Last marked 3 Jul 2026 · Present/);
   expect(screen.getByTestId('today-standing')).toBeTruthy();
