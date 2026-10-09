@@ -1,4 +1,4 @@
-import { Pressable, Text, View } from 'react-native';
+import { LayoutAnimation, Pressable, Text, View } from 'react-native';
 import { Icon, type IconName } from './icons';
 import { useTokens } from '@/theme/theme-context';
 import { useKeyboardVisible } from '@/lib/keyboard';
@@ -75,8 +75,11 @@ function TabButton({
   tight?: boolean;
 }) {
   const tokens = useTokens();
-  // UI v2: a light bar; the selected tab is the school colour on its own tint.
-  const color = focused ? tokens.color.barActive : tokens.color.barInactive;
+  // sckools-ui-standards §4 — the FLOATING PILL. The open tab is a 48 dp
+  // brand pill holding its icon AND its word; the others are icons only, so
+  // the bar is calm but a parent who reads little English still sees where
+  // they are. Every tab keeps its title as the accessibility label.
+  const color = focused ? tokens.color.onBrand : tokens.color.barInactive;
   return (
     <Pressable
       testID={`tab-${name}`}
@@ -84,37 +87,34 @@ function TabButton({
       accessibilityState={{ selected: focused }}
       accessibilityLabel={title}
       onPress={onPress}
-      style={{ flex: 1, minWidth: 0, alignItems: 'center', justifyContent: 'center', gap: 3, paddingVertical: 6 }}
+      style={{ flexGrow: focused ? 1.9 : 1, flexBasis: 0, minWidth: 0, height: 48 }}
     >
-      {/* UI v2: the Material 3 selected PILL behind the icon (a tint of the
-          school colour), instead of a 3 dp line above it — a target a thumb
-          can see, on a light bar. */}
       <View
         testID={focused ? `tab-indicator-${name}` : undefined}
         style={{
-          width: 56,
-          height: 30,
-          borderRadius: 15,
+          flex: 1,
+          borderRadius: 24,
+          flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: focused ? tokens.color.barIndicator : 'transparent',
+          gap: 6,
+          paddingHorizontal: 8,
+          backgroundColor: focused ? tokens.color.indigo : 'transparent',
         }}
       >
         <Icon name={icon} size={22} color={color} fillOpacity={focused ? 0.3 : 0.14} />
-      </View>
-      {/* Capped: this label lives under an icon in a fixed-height bar. Content
-          elsewhere scales freely — see theme/__tests__/text-scaling.test.ts. */}
-      <Text
+        {focused ? (
+          // Capped: this label lives in a fixed-height bar. Content elsewhere
+          // scales freely — see theme/__tests__/text-scaling.test.ts.
+          <Text
             numberOfLines={1}
-            // Five tabs on a 360 dp phone give each ~70 dp; "Attendance" at 10px
-            // and the 1.3 cap needed ~74 and rendered as "Attendanc…". The
-            // fifth tab tightens the type instead of clipping the word
-            // (UI audit 2026-09-22, #23).
             maxFontSizeMultiplier={tight ? 1.15 : 1.3}
-            style={{ fontSize: tight ? 10.5 : 11.5, fontWeight: focused ? '700' : '500', color }}
+            style={{ fontSize: tight ? 12.5 : 13, fontWeight: '600', color, flexShrink: 1 }}
           >
-        {title}
-      </Text>
+            {title}
+          </Text>
+        ) : null}
+      </View>
     </Pressable>
   );
 }
@@ -131,39 +131,57 @@ export function PortalTabBar({ tabs, state, navigation, insets }: PortalTabBarPr
     const isFocused = activeName === name;
     const event = navigation.emit({ type: 'tabPress', target: route?.key, canPreventDefault: true });
     if (!isFocused && !event.defaultPrevented) {
+      // The open pill widens to its new home instead of jumping.
+      LayoutAnimation.configureNext(LayoutAnimation.create(220, 'easeInEaseOut', 'scaleXY'));
       navigation.navigate(name);
     }
   }
 
   if (typing) return null;
 
+  // The bar sits IN FLOW on the page ground, so no screen has to pad for it
+  // and nothing can scroll under it; the pill inside floats 16 dp in from each
+  // edge and 12 dp above the system bar (sckools-ui-standards §4).
   return (
     <View
       style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-around',
-        // THE BAR IS THE THEME'S DARK FORM in both schemes — chrome, not
-        // another card on the paper (see tokens.ts barBg note).
-        backgroundColor: tokens.color.barBg,
-        borderTopColor: tokens.color.line,
-        borderTopWidth: 1,
-        paddingHorizontal: 4,
-        paddingTop: 6,
-        paddingBottom: Math.max(insets.bottom, 8),
+        backgroundColor: tokens.color.appBg,
+        paddingHorizontal: 16,
+        paddingTop: 8,
+        paddingBottom: insets.bottom + 12,
       }}
     >
-      {tabs.map((t) => (
-        <TabButton
-          tight={tabs.length > 4}
-          key={t.name}
-          name={t.name}
-          title={t.title}
-          icon={t.icon}
-          focused={activeName === t.name}
-          onPress={() => go(t.name)}
-        />
-      ))}
+      <View
+        testID="tab-bar-pill"
+        style={{
+          height: 64,
+          borderRadius: 32,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 4,
+          padding: 8,
+          backgroundColor: tokens.color.barBg,
+          borderWidth: tokens.color.barBg === tokens.color.surface ? 1 : 0,
+          borderColor: tokens.color.line,
+          shadowColor: tokens.color.ink,
+          shadowOpacity: 0.18,
+          shadowRadius: 24,
+          shadowOffset: { width: 0, height: 8 },
+          elevation: 10,
+        }}
+      >
+        {tabs.map((t) => (
+          <TabButton
+            tight={tabs.length > 4}
+            key={t.name}
+            name={t.name}
+            title={t.title}
+            icon={t.icon}
+            focused={activeName === t.name}
+            onPress={() => go(t.name)}
+          />
+        ))}
+      </View>
     </View>
   );
 }

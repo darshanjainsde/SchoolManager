@@ -1,9 +1,6 @@
-import { Pressable, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { Card } from './ui';
-import { Icon, type IconName } from './icons';
-import { useTokens } from '@/theme/theme-context';
-
+import type { IconName } from './icons';
+import { LinkRow, ProfileGroup } from './ProfileKit';
 export interface ProfileMenuRow {
   /** Drawn duotone glyph on the 30px tile — same voice as the profile's record rows. */
   icon: IconName;
@@ -25,45 +22,20 @@ export interface ProfileMenuRow {
  * ruled separators) so the menu reads as more of the same record, plus a
  * chevron because these rows go somewhere.
  */
-export function ProfileMenu({ rows }: { rows: ProfileMenuRow[] }) {
-  const tokens = useTokens();
+export function ProfileMenu({ rows, label = 'Settings' }: { rows: ProfileMenuRow[]; label?: string }) {
+  // sckools-ui-standards §6: a labelled r24 group of 56 dp doors.
   return (
-    <Card style={{ paddingVertical: 2 }}>
+    <ProfileGroup label={label}>
       {rows.map((row, i) => (
-        <Pressable
+        <LinkRow
           key={row.testID}
+          first={i === 0}
           testID={row.testID}
-          accessibilityRole="button"
-          accessibilityLabel={row.label}
+          icon={row.icon}
+          label={row.label}
           onPress={() => router.push(row.route as Parameters<typeof router.push>[0])}
-          style={({ pressed }) => ({
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 11,
-            paddingVertical: 12,
-            borderTopWidth: i === 0 ? 0 : 1,
-            borderTopColor: tokens.color.line,
-            opacity: pressed ? 0.6 : 1,
-          })}
-        >
-          <View
-            style={{
-              width: 30,
-              height: 30,
-              borderRadius: 9,
-              backgroundColor: tokens.color.surfaceMuted,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Icon name={row.icon} size={16} color={tokens.color.ink2} />
-          </View>
-          <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: tokens.color.ink }}>
-            {row.label}
-          </Text>
-          <Text style={{ fontSize: 15, fontWeight: '800', color: tokens.color.sub }}>›</Text>
-        </Pressable>
+        />
       ))}
-    </Card>
+    </ProfileGroup>
   );
 }

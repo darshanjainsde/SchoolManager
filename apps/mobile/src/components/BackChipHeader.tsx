@@ -3,7 +3,6 @@ import { router } from 'expo-router';
 import { Icon } from './icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTokens } from '@/theme/theme-context';
-import { font } from '@/theme/tokens';
 
 /**
  * Pitch №5 §3 — the way back, on every pushed screen. Until now headers were
@@ -30,7 +29,7 @@ export function BackChipHeader({ title }: { title: string }) {
         paddingHorizontal: 16,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
+        gap: 12,
         backgroundColor: tokens.color.appBg,
       }}
     >
@@ -43,7 +42,8 @@ export function BackChipHeader({ title }: { title: string }) {
         style={({ pressed }) => ({
           width: 44,
           height: 44,
-          borderRadius: 15,
+          // sckools-ui-standards §3: header buttons are 44 dp circles.
+          borderRadius: 22,
           backgroundColor: tokens.color.surface,
           borderColor: tokens.color.line,
           borderWidth: 1,
@@ -60,9 +60,9 @@ export function BackChipHeader({ title }: { title: string }) {
         numberOfLines={1}
         maxFontSizeMultiplier={1.4}
         style={{
-          fontFamily: font.serif,
-          fontSize: 17,
-          fontWeight: '600',
+          fontSize: 20,
+          lineHeight: 28,
+          fontWeight: '700',
           letterSpacing: -0.2,
           color: tokens.color.ink,
           flex: 1,

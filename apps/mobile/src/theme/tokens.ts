@@ -101,10 +101,12 @@ const light: ColorPalette = {
   // The dark scheme's surface/sub/amber, worn in light mode — see the
   // interface note: the bar is the theme's dark form everywhere.
   // UI v2: a light bar with a tinted pill under the selected tab (Material 3).
-  barBg: '#FFFFFF',
-  barActive: '#4338CA',
-  barInactive: '#5E6480',
-  barIndicator: '#EEF0FF',
+  // sckools-ui-standards §4: the floating pill is the one dark object on a
+  // light page; the open tab is the brand pill (indigo) inside it.
+  barBg: '#151A30',
+  barActive: '#FFFFFF',
+  barInactive: '#B9BDD4',
+  barIndicator: '#4338CA',
 };
 
 // Values lifted from apps/web/app/sk-theme.css's `@media (prefers-color-scheme:
@@ -137,10 +139,10 @@ const dark: ColorPalette = {
   marginRed: '#E86A6A',
   // One step darker than the page (surfaceMuted family) so the bar still
   // reads as chrome on an already-dark ground.
-  barBg: '#100E1E',
-  barActive: '#EDEBFA',
-  barInactive: '#807DA0',
-  barIndicator: '#FBBF24',
+  barBg: '#23263E',
+  barActive: '#12142B',
+  barInactive: '#A3A8C6',
+  barIndicator: '#A5A1FF',
 };
 
 export const palette = { light, dark } as const;
@@ -174,7 +176,8 @@ export const GAP = 12;
 export const SPACE = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;
 // Rounder than Material's defaults, the way Google's own apps have gone:
 // card 20, field 14, chip 10, sheet 28; buttons are pills (Button.tsx).
-export const RADIUS = { card: 20, field: 14, chip: 10, sheet: 28 } as const;
+/** sckools-ui-standards §2 — cards 24, inputs 16, chips/icon squares 12, sheets 28. */
+export const RADIUS = { card: 24, field: 16, chip: 12, sheet: 28 } as const;
 
 /**
  * Fixed brand constants that intentionally do NOT vary with the device's
@@ -212,10 +215,12 @@ export const brand = {
     indigo: ['#4F46E5', '#6D5CF0', '#8B5CF6'] as const,
     // Darkened so white ink on the hero clears AA (was #10B981/#0EA5A4/#22C55E,
     // ≈2.0:1 against white — the weekend card at the top of Home; UI audit #19).
-    green: ['#047857', '#0F766E', '#15803D'] as const,
+    // One colour family (9 Oct 2026): the free-period / holiday hero is the
+    // DEEP shade of the brand indigo instead of a second, green brand.
+    green: ['#1E1B4B', '#312E81', '#4338CA'] as const,
     done: ['#334155', '#4338CA', '#6D5CF0'] as const,
     ctaInk: '#4338CA',
-    ctaInkGreen: '#047857',
+    ctaInkGreen: '#312E81',
     shadow: '#181648',
   },
   /**

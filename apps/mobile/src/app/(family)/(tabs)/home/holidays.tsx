@@ -94,18 +94,18 @@ export default function Holidays() {
                   style={{
                     width: 44,
                     borderWidth: 1,
-                    borderColor: tokens.color.amber,
-                    backgroundColor: tokens.color.amber50,
+                    borderColor: tokens.color.indigo,
+                    backgroundColor: tokens.color.indigo50,
                     borderRadius: 11,
                     paddingTop: 5,
                     paddingBottom: 6,
                     alignItems: 'center',
                   }}
                 >
-                  <Text style={{ fontSize: 8.5, fontWeight: '800', letterSpacing: 0.5, color: tokens.color.late }}>
+                  <Text style={{ fontSize: 8.5, fontWeight: '800', letterSpacing: 0.5, color: tokens.color.indigo }}>
                     {weekday.toUpperCase()}
                   </Text>
-                  <Text style={{ fontFamily: font.serif, fontSize: 15, color: tokens.color.late }}>{day}</Text>
+                  <Text style={{ fontFamily: font.serif, fontSize: 15, color: tokens.color.indigo }}>{day}</Text>
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 12.5, fontWeight: '600', color: tokens.color.ink }}>{h.name}</Text>

@@ -145,9 +145,9 @@ export function AccountsToday({ firstName }: { firstName: string }) {
             const d = new Date(h.startDate.slice(0, 10));
             return (
               <View key={h.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 10, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: c.line }}>
-                <View style={{ width: 40, height: 42, borderRadius: 11, backgroundColor: c.amber50, alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ fontSize: 9.5, fontWeight: '700', color: c.late }}>{['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][d.getMonth()]}</Text>
-                  <Text style={{ fontSize: 16, fontWeight: '700', color: c.late, lineHeight: 18 }}>{d.getDate()}</Text>
+                <View style={{ width: 40, height: 42, borderRadius: 12, backgroundColor: c.indigo50, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 9.5, fontWeight: '700', color: c.indigo }}>{['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][d.getMonth()]}</Text>
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: c.indigo, lineHeight: 18 }}>{d.getDate()}</Text>
                 </View>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text numberOfLines={1} style={{ fontSize: 14.5, fontWeight: '600', color: c.ink }}>{h.name}</Text>

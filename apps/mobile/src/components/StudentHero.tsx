@@ -87,15 +87,12 @@ function Gradient({
         setSize((s) => (s.w === width && s.h === height ? s : { w: width, h: height }));
       }}
       style={{
-        borderRadius: 22,
-        padding: 16,
+        borderRadius: 28,
+        padding: 20,
         overflow: 'hidden',
         backgroundColor: colors[0],
-        shadowColor: brand.hero.shadow,
-        shadowOpacity: 0.35,
-        shadowRadius: 22,
-        shadowOffset: { width: 0, height: 14 },
-        elevation: 8,
+        shadowOpacity: 0,
+        elevation: 0,
       }}
     >
       {size.w > 0 && (

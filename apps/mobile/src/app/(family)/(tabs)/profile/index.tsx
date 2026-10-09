@@ -1,17 +1,15 @@
 import { useReload } from '@/lib/query';
 import { useCallback, useState } from 'react';
-import { Pressable, Text, View, Alert } from 'react-native';
+import { Text, View, Alert } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import type { StudentProfile } from '@/lib/portal';
 import { signOut } from '@/lib/sign-out';
 import { ProfileMenu } from '@/components/ProfileMenu';
-import { EditableAvatar } from '@/components/EditableAvatar';
+import { InfoRow, ProfileGroup, ProfileHead, SignOutRow, useInfoValueStyle } from '@/components/ProfileKit';
 import { Button } from '@/components/Button';
-import { Card, ErrorState, Page, Screen } from '@/components/ui';
-import { Icon, type IconName } from '@/components/icons';
+import { ErrorState, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
-import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 
 /** "AS" for Aarav Sharma — mirrors the web's `initials` (apps/web/app/portal/profile/page.tsx). */
@@ -20,78 +18,6 @@ function initials(firstName: string, lastName: string): string {
 }
 
 /** A `.pfrow` value line: quiet label, the value in tabular figures so a column of them lines up; `mono` for a code read character by character (the roll number). */
-function InfoRow({ label, value, first, mono }: { label: string; value: string | null; first?: boolean; mono?: boolean }) {
-  const tokens = useTokens();
-  return (
-    <View
-      style={{
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        minHeight: 48,
-        paddingVertical: 10,
-        paddingHorizontal: 16,
-        borderTopWidth: first ? 0 : 1,
-        borderTopColor: tokens.color.line,
-      }}
-    >
-      <Text style={{ fontSize: 14, color: tokens.color.sub }}>{label}</Text>
-      <Text style={{ ...(mono ? { fontFamily: font.mono } : { fontVariant: ['tabular-nums' as const] }), fontSize: 14, fontWeight: '700', color: tokens.color.ink }}>
-        {value ?? '—'}
-      </Text>
-    </View>
-  );
-}
-
-/** A `.pfrow` action line: a tinted icon tile, a label, and a chevron. */
-function SettingRow({
-  icon,
-  label,
-  onPress,
-  testID,
-  first,
-}: {
-  icon: IconName;
-  label: string;
-  onPress: () => void;
-  testID?: string;
-  first?: boolean;
-}) {
-  const tokens = useTokens();
-  return (
-    <Pressable
-      testID={testID}
-      accessibilityRole="button"
-      onPress={onPress}
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-        minHeight: 56,
-        paddingVertical: 10,
-        paddingHorizontal: 16,
-        borderTopWidth: first ? 0 : 1,
-        borderTopColor: tokens.color.line,
-      }}
-    >
-      <View
-        style={{
-          width: 32,
-          height: 32,
-          borderRadius: tokens.radius.chip,
-          backgroundColor: tokens.color.surfaceMuted,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <Icon name={icon} size={16} color={tokens.color.ink2} />
-      </View>
-      <Text style={{ flex: 1, fontSize: 16, fontWeight: '600', color: tokens.color.ink }}>{label}</Text>
-      <Text style={{ color: tokens.color.sub }}>›</Text>
-    </Pressable>
-  );
-}
-
 /**
  * Standalone, read-only mirror of the web's `/portal/profile`
  * (apps/web/app/portal/profile/page.tsx): photo (or an initials fallback),
@@ -120,7 +46,7 @@ function confirmSignOut(): void {
 }
 
 export default function Profile() {
-  const tokens = useTokens();
+  const valueStyle = useInfoValueStyle();
   // Try again / pull-to-refresh for this screen's own focus effect.
   const [reloadKey, reload] = useReload();
   const [profile, setProfile] = useState<StudentProfile | null>(null);
@@ -146,88 +72,47 @@ export default function Profile() {
 
   return (
     <Screen onRefresh={reload}>
+      <SectionTitle title="Profile" />
       {error && <ErrorState error={error} onRetry={reload} />}
-      {profile === null && !error && (
-        <LoadingRows label="Loading profile…" rows={4} />
-      )}
+      {profile === null && !error && <LoadingRows label="Loading profile…" rows={4} />}
 
       {profile && (
         <>
-          <View style={{ alignItems: 'center', paddingTop: 6, paddingBottom: 2 }}>
-            {/* `.bigav`'s double ring: a 3px paper gap, then the indigo
-                keyline. Two rings, not one, because a single border reads as
-                a frame while a gap + keyline reads as a photo mounted on a
-                page — the whole conceit of this app. */}
-            <View
-              style={{
-                padding: 3,
-                borderRadius: 999,
-                borderWidth: 2,
-                borderColor: tokens.color.indigo,
-                backgroundColor: tokens.color.appBg,
-              }}
-            >
-              <EditableAvatar
-                size={82}
-                photoUrl={profile.photoUrl}
-                initials={initials(profile.firstName, profile.lastName)}
-                onUploaded={(url) => setProfile((p) => (p ? { ...p, photoUrl: url } : p))}
+          {/* sckools-ui-standards §6 — the profile recipe. "Switch child" is the
+              head's one action: families with two children use it most. */}
+          <ProfileHead
+            photoUrl={profile.photoUrl}
+            initials={initials(profile.firstName, profile.lastName)}
+            name={`${profile.firstName} ${profile.lastName}`}
+            line={`${profile.className ?? 'Class not set'} · Roll ${profile.rollNo ?? '—'}`}
+            onUploaded={(url) => setProfile((p) => (p ? { ...p, photoUrl: url } : p))}
+            action={
+              <Button
+                testID="switch-diary"
+                variant="tonal"
+                label="Switch child / add a child"
+                onPress={() => router.push('/(family)/(tabs)/home/shelf')}
               />
-            </View>
-
-            <Text style={{ fontSize: 22, lineHeight: 28, fontWeight: '700', color: tokens.color.ink, marginTop: 10 }}>
-              {profile.firstName} {profile.lastName}
-            </Text>
-            <Text style={{ fontSize: 13, color: tokens.color.sub, marginTop: 2 }}>
-              {profile.className ?? 'Class not set'} · roll {profile.rollNo ?? '—'}
-            </Text>
-
-            {/* `.pfcode` — the admission number as a chip. */}
-            {profile.admissionNo && (
-              <View
-                style={{
-                  marginTop: 8,
-                  backgroundColor: tokens.color.indigo50,
-                  borderRadius: tokens.radius.chip,
-                  paddingHorizontal: 12,
-                  paddingVertical: 5,
-                }}
-              >
-                <Text
-                  style={{
-                    fontFamily: font.mono,
-                    fontSize: 13,
-                    fontWeight: '700',
-                    letterSpacing: 1.4,
-                    color: tokens.color.indigoDeep,
-                  }}
-                >
-                  {profile.admissionNo}
-                </Text>
-              </View>
-            )}
-          </View>
-
-          <Page>
-            <InfoRow first mono label="Roll no." value={profile.rollNo} />
-            <InfoRow label="Class" value={profile.className} />
-          </Page>
+            }
+          />
+          <View style={{ height: 16 }} />
+          <ProfileGroup label="About">
+            {/* The admission number is the one string read out to the office. */}
+            {profile.admissionNo ? (
+              <InfoRow first icon="person" label="Student code">
+                <Text style={{ ...valueStyle, fontFamily: font.mono, letterSpacing: 1 }}>{profile.admissionNo}</Text>
+              </InfoRow>
+            ) : null}
+            <InfoRow first={!profile.admissionNo} icon="home" label="Class">
+              <Text style={valueStyle}>{profile.className ?? '—'}</Text>
+            </InfoRow>
+            <InfoRow icon="take" label="Roll no.">
+              <Text style={{ ...valueStyle, fontVariant: ['tabular-nums'] }}>{profile.rollNo ?? '—'}</Text>
+            </InfoRow>
+          </ProfileGroup>
         </>
       )}
 
-      {/* The family shelf (Phase 5·2): switch children or add another. */}
-      <Page>
-        <SettingRow
-          testID="switch-diary"
-          first
-          icon="diary"
-          label="Switch diary / add a child"
-          onPress={() => router.push('/(family)/(tabs)/home/shelf')}
-        />
-      </Page>
-
-      {/* THE DOORS (pitch №7): Appearance and Change password each open
-          their own pushed screen instead of sitting fully unfolded here. */}
       <ProfileMenu
         rows={[
           { icon: 'palette', label: 'Appearance', route: '/(family)/(tabs)/profile/appearance', testID: 'profile-menu-appearance' },
@@ -235,14 +120,8 @@ export default function Profile() {
         ]}
       />
 
-      {/* SIGN OUT LIVES HERE.
-          It was reachable only from the tools drawer, behind a chevron FAB —
-          the one screen on the phone where nobody looks for it. Every other app
-          has taught people that signing out is at the bottom of Profile, so it
-          is here as well as there. Styled as a quiet destructive action, not a
-          primary button: it is the last thing on the screen, not the point of
-          it. */}
-      <Button testID="profile-signout" label="Sign out" onPress={confirmSignOut} variant="danger" block style={{ marginTop: 4 }} />
+      {/* Sign out: last, red, alone — and it still asks first. */}
+      <SignOutRow testID="profile-signout" onPress={confirmSignOut} />
     </Screen>
   );
 }

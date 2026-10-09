@@ -73,7 +73,7 @@ export function Sheet({
             backgroundColor: tokens.color.appBg,
             borderTopLeftRadius: tokens.radius.sheet,
             borderTopRightRadius: tokens.radius.sheet,
-            paddingHorizontal: 14,
+            paddingHorizontal: 16,
             paddingTop: 8,
             // Clear the gesture strip / home indicator (UI audit 2026-09-22, #20).
             paddingBottom: Math.max(insets.bottom, 18),

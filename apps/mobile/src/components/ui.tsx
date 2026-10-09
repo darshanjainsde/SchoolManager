@@ -106,7 +106,7 @@ export function ListScreen<T>({
       }
       contentContainerStyle={{
         paddingTop: pushed ? 4 : 10,
-        paddingHorizontal: 14,
+        paddingHorizontal: 16,
         // Never less than the system bar: Android 16 forces edge-to-edge, and
         // a pushed screen (no tab bar) with 3-button navigation has a 48 dp bar
         // the last row used to sit under.
@@ -188,7 +188,7 @@ export function Screen({
       }
       contentContainerStyle={{
         paddingTop: pushed ? 4 : 10,
-        paddingHorizontal: 14,
+        paddingHorizontal: 16,
         gap: tokens.gap,
         // Never less than the system bar: Android 16 forces edge-to-edge, and
         // a pushed screen (no tab bar) with 3-button navigation has a 48 dp bar
@@ -322,7 +322,7 @@ export function Empty({
   const tone = {
     first: { ink: c.indigo, soft: c.indigo50, icon: 'send' as IconName },
     done: { ink: c.green, soft: c.green50, icon: 'check' as IconName },
-    choose: { ink: c.late, soft: c.amber50, icon: 'take' as IconName },
+    choose: { ink: c.indigo, soft: c.indigo50, icon: 'take' as IconName },
     search: { ink: c.indigo, soft: c.indigo50, icon: 'search' as IconName },
     locked: { ink: c.red, soft: c.red50, icon: 'lock' as IconName },
     error: { ink: c.red, soft: c.red50, icon: 'alert' as IconName },
@@ -537,15 +537,17 @@ export function RailRow({
       style={{
         flexDirection: 'row',
         alignItems: 'center',
-        minHeight: 40,
+        minHeight: 56,
         borderTopWidth: first ? 0 : 1,
         borderTopColor: tokens.color.line,
         opacity: state === 'done' ? 0.55 : 1,
         ...style,
       }}
     >
-      {state === 'now' && <RowWash color={tokens.color.amber50} />}
-      {state === 'free' && <RowWash color={tokens.color.green50} />}
+      {/* One colour family (sckools-ui-standards §7): "now" is a brand tint,
+          a free period a quiet muted one — neither borrows a second hue. */}
+      {state === 'now' && <RowWash color={tokens.color.indigo50} />}
+      {state === 'free' && <RowWash color={tokens.color.surfaceMuted} />}
 
       {/* The margin figures stay at the list's own reading size. The repaint
           shipped these at 9px, which is below the smallest size iOS and
@@ -565,14 +567,14 @@ export function RailRow({
         {'\n'}
         {endTime}
       </Text>
-      <View style={{ width: 1.5, alignSelf: 'stretch', backgroundColor: tokens.color.marginRed, opacity: 0.5 }} />
+      <View style={{ width: 1.5, alignSelf: 'stretch', backgroundColor: tokens.color.indigo, opacity: 0.25 }} />
 
       <View style={{ flex: 1, minWidth: 0, paddingVertical: 8, paddingHorizontal: 10 }}>
-        <Text numberOfLines={1} style={{ fontSize: 13.5, fontWeight: '700', color: tokens.color.ink }}>
+        <Text numberOfLines={1} style={{ fontSize: 15, lineHeight: 20, fontWeight: '600', color: tokens.color.ink }}>
           {title}
         </Text>
         {subtitle ? (
-          <Text numberOfLines={1} style={{ fontSize: 11, color: tokens.color.sub, marginTop: 1 }}>
+          <Text numberOfLines={1} style={{ fontSize: 12.5, lineHeight: 17, color: tokens.color.sub, marginTop: 1 }}>
             {subtitle}
           </Text>
         ) : null}
@@ -632,7 +634,7 @@ export function Tick({ size = 12, drawn = true }: { size?: number; drawn?: boole
 export function RailStatus({ tone, children }: PropsWithChildren<{ tone: 'good' | 'now' | 'muted' }>) {
   const tokens = useTokens();
   const color =
-    tone === 'good' ? tokens.color.green : tone === 'now' ? tokens.color.late : tokens.color.sub;
+    tone === 'good' ? tokens.color.green : tone === 'now' ? tokens.color.indigo : tokens.color.sub;
   return <Text style={{ fontSize: 12, fontWeight: '700', color }}>{children}</Text>;
 }
 

@@ -14,13 +14,18 @@ export interface FamilyTone {
   soft: string;
 }
 
+// ONE COLOUR FAMILY (user, 9 Oct 2026: "follow one theme where you can vary
+// shade & designs but only limited color family"). The six families stay as
+// NAMES (so a tool keeps its place and its tests) but all are shades of the
+// app's indigo: deep, core and violet-leaning, each on its own pale tint.
+// Red and green remain only for meaning (absent/overdue, present/done).
 export const FAMILIES: Record<Family, Record<ColorScheme, FamilyTone>> = {
   learn: { light: { ink: '#4338CA', soft: '#EEF0FF' }, dark: { ink: '#A5A8FF', soft: '#2A2A5C' } },
-  money: { light: { ink: '#0369A1', soft: '#E3F1FB' }, dark: { ink: '#7CC4F2', soft: '#0E2E44' } },
-  care: { light: { ink: '#B45309', soft: '#FFF4E0' }, dark: { ink: '#F7C774', soft: '#3B2A10' } },
-  people: { light: { ink: '#0F766E', soft: '#E3F6F3' }, dark: { ink: '#6EE0CF', soft: '#0D3330' } },
-  sport: { light: { ink: '#166534', soft: '#E6F5EA' }, dark: { ink: '#86E3A2', soft: '#12331C' } },
-  school: { light: { ink: '#6D28D9', soft: '#F1EAFE' }, dark: { ink: '#C4A8FF', soft: '#2E1F52' } },
+  money: { light: { ink: '#312E81', soft: '#E7E8FA' }, dark: { ink: '#C7C9FF', soft: '#23244D' } },
+  care: { light: { ink: '#4F46E5', soft: '#ECEBFF' }, dark: { ink: '#B4B2FF', soft: '#2B2960' } },
+  people: { light: { ink: '#3730A3', soft: '#EAEBFC' }, dark: { ink: '#B9BCFF', soft: '#262856' } },
+  sport: { light: { ink: '#3B3BB3', soft: '#EDEEFB' }, dark: { ink: '#AEB2FF', soft: '#25285A' } },
+  school: { light: { ink: '#5B21B6', soft: '#F0EBFE' }, dark: { ink: '#C9B6FF', soft: '#2E2456' } },
 };
 
 const BY_ICON: Record<string, Family> = {

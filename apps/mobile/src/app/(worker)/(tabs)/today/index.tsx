@@ -244,8 +244,8 @@ function StaffToday() {
 
           <View style={{ flexDirection: 'row', gap: 10 }}>
             <Card style={{ flex: 1, gap: 6, padding: 14 }} testID="today-leave-tile">
-              <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: c.amber50, alignItems: 'center', justifyContent: 'center' }}>
-                <Icon name="lock" size={20} color={c.late} fillOpacity={0.15} />
+              <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: c.indigo50, alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name="lock" size={20} color={c.indigo} fillOpacity={0.15} />
               </View>
               <Text style={{ fontSize: 14, fontWeight: '700', color: c.ink }}>Leave</Text>
               <Text style={{ fontSize: 12, lineHeight: 17, color: c.sub }}>Apply through the office for now. On the app soon.</Text>
@@ -262,9 +262,9 @@ function StaffToday() {
 
           {nextHoliday ? (
             <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 }} testID="today-holiday">
-              <View style={{ width: 40, height: 42, borderRadius: 11, backgroundColor: c.amber50, alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ fontSize: 9.5, fontWeight: '700', color: c.late }}>{['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][new Date(nextHoliday.startDate.slice(0, 10)).getMonth()]}</Text>
-                <Text style={{ fontSize: 16, fontWeight: '700', color: c.late, lineHeight: 18 }}>{new Date(nextHoliday.startDate.slice(0, 10)).getDate()}</Text>
+              <View style={{ width: 40, height: 42, borderRadius: 12, backgroundColor: c.indigo50, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 9.5, fontWeight: '700', color: c.indigo }}>{['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][new Date(nextHoliday.startDate.slice(0, 10)).getMonth()]}</Text>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: c.indigo, lineHeight: 18 }}>{new Date(nextHoliday.startDate.slice(0, 10)).getDate()}</Text>
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text numberOfLines={1} style={{ fontSize: 14.5, fontWeight: '600', color: c.ink }}>{nextHoliday.name} · next holiday</Text>

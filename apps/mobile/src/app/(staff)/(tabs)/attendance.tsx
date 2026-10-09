@@ -264,7 +264,7 @@ export default function StaffAttendance() {
           ) : c.taken ? (
             <Pill tone="green">{`✓ ${c.present}/${c.total} present`}</Pill>
           ) : (
-            <Pill tone="amber">Take now</Pill>
+            <Pill tone="indigo">Take now</Pill>
           )}
         </View>
         {rejectedMessage && (

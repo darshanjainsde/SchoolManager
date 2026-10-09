@@ -61,14 +61,14 @@ function Row({
         accessibilityLabel={`Take the register for ${entry.slot.className}`}
         onPress={() => onTakeAttendance(entry.slot!.classSectionId)}
       >
-        <Pill tone="amber">Take now</Pill>
+        <Pill tone="indigo">Take now</Pill>
       </Touchable>
     ) : (
-      <Pill tone="amber">Take now</Pill>
+      <Pill tone="indigo">Take now</Pill>
     )
   ) : isFree ? (
     <View testID={`timeline-free-${entry.periodId}`}>
-      <RailStatus tone="good">Free</RailStatus>
+      <RailStatus tone="now">Free</RailStatus>
     </View>
   ) : (
     <Pill tone="neutral">Break</Pill>
