@@ -252,7 +252,7 @@ export const brand = {
       name: '#171C3F',
       line: '#5B6188',
       roomTag: '#A6ABCF',
-      sheetFill: 'rgba(255,255,255,0.94)',
+      sheetFill: '#FFFFFF', // opaque: a translucent fill let Android draw the elevation shadow INSIDE the card (a ghost box)
       sheetBorder: 'rgba(79,70,229,0.16)',
     },
     dark: {
@@ -266,7 +266,7 @@ export const brand = {
       name: '#EEF0FF',
       line: '#A7ADD6',
       roomTag: '#8B92D3',
-      sheetFill: 'rgba(16,19,48,0.94)',
+      sheetFill: '#101330',
       sheetBorder: 'rgba(139,146,211,0.28)',
     },
   },

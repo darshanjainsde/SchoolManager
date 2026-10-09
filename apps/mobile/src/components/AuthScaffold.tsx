@@ -1,145 +1,9 @@
-import { useEffect, useRef, type ReactNode } from 'react';
-import {
-  Animated,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-  type TextStyle, useWindowDimensions } from 'react-native';
-import Svg, { Defs, LinearGradient, Rect, Stop, Circle } from 'react-native-svg';
-import { SckoolsLogo } from '@/components/SckoolsLogo';
+import { type ReactNode } from 'react';
+import { Pressable, Text, View, type TextStyle } from 'react-native';
 import { Button } from '@/components/Button';
 import { useTokens } from '@/theme/theme-context';
-import { brand, font } from '@/theme/tokens';
+import { font } from '@/theme/tokens';
 
-/**
- * Branded auth scaffold shared by the Connect + Login screens.
- * Indigo brand gradient hero with a floating white form card, and a staggered
- * entrance animation (logo springs in, then the card fades/slides up). Uses
- * react-native's built-in Animated (no extra native deps) and react-native-svg
- * for the gradient (already a dependency).
- */
-export function AuthScaffold({
-  title,
-  subtitle,
-  children,
-}: {
-  title: string;
-  subtitle?: string;
-  children: ReactNode;
-}) {
-  const tokens = useTokens();
-  // useWindowDimensions SUBSCRIBES; Dimensions.get() is a one-off read that
-  // goes stale the moment the window changes — split-screen, a foldable
-  // unfolding, or the keyboard resizing the view on Android.
-  const { width, height } = useWindowDimensions();
-  const slide = useRef(new Animated.Value(28)).current;
-  const logoScale = useRef(new Animated.Value(0.82)).current;
-  const logoFade = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    // Logo fades + springs in (non-interactive, safe to fade). The form block
-    // only SLIDES up (opacity stays 1) so its inputs/button are always visible
-    // and tappable — a fade-from-0 there can stall on slow devices and leave
-    // the primary button briefly untappable.
-    Animated.sequence([
-      Animated.parallel([
-        Animated.timing(logoFade, { toValue: 1, duration: 420, useNativeDriver: true }),
-        Animated.spring(logoScale, { toValue: 1, friction: 6, tension: 80, useNativeDriver: true }),
-      ]),
-      Animated.spring(slide, { toValue: 0, friction: 9, tension: 70, useNativeDriver: true }),
-    ]).start();
-  }, [slide, logoScale, logoFade]);
-
-  return (
-    <View style={{ flex: 1, backgroundColor: brand.authGradientEnd }}>
-      <Svg width={width} height={height} style={{ position: 'absolute', top: 0, left: 0 }}>
-        <Defs>
-          <LinearGradient id="authbg" x1="0" y1="0" x2="0.7" y2="1">
-            <Stop offset="0" stopColor={brand.authGradientStart} />
-            <Stop offset="0.55" stopColor={brand.authGradientMid} />
-            <Stop offset="1" stopColor={brand.authGradientEnd} />
-          </LinearGradient>
-        </Defs>
-        <Rect width={width} height={height} fill="url(#authbg)" />
-        {/* soft amber brand glow, top-right */}
-        <Circle cx={width * 0.9} cy={height * 0.12} r={width * 0.42} fill={brand.authGlowAmber} opacity={0.12} />
-        <Circle cx={width * 0.12} cy={height * 0.9} r={width * 0.5} fill={brand.authGlowIndigo} opacity={0.18} />
-      </Svg>
-
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        {/* It SCROLLS. The card is centred while there is room, and once the
-            keyboard takes the bottom half of a small phone the person can
-            still reach the last box and the button — a centred View with no
-            scroll simply cut them off (keyboard audit 2026-10-08). */}
-        <ScrollView
-          testID="auth-scroll"
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 24 }}
-        >
-          <Animated.View
-            style={{ alignItems: 'center', marginBottom: 30, opacity: logoFade, transform: [{ scale: logoScale }] }}
-          >
-            {/* The pitch's splash: "the S draws itself · the tassel is the '!'".
-                This is the one screen where the mark is the subject rather than
-                a header ornament, so it gets the full pen-draw and then keeps
-                the slow tassel swing while the person types. */}
-            <SckoolsLogo size={54} theme="dark" draw swing />
-          </Animated.View>
-
-          <Animated.View style={{ transform: [{ translateY: slide }] }}>
-            <Text
-              style={{
-                color: brand.onHero,
-                fontFamily: font.serif,
-                fontSize: 27,
-                fontWeight: '600',
-                letterSpacing: -0.3,
-                textAlign: 'center',
-              }}
-            >
-              {title}
-            </Text>
-            {subtitle ? (
-              <Text
-                style={{
-                  color: brand.onHero,
-                  opacity: 0.78,
-                  fontSize: 15,
-                  lineHeight: 21,
-                  textAlign: 'center',
-                  marginTop: 10,
-                  paddingHorizontal: 8,
-                }}
-              >
-                {subtitle}
-              </Text>
-            ) : null}
-
-            <View
-              style={{
-                backgroundColor: tokens.color.surface,
-                borderRadius: 22,
-                padding: 20,
-                marginTop: 26,
-                gap: 14,
-                shadowColor: brand.authCardShadow,
-                shadowOpacity: 0.25,
-                shadowRadius: 24,
-                shadowOffset: { width: 0, height: 12 },
-                elevation: 10,
-              }}
-            >
-              {children}
-            </View>
-          </Animated.View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </View>
-  );
-}
 
 // ── The gate's form vocabulary (`.fld`, `.savebtn`, `.linkish`, `.gatesub`,
 //    `.resetok`) ────────────────────────────────────────────────────────────
@@ -315,7 +179,7 @@ export function AuthLink({
 export function AuthNote({ children }: { children: ReactNode }) {
   const tokens = useTokens();
   return (
-    <Text style={{ fontSize: 11.5, lineHeight: 16, color: tokens.color.sub, marginTop: -4 }}>{children}</Text>
+    <Text style={{ fontSize: 13, lineHeight: 18, color: tokens.color.sub, marginTop: -8 }}>{children}</Text>
   );
 }
 
@@ -348,12 +212,12 @@ export function AuthSlip({
         borderWidth: 1.5,
         borderColor: tone === 'good' ? tokens.color.green : tokens.color.amber,
         backgroundColor: bg,
-        borderRadius: 11,
-        paddingVertical: 11,
-        paddingHorizontal: 13,
+        borderRadius: 16,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
       }}
     >
-      <Text testID={testID} style={{ color: fg, fontSize: 13, lineHeight: 19, fontWeight: '600' }}>
+      <Text testID={testID} style={{ color: fg, fontSize: 14, lineHeight: 20, fontWeight: '600' }}>
         {children}
       </Text>
     </View>
