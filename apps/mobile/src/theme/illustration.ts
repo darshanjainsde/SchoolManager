@@ -24,4 +24,7 @@ export const ART = {
   gold: '#FBBF24',
   sun: '#FDE68A',
   white: '#FFFFFF',
+  /** The pencil's graphite tip and the rupee on the coin (components/EmptyArt). */
+  graphite: '#3F3F46',
+  coinInk: '#7C2D12',
 } as const;

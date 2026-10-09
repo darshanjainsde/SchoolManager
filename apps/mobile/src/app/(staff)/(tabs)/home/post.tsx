@@ -5,7 +5,7 @@ import type { AnnouncementMine } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import type { MyClassSection } from '@/lib/attendance';
 import { ClassChips } from '@/components/ClassChips';
-import { Card, Screen, SectionTitle, Toast } from '@/components/ui';
+import { Card, Screen, SectionTitle, Toast, Empty } from '@/components/ui';
 import { Button } from '@/components/Button';
 import { Field, fieldInputStyle, TextField } from '@/components/Field';
 import { LoadingRows } from '@/components/Loading';
@@ -303,7 +303,7 @@ export default function Post() {
       )}
       {mine?.length === 0 && !mineError && (
         <Card>
-          <Text style={{ color: tokens.color.sub }}>You haven&apos;t posted anything yet.</Text>
+          <Empty icon="notices">You haven&apos;t posted anything yet.</Empty>
         </Card>
       )}
       {mine?.map((a, i) =>

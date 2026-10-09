@@ -11,6 +11,7 @@ import { isPushedRoute, titleForSegments } from '@/lib/screen-titles';
 import { BackChipHeader } from './BackChipHeader';
 import { Icon, type IconName } from './icons';
 import { Illustration, type Scene } from './Illustration';
+import { EmptyArt, sceneFor } from './EmptyArt';
 import { Button } from './Button';
 import { useKeepFocusedInView } from '@/lib/keyboard';
 
@@ -304,9 +305,12 @@ export function Empty({
   title,
   action,
   secondary,
+  art = true,
 }: PropsWithChildren<{
   testID?: string;
   icon?: IconName;
+  /** The moving picture (EmptyArt) is on by default; false keeps the plain glyph. */
+  art?: boolean;
   scene?: Scene;
   kind?: EmptyKind;
   title?: string;
@@ -325,10 +329,12 @@ export function Empty({
   }[kind ?? 'first'];
   const glyph = icon ?? (kind ? tone.icon : undefined);
   const picture = kind === 'first' || !kind ? scene : undefined;
+  const moving = !picture && art ? sceneFor(icon, kind) : undefined;
   return (
     <View testID={testID} style={{ paddingVertical: 18, paddingHorizontal: 16, alignItems: 'flex-start', gap: 10 }}>
       {picture && <Illustration scene={picture} height={130} />}
-      {!picture && glyph && (
+      {moving && <EmptyArt scene={moving} icon={icon} />}
+      {!picture && !moving && glyph && (
         <View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: kind ? tone.soft : c.surfaceMuted, alignItems: 'center', justifyContent: 'center' }}>
           <Icon name={glyph} size={24} color={kind ? tone.ink : c.sub} fillOpacity={0.18} />
         </View>

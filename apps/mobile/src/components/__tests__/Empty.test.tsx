@@ -31,7 +31,9 @@ describe('Empty', () => {
     // An empty screen is the one screen with nothing on it to say WHICH screen
     // it is. The glyph is what makes "no messages" distinguishable from "this
     // page did not load".
-    const view = mount(<Empty icon="messages">No messages yet.</Empty>);
+    // UI v2 (9 Oct 2026): by default a moving picture (EmptyArt) stands in
+    // for the glyph — tested in EmptyArt.test.tsx. With art off, the glyph.
+    const view = mount(<Empty icon="messages" art={false}>No messages yet.</Empty>);
     expect(view.UNSAFE_queryAllByType(Path).length).toBeGreaterThan(0);
   });
 });
