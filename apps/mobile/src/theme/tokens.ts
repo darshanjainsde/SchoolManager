@@ -180,6 +180,14 @@ export const SPACE = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;
 export const RADIUS = { card: 24, field: 16, chip: 12, sheet: 28 } as const;
 
 /**
+ * The widest a column of content gets (dp, padding included). The app no
+ * longer locks portrait (Play, release 24), so on a tablet, a foldable or a
+ * phone turned sideways every screen, header and the tab bar stay a phone-width
+ * column in the middle instead of stretching edge to edge (android-ui-ledger D3).
+ */
+export const CONTENT_MAX = 640;
+
+/**
  * Fixed brand constants that intentionally do NOT vary with the device's
  * colour scheme — the branded indigo hero gradient behind auth screens is a
  * full-bleed brand moment (like the web's own coloured marketing surfaces),

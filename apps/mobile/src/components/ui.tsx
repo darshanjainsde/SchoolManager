@@ -5,7 +5,7 @@ import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { useSegments } from 'expo-router';
 import { ApiError } from '@/lib/api';
 import { useTokens } from '@/theme/theme-context';
-import { font, type ColorPalette } from '@/theme/tokens';
+import { CONTENT_MAX, font, type ColorPalette } from '@/theme/tokens';
 import { DASH, DUR, inkWidth, strokeDashoffset, useGesture } from '@/theme/motion';
 import { isPushedRoute, titleForSegments } from '@/lib/screen-titles';
 import { BackChipHeader } from './BackChipHeader';
@@ -107,6 +107,10 @@ export function ListScreen<T>({
       contentContainerStyle={{
         paddingTop: pushed ? 4 : 10,
         paddingHorizontal: 16,
+        // A phone-width column on tablets and in landscape (CONTENT_MAX).
+        width: '100%',
+        maxWidth: CONTENT_MAX,
+        alignSelf: 'center',
         // Never less than the system bar: Android 16 forces edge-to-edge, and
         // a pushed screen (no tab bar) with 3-button navigation has a 48 dp bar
         // the last row used to sit under.
@@ -189,6 +193,10 @@ export function Screen({
       contentContainerStyle={{
         paddingTop: pushed ? 4 : 10,
         paddingHorizontal: 16,
+        // A phone-width column on tablets and in landscape (CONTENT_MAX).
+        width: '100%',
+        maxWidth: CONTENT_MAX,
+        alignSelf: 'center',
         gap: tokens.gap,
         // Never less than the system bar: Android 16 forces edge-to-edge, and
         // a pushed screen (no tab bar) with 3-button navigation has a 48 dp bar

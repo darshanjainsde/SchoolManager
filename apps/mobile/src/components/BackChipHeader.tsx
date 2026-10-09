@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { Icon } from './icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTokens } from '@/theme/theme-context';
+import { CONTENT_MAX } from '@/theme/tokens';
 
 /**
  * Pitch №5 §3 — the way back, on every pushed screen. Until now headers were
@@ -31,6 +32,10 @@ export function BackChipHeader({ title }: { title: string }) {
         alignItems: 'center',
         gap: 12,
         backgroundColor: tokens.color.appBg,
+        // Lines up with the capped content column on wide screens.
+        width: '100%',
+        maxWidth: CONTENT_MAX,
+        alignSelf: 'center',
       }}
     >
       <Pressable

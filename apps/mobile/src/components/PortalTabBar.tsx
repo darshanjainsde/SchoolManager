@@ -2,6 +2,7 @@ import { LayoutAnimation, Pressable, Text, View } from 'react-native';
 import { Icon, type IconName } from './icons';
 import { useTheme, useTokens } from '@/theme/theme-context';
 import { useKeyboardVisible } from '@/lib/keyboard';
+import { CONTENT_MAX } from '@/theme/tokens';
 
 /**
  * The slice of `@react-navigation/bottom-tabs`' `BottomTabBarProps` this bar
@@ -160,6 +161,10 @@ export function PortalTabBar({ tabs, state, navigation, insets }: PortalTabBarPr
       <View
         testID="tab-bar-pill"
         style={{
+          // Same column as the content on wide screens (CONTENT_MAX - 2 × 16).
+          width: '100%',
+          maxWidth: CONTENT_MAX - 32,
+          alignSelf: 'center',
           height: 64,
           borderRadius: 32,
           flexDirection: 'row',
