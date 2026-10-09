@@ -139,6 +139,14 @@ function SavedStamp() {
   );
 }
 
+const CELL_GAP = 8;
+/** The largest cell ≥ 48 dp that fills `width` with whole columns. */
+export function cellSize(width: number, min = 48, gap = CELL_GAP): number {
+  if (width <= 0) return min;
+  const cols = Math.max(1, Math.floor((width + gap) / (min + gap)));
+  return Math.floor((width - gap * (cols - 1)) / cols);
+}
+
 export default function TakeAttendance() {
   const tokens = useTokens();
   const CELL = cellTones(tokens);
@@ -161,6 +169,8 @@ export default function TakeAttendance() {
   // Try again / pull-to-refresh for this screen's own focus effect.
   const [reloadKey, reload] = useReload();
   const [roster, setRoster] = useState<RosterRow[] | null>(null);
+  const [gridW, setGridW] = useState(0);
+  const cell = cellSize(gridW);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmation, setConfirmation] = useState<SaveAttendanceResponse | null>(null);
@@ -364,7 +374,9 @@ export default function TakeAttendance() {
   return (
     <Screen onRefresh={reload}>
       <SectionTitle
-        title={`${name ?? 'Class'} · Attendance${date === todayISO() ? '' : ` · ${formatDate(date)}`}`}
+        // The header already says "Attendance"; this line names the class
+        // (and the day, when it is not today) instead of saying it twice.
+        title={`${name ?? 'Class'}${date === todayISO() ? ' · today' : ` · ${formatDate(date)}`}`}
       />
       {confirmation && <SavedStamp />}
       {confirmation && (
@@ -455,7 +467,14 @@ export default function TakeAttendance() {
           a screen reader still announces "Asha Rao, roll 1, present". */}
       {rows.length > 0 && (
         <Card style={{ paddingVertical: 12 }}>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5 }}>
+          {/* Cells are sized from the card's own width so the grid fills it
+              edge to edge — fixed 46 dp cells left an empty strip on the right
+              at phone width — and never fall under the 48 dp touch floor. */}
+          <View
+            testID="register-grid"
+            onLayout={(e) => setGridW(e.nativeEvent.layout.width)}
+            style={{ flexDirection: 'row', flexWrap: 'wrap', gap: CELL_GAP }}
+          >
             {rows.map((r) => {
               const tone = CELL[r.status];
               return (
@@ -482,8 +501,8 @@ export default function TakeAttendance() {
                     // instead of on whatever happens to be outermost today.
                     testID={`cell-body-${r.studentId}`}
                     style={{
-                      width: 46,
-                      height: 46,
+                      width: cell,
+                      height: cell,
                       borderRadius: tokens.radius.chip,
                       alignItems: 'center',
                       justifyContent: 'center',

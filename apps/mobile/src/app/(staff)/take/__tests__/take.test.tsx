@@ -698,3 +698,18 @@ it('a network-fail save is queued on the device, toasts instead of erroring, and
     ],
   });
 });
+
+describe('register grid fills its card (audit 9 Oct 2026)', () => {
+  const { cellSize } = jest.requireActual('../[classSectionId]') as { cellSize: (w: number) => number };
+  it('whole columns fill the width exactly, never under the 48 dp floor', () => {
+    for (const w of [300, 347, 360, 400, 520]) {
+      const c = cellSize(w);
+      const cols = Math.floor((w + 8) / (c + 8));
+      expect(c).toBeGreaterThanOrEqual(48);
+      expect(w - (cols * c + (cols - 1) * 8)).toBeLessThan(cols); // only rounding left over
+    }
+  });
+  it('before layout it falls back to the floor', () => {
+    expect(cellSize(0)).toBe(48);
+  });
+});

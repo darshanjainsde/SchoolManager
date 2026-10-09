@@ -263,11 +263,19 @@ export default function Today() {
             onOpenTodos={liveSlot ? () => setSheet('todos') : undefined}
             deck={
               <HeroDeck
-                figures={[
-                  { value: `${taken}/${classes.length}`, label: 'registers', testID: 'hero-fig-registers' },
-                  { value: String(studentsMarked), label: 'marked', testID: 'hero-fig-marked' },
-                  { value: String(unreadMsgs), label: unreadMsgs === 1 ? 'message' : 'messages', testID: 'hero-fig-messages' },
-                ]}
+                // While a class is live the hero already carries the period,
+                // its tools and its button; the day's figures made it three
+                // rows of controls tall and pushed the menu off the screen
+                // (audit 9 Oct 2026). They return the moment the bell goes.
+                figures={
+                  liveSlot
+                    ? []
+                    : [
+                        { value: `${taken}/${classes.length}`, label: 'registers', testID: 'hero-fig-registers' },
+                        { value: String(studentsMarked), label: 'marked', testID: 'hero-fig-marked' },
+                        { value: String(unreadMsgs), label: unreadMsgs === 1 ? 'message' : 'messages', testID: 'hero-fig-messages' },
+                      ]
+                }
                 // The hero DOES (quick verbs); the tiles below GO (places).
                 actions={[
                   {

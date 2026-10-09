@@ -423,6 +423,18 @@ it('flips at the bell while the teacher is still looking at it', async () => {
   expect(screen.getByLabelText(/^Register, [1-9]\d* waiting$/)).toBeTruthy();
 });
 
+it('a live class keeps the hero short — the day\'s figures wait for the bell (audit 9 Oct 2026)', async () => {
+  setNow(8, 44);
+  mockDay(DAY);
+  render(<Today />);
+  await screen.findByTestId('now-card');
+  expect(screen.queryByTestId('hero-figures')).toBeNull();
+  await act(async () => {
+    jest.advanceTimersByTime(60_000);
+  });
+  expect(screen.getByTestId('hero-figures')).toBeTruthy();
+});
+
 it('refetches on focus so a colleague marking the register elsewhere shows up without a manual reload', async () => {
   setNow(8, 20);
   mockDay({
