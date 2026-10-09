@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import { useQuery } from '@/lib/query';
@@ -10,6 +10,7 @@ import { Button, Row, SearchBox } from '@/components/desk';
 import { Sheet } from '@/components/Sheet';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
+import { ask } from '@/components/ConfirmSheet';
 
 /**
  * ONE READER AT THE COUNTER. Their shelf with a Return on every line, the
@@ -41,10 +42,10 @@ export default function Member() {
   }
   function confirmReturn(c: IssueCard) {
     const w = dueWord(c.dueOn, today);
-    Alert.alert('Take this book back?', `${c.title} · ${c.accessionNo}${w.tone === 'red' ? ` · ${w.text}${c.accruedFineRupees ? `, ${rupees(c.accruedFineRupees)} fine` : ''}` : ''}`, [
+    ask('Take this book back?', `${c.title} · ${c.accessionNo}${w.tone === 'red' ? ` · ${w.text}${c.accruedFineRupees ? `, ${rupees(c.accruedFineRupees)} fine` : ''}` : ''}`, [
       { text: 'Not yet', style: 'cancel' },
       { text: 'Return', onPress: () => void doReturn(c) },
-    ]);
+    ], { icon: 'library' });
   }
 
   return (

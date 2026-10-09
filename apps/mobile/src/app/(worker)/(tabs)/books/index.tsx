@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import { type TitleView } from '@/lib/library-desk';
@@ -10,6 +10,7 @@ import { Sheet } from '@/components/Sheet';
 import { TextField } from '@/components/Field';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
+import { ask } from '@/components/ConfirmSheet';
 
 /**
  * BOOKS — the catalogue, searched. A title opens to its copies, each with
@@ -82,7 +83,7 @@ export default function Books() {
       {toast && <Toast kind={toast.kind} message={toast.message} />}
 
       <Sheet open={!!open} onClose={() => setOpenId(null)} title={open?.title ?? ''} subtitle={open ? `${open.author}${open.shelf ? ` · shelf ${open.shelf}` : ''}` : undefined} testID="book-sheet"
-        footer={open ? <Button variant="ghost" testID="book-add-copy" label="Add a copy" onPress={() => Alert.alert('Add a copy?', `A new accession number for ${open.title}.`, [{ text: 'No', style: 'cancel' }, { text: 'Add', onPress: () => void addCopy(open) }])} /> : undefined}>
+        footer={open ? <Button variant="ghost" testID="book-add-copy" label="Add a copy" onPress={() => ask('Add a copy?', `A new accession number for ${open.title}.`, [{ text: 'No', style: 'cancel' }, { text: 'Add', onPress: () => void addCopy(open) }], { icon: 'library' })} /> : undefined}>
         {open && open.copies.length === 0 && <Empty>No copies yet.</Empty>}
         {open?.copies.map((c, i) => (
           <Row key={c.id} first={i === 0} mono testID={`copy-${c.id}`} title={c.accessionNo}

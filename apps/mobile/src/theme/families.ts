@@ -71,13 +71,16 @@ export function deriveFamilies(c: ColorPalette, scheme: ColorScheme): Record<Fam
       const soft = mix(softFrom, base, k);
       return { ink: legible(ink, soft, '#FFFFFF'), soft };
     };
+    // ONE tint for every tile (user, 9 Oct 2026: the Fees tile read greyer
+    // than its neighbours — it was mixed from the deep shade). Families now
+    // differ only in the glyph's ink, never in the tile.
     return {
       learn: tone(F, F, 0.78),
-      money: tone(mix(F, '#FFFFFF', 0.25), D, 0.72),
-      care: tone(F, D, 0.8),
-      people: tone(mix(F, '#FFFFFF', 0.15), F, 0.84),
-      sport: tone(F, D, 0.76),
-      school: tone(mix(F, '#FFFFFF', 0.3), F, 0.74),
+      money: tone(mix(F, '#FFFFFF', 0.25), F, 0.78),
+      care: tone(mix(F, D, 0.3), F, 0.78),
+      people: tone(mix(F, '#FFFFFF', 0.15), F, 0.78),
+      sport: tone(F, F, 0.78),
+      school: tone(mix(F, '#FFFFFF', 0.3), F, 0.78),
     };
   }
   const W = '#FFFFFF';
@@ -87,11 +90,11 @@ export function deriveFamilies(c: ColorPalette, scheme: ColorScheme): Record<Fam
   };
   return {
     learn: tone(F, F, 0.9),
-    money: tone(D, D, 0.88),
-    care: tone(mix(F, D, 0.5), F, 0.86),
-    people: tone(D, F, 0.92),
-    sport: tone(F, D, 0.92),
-    school: tone(mix(D, '#000000', 0.2), F, 0.88),
+    money: tone(D, F, 0.9),
+    care: tone(mix(F, D, 0.5), F, 0.9),
+    people: tone(D, F, 0.9),
+    sport: tone(F, F, 0.9),
+    school: tone(mix(D, '#000000', 0.2), F, 0.9),
   };
 }
 

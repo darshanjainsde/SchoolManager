@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Alert, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import { useQuery } from '@/lib/query';
@@ -9,6 +9,7 @@ import { Row } from '@/components/desk';
 import { Button } from '@/components/Button';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
+import { ask } from '@/components/ConfirmSheet';
 
 /**
  * FINES — what is owed, by whom, and the two things a librarian does about
@@ -39,11 +40,11 @@ export default function Fines() {
       setToast({ kind: 'error', message: err instanceof ApiError ? err.message : 'Could not settle that fine.' });
     } finally { setBusy(null); }
   }
-  function ask(e: FineEntry, how: 'collect' | 'waive') {
-    Alert.alert(how === 'collect' ? `Collect ${rupees(e.amountRupees)}?` : `Waive ${rupees(e.amountRupees)}?`, `${e.borrower.name} · ${e.title}`, [
+  function askSettle(e: FineEntry, how: 'collect' | 'waive') {
+    ask(how === 'collect' ? `Collect ${rupees(e.amountRupees)}?` : `Waive ${rupees(e.amountRupees)}?`, `${e.borrower.name} · ${e.title}`, [
       { text: 'No', style: 'cancel' },
       { text: how === 'collect' ? 'Collected' : 'Waive', style: how === 'waive' ? 'destructive' : 'default', onPress: () => void settle(e, how) },
-    ]);
+    ], { icon: 'fees' });
   }
   async function remind() {
     setBusy('remind');
@@ -60,7 +61,7 @@ export default function Fines() {
 
   return (
     <Screen onRefresh={q.refresh} refreshing={q.refreshing}>
-      <SectionTitle title="Fines" actionLabel={total ? 'Remind all' : undefined} onAction={total ? () => Alert.alert('Remind every reader who owes?', `${total} notice${total === 1 ? '' : 's'} go out through the school's channels.`, [{ text: 'No', style: 'cancel' }, { text: 'Send', onPress: () => void remind() }]) : undefined} />
+      <SectionTitle title="Fines" actionLabel={total ? 'Remind all' : undefined} onAction={total ? () => ask('Remind every reader who owes?', `${total} notice${total === 1 ? '' : 's'} go out through the school's channels.`, [{ text: 'No', style: 'cancel' }, { text: 'Send', onPress: () => void remind() }], { icon: 'bell' }) : undefined} />
       {q.loading && <LoadingRows label="Adding up the fines…" rows={3} />}
       {q.error && !q.data && <ErrorState error={q.error} onRetry={q.reload} />}
       {q.data && (
@@ -87,8 +88,8 @@ export default function Fines() {
                       and the rarer Waive a text button, both right-aligned
                       so the figure above and the button below share an edge. */}
                   <View style={{ flexDirection: 'row', gap: 4, justifyContent: 'flex-end' }}>
-                    <Button variant="text" size="sm" testID={`waive-${e.id}`} label="Waive" onPress={() => ask(e, 'waive')} disabled={busy === e.id} />
-                    <Button variant="tonal" size="sm" icon="check" testID={`collect-${e.id}`} label="Collected" onPress={() => ask(e, 'collect')} busy={busy === e.id} />
+                    <Button variant="text" size="sm" testID={`waive-${e.id}`} label="Waive" onPress={() => askSettle(e, 'waive')} disabled={busy === e.id} />
+                    <Button variant="tonal" size="sm" icon="check" testID={`collect-${e.id}`} label="Collected" onPress={() => askSettle(e, 'collect')} busy={busy === e.id} />
                   </View>
                 </View>
               ))}

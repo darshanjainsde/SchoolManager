@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Alert, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import { useQuery } from '@/lib/query';
@@ -11,6 +11,7 @@ import { Sheet } from '@/components/Sheet';
 import { SegmentedField } from '@/components/Field';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
+import { ask } from '@/components/ConfirmSheet';
 
 /**
  * ONE MEET, ON THE DAY. Events grouped by the noun the teacher says out loud
@@ -44,10 +45,10 @@ export default function Meet() {
 
   function confirmPublish() {
     if (!t) return;
-    Alert.alert('Publish this meet?', 'Every child in it sees their fixtures and results in the app.', [
+    ask('Publish this meet?', 'Every child in it sees their fixtures and results in the app.', [
       { text: 'Not yet', style: 'cancel' },
       { text: 'Publish', onPress: () => void doPublish() },
-    ]);
+    ], { icon: 'send' });
   }
   async function doPublish() {
     if (!t) return;
@@ -232,10 +233,10 @@ function MarksSheet({ e, h, names, onClose, onSaved }: { e: EventDetail; h: Heat
     }
   }
   function confirmDone() {
-    Alert.alert('Close this heat?', 'Marks are ranked, points go to houses, and records are checked. A lane left blank counts as no mark.', [
+    ask('Close this heat?', 'Marks are ranked, points go to houses, and records are checked. A lane left blank counts as no mark.', [
       { text: 'Keep open', style: 'cancel' },
       { text: 'Close heat', onPress: () => void save(true) },
-    ]);
+    ], { icon: 'sports' });
   }
 
   return (

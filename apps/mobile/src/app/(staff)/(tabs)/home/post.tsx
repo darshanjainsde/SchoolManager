@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState, type ReactNode } from 'react';
-import { Alert, Animated, Text, TextInput, View } from 'react-native';
+import { Animated, Text, TextInput, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import type { AnnouncementMine } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
@@ -12,6 +12,7 @@ import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { DUR, pinStyle, useGesture } from '@/theme/motion';
 import { fmtDateTime } from '@/lib/dates';
+import { ask } from '@/components/ConfirmSheet';
 
 /**
  * THE PIN (`.postit.pin`) — an announcement is a thing you PUT UP, so it
@@ -179,10 +180,10 @@ export default function Post() {
 
   function confirmDelete(a: AnnouncementMine) {
     if (deletingRef.current) return;
-    Alert.alert('Delete this announcement?', `"${a.title}" will be removed for everyone it was sent to.`, [
+    ask('Delete this announcement?', `"${a.title}" will be removed for everyone it was sent to.`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Yes, delete', style: 'destructive', onPress: () => void doDelete(a.id) },
-    ]);
+    ], { icon: 'trash' });
   }
 
   return (

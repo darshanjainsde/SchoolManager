@@ -50,7 +50,10 @@ export type IconName =
   | 'search'
   | 'lock'
   | 'alert'
-  | 'check';
+  | 'check'
+  // The confirm sheet: leaving (a door with an arrow out) and removing (a bin).
+  | 'signout'
+  | 'trash';
 
 /** `body` is the filled silhouette; `lines` are the strokes drawn over it. */
 const PATHS: Record<IconName, { body: string; lines: string[] }> = {
@@ -217,6 +220,16 @@ const PATHS: Record<IconName, { body: string; lines: string[] }> = {
   palette: {
     body: 'M12 4.5a7.5 7.5 0 1 0 0 15c1.2 0 1.6-.8 1.2-1.7-.5-1 .2-2 1.3-2H16a3.5 3.5 0 0 0 3.5-3.5A7.5 7.5 0 0 0 12 4.5Z',
     lines: ['M12 4.5a7.5 7.5 0 1 0 0 15c1.2 0 1.6-.8 1.2-1.7-.5-1 .2-2 1.3-2H16a3.5 3.5 0 0 0 3.5-3.5A7.5 7.5 0 0 0 12 4.5Z', 'M8.5 12.5h.01M10.5 8.5h.01M14.5 8.5h.01'],
+  },
+  // A door with an arrow leaving it — sign out.
+  signout: {
+    body: 'M5.5 4.5h7a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5h-7Z',
+    lines: ['M14 4.5H7A1.5 1.5 0 0 0 5.5 6v12A1.5 1.5 0 0 0 7 19.5h7', 'M10.5 12h9M16.5 9l3 3-3 3'],
+  },
+  // A bin with a lid — delete.
+  trash: {
+    body: 'M6.5 7.5h11l-1 11.5a1.5 1.5 0 0 1-1.5 1.5H9a1.5 1.5 0 0 1-1.5-1.5Z',
+    lines: ['M6.5 7.5h11l-1 11.5a1.5 1.5 0 0 1-1.5 1.5H9a1.5 1.5 0 0 1-1.5-1.5Z', 'M4.5 7.5h15M9.5 7.5V5.5h5v2M10.5 11v6M13.5 11v6'],
   },
   // A key — the password.
   key: {

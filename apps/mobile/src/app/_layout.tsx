@@ -5,6 +5,7 @@ import type { ErrorBoundaryProps } from 'expo-router';
 import Constants from 'expo-constants';
 import * as Sentry from '@sentry/react-native';
 import { ThemeProvider } from '@/theme/theme-context';
+import { ConfirmHost } from '@/components/ConfirmSheet';
 import { emergency } from '@/theme/tokens';
 
 // Initialise crash reporting as early as possible so a launch crash is
@@ -77,6 +78,8 @@ function RootLayout() {
           gesture-driven and interruptible, which a hand-rolled transform is
           not, and it already respects the OS reduce-motion setting. */}
       <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }} />
+      {/* Every "are you sure?" in the app (components/ConfirmSheet.tsx). */}
+      <ConfirmHost />
     </ThemeProvider>
   );
 }

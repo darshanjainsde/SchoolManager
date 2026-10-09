@@ -15,7 +15,9 @@ export interface DayTimelineProps {
 function stateOf(entry: TeacherDayEntry, dimmed: boolean, current: boolean): RailState {
   if (dimmed) return 'done';
   if (current) return 'now';
-  if (entry.kind === 'FREE') return 'free';
+  // Only a class is a dark row (user, 9 Oct 2026: "add darks to the day which
+  // is not free"). A break is no class either, so it stays quiet like Free.
+  if (entry.kind !== 'CLASS') return 'free';
   return 'upcoming';
 }
 
@@ -95,7 +97,7 @@ function Row({
             : entry.label
           : isFree
             ? `${entry.label} · prep or catch up`
-            : `${entry.startTime}–${entry.endTime}`
+            : 'No class'
       }
       right={right}
     />

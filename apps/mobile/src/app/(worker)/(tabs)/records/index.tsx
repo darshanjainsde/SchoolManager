@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Alert, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { AGE_GROUPS, SPORTS, type Band } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { useQuery } from '@/lib/query';
@@ -13,6 +13,7 @@ import { SegmentedField } from '@/components/Field';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { sportsGroupLine } from '@/lib/labels';
+import { ask } from '@/components/ConfirmSheet';
 
 interface Settings { grouping: 'BANDS' | 'AGE'; bands: Band[] }
 
@@ -57,12 +58,12 @@ export default function Records() {
       } finally { setDeciding(null); }
     };
     if (approve) {
-      Alert.alert('Approve as a school record?', `${a.student.name} · ${a.sportName} ${sportsGroupLine(a.groupKey, a.category, bands)} · ${a.text}`, [
+      ask('Approve as a school record?', `${a.student.name} · ${a.sportName} ${sportsGroupLine(a.groupKey, a.category, bands)} · ${a.text}`, [
         { text: 'Not yet', style: 'cancel' },
         { text: 'Approve', onPress: () => void go() },
-      ]);
+      ], { icon: 'sports' });
     } else {
-      Alert.alert('Reject this attempt?', 'It stays in the log as rejected. The child is not told.', [
+      ask('Reject this attempt?', 'It stays in the log as rejected. The child is not told.', [
         { text: 'Keep', style: 'cancel' },
         { text: 'Reject', style: 'destructive', onPress: () => void go('Rejected at the desk') },
       ]);

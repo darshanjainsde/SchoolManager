@@ -1,6 +1,6 @@
 import { useReload } from '@/lib/query';
 import { useCallback, useState } from 'react';
-import { Text, View, Alert } from 'react-native';
+import { Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import type { StudentProfile } from '@/lib/portal';
@@ -11,6 +11,7 @@ import { Button } from '@/components/Button';
 import { ErrorState, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { font } from '@/theme/tokens';
+import { ask } from '@/components/ConfirmSheet';
 
 /** "AS" for Aarav Sharma — mirrors the web's `initials` (apps/web/app/portal/profile/page.tsx). */
 function initials(firstName: string, lastName: string): string {
@@ -38,11 +39,16 @@ function initials(firstName: string, lastName: string): string {
  * One stray thumb used to clear the session AND every child on the shelf
  * (UI audit 2026-09-22, #13). Ask first, in the words that say what is lost.
  */
-function confirmSignOut(): void {
-  Alert.alert('Sign out?', 'This removes every profile on this phone. You can sign in again with your number.', [
-    { text: 'Stay', style: 'cancel' },
-    { text: 'Sign out', style: 'destructive', onPress: () => void signOut() },
-  ]);
+function confirmSignOut(who?: { initials: string; name: string; line?: string }): void {
+  ask(
+    'Sign out?',
+    'This removes every profile on this phone. You can sign in again with your number.',
+    [
+      { text: 'Stay', style: 'cancel' },
+      { text: 'Sign out', style: 'destructive', onPress: () => void signOut() },
+    ],
+    { icon: 'signout', who, testID: 'confirm-signout' },
+  );
 }
 
 export default function Profile() {
@@ -121,7 +127,7 @@ export default function Profile() {
       />
 
       {/* Sign out: last, red, alone — and it still asks first. */}
-      <SignOutRow testID="profile-signout" onPress={confirmSignOut} />
+      <SignOutRow testID="profile-signout" onPress={() => confirmSignOut(profile ? { initials: initials(profile.firstName, profile.lastName), name: `${profile.firstName} ${profile.lastName}`, line: profile.className ?? undefined } : undefined)} />
     </Screen>
   );
 }

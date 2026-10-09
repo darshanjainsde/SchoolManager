@@ -2,7 +2,7 @@ import { Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Touchable } from './Touchable';
 import { Icon, isIconName } from './icons';
-import { useTheme, useTokens } from '@/theme/theme-context';
+import { useTokens } from '@/theme/theme-context';
 import { useFamilyTone } from '@/theme/families';
 import type { MoreTone } from '@/lib/staff-nav';
 
@@ -148,6 +148,29 @@ export function HomeToolGrid({
           </View>
         );
       })}
+    </View>
+  );
+}
+
+/**
+ * THE HOME MENU — one card, one grid (user, 9 Oct 2026: "can you make that
+ * menu together"). Home used to draw two grids, "Needs you today" and "Go to",
+ * split by a rule and a block of figures, in two column counts (3 and 4) —
+ * read as two menus that disagreed. Now the hero's quick actions carry the
+ * asks (with their badges) and this card holds every other door, the badged
+ * ones first. An r24 surface card on the page ground, 20 dp inside.
+ */
+export function HomeMenu({ tools, testID = 'home-menu' }: { tools: HomeTool[]; testID?: string }): React.JSX.Element {
+  const tokens = useTokens();
+  const c = tokens.color;
+  const has = (t: HomeTool) => (t.badge ?? 0) > 0;
+  const ordered = [...tools.filter(has), ...tools.filter((t) => !has(t))];
+  return (
+    <View
+      testID={testID}
+      style={{ backgroundColor: c.surface, borderRadius: 24, borderWidth: 1, borderColor: c.line, paddingTop: 20, paddingBottom: 16, paddingHorizontal: 4 }}
+    >
+      <HomeToolGrid testID={`${testID}-grid`} tools={ordered} />
     </View>
   );
 }

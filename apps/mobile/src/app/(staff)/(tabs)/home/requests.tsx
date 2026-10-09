@@ -19,6 +19,7 @@ import { ChevronDown, SelectField, weekdayDate } from '@/components/Field';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { fmtDate, fmtDateTime } from '@/lib/dates';
+import { ask } from '@/components/ConfirmSheet';
 
 const LEAVE_TYPE_LABEL: Record<LeaveTypeValue, string> = {
   SICK: 'Sick leave',
@@ -235,10 +236,10 @@ export default function Requests() {
 
   function confirmCancel(id: string) {
     if (cancellingRef.current) return;
-    Alert.alert('Cancel this leave?', 'Your classes and attendance for the cancelled dates will be restored.', [
+    ask('Cancel this leave?', 'Your classes and attendance for the cancelled dates will be restored.', [
       { text: 'No', style: 'cancel' },
       { text: 'Yes, cancel leave', style: 'destructive', onPress: () => void doCancel(id) },
-    ]);
+    ], { icon: 'requests' });
   }
 
   // ── Apply for leave ──────────────────────────────────────────────────────

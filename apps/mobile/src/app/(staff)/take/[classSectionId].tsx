@@ -1,7 +1,7 @@
 import { useReload } from '@/lib/query';
 import { formatDate } from '@/lib/portal';
 import { useCallback, useState, useMemo } from 'react';
-import { Alert, Animated, Text, View } from 'react-native';
+import { Animated, Text, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { type AttendanceStatusValue, type SaveAttendanceResponse } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
@@ -15,6 +15,7 @@ import { LoadingGrid } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font, type ColorPalette } from '@/theme/tokens';
 import { DUR, stampStyle, useGesture } from '@/theme/motion';
+import { ask } from '@/components/ConfirmSheet';
 
 interface RosterRow {
   studentId: string;
@@ -299,7 +300,7 @@ export default function TakeAttendance() {
     if (takenBy) {
       const when = date === todayISO() ? 'today' : `on ${date}`;
       const ok = await new Promise<boolean>((resolve) => {
-        Alert.alert(
+        ask(
           `Replace ${name ?? 'this class'}'s register?`,
           `${takenBy} already marked it ${when}. Saving replaces that record for ` +
             `every teacher. The previous version stays in the audit log.`,
@@ -307,7 +308,7 @@ export default function TakeAttendance() {
             { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
             { text: 'Replace', style: 'destructive', onPress: () => resolve(true) },
           ],
-          { onDismiss: () => resolve(false) },
+          { onDismiss: () => resolve(false), icon: 'take' },
         );
       });
       if (!ok) return;

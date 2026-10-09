@@ -46,6 +46,17 @@ describe('DayTimeline', () => {
     expect(screen.getByText('8-A · Science')).toBeTruthy();
   });
 
+  it('a break is quiet like a free period — only classes are dark rows (9 Oct 2026)', () => {
+    render(<DayTimeline entries={[breakEntry, classEntry('p9', 'Maths', false)]} currentIndex={-1} onTakeAttendance={jest.fn()} />);
+    const weight = (t: string) => {
+      const st = screen.getByText(t).props.style;
+      return (Array.isArray(st) ? Object.assign({}, ...st) : st).fontWeight;
+    };
+    expect(weight('Lunch break')).toBe('400');
+    expect(weight('8-A · Maths')).toBe('700');
+    expect(screen.getByText('No class')).toBeTruthy();
+  });
+
   it('renders a FREE entry as a distinct green "Free period" tile, not a class or a break', () => {
     render(<DayTimeline entries={[freeEntry]} currentIndex={-1} onTakeAttendance={jest.fn()} />);
     expect(screen.getByTestId(`timeline-free-${freeEntry.periodId}`)).toBeTruthy();

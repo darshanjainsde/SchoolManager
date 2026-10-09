@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, memo, useMemo } from 'react';
-import { Alert, Animated, Text, TextInput, View, type TextStyle } from 'react-native';
+import { Animated, Text, TextInput, View, type TextStyle } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import type {
   Exam,
@@ -18,6 +18,7 @@ import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 import { DUR, inkWidth, play, stampStyle, useGesture, useReduceMotion } from '@/theme/motion';
 import { fmtDateTime } from '@/lib/dates';
+import { ask } from '@/components/ConfirmSheet';
 
 /**
  * THE INK LINE (`.mprog`) — a rule drawing itself along as the sheet fills.
@@ -361,10 +362,10 @@ export default function ExamResults() {
   // button to press at all.
   const confirmPublish = () => {
     if (!exam) return;
-    Alert.alert(`Publish results for ${exam.title}?`, PUBLISH_WARNING, [
+    ask(`Publish results for ${exam.title}?`, PUBLISH_WARNING, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Yes, publish', style: 'destructive', onPress: () => void doPublish() },
-    ]);
+    ], { icon: 'send' });
   };
 
   return (

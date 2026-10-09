@@ -1,6 +1,6 @@
 import { useReload } from '@/lib/query';
 import { useCallback, useState } from 'react';
-import { Text, View, Alert } from 'react-native';
+import { Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import type { TeacherProfile } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
@@ -10,6 +10,7 @@ import { InfoRow, ProfileGroup, ProfileHead, SignOutRow, useInfoValueStyle } fro
 import { ErrorState, Pill, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
+import { ask } from '@/components/ConfirmSheet';
 
 /** "AR" for Asha Rao — same rule as the family profile / web pages. */
 function initials(firstName: string, lastName: string): string {
@@ -27,11 +28,16 @@ function initials(firstName: string, lastName: string): string {
  * One stray thumb used to clear the session AND every child on the shelf
  * (UI audit 2026-09-22, #13). Ask first, in the words that say what is lost.
  */
-function confirmSignOut(): void {
-  Alert.alert('Sign out?', 'This removes every profile on this phone. You can sign in again with your number.', [
-    { text: 'Stay', style: 'cancel' },
-    { text: 'Sign out', style: 'destructive', onPress: () => void signOut() },
-  ]);
+function confirmSignOut(who?: { initials: string; name: string; line?: string }): void {
+  ask(
+    'Sign out?',
+    'This removes every profile on this phone. You can sign in again with your number.',
+    [
+      { text: 'Stay', style: 'cancel' },
+      { text: 'Sign out', style: 'destructive', onPress: () => void signOut() },
+    ],
+    { icon: 'signout', who, testID: 'confirm-signout' },
+  );
 }
 
 export default function Profile() {
@@ -141,7 +147,7 @@ export default function Profile() {
       />
 
       {/* Sign out: last, red, alone — and it still asks first. */}
-      <SignOutRow testID="profile-signout" onPress={confirmSignOut} />
+      <SignOutRow testID="profile-signout" onPress={() => confirmSignOut(profile ? { initials: initials(profile.firstName, profile.lastName), name: `${profile.firstName} ${profile.lastName}`, line: 'Teacher' } : undefined)} />
     </Screen>
   );
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Animated, Linking, Pressable, Text, TextInput, View } from 'react-native';
+import { Animated, Linking, Pressable, Text, TextInput, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { useFocusEffect } from 'expo-router';
 import type { Assignment, AssignmentAttachment, AssignmentList, MyClassSection, Subject } from '@skoolos/types';
@@ -14,6 +14,7 @@ import { Icon } from '@/components/icons';
 import { useTokens } from '@/theme/theme-context';
 import { DUR, inkWidth, useGesture } from '@/theme/motion';
 import { fmtDate } from '@/lib/dates';
+import { ask } from '@/components/ConfirmSheet';
 
 /** Same caps as the web teacher page and the API (Vercel's ~4.5 MB body). */
 const MAX_ATTACHMENT_BYTES = 4 * 1024 * 1024;
@@ -279,10 +280,10 @@ export default function Assignments() {
 
   function confirmDelete(a: Assignment) {
     if (deletingRef.current) return;
-    Alert.alert('Delete this assignment?', `"${a.title}" will be removed for the class.`, [
+    ask('Delete this assignment?', `"${a.title}" will be removed for the class.`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Yes, delete', style: 'destructive', onPress: () => void doDelete(a.id) },
-    ]);
+    ], { icon: 'trash' });
   }
 
   // The roster size of the class currently on screen — the only honest

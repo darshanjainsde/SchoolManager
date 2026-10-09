@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Alert, Text } from 'react-native';
+import { Text } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import { useReload } from '@/lib/query';
@@ -12,6 +12,7 @@ import { jobFor } from '@/lib/worker-nav';
 import { useSession } from '@/lib/use-session';
 import { hasFeature } from '@/lib/features';
 import { useTokens } from '@/theme/theme-context';
+import { ask } from '@/components/ConfirmSheet';
 
 /**
  * THE NON-TEACHING STAFF PROFILE — office, support, driver, helper,
@@ -43,11 +44,16 @@ interface Me {
   name: string | null;
 }
 
-function confirmSignOut(): void {
-  Alert.alert('Sign out?', 'This removes every profile on this phone. You can sign in again with your number.', [
-    { text: 'Stay', style: 'cancel' },
-    { text: 'Sign out', style: 'destructive', onPress: () => void signOut() },
-  ]);
+function confirmSignOut(who?: { initials: string; name: string; line?: string }): void {
+  ask(
+    'Sign out?',
+    'This removes every profile on this phone. You can sign in again with your number.',
+    [
+      { text: 'Stay', style: 'cancel' },
+      { text: 'Sign out', style: 'destructive', onPress: () => void signOut() },
+    ],
+    { icon: 'signout', who, testID: 'confirm-signout' },
+  );
 }
 
 function initials(name: string): string {
@@ -124,7 +130,7 @@ export default function WorkerProfile() {
       {/* Sign out lives at the bottom of Profile because that is where every
           other app has taught people to look — and because before this it
           did not exist anywhere in this portal. */}
-      <SignOutRow testID="profile-signout" onPress={confirmSignOut} />
+      <SignOutRow testID="profile-signout" onPress={() => confirmSignOut(me ? { initials: initials(name || 'Staff'), name: name || 'Your school record', line: STAFF_ROLE_LABEL[me.staffRole ?? 'OTHER'] ?? 'Staff' } : undefined)} />
     </Screen>
   );
 }
