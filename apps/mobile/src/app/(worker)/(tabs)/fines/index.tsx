@@ -10,6 +10,13 @@ import { Button } from '@/components/Button';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { ask } from '@/components/ConfirmSheet';
+import { fmtDate } from '@/lib/dates';
+
+/** The server writes the fine's detail with ISO dates ("returned 2026-07-06");
+ * people read "6 Jul 2026" everywhere else in the app (audit 9 Oct 2026). */
+export function readableDetail(detail: string): string {
+  return detail.replace(/\b(\d{4}-\d{2}-\d{2})\b/g, (iso) => fmtDate(iso));
+}
 
 /**
  * FINES — what is owed, by whom, and the two things a librarian does about
@@ -79,7 +86,7 @@ export default function Fines() {
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Text numberOfLines={1} style={{ fontWeight: '700', color: tokens.color.ink, fontSize: 14 }}>{e.borrower.name}</Text>
-                      <Text numberOfLines={1} style={{ fontSize: 13, color: tokens.color.sub, marginTop: 1 }}>{borrowerLine(e.borrower)} · {e.title} · {e.reason === 'LOST' ? 'lost' : e.detail}</Text>
+                      <Text numberOfLines={1} style={{ fontSize: 13, color: tokens.color.sub, marginTop: 1 }}>{borrowerLine(e.borrower)} · {e.title} · {e.reason === 'LOST' ? 'lost' : readableDetail(e.detail)}</Text>
                     </View>
                     <Text style={{ fontVariant: ['tabular-nums'], fontWeight: '700', fontSize: 16, color: tokens.color.red }}>{rupees(e.amountRupees)}</Text>
                   </View>
@@ -99,7 +106,7 @@ export default function Fines() {
             <Page testID="fines-growing">
               <PageHeader title="Still growing" icon="library" />
               {groups.growing.map((e, i) => (
-                <Row key={e.id} first={i === 0} testID={`growing-${e.id}`} title={e.borrower.name} sub={`${e.title} · ${e.detail} · settle when it is back`} right={<Pill tone="amber">{rupees(e.amountRupees)}</Pill>} onPress={() => router.push(`/(worker)/(tabs)/counter/member/${e.borrower.kind.toLowerCase()}/${e.borrower.id}`)} />
+                <Row key={e.id} first={i === 0} testID={`growing-${e.id}`} title={e.borrower.name} sub={`${e.title} · ${readableDetail(e.detail)} · settle when it is back`} right={<Pill tone="amber">{rupees(e.amountRupees)}</Pill>} onPress={() => router.push(`/(worker)/(tabs)/counter/member/${e.borrower.kind.toLowerCase()}/${e.borrower.id}`)} />
               ))}
             </Page>
           )}
