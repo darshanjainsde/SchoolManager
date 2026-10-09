@@ -3,16 +3,24 @@ import { Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import type { Exam, ExamList, MyClassSection, Subject } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
-import { shiftISO, todayISO } from '@/lib/attendance';
-import { DEFAULT_SCHEDULE_TIME, isValidMaxMarks, shiftTime, toScheduledAtISO } from '@/lib/exams';
+import { todayISO } from '@/lib/attendance';
+import { DEFAULT_SCHEDULE_TIME, isValidMaxMarks, toScheduledAtISO } from '@/lib/exams';
 import { Card, Empty, Pill, Screen, SectionTitle, Toast } from '@/components/ui';
 import { Button } from '@/components/Button';
-import { Chip, ChipRow } from '@/components/Chip';
-import { Stepper } from '@/components/Stepper';
-import { TextField } from '@/components/Field';
+import { DateField, SelectField, TextField } from '@/components/Field';
+import { addDays, classOptions, onlyOwnSubject, subjectOptions, useMySubjectNames } from '@/lib/subject-options';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { fmtDateTime, fmtWeekdayDay } from '@/lib/dates';
+
+/** Quarter-hours across a school day, labelled the way people say them. */
+const TIME_OPTIONS = Array.from({ length: (17 - 7) * 4 + 1 }, (_, i) => {
+  const h = 7 + Math.floor(i / 4);
+  const m = (i % 4) * 15;
+  const id = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  const h12 = ((h + 11) % 12) + 1;
+  return { id, label: `${h12}:${String(m).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}` };
+});
 
 export default function Tests() {
   const tokens = useTokens();
@@ -29,6 +37,7 @@ export default function Tests() {
   const [examsLoading, setExamsLoading] = useState(false);
 
   const [subjectId, setSubjectId] = useState('');
+  const mySubjects = useMySubjectNames();
   const [title, setTitle] = useState('');
   const [date, setDate] = useState(todayISO());
   const [time, setTime] = useState(DEFAULT_SCHEDULE_TIME);
@@ -116,6 +125,19 @@ export default function Tests() {
     setScheduled(false);
     setScheduleError(null);
   };
+  // One class? It is the class. One subject of their own? Pre-pick it.
+  useEffect(() => {
+    if (!classSectionId && classes && classes.length === 1) selectClass(classes[0].classSectionId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classes]);
+  useEffect(() => {
+    if (!subjectId && subjects) {
+      const only = onlyOwnSubject(subjects, mySubjects);
+      if (only) setSubjectId(only);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subjects, mySubjects]);
+
 
   const maxMarksOk = isValidMaxMarks(maxMarksRaw);
   const canSchedule =
@@ -138,7 +160,7 @@ export default function Tests() {
           maxMarks: Number(maxMarksRaw),
         },
       });
-      setSubjectId('');
+      setSubjectId(onlyOwnSubject(subjects ?? [], mySubjects) ?? '');
       setTitle('');
       setDate(todayISO());
       setTime(DEFAULT_SCHEDULE_TIME);
@@ -219,25 +241,22 @@ export default function Tests() {
 
       {classes && classes.length > 0 && (
         <Card>
-          <Text style={{ ...labelStyle, marginBottom: 8 }}>Class</Text>
-          <ChipRow>
-            {classes.map((c) => (
-              <Chip
-                key={c.classSectionId}
-                testID={`class-${c.classSectionId}`}
-                label={c.name}
-                selected={classSectionId === c.classSectionId}
-                onPress={() => selectClass(c.classSectionId)}
-              />
-            ))}
-          </ChipRow>
+          <SelectField
+            label="Class"
+            testID="test-class"
+            optionTestID={(id) => `class-${id}`}
+            placeholder="Choose a class"
+            value={classSectionId || null}
+            options={classOptions(classes)}
+            onChange={selectClass}
+          />
         </Card>
       )}
 
       {/* Choose-first (empty kind "choose", v2 2026-10-08): until a class is
           picked the form is hidden, and the page said so with 80% blank. */}
       {classes && classes.length > 0 && !classSectionId && (
-        <Empty kind="choose" icon="results" title="Pick a class above">
+        <Empty kind="choose" icon="results" title="Choose a class above">
           The form opens for that class — you can schedule a test for one class at a time.
         </Empty>
       )}
@@ -252,20 +271,15 @@ export default function Tests() {
           </View>
 
           {subjectsError && <Text style={{ color: tokens.color.red, fontSize: 13 }}>{subjectsError}</Text>}
-          <View style={{ gap: 6 }}>
-            <Text style={labelStyle}>Subject</Text>
-            <ChipRow>
-              {(subjects ?? []).map((s) => (
-                <Chip
-                  key={s.id}
-                  testID={`subject-${s.id}`}
-                  label={s.code}
-                  selected={subjectId === s.id}
-                  onPress={() => setSubjectId(s.id)}
-                />
-              ))}
-            </ChipRow>
-          </View>
+          <SelectField
+            label="Subject"
+            testID="test-subject"
+            optionTestID={(id) => `subject-${id}`}
+            placeholder="Choose a subject"
+            value={subjectId || null}
+            options={subjectOptions(subjects ?? [], mySubjects)}
+            onChange={setSubjectId}
+          />
 
           <TextField
             label="Title"
@@ -275,29 +289,47 @@ export default function Tests() {
             placeholder="Unit test 1"
           />
 
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-            <Text style={labelStyle}>Date</Text>
-            <Stepper
-              testID="test-date"
-              value={date}
-              onPrev={() => setDate((d) => shiftISO(d, -1))}
-              onNext={() => setDate((d) => shiftISO(d, 1))}
-              prevLabel="Previous day"
-              nextLabel="Next day"
-            />
+          {/* Date on a calendar with its weekday; time from a list of
+              quarter-hours — no more tapping ‹ › once per day or per 15 min. */}
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <View style={{ flex: 3 }}>
+              <DateField
+                label="Date"
+                testID="test-date"
+                value={date}
+                minDate={todayISO()}
+                onChange={setDate}
+              />
+            </View>
+            <View style={{ flex: 2 }}>
+              <SelectField
+                label="Time"
+                testID="test-time"
+                sheetTitle="Start time"
+                searchable={false}
+                value={time}
+                options={TIME_OPTIONS}
+                onChange={setTime}
+              />
+            </View>
           </View>
-
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-            <Text style={labelStyle}>Time</Text>
-            <Stepper
-              testID="test-time"
-              value={time}
-              onPrev={() => setTime((t) => shiftTime(t, -15))}
-              onNext={() => setTime((t) => shiftTime(t, 15))}
-              prevLabel="Previous"
-              nextLabel="Next"
-              minWidth={72}
-            />
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: -2 }}>
+            {[
+              { label: 'Tomorrow', iso: addDays(todayISO(), 1) },
+              { label: 'In a week', iso: addDays(todayISO(), 7) },
+              { label: 'In two weeks', iso: addDays(todayISO(), 14) },
+            ].map((q) => (
+              <Pressable
+                key={q.label}
+                testID={`test-date-quick-${q.label.replace(/\s+/g, '-').toLowerCase()}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: date === q.iso }}
+                onPress={() => setDate(q.iso)}
+                style={{ height: 36, paddingHorizontal: 14, borderRadius: 999, justifyContent: 'center', backgroundColor: date === q.iso ? tokens.color.indigo : tokens.color.indigo50 }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '600', color: date === q.iso ? tokens.color.onBrand : tokens.color.indigo }}>{q.label}</Text>
+              </Pressable>
+            ))}
           </View>
 
           <View>

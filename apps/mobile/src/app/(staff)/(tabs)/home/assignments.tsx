@@ -4,12 +4,11 @@ import * as DocumentPicker from 'expo-document-picker';
 import { useFocusEffect } from 'expo-router';
 import type { Assignment, AssignmentAttachment, AssignmentList, MyClassSection, Subject } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
-import { shiftISO, todayISO } from '@/lib/attendance';
+import { todayISO } from '@/lib/attendance';
 import { Card, Empty, Screen, SectionTitle, Toast } from '@/components/ui';
 import { Button } from '@/components/Button';
-import { Chip, ChipRow } from '@/components/Chip';
-import { Stepper } from '@/components/Stepper';
-import { Field, fieldInputStyle } from '@/components/Field';
+import { DateField, Field, fieldInputStyle, SelectField } from '@/components/Field';
+import { addDays, classOptions, onlyOwnSubject, subjectOptions, useMySubjectNames } from '@/lib/subject-options';
 import { LoadingRows } from '@/components/Loading';
 import { Icon } from '@/components/icons';
 import { useTokens } from '@/theme/theme-context';
@@ -77,6 +76,7 @@ export default function Assignments() {
   const [listLoading, setListLoading] = useState(false);
 
   const [subjectId, setSubjectId] = useState('');
+  const mySubjects = useMySubjectNames();
   const [title, setTitle] = useState('');
   // The keyboard's Next moves from the one-line title to the details box.
   const instructionsRef = useRef<TextInput>(null);
@@ -209,7 +209,7 @@ export default function Assignments() {
           ...(attachments.length ? { attachments } : {}),
         },
       });
-      setSubjectId('');
+      setSubjectId(onlyOwnSubject(subjects ?? [], mySubjects) ?? '');
       setTitle('');
       setInstructions('');
       setDueDate(todayISO());
@@ -226,7 +226,7 @@ export default function Assignments() {
 
   const subjectLabel = (id: string) => {
     const s = (subjects ?? []).find((x) => x.id === id);
-    return s ? `${s.code} — ${s.name}` : '—';
+    return s ? s.name : '—';
   };
 
   // A TEACHER may only post/view assignments for sections they own —
@@ -235,6 +235,20 @@ export default function Assignments() {
   // assignments/page.tsx). Filtering here means the picker never offers a
   // class the server will refuse.
   const ownedClasses = (classes ?? []).filter((c) => !c.covering);
+
+  // One class? It is the class — no question to answer.
+  useEffect(() => {
+    if (!classSectionId && ownedClasses.length === 1) selectClass(ownedClasses[0].classSectionId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classes]);
+  // One subject of their own? Pre-pick it; they can still change it.
+  useEffect(() => {
+    if (!subjectId && subjects) {
+      const only = onlyOwnSubject(subjects, mySubjects);
+      if (only) setSubjectId(only);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subjects, mySubjects]);
 
   const upcoming = list?.upcoming ?? [];
   const past = list?.past ?? [];
@@ -338,25 +352,24 @@ export default function Assignments() {
 
       {ownedClasses.length > 0 && (
         <Card>
-          <Text style={{ ...labelStyle, marginBottom: 8 }}>Class</Text>
-          <ChipRow>
-            {ownedClasses.map((c) => (
-              <Chip
-                key={c.classSectionId}
-                testID={`class-${c.classSectionId}`}
-                label={c.name}
-                selected={classSectionId === c.classSectionId}
-                onPress={() => selectClass(c.classSectionId)}
-              />
-            ))}
-          </ChipRow>
+          {/* A dropdown, not chips (user, 9 Oct 2026): the class with its roll
+              size, auto-picked when the teacher has only one. */}
+          <SelectField
+            label="Class"
+            testID="assign-class"
+            optionTestID={(id) => `class-${id}`}
+            placeholder="Choose a class"
+            value={classSectionId || null}
+            options={classOptions(ownedClasses)}
+            onChange={selectClass}
+          />
         </Card>
       )}
 
       {/* Choose-first (empty kind "choose", v2 2026-10-08): until a class is
           picked the form is hidden, and the page said so with 80% blank. */}
       {ownedClasses.length > 0 && !classSectionId && (
-        <Empty kind="choose" icon="assignments" title="Pick a class above">
+        <Empty kind="choose" icon="assignments" title="Choose a class above">
           The form opens for that class — you can post homework to one class at a time.
         </Empty>
       )}
@@ -371,20 +384,15 @@ export default function Assignments() {
           </View>
 
           {subjectsError && <Text style={{ color: tokens.color.red, fontSize: 13 }}>{subjectsError}</Text>}
-          <View style={{ gap: 6 }}>
-            <Text style={labelStyle}>Subject</Text>
-            <ChipRow>
-              {(subjects ?? []).map((s) => (
-                <Chip
-                  key={s.id}
-                  testID={`subject-${s.id}`}
-                  label={s.code}
-                  selected={subjectId === s.id}
-                  onPress={() => setSubjectId(s.id)}
-                />
-              ))}
-            </ChipRow>
-          </View>
+          <SelectField
+            label="Subject"
+            testID="assign-subject"
+            optionTestID={(id) => `subject-${id}`}
+            placeholder="Choose a subject"
+            value={subjectId || null}
+            options={subjectOptions(subjects ?? [], mySubjects)}
+            onChange={setSubjectId}
+          />
 
           <Field label="Title">
             <TextInput
@@ -417,17 +425,19 @@ export default function Assignments() {
             />
           </Field>
 
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-            <Text style={labelStyle}>Due date</Text>
-            <Stepper
-              testID="assign-due"
-              value={dueDate}
-              onPrev={() => setDueDate((d) => shiftISO(d, -1))}
-              onNext={() => setDueDate((d) => shiftISO(d, 1))}
-              prevLabel="Previous"
-              nextLabel="Next"
-            />
-          </View>
+          {/* A calendar with the weekday, not a ‹ 2026-10-09 › stepper. */}
+          <DateField
+            label="Due date"
+            testID="assign-due"
+            value={dueDate}
+            minDate={todayISO()}
+            onChange={setDueDate}
+            quick={[
+              { label: 'Tomorrow', iso: addDays(todayISO(), 1) },
+              { label: 'In 3 days', iso: addDays(todayISO(), 3) },
+              { label: 'In a week', iso: addDays(todayISO(), 7) },
+            ]}
+          />
 
           <View style={{ gap: 6 }}>
             <Text style={labelStyle}>Attachments</Text>

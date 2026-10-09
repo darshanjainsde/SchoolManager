@@ -13,9 +13,9 @@ import { api, ApiError } from '@/lib/api';
 import { todayISO } from '@/lib/attendance';
 import { Card, Empty, Pill, Screen, SectionTitle, Toast } from '@/components/ui';
 import { Button } from '@/components/Button';
-import { Chip, ChipRow } from '@/components/Chip';
 import { Field, fieldInputStyle, TextField } from '@/components/Field';
 import { CalendarSheet } from '@/components/CalendarSheet';
+import { ChevronDown, SelectField, weekdayDate } from '@/components/Field';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { fmtDate, fmtDateTime } from '@/lib/dates';
@@ -297,18 +297,24 @@ export default function Requests() {
         <Text style={{ fontSize: 17, fontWeight: '700', color: tokens.color.ink }}>Apply for leave</Text>
 
         <View>
-          <Text style={[labelStyle, { marginBottom: 6 }]}>Type</Text>
-          <ChipRow>
-            {LEAVE_TYPES.map((t) => (
-              <Chip
-                key={t}
-                testID={`apply-type-${t}`}
-                label={LEAVE_TYPE_LABEL[t]}
-                selected={type === t}
-                onPress={() => setType(t)}
-              />
-            ))}
-          </ChipRow>
+          {/* A dropdown, each type with its balance (user, 9 Oct 2026). */}
+          <SelectField
+            label="Type"
+            testID="apply-type"
+            optionTestID={(t) => `apply-type-${t}`}
+            sheetTitle="Type of leave"
+            subInField={false}
+            value={type}
+            options={LEAVE_TYPES.map((t) => {
+              const bal = balances?.balances.find((b) => b.builtin === t);
+              return {
+                id: t,
+                label: LEAVE_TYPE_LABEL[t],
+                sub: bal && bal.remaining !== null ? `${bal.remaining} ${bal.remaining === 1 ? 'day' : 'days'} left` : undefined,
+              };
+            })}
+            onChange={(t) => setType(t as typeof type)}
+          />
           {(() => {
             const bal = balances?.balances.find((b) => b.builtin === type);
             if (!bal || bal.remaining === null) return null;
@@ -352,8 +358,8 @@ export default function Requests() {
                     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', opacity: applySubmitting ? 0.6 : 1 },
                   ]}
                 >
-                  <Text style={{ fontSize: 16, color: tokens.color.ink }}>{formatDateOnly(f.value)}</Text>
-                  <Text style={{ fontSize: 14, color: tokens.color.indigo, fontWeight: '700' }}>▾</Text>
+                  <Text numberOfLines={1} style={{ fontSize: 15, color: tokens.color.ink, flexShrink: 1 }}>{weekdayDate(f.value)}</Text>
+                  <ChevronDown color={tokens.color.sub} />
                 </Pressable>
               </Field>
             </View>

@@ -8,6 +8,7 @@ import {
 import { api, ApiError } from '@/lib/api';
 import { Button } from '@/components/Button';
 import { Chip, ChipRow } from '@/components/Chip';
+import { SelectField } from '@/components/Field';
 import { Field, fieldInputStyle } from '@/components/AuthScaffold';
 import { Card, Empty, ErrorState, Page, Pill, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
@@ -106,14 +107,15 @@ export default function FamilyConcerns() {
             </View>
           </View>
 
-          <View style={{ gap: 6 }}>
-            <Text style={eyebrow}>WHAT IS IT ABOUT</Text>
-            <ChipRow>
-              {CONCERN_CATEGORIES.map((k) => (
-                <Chip key={k} label={CONCERN_CATEGORY_LABEL[k]} selected={form.category === k} onPress={() => setForm({ ...form, category: k })} />
-              ))}
-            </ChipRow>
-          </View>
+          {/* Seven topics: a dropdown, not a wall of chips (9 Oct 2026). */}
+          <SelectField
+            label="What is it about"
+            testID="concern-category"
+            optionTestID={(k) => `concern-category-${k}`}
+            value={form.category}
+            options={CONCERN_CATEGORIES.map((k) => ({ id: k, label: CONCERN_CATEGORY_LABEL[k] }))}
+            onChange={(k) => setForm({ ...form, category: k as typeof form.category })}
+          />
 
           <Field label="In one line">
             <TextInput

@@ -13,6 +13,9 @@ import { shiftISO, todayISO } from '@/lib/attendance';
 import { Card, Empty, ErrorState, Page, RowWash, Screen, SectionTitle, Toast } from '@/components/ui';
 import { Button } from '@/components/Button';
 import { Chip, ChipRow } from '@/components/Chip';
+import { DayControl } from '@/components/DayControl';
+import { SelectField } from '@/components/Field';
+import { classOptions } from '@/lib/subject-options';
 import { fieldInputStyle } from '@/components/Field';
 import { StudentPicker, type PickableStudent } from '@/components/StudentPicker';
 import { useTokens } from '@/theme/theme-context';
@@ -421,41 +424,23 @@ export default function StaffDiary() {
           one — so pressing "previous" twice did nothing the second time, and
           a teacher could no longer walk back past six days at all. A relative
           shift with no window limit is the whole point of this control. */}
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          minHeight: 48,
-          borderRadius: tokens.radius.field,
-        }}
-      >
-        <Button testID="diary-prev" variant="text" size="sm" label="‹ Prev day" onPress={() => setDate((d) => shiftISO(d, -1))} />
-        {!isToday && (
-          <Button testID="diary-today" variant="text" size="sm" label="Jump to today" onPress={() => setDate(today)} />
-        )}
-        <Button
-          testID="diary-next"
-          variant="text"
-          size="sm"
-          label="Next day ›"
-          disabled={isToday}
-          onPress={() => setDate((d) => (d < today ? shiftISO(d, 1) : d))}
-        />
-      </View>
+      <DayControl
+        date={date}
+        today={today}
+        onChange={setDate}
+        ids={{ prev: 'diary-prev', next: 'diary-next', pick: 'diary-pick', today: 'diary-today' }}
+      />
 
+      {/* The class as a dropdown with its roll size (user, 9 Oct 2026). */}
       {classes && classes.length > 1 && (
-        <ChipRow>
-          {classes.map((c) => (
-            <Chip
-              key={c.classSectionId}
-              testID={`diary-class-${c.classSectionId}`}
-              label={c.name}
-              selected={c.classSectionId === classId}
-              onPress={() => setClassId(c.classSectionId)}
-            />
-          ))}
-        </ChipRow>
+        <SelectField
+          label="Class"
+          testID="diary-class"
+          optionTestID={(id) => `diary-class-${id}`}
+          value={classId}
+          options={classOptions(classes)}
+          onChange={setClassId}
+        />
       )}
 
       {error && page !== null && <Toast kind="error" message={error} />}

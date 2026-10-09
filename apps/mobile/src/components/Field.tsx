@@ -1,7 +1,9 @@
-import { useState, type ReactNode } from 'react';
-import { Pressable, Text, TextInput, View, type TextInputProps } from 'react-native';
+import { useRef, useState, type ReactNode } from 'react';
+import { Pressable, ScrollView, Text, TextInput, View, type TextInputProps } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import * as ImagePicker from 'expo-image-picker';
 import { CalendarSheet } from './CalendarSheet';
+import { Sheet } from './Sheet';
 import { Field, fieldInputStyle } from './AuthScaffold';
 import { parseRupees, rupeeInput, rupees } from '@/lib/money';
 import { formatDate } from '@/lib/portal';
@@ -116,6 +118,8 @@ export function DateField({
   onChange,
   testID,
   maxDate,
+  minDate,
+  quick,
 }: {
   label: string;
   /** YYYY-MM-DD */
@@ -124,6 +128,10 @@ export function DateField({
   testID?: string;
   /** Days after this are not pickable — a payment can't be dated tomorrow. */
   maxDate?: string;
+  /** Days before this are not pickable — homework can't be due yesterday. */
+  minDate?: string;
+  /** One-tap shortcuts under the box ("Tomorrow", "In a week"). */
+  quick?: readonly { label: string; iso: string }[];
 }) {
   const tokens = useTokens();
   const [open, setOpen] = useState(false);
@@ -132,22 +140,226 @@ export function DateField({
       <Pressable
         testID={testID}
         accessibilityRole="button"
-        accessibilityLabel={`${label}: ${formatDate(value)}`}
+        accessibilityLabel={`${label}: ${weekdayDate(value)}. Opens a calendar.`}
         onPress={() => setOpen(true)}
-        style={[fieldInputStyle(tokens, { focused: open }), { justifyContent: 'center' }]}
+        style={[fieldInputStyle(tokens, { focused: open }), { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
       >
-        <Text style={{ fontSize: 14.5, color: tokens.color.ink }}>{formatDate(value)}</Text>
+        <Text style={{ fontSize: 16, color: tokens.color.ink }}>{weekdayDate(value)}</Text>
+        <ChevronDown color={tokens.color.sub} />
       </Pressable>
+      {quick && quick.length > 0 ? (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+          {quick.map((q) => {
+            const on = q.iso === value;
+            return (
+              <Pressable
+                key={q.label}
+                testID={testID ? `${testID}-quick-${q.label.replace(/\s+/g, '-').toLowerCase()}` : undefined}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+                onPress={() => onChange(q.iso)}
+                hitSlop={6}
+                style={{ height: 36, paddingHorizontal: 14, borderRadius: 999, justifyContent: 'center', backgroundColor: on ? tokens.color.indigo : tokens.color.indigo50 }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: '600', color: on ? tokens.color.onBrand : tokens.color.indigo }}>{q.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
       <CalendarSheet
         open={open}
         title={label}
         value={value}
+        minDate={minDate}
         onPick={(iso) => {
           if (maxDate && iso > maxDate) return;
+          if (minDate && iso < minDate) return;
           onChange(iso);
         }}
         onClose={() => setOpen(false)}
       />
+    </Field>
+  );
+}
+
+const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MO = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** "Fri, 9 Oct 2026" — the weekday is what a teacher plans by. */
+export function weekdayDate(iso: string): string {
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  if (!y || !m || !d) return iso;
+  const wd = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  return `${WD[wd]}, ${d} ${MO[m - 1]} ${y}`;
+}
+
+export function ChevronDown({ color }: { color: string }) {
+  return (
+    <Svg width={20} height={20} viewBox="0 0 24 24" accessible={false}>
+      <Path d="M6 9l6 6 6-6" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+export interface SelectOption {
+  id: string;
+  label: string;
+  /** A second line ("27 students", "MATH"). */
+  sub?: string;
+  /** Options with the same group are listed under that heading, in first-seen order. */
+  group?: string;
+}
+
+/**
+ * THE DROPDOWN (sckools-ui-standards, 9 Oct 2026). A row of chips is right
+ * for two or three short choices; past that — 16 subject CODES, five leave
+ * types, a teacher's classes — it becomes a wall a person has to decode.
+ * This is a 56 dp field showing the full name, opening a sheet of 56 dp rows
+ * with the chosen one ticked; past eight options the sheet gets a search box.
+ *
+ * Option rows keep caller testIDs (`optionTestID`) so screen tests can still
+ * pick "subject-<id>" once the field is opened.
+ */
+export function SelectField({
+  label,
+  value,
+  options,
+  onChange,
+  placeholder = 'Choose…',
+  testID,
+  optionTestID,
+  sheetTitle,
+  disabled,
+  searchable: searchableProp,
+  subInField = true,
+}: {
+  label: string;
+  value: string | null | undefined;
+  options: readonly SelectOption[];
+  /** Defaults to "more than eight options"; a list of times needs no search. */
+  searchable?: boolean;
+  /** Show the chosen option's second line inside the box (off when the screen says it elsewhere). */
+  subInField?: boolean;
+  onChange: (id: string) => void;
+  placeholder?: string;
+  testID?: string;
+  optionTestID?: (id: string) => string;
+  sheetTitle?: string;
+  disabled?: boolean;
+}) {
+  const tokens = useTokens();
+  const c = tokens.color;
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const chosen = options.find((o) => o.id === value);
+  const searchable = searchableProp ?? options.length > 8;
+  const listRef = useRef<ScrollView>(null);
+  const needle = q.trim().toLowerCase();
+  const shown = needle
+    ? options.filter((o) => o.label.toLowerCase().includes(needle) || (o.sub ?? '').toLowerCase().includes(needle))
+    : options;
+  const groups: { name: string | undefined; items: SelectOption[] }[] = [];
+  for (const o of shown) {
+    const g = groups.find((x) => x.name === o.group);
+    if (g) g.items.push(o);
+    else groups.push({ name: o.group, items: [o] });
+  }
+  return (
+    <Field label={label}>
+      <Pressable
+        testID={testID}
+        accessibilityRole="button"
+        accessibilityLabel={`${label}: ${chosen ? chosen.label : 'not chosen'}. Opens a list.`}
+        disabled={disabled}
+        onPress={() => {
+          setQ('');
+          setOpen(true);
+        }}
+        style={[
+          fieldInputStyle(tokens, { focused: open }),
+          { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, opacity: disabled ? 0.55 : 1 },
+        ]}
+      >
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text numberOfLines={1} style={{ fontSize: 16, color: chosen ? c.ink : c.placeholder }}>
+            {chosen ? chosen.label : placeholder}
+          </Text>
+        </View>
+        {subInField && chosen?.sub ? <Text style={{ fontSize: 13, color: c.sub }}>{chosen.sub}</Text> : null}
+        <ChevronDown color={c.sub} />
+      </Pressable>
+      <Sheet open={open} onClose={() => setOpen(false)} title={sheetTitle ?? label} testID={testID ? `${testID}-sheet` : undefined}>
+        {searchable ? (
+          <TextInput
+            testID={testID ? `${testID}-search` : undefined}
+            value={q}
+            onChangeText={setQ}
+            placeholder={`Search ${label.toLowerCase()}`}
+            placeholderTextColor={c.placeholder}
+            autoCorrect={false}
+            style={[fieldInputStyle(tokens, { focused: false }), { marginBottom: 8 }]}
+          />
+        ) : null}
+        <ScrollView
+          ref={listRef}
+          style={{ maxHeight: 420 }}
+          keyboardShouldPersistTaps="handled"
+          // Open on the chosen option, not the top of a long list (9:00 am,
+          // not 7:00 am). Rows are 56 dp; leave two above it in view.
+          onLayout={() => {
+            const i = shown.findIndex((o) => o.id === value);
+            if (i > 2) listRef.current?.scrollTo({ y: (i - 2) * 56, animated: false });
+          }}
+        >
+          {groups.map((g) => (
+            <View key={g.name ?? '_'}>
+              {g.name ? (
+                <Text style={{ fontSize: 12, fontWeight: '600', letterSpacing: 0.8, textTransform: 'uppercase', color: c.sub, marginTop: 12, marginBottom: 4 }}>
+                  {g.name}
+                </Text>
+              ) : null}
+              {g.items.map((o) => {
+                const on = o.id === value;
+                return (
+                  <Pressable
+                    key={o.id}
+                    testID={optionTestID ? optionTestID(o.id) : testID ? `${testID}-option-${o.id}` : undefined}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: on }}
+                    accessibilityLabel={o.label}
+                    onPress={() => {
+                      onChange(o.id);
+                      setOpen(false);
+                    }}
+                    style={({ pressed }) => ({
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 12,
+                      minHeight: 56,
+                      paddingHorizontal: 12,
+                      borderRadius: 16,
+                      backgroundColor: on ? c.indigo50 : pressed ? c.surfaceMuted : 'transparent',
+                    })}
+                  >
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text numberOfLines={1} style={{ fontSize: 16, fontWeight: on ? '600' : '400', color: on ? c.indigo : c.ink }}>{o.label}</Text>
+                      {o.sub ? <Text style={{ fontSize: 13, color: c.sub, marginTop: 1 }}>{o.sub}</Text> : null}
+                    </View>
+                    {on ? (
+                      <Svg width={20} height={20} viewBox="0 0 24 24" accessible={false}>
+                        <Path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke={c.indigo} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />
+                      </Svg>
+                    ) : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+          ))}
+          {shown.length === 0 ? (
+            <Text style={{ fontSize: 14, color: c.sub, paddingVertical: 16, textAlign: 'center' }}>Nothing matches “{q}”.</Text>
+          ) : null}
+        </ScrollView>
+      </Sheet>
     </Field>
   );
 }

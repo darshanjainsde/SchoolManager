@@ -5,7 +5,7 @@ import { useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import { formatDate, type AttendanceSummary } from '@/lib/portal';
 import { buildAttendanceGrid, currentMonthKey, monthKeyLabel, shiftMonthKey } from '@/lib/attendance-grid';
-import { Button } from '@/components/Button';
+import { DayArrow } from '@/components/DayControl';
 import { Card, ErrorState, Pill, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { DUR, inkWidth, useGesture } from '@/theme/motion';
@@ -163,35 +163,22 @@ function MonthNav({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        minHeight: 48,
-        borderRadius: tokens.radius.field,
-        marginHorizontal: 4,
+        minHeight: 56,
+        padding: 6,
+        borderRadius: 999,
+        backgroundColor: tokens.color.surface,
+        borderWidth: 1,
+        borderColor: tokens.color.line,
       }}
     >
-      <Button
-        testID="attendance-prev-month"
-        accessibilityLabel="Previous month"
-        label="‹ Prev"
-        disabled={atEarliestMonth}
-        onPress={onPrev}
-        variant="text"
-        size="sm"
-      />
+      <DayArrow testID="attendance-prev-month" dir="prev" label="Previous month" disabled={atEarliestMonth} onPress={onPrev} />
       <Text
         testID="attendance-month-label"
         style={{ fontSize: 16, fontWeight: '600', color: tokens.color.ink }}
       >
         {monthKeyLabel(month)}
       </Text>
-      <Button
-        testID="attendance-next-month"
-        accessibilityLabel="Next month"
-        label="Next ›"
-        disabled={atLatestMonth}
-        onPress={onNext}
-        variant="text"
-        size="sm"
-      />
+      <DayArrow testID="attendance-next-month" dir="next" label="Next month" disabled={atLatestMonth} onPress={onNext} />
     </View>
   );
 }

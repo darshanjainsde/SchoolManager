@@ -1,7 +1,6 @@
 import { useReload } from '@/lib/query';
-import { formatDate } from '@/lib/portal';
 import { useCallback, useState } from 'react';
-import { Text, View } from 'react-native';
+import { BackHandler, Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import type { RegisterChangeRow } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
@@ -9,7 +8,8 @@ import { shiftISO, todayISO, type ClassDayStatus } from '@/lib/attendance';
 import { flush, pendingSaves, queueKey, type FlushResult } from '@/lib/offline-queue';
 import { LockedDayCard } from '@/components/LockedDayCard';
 import { Card, ErrorState, Pill, Screen, SectionTitle } from '@/components/ui';
-import { Button } from '@/components/Button';
+import { DayControl } from '@/components/DayControl';
+import { Icon } from '@/components/icons';
 import { Touchable } from '@/components/Touchable';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
@@ -46,6 +46,19 @@ export default function StaffAttendance() {
   const today = todayISO();
   const isPast = date < today;
   const isFuture = date > today;
+
+  // Away from today, Android's back returns to TODAY first (user, 9 Oct 2026:
+  // "user lands on the previous day attendance when they want to go back").
+  useFocusEffect(
+    useCallback(() => {
+      if (date === todayISO()) return undefined;
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        setDate(todayISO());
+        return true;
+      });
+      return () => sub.remove();
+    }, [date]),
+  );
 
   // Refetch every time this tab regains focus (not just on mount) so a class
   // another teacher just marked shows as locked without a manual reload.
@@ -181,22 +194,20 @@ export default function StaffAttendance() {
    * `sync-rejected-`): the behaviour under test — what a tap opens, what a
    * queued save shows — is unchanged; only the shape is new.
    */
-  const renderClassTile = (c: ClassDayStatus, fullWidth = false) => {
+  // THE CLASS CARD (sckools-ui-standards, 9 Oct 2026): full width, so ten
+  // classes are a list and not a wall of half-tiles; the class, its size and
+  // ONE clear action. A taken register shows its count and who took it.
+  const renderClassTile = (c: ClassDayStatus, _fullWidth = false) => {
     const key = queueKey(c.classSectionId, date);
     const isPendingSync = pendingKeys.has(key);
     const rejectedMessage = rejectedByKey[key] ?? null;
+    const absent = Math.max(0, c.total - c.present);
+    const pct = c.total > 0 ? Math.round((c.present / c.total) * 100) : 0;
     return (
-      // LAYOUT LIVES HERE, on a plain View — never on Touchable's style, which
-      // lands on an INNER Animated.View (the flex row then lays out a
-      // content-sized Pressable and 48% resolves against nothing; on-device
-      // this rendered skinny full-height towers). Same wrapper pattern as
-      // HomeToolGrid. Ledger: wrapper-style-prop-lands-on-inner-node.
-      <View key={c.classSectionId} style={{ width: fullWidth ? '100%' : '48.4%' }}>
       <Touchable
+        key={c.classSectionId}
         testID={c.taken ? `retake-${c.classSectionId}` : `take-${c.classSectionId}`}
         onPress={() => goTake(c)}
-        // Opening a taken register writes nothing (the overwrite warning
-        // lives on Save, inside the take screen), so its tap stays light.
         haptic={c.taken ? 'light' : 'medium'}
         accessibilityLabel={
           c.taken
@@ -205,78 +216,79 @@ export default function StaffAttendance() {
         }
         style={{
           borderRadius: tokens.radius.card,
-          padding: 12,
-          gap: 8,
+          padding: 16,
+          gap: 14,
           backgroundColor: tokens.color.surface,
           borderWidth: 1,
           borderColor: tokens.color.line,
-          // Waiting = raised off the page; taken = flat on it.
-          ...(c.taken
-            ? {}
-            : {
-                shadowColor: tokens.color.ink,
-                shadowOpacity: 0.16,
-                shadowRadius: 8,
-                shadowOffset: { width: 0, height: 5 },
-                elevation: 5,
-              }),
         }}
       >
-        {/* `.clsrow .ic` — the 34px serif-initial tile. A class is a *place*
-            in a teacher's day, and a labelled tile is how a paper timetable
-            names one. Taken classes get the pale wash: spent, not urgent. */}
-        <View
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: tokens.radius.chip,
-            backgroundColor: c.taken ? tokens.color.indigo50 : tokens.color.indigo,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Text
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <View
             style={{
-              fontWeight: '700',
-              fontSize: 15,
-              color: c.taken ? tokens.color.indigo : tokens.color.onBrand,
+              width: 48,
+              height: 48,
+              borderRadius: 16,
+              backgroundColor: c.taken ? tokens.color.indigo50 : tokens.color.indigo,
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
-            {c.name.trim().charAt(0).toUpperCase()}
-          </Text>
-        </View>
-        <View>
-          <Text numberOfLines={1} style={{ fontWeight: '600', fontSize: 16, color: tokens.color.ink }}>
-            {c.name}
-          </Text>
-          <Text numberOfLines={1} style={{ fontSize: 13, color: tokens.color.sub, marginTop: 1 }}>
-            {c.taken ? `By ${c.markedBy ?? '—'}` : `${c.total} students`}
-          </Text>
-        </View>
-        <View style={{ flexDirection: 'row' }}>
-          {isPendingSync ? (
-            // Deliberately not the taken (green) or not-taken (amber) pill —
-            // this class is neither: the device believes it's saved, the
-            // server doesn't know yet.
-            <View testID={`pending-sync-${c.classSectionId}`}>
-              <Pill tone="indigo">Saved on device · syncing</Pill>
-            </View>
-          ) : c.taken ? (
+            <Text style={{ fontWeight: '700', fontSize: 15, color: c.taken ? tokens.color.indigo : tokens.color.onBrand }} numberOfLines={1}>
+              {c.name.trim().split(/[\s-]+/)[0].slice(0, 4)}
+            </Text>
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text numberOfLines={1} style={{ fontWeight: '600', fontSize: 17, lineHeight: 22, color: tokens.color.ink }}>
+              {c.name}
+            </Text>
+            <Text numberOfLines={1} style={{ fontSize: 13, lineHeight: 18, color: tokens.color.sub, marginTop: 2 }}>
+              {c.taken ? `Taken by ${c.markedBy ?? '—'}` : `${c.total} students · not taken yet`}
+            </Text>
+          </View>
+          {c.taken && !isPendingSync ? (
             <Pill tone="green">{`✓ ${c.present}/${c.total} present`}</Pill>
-          ) : (
-            <Pill tone="indigo">Take now</Pill>
-          )}
+          ) : null}
         </View>
-        {rejectedMessage && (
-          <Text
-            testID={`sync-rejected-${c.classSectionId}`}
-            style={{ color: tokens.color.red, fontSize: 13, marginTop: 2 }}
+
+        {c.taken ? (
+          <View style={{ gap: 6 }}>
+            <View style={{ height: 6, borderRadius: 99, backgroundColor: tokens.color.red50, overflow: 'hidden' }}>
+              <View style={{ width: `${pct}%`, height: '100%', borderRadius: 99, backgroundColor: tokens.color.green }} />
+            </View>
+            <Text style={{ fontSize: 13, color: tokens.color.sub, fontVariant: ['tabular-nums'] }}>
+              {`${c.present} present · ${absent} absent · tap to open`}
+            </Text>
+          </View>
+        ) : isPendingSync ? null : (
+          // The action, drawn as the card's button; the whole card is the target.
+          <View
+            style={{
+              height: 48,
+              borderRadius: 999,
+              backgroundColor: tokens.color.indigo,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+            }}
           >
+            <Icon name="take" size={20} color={tokens.color.onBrand} fillOpacity={0.3} />
+            <Text style={{ fontSize: 15, fontWeight: '600', color: tokens.color.onBrand }}>Take register</Text>
+          </View>
+        )}
+
+        {isPendingSync ? (
+          <View testID={`pending-sync-${c.classSectionId}`} style={{ flexDirection: 'row' }}>
+            <Pill tone="indigo">Saved on device · syncing</Pill>
+          </View>
+        ) : null}
+        {rejectedMessage && (
+          <Text testID={`sync-rejected-${c.classSectionId}`} style={{ color: tokens.color.red, fontSize: 13 }}>
             {rejectedMessage}
           </Text>
         )}
       </Touchable>
-      </View>
     );
   };
 
@@ -307,23 +319,39 @@ export default function StaffAttendance() {
 
   return (
     <Screen onRefresh={reload}>
-      <SectionTitle title={`Attendance · ${date === today ? 'today' : formatDate(date)}`} />
-      {/* The date control keeps its WORDS. The repaint replaced "‹ Prev day" /
-          "Next day ›" with bare chevrons and turned "Jump to today" into an
-          unlabelled date tile — three affordances that all stopped saying what
-          they do, in a row that also stopped sitting flush to the page's
-          margins. A control a teacher uses to walk back through a term is not
-          the place to spend legibility on shape. */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 48, borderRadius: tokens.radius.field }}>
-        <Button testID="date-prev" variant="text" size="sm" label="‹ Prev day" onPress={() => setDate((d) => shiftISO(d, -1))} />
-        {date !== today && (
-          <Button testID="date-today" variant="text" size="sm" label="Jump to today" onPress={() => setDate(today)} />
-        )}
-        <Button testID="date-next" variant="text" size="sm" label="Next day ›" onPress={() => setDate((d) => shiftISO(d, 1))} />
+      {/* Title row: away from today it carries the same round back button
+          every pushed screen has — back means "back to today" here. */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 48 }}>
+        {date !== today ? (
+          <Pressable
+            testID="date-back-today"
+            accessibilityRole="button"
+            accessibilityLabel="Back to today"
+            onPress={() => setDate(today)}
+            hitSlop={8}
+            style={({ pressed }) => ({
+              width: 44,
+              height: 44,
+              borderRadius: 22,
+              backgroundColor: tokens.color.surface,
+              borderWidth: 1,
+              borderColor: tokens.color.line,
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: pressed ? 0.6 : 1,
+            })}
+          >
+            <Icon name="chevron" size={20} color={tokens.color.ink} />
+          </Pressable>
+        ) : null}
+        <View style={{ flex: 1 }}>
+          <SectionTitle title="Attendance" />
+        </View>
       </View>
+
+      <DayControl date={date} today={today} onChange={setDate} />
       <Text style={{ color: tokens.color.sub, fontSize: 13, lineHeight: 18, marginHorizontal: 4 }}>
-        One record per class per day. Once any teacher takes it, it locks for everyone —
-        retake needs confirmation.
+        One register per class per day. Once any teacher takes it, it locks for everyone.
       </Text>
 
       {isFuture ? (
@@ -400,7 +428,7 @@ export default function StaffAttendance() {
               {rows.some((c) => !c.taken) && (
                 <>
                   <Text style={wallEyebrow(tokens)}>Still to take</Text>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                  <View style={{ gap: 12 }}>
                     {rows.filter((c) => !c.taken).map((c) => renderClassTile(c))}
                   </View>
                 </>
@@ -411,7 +439,7 @@ export default function StaffAttendance() {
                     <View style={{ borderTopWidth: 1, borderTopColor: tokens.color.line, marginHorizontal: 2, marginTop: 4 }} />
                   )}
                   <Text style={wallEyebrow(tokens)}>Taken</Text>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                  <View style={{ gap: 12 }}>
                     {rows.filter((c) => c.taken).map((c) => renderClassTile(c))}
                   </View>
                 </>
@@ -437,3 +465,4 @@ function wallEyebrow(tokens: ReturnType<typeof useTokens>) {
     color: tokens.color.sub,
   };
 }
+
