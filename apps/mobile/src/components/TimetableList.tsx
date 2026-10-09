@@ -100,10 +100,13 @@ export function TimetableList({ rows, currentPeriodId, nowMinutes, lead = 'class
               key={period.id}
               testID={`period-row-break-${period.id}`}
               first={i === 0}
-              state={isPast ? 'done' : 'upcoming'}
+              // Quiet like a free period: only a class is a dark row (same
+              // rule as Home's timeline, 9 Oct 2026).
+              state="free"
               startTime={period.startTime ?? period.label}
               endTime={period.endTime ?? ''}
               title={period.label}
+              subtitle="No class"
               right={<RailStatus tone="muted">Break</RailStatus>}
             />
           );

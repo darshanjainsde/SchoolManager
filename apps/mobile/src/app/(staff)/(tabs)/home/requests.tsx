@@ -93,7 +93,11 @@ function toLeaveItem(a: LeaveApplication): RequestItem {
     kind: 'leave',
     id: a.id,
     title: LEAVE_TYPE_LABEL[a.type] ?? a.type,
-    detail: `${formatDateOnly(a.startDate)} – ${formatDateOnly(a.endDate)}`,
+    // One day reads once ("Fri, 9 Oct 2026"), not "9 Oct 2026 – 9 Oct 2026".
+    detail:
+      a.startDate.slice(0, 10) === a.endDate.slice(0, 10)
+        ? formatDateOnly(a.startDate)
+        : `${formatDateOnly(a.startDate)} – ${formatDateOnly(a.endDate)}`,
     reason: a.reason,
     status: a.status,
     createdAt: a.createdAt,

@@ -128,6 +128,13 @@ it('shows an empty state once both sources have settled with nothing', async () 
   expect(await findByText('No requests yet.')).toBeTruthy();
 });
 
+it('a one-day leave names its day once, not "9 Oct – 9 Oct" (9 Oct 2026)', async () => {
+  mockApi({ leave: [leaveRow({ startDate: '2026-07-20T00:00:00.000Z', endDate: '2026-07-20T00:00:00.000Z' })], register: [] });
+  const { findByText, queryByText } = render(<Requests />);
+  await findByText('Sick leave');
+  expect(queryByText(/ – /)).toBeNull();
+});
+
 it('shows the kind badge for each row', async () => {
   mockApi({ leave: [leaveRow()], register: [registerRow()] });
   const { findByText } = render(<Requests />);
