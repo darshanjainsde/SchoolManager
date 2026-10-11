@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, HttpCode, Post, Query, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { Public } from '../../common/auth/public.decorator';
 import { SchoolJwtGuard } from '../../common/auth/school-jwt.guard';
@@ -47,16 +47,34 @@ export class TvAdminController {
     return this.tv.status(schoolId, host);
   }
 
-  /** Enable, or rotate — one gesture: "give me a fresh URL". */
-  @Get('rotate')
+  /**
+   * Enable, or rotate — one gesture: "give me a fresh URL". POST because it
+   * changes state (settings audit, 11 Oct 2026). The GET twins below stay for
+   * one release so a console tab opened before the deploy still works.
+   */
+  @Post('rotate')
+  @HttpCode(200)
   rotate() {
     const { schoolId, host } = this.ctx();
     return this.tv.rotate(schoolId, host);
   }
 
-  @Get('disable')
+  @Post('disable')
+  @HttpCode(200)
   disable() {
     const { schoolId } = this.ctx();
     return this.tv.disable(schoolId);
+  }
+
+  /** @deprecated GET that changes state — kept for one release, use POST. */
+  @Get('rotate')
+  rotateLegacy() {
+    return this.rotate();
+  }
+
+  /** @deprecated GET that changes state — kept for one release, use POST. */
+  @Get('disable')
+  disableLegacy() {
+    return this.disable();
   }
 }
