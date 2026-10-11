@@ -587,8 +587,6 @@ label.sk-lab { display: block; margin-bottom: 5px; }
 .sk-nav:hover { background: var(--sk-brand-tint); color: var(--sk-ink); }
 .sk-nav[data-active="true"] { background: var(--sk-brand); color: #fff; font-weight: 660; box-shadow: var(--sk-shadow-sm); }
 @media (prefers-color-scheme: dark) { .sk-nav[data-active="true"] { color: #211d45; } }
-html[data-theme='dark'] .sk-nav[data-active="true"] { color: #211d45; }
-html[data-theme='light'] .sk-nav[data-active="true"] { color: #fff; }
 .sk-nav .ic { width: 18px; height: 18px; flex: none; }
 .sk-side-foot { margin-top: auto; }
 /* ONE CONTENT COLUMN, shared with `.sk-main` above.
@@ -740,11 +738,6 @@ a.sk-entity:hover { transform: translateY(-2px); border-color: var(--sk-brand); 
 .sk-btn[aria-pressed='true'] { border-color: var(--sk-brand); background: var(--sk-brand-tint); color: var(--sk-brand-2); }
 .sk-btn[data-variant="primary"] { background: var(--sk-brand); color: #fff; border-color: transparent; }
 @media (prefers-color-scheme: dark) { .sk-btn[data-variant="primary"] { color: #211d45; } }
-/* The label follows the CHOSEN theme, not only the OS one: a person who picks
-   Light on a dark-mode laptop got near-black text on indigo (settings audit,
-   11 Oct 2026). Same pairing as .sk-clsrow .ic below. */
-html[data-theme='dark'] .sk-btn[data-variant="primary"] { color: #211d45; }
-html[data-theme='light'] .sk-btn[data-variant="primary"] { color: #fff; }
 .sk-btn[data-variant="primary"]:hover { filter: brightness(1.06); }
 /* NOT opacity. Fading the brand fill toward the card makes a washed indigo
    that the white label sinks into — and a disabled button is usually disabled
@@ -5097,3 +5090,12 @@ button.sk-hubdoor:hover { transform: translateY(-2px); border-color: var(--sk-br
 }
 .sk-settest { display: flex; gap: 8px; flex-wrap: nowrap; align-items: center; min-width: 0; }
 .sk-settest > .sk-input { flex: 1 1 auto; min-width: 0; width: 100%; }
+
+/* Labels on the brand fill follow the CHOSEN theme, not only the OS one: a
+   person who picked Light on a dark-mode laptop got near-black text on indigo
+   (settings audit, 11 Oct 2026). Kept at the end of the file: sk-theme.test
+   finds the token blocks by the FIRST html[data-theme] selector. */
+html[data-theme='dark'] .sk-btn[data-variant="primary"],
+html[data-theme='dark'] .sk-nav[data-active="true"] { color: #211d45; }
+html[data-theme='light'] .sk-btn[data-variant="primary"],
+html[data-theme='light'] .sk-nav[data-active="true"] { color: #fff; }
