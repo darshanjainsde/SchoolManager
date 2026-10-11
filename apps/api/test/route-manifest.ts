@@ -99,6 +99,8 @@ export const AUTHZ_REVIEWED: string[] = [
   "GET /manage/tv",
   "GET /manage/tv/rotate",
   "GET /manage/tv/disable",
+  "POST /manage/tv/rotate",
+  "POST /manage/tv/disable",
   "GET /manage/press/overview",
   // The Result Room — press-authz OFFICE_ROUTES (admin+staff in, teacher/
   // student/anon refused); the gate's 409 + override is unit-proven.

@@ -3,7 +3,7 @@ import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { renderWithProviders, type ApiStub } from '@/test/render';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
-import { WhatsAppCard } from './whatsapp-card';
+import { WhatsAppSettings as WhatsAppCard } from './whatsapp-settings';
 
 vi.mock('@/lib/use-api', () => ({ useApi: vi.fn() }));
 vi.mock('@/components/use-host', () => ({ useHost: vi.fn() }));
@@ -27,13 +27,16 @@ function stub(payload: Record<string, unknown>) {
 }
 beforeEach(() => vi.mocked(useHost).mockReturnValue('raffles.sckools.com'));
 
-describe('WhatsAppCard', () => {
-  it('shows the switch, the month, receipts with the reason for a failure, and turns on with one tick', async () => {
+describe('WhatsApp settings', () => {
+  it('shows the switch and the month, keeps the log behind a button, and turns on with one tick', async () => {
     const api = stub(BASE);
     renderWithProviders(<WhatsAppCard />);
     expect(await screen.findByTestId('whatsapp-state')).toHaveTextContent('Off');
     expect(screen.getByTestId('whatsapp-month')).toHaveTextContent('6');
-    expect(screen.getByTestId('whatsapp-recent')).toHaveTextContent('Message undeliverable (code 131026)');
+    // The log is never on the page until asked for (settings audit, 11 Oct 2026).
+    expect(screen.queryByTestId('whatsapp-recent')).toBeNull();
+    fireEvent.click(screen.getByTestId('whatsapp-open-log'));
+    expect(await screen.findByTestId('whatsapp-recent')).toHaveTextContent('Message undeliverable (code 131026)');
     expect(screen.getByTestId('whatsapp-recent')).toHaveTextContent('+91 98••• •3210');
     fireEvent.click(screen.getByTestId('whatsapp-toggle'));
     await waitFor(() => expect(api.put).toHaveBeenCalledWith('/manage/whatsapp-settings', { enabled: true }));
@@ -46,7 +49,8 @@ describe('WhatsAppCard', () => {
     expect(await screen.findByTestId('whatsapp-state')).toHaveTextContent('waiting for the platform number');
     expect(screen.getByText(/not connected yet/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Send test' })).toBeDisabled();
-    expect(screen.getByTestId('whatsapp-empty')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('whatsapp-open-log'));
+    expect(await screen.findByTestId('whatsapp-empty')).toBeInTheDocument();
   });
 
   it('sends a test to the number typed', async () => {
@@ -85,3 +89,19 @@ describe('why WhatsApp is idle', () => {
   });
 });
 
+
+describe('plain words, not codes', () => {
+  it('names every kind in the log and the wording, never the raw code', async () => {
+    stub({ ...BASE, recent: [{ ...BASE.recent[0], kind: 'COVER_UNFILLED' }], templates: [{ kind: 'LEAVE_DECIDED', name: 'x', body: 'Your leave was decided.' }] });
+    renderWithProviders(<WhatsAppCard />);
+    fireEvent.click(await screen.findByTestId('whatsapp-open-log'));
+    expect(await screen.findByText('Cover still needed')).toBeInTheDocument();
+    expect(screen.queryByText('COVER_UNFILLED')).toBeNull();
+  });
+
+  it('says SMS is sign-in codes only', async () => {
+    stub(BASE);
+    renderWithProviders(<WhatsAppCard />);
+    expect(await screen.findByTestId('sms-section')).toHaveTextContent('Sign-in codes only');
+  });
+});

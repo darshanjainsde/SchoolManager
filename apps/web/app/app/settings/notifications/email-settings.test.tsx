@@ -3,7 +3,7 @@ import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { renderWithProviders, type ApiStub } from '@/test/render';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
-import { EmailSettingsCard } from './email-card';
+import { EmailSettings as EmailSettingsCard } from './email-settings';
 
 vi.mock('@/lib/use-api', () => ({ useApi: vi.fn() }));
 vi.mock('@/components/use-host', () => ({ useHost: vi.fn() }));
@@ -31,10 +31,15 @@ function stub() {
 }
 beforeEach(() => vi.mocked(useHost).mockReturnValue('raffles.sckools.com'));
 
-describe('the email card: deliveries', () => {
-  it('shows the month, each receipt with the reason for a bounce, and the addresses to fix', async () => {
+describe('email settings: deliveries', () => {
+  it('keeps the log behind a button; it shows the month, each receipt with the reason for a bounce, and the addresses to fix', async () => {
     stub();
     renderWithProviders(<EmailSettingsCard />);
+    // The section names the problem without opening anything…
+    expect(await screen.findByTestId('email-month-line')).toHaveTextContent('1 address bounces');
+    expect(screen.queryByTestId('email-recent')).toBeNull();
+    // …and the receipts open only when asked for.
+    fireEvent.click(screen.getByTestId('email-open-log'));
     const box = await screen.findByTestId('email-deliveries');
     expect(box).toHaveTextContent('8'); // 2 + 5 + 1 this month
     expect(box).toHaveTextContent('63% of sent');
@@ -45,8 +50,30 @@ describe('the email card: deliveries', () => {
   it('"Fixed — send again" clears the address', async () => {
     const api = stub();
     renderWithProviders(<EmailSettingsCard />);
+    fireEvent.click(await screen.findByTestId('email-open-log'));
     await screen.findByTestId('email-suppressed');
     fireEvent.click(screen.getByRole('button', { name: 'Fixed — send again' }));
     await waitFor(() => expect(api.post).toHaveBeenCalledWith('/manage/email-settings/unsuppress', { to: 'old@gmial.com' }));
+  });
+});
+
+describe('email settings: letterhead and own mailbox', () => {
+  it('saves the letterhead with the fields typed', async () => {
+    const api = stub();
+    api.put.mockResolvedValue(BASE);
+    renderWithProviders(<EmailSettingsCard />);
+    fireEvent.change(await screen.findByLabelText('Replies go to'), { target: { value: 'office@raffles.in' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save letterhead' }));
+    await waitFor(() => expect(api.put).toHaveBeenCalledWith('/manage/email-settings', expect.objectContaining({ replyTo: 'office@raffles.in', template: 'CLASSIC' })));
+  });
+
+  it('opens the mailbox set-up in a panel, not on the page', async () => {
+    stub();
+    renderWithProviders(<EmailSettingsCard />);
+    expect(await screen.findByTestId('email-sender')).toHaveTextContent('Not set up');
+    expect(screen.queryByLabelText('Mail server')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Set up' }));
+    expect(await screen.findByLabelText('Mail server')).toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 });
