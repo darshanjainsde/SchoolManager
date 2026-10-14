@@ -59,7 +59,7 @@ console.log(`${ALL.length} templates to place on ${waba}${dry ? '  (dry run)' : 
 let made = 0, skipped = 0, failed = 0;
 
 for (const t of ALL) {
-  const have = existing.get(`${t.name}:en`);
+  const have = existing.get(`${t.name}:${t.language}`);
   if (have && have !== 'REJECTED') { console.log(`  · ${t.name.padEnd(28)} already ${have}`); skipped++; continue; }
 
   // An AUTHENTICATION template's body is fixed by Meta — you choose the
@@ -81,7 +81,7 @@ for (const t of ALL) {
           : []),
       ];
 
-  const payload = { name: t.name, language: 'en', category: t.category, components };
+  const payload = { name: t.name, language: t.language, category: t.category, components };
   if (dry) {
     console.log(`  + ${t.name.padEnd(28)} ${t.category}  ${t.samples.length} sample(s)  ${t.buttons.length} button(s)`);
     made++;

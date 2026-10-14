@@ -66,10 +66,20 @@ export const NOTICE_TEMPLATES: Record<NoticeTopic['kind'], string> = {
   FEE: `${TEMPLATE_PREFIX}fee_due`,
 };
 
-/** AUTHENTICATION category: Meta fixes the body; only the code is a parameter, and the copy-code button repeats it. */
-export const VERIFY_CODE = `${TEMPLATE_PREFIX}verify_code`;
+/**
+ * AUTHENTICATION category: Meta fixes the body; only the code is a parameter, and the copy-code button repeats it.
+ *
+ * The one template NOT named `sckools_*` and NOT in `en`. The category was
+ * blocked on this account until 2026-10-14; when it opened, the template was
+ * made in WhatsApp Manager as `sckoolsverify` in English (US). A name and its
+ * language are the template's identity at Meta — send either wrong and Meta
+ * answers 132001 "does not exist", and the code falls back to asking the
+ * person to say "Hi" first. So both are spelled exactly as Meta holds them.
+ */
+export const VERIFY_CODE = 'sckoolsverify';
+export const VERIFY_CODE_LANGUAGE = 'en_US';
 export function verifyCodeTemplate(code: string): WhatsAppTemplate {
-  return { name: VERIFY_CODE, language: TEMPLATE_LANGUAGE, params: [code], buttons: [{ type: 'copy_code', index: 0, text: code }] };
+  return { name: VERIFY_CODE, language: VERIFY_CODE_LANGUAGE, params: [code], buttons: [{ type: 'copy_code', index: 0, text: code }] };
 }
 
 /** When the 24-hour window has closed and a list cannot be sent: point at the console instead. */
@@ -334,9 +344,10 @@ export const SUBMISSIONS: Record<NotificationKind, { body: string; samples: stri
 };
 
 /** Not notification kinds, but templates all the same — submitted with the others. */
-export const EXTRA_SUBMISSIONS: Record<string, { category: 'AUTHENTICATION' | 'UTILITY'; body: string; samples: string[]; buttons?: string[] }> = {
+export const EXTRA_SUBMISSIONS: Record<string, { category: 'AUTHENTICATION' | 'UTILITY'; body: string; samples: string[]; buttons?: string[]; language?: string }> = {
   [VERIFY_CODE]: {
     category: 'AUTHENTICATION',
+    language: VERIFY_CODE_LANGUAGE,
     body: '{{1}} is your Sckools verification code. For your security, do not share this code.',
     samples: ['482911'],
     buttons: ['Copy code'],
@@ -382,6 +393,8 @@ export interface TemplateSubmission {
   body: string;
   samples: string[];
   buttons: string[];
+  /** Meta's language code; `en` unless the template was made in another. */
+  language: string;
 }
 
 /**
@@ -402,10 +415,10 @@ export function templateSubmissions(): TemplateSubmission[] {
   };
   for (const kind of Object.keys(SUBMISSIONS) as NotificationKind[]) {
     const s = SUBMISSIONS[kind];
-    put({ name: TEMPLATE_NAMES[kind], category: 'UTILITY', body: s.body, samples: s.samples, buttons: s.buttons ?? [] });
+    put({ name: TEMPLATE_NAMES[kind], category: 'UTILITY', body: s.body, samples: s.samples, buttons: s.buttons ?? [], language: TEMPLATE_LANGUAGE });
   }
   for (const [name, s] of Object.entries(EXTRA_SUBMISSIONS)) {
-    put({ name, category: s.category, body: s.body, samples: s.samples, buttons: s.buttons ?? [] });
+    put({ name, category: s.category, body: s.body, samples: s.samples, buttons: s.buttons ?? [], language: s.language ?? TEMPLATE_LANGUAGE });
   }
   return [...out.values()];
 }

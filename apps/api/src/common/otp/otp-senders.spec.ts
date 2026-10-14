@@ -30,7 +30,7 @@ describe('WhatsAppOtpSender', () => {
   it('sends the template when it is approved, and never falls back', async () => {
     const { channel, labels } = channelWith([{ ok: true, code: null }]);
     await expect(new WhatsAppOtpSender(channel).send('+919876543210', '482911', ctx)).resolves.toEqual({ ok: true, code: null });
-    expect(labels).toEqual(['sckools_verify_code']);
+    expect(labels).toEqual(['sckoolsverify']);
   });
 
   it('falls back to free text when the template is not approved (132001)', async () => {
@@ -39,7 +39,7 @@ describe('WhatsAppOtpSender', () => {
       { ok: true, code: null },
     ]);
     await expect(new WhatsAppOtpSender(channel).send('+919876543210', '482911', ctx)).resolves.toEqual({ ok: true, code: null });
-    expect(labels).toEqual(['sckools_verify_code', 'session_text']);
+    expect(labels).toEqual(['sckoolsverify', 'session_text']);
   });
 
   it('asks for the window when free text is refused outside it (131047)', async () => {
@@ -58,7 +58,7 @@ describe('WhatsAppOtpSender', () => {
     // Not on WhatsApp at all: no template, no text, no instruction that helps.
     const { channel, labels } = channelWith([{ ok: false, code: 131026 }]);
     await expect(new WhatsAppOtpSender(channel).send('+919876543210', '482911', ctx)).resolves.toMatchObject({ ok: false, reason: 'not on WhatsApp' });
-    expect(labels).toEqual(['sckools_verify_code']);
+    expect(labels).toEqual(['sckoolsverify']);
   });
 
   it('carries the six digits into the text it sends', async () => {
@@ -66,7 +66,7 @@ describe('WhatsAppOtpSender', () => {
     const channel = {
       configured: true,
       deliverWith: jest.fn(async (_s: string, _p: string, _k: string, label: string, fn: (c: unknown, p: unknown, f: unknown) => Promise<unknown>) => {
-        if (label === 'sckools_verify_code') return { ok: false, code: 132001 };
+        if (label === 'sckoolsverify') return { ok: false, code: 132001 };
         await fn({ phoneNumberId: 'x', token: 't', graphVersion: 'v21.0' }, null, (async (_u: string, init: { body: string }) => {
           sent.push(JSON.parse(init.body).text.body);
           return { ok: true, json: async () => ({ messages: [{ id: 'wamid.1' }] }) };

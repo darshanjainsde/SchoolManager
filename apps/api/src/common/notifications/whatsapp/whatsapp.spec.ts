@@ -123,8 +123,8 @@ describe('templateFor ↔ SUBMISSIONS', () => {
   });
 
   it('the verification code goes as an AUTHENTICATION template with a copy-code button; the fallback names the school and the count', () => {
-    expect(verifyCodeTemplate('482911')).toEqual({ name: 'sckools_verify_code', language: 'en', params: ['482911'], buttons: [{ type: 'copy_code', index: 0, text: '482911' }] });
-    expect(EXTRA_SUBMISSIONS.sckools_verify_code.category).toBe('AUTHENTICATION');
+    expect(verifyCodeTemplate('482911')).toEqual({ name: 'sckoolsverify', language: 'en_US', params: ['482911'], buttons: [{ type: 'copy_code', index: 0, text: '482911' }] });
+    expect(EXTRA_SUBMISSIONS.sckoolsverify.category).toBe('AUTHENTICATION');
     expect(coverPendingTemplate('Raffles', 3).params).toEqual(['Raffles', '3']);
     for (const [name, sub] of Object.entries(EXTRA_SUBMISSIONS)) expect(sub.samples).toHaveLength(placeholderCount(sub.body));
   });
