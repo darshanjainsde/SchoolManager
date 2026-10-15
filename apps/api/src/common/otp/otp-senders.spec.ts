@@ -27,23 +27,40 @@ function channelWith(results: { ok: boolean; code: number | null }[]) {
 }
 
 describe('WhatsAppOtpSender', () => {
-  it('sends the template when it is approved, and never falls back', async () => {
+  it('proving a number sends the neutral verification template when it is approved, and nothing else', async () => {
     const { channel, labels } = channelWith([{ ok: true, code: null }]);
     await expect(new WhatsAppOtpSender(channel).send('+919876543210', '482911', ctx)).resolves.toEqual({ ok: true, code: null });
     expect(labels).toEqual(['sckools_verify_code']);
   });
 
-  it('falls back to free text when the template is not approved (132001)', async () => {
+  it('signing in sends the login template only', async () => {
+    const { channel, labels } = channelWith([{ ok: true, code: null }]);
+    await new WhatsAppOtpSender(channel).send('+919876543210', '482911', { ...ctx, purpose: 'LOGIN' });
+    expect(labels).toEqual(['sckoolsverify']);
+  });
+
+  it('while the neutral template is in review (132001), the login template carries the code — no "Hi" needed', async () => {
     const { channel, labels } = channelWith([
       { ok: false, code: 132001 },
       { ok: true, code: null },
     ]);
+    await expect(new WhatsAppOtpSender(channel).send('+919876543210', '482911', { ...ctx, purpose: 'RESET' })).resolves.toEqual({ ok: true, code: null });
+    expect(labels).toEqual(['sckools_verify_code', 'sckoolsverify']);
+  });
+
+  it('falls back to free text only when NO code template exists (132001 on both)', async () => {
+    const { channel, labels } = channelWith([
+      { ok: false, code: 132001 },
+      { ok: false, code: 132001 },
+      { ok: true, code: null },
+    ]);
     await expect(new WhatsAppOtpSender(channel).send('+919876543210', '482911', ctx)).resolves.toEqual({ ok: true, code: null });
-    expect(labels).toEqual(['sckools_verify_code', 'session_text']);
+    expect(labels).toEqual(['sckools_verify_code', 'sckoolsverify', 'session_text']);
   });
 
   it('asks for the window when free text is refused outside it (131047)', async () => {
     const { channel } = channelWith([
+      { ok: false, code: 132001 },
       { ok: false, code: 132001 },
       { ok: false, code: 131047 },
     ]);
@@ -58,6 +75,7 @@ describe('WhatsAppOtpSender', () => {
     // Not on WhatsApp at all: no template, no text, no instruction that helps.
     const { channel, labels } = channelWith([{ ok: false, code: 131026 }]);
     await expect(new WhatsAppOtpSender(channel).send('+919876543210', '482911', ctx)).resolves.toMatchObject({ ok: false, reason: 'not on WhatsApp' });
+    // …and does not try the second template either: it would be refused the same way.
     expect(labels).toEqual(['sckools_verify_code']);
   });
 
@@ -66,7 +84,7 @@ describe('WhatsAppOtpSender', () => {
     const channel = {
       configured: true,
       deliverWith: jest.fn(async (_s: string, _p: string, _k: string, label: string, fn: (c: unknown, p: unknown, f: unknown) => Promise<unknown>) => {
-        if (label === 'sckools_verify_code') return { ok: false, code: 132001 };
+        if (label !== 'session_text') return { ok: false, code: 132001 };
         await fn({ phoneNumberId: 'x', token: 't', graphVersion: 'v21.0' }, null, (async (_u: string, init: { body: string }) => {
           sent.push(JSON.parse(init.body).text.body);
           return { ok: true, json: async () => ({ messages: [{ id: 'wamid.1' }] }) };

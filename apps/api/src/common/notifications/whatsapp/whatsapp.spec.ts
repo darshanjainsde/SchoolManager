@@ -1,7 +1,7 @@
 import { chooseTemplate } from './template-approval';
 import { toE164, forGraph } from './phone';
 import { whatsAppConfig, whatsAppConfigProblem } from './graph.client';
-import { COVER_ASSIGNED_V1, COVER_ASSIGNED_V2, EXTRA_SUBMISSIONS, GATED_TEMPLATES, HELLO_WORLD, SUBMISSIONS, TEMPLATE_NAMES, coverPendingTemplate, param, placeholderCount, templateFor, templateSubmissions, testNoticeTemplate, verifyCodeTemplate } from './templates';
+import { COVER_ASSIGNED_V1, COVER_ASSIGNED_V2, EXTRA_SUBMISSIONS, GATED_TEMPLATES, HELLO_WORLD, SUBMISSIONS, TEMPLATE_NAMES, coverPendingTemplate, param, placeholderCount, templateFor, templateSubmissions, testNoticeTemplate, verifyCodeTemplate, loginCodeTemplate, codeTemplates } from './templates';
 import type { NotificationKind, NotificationMessage } from '../notification.types';
 
 describe('toE164', () => {
@@ -124,7 +124,12 @@ describe('templateFor ↔ SUBMISSIONS', () => {
 
   it('the verification code goes as an AUTHENTICATION template with a copy-code button; the fallback names the school and the count', () => {
     expect(verifyCodeTemplate('482911')).toEqual({ name: 'sckools_verify_code', language: 'en', params: ['482911'], buttons: [{ type: 'copy_code', index: 0, text: '482911' }] });
+    // The login template is spelled exactly as WhatsApp Manager holds it — name AND language.
+    expect(loginCodeTemplate('482911')).toEqual({ name: 'sckoolsverify', language: 'en_US', params: ['482911'], buttons: [{ type: 'copy_code', index: 0, text: '482911' }] });
+    expect(codeTemplates('LOGIN', '1').map((t) => t.name)).toEqual(['sckoolsverify']);
+    expect(codeTemplates('VERIFY_PHONE', '1').map((t) => t.name)).toEqual(['sckools_verify_code', 'sckoolsverify']);
     expect(EXTRA_SUBMISSIONS.sckools_verify_code.category).toBe('AUTHENTICATION');
+    expect(EXTRA_SUBMISSIONS.sckoolsverify.category).toBe('AUTHENTICATION');
     expect(coverPendingTemplate('Raffles', 3).params).toEqual(['Raffles', '3']);
     for (const [name, sub] of Object.entries(EXTRA_SUBMISSIONS)) expect(sub.samples).toHaveLength(placeholderCount(sub.body));
   });

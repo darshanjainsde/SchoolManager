@@ -66,10 +66,38 @@ export const NOTICE_TEMPLATES: Record<NoticeTopic['kind'], string> = {
   FEE: `${TEMPLATE_PREFIX}fee_due`,
 };
 
-/** AUTHENTICATION category: Meta fixes the body; only the code is a parameter, and the copy-code button repeats it. */
+/**
+ * The AUTHENTICATION templates. Meta fixes the body for this category; only
+ * the code is a parameter, and the copy-code button repeats it.
+ *
+ * Two, because the words differ and the words are Meta's, not ours:
+ *  · `sckoolsverify` (en_US) says "Your login code is …" — right for signing
+ *    in, made in WhatsApp Manager the day the category opened (2026-10-14).
+ *  · `sckools_verify_code` (en) says "… is your verification code" — right
+ *    for proving a number on a profile, or resetting a password, where the
+ *    person is not logging in. Submitted 2026-10-15.
+ * A name AND its language are the template's identity at Meta; send either
+ * wrong and Meta answers 132001 "does not exist". So both are spelled
+ * exactly as Meta holds them.
+ */
+export const LOGIN_CODE = 'sckoolsverify';
+export const LOGIN_CODE_LANGUAGE = 'en_US';
 export const VERIFY_CODE = `${TEMPLATE_PREFIX}verify_code`;
+const codeButton = (code: string): TemplateButton[] => [{ type: 'copy_code', index: 0, text: code }];
+export function loginCodeTemplate(code: string): WhatsAppTemplate {
+  return { name: LOGIN_CODE, language: LOGIN_CODE_LANGUAGE, params: [code], buttons: codeButton(code) };
+}
 export function verifyCodeTemplate(code: string): WhatsAppTemplate {
-  return { name: VERIFY_CODE, language: TEMPLATE_LANGUAGE, params: [code], buttons: [{ type: 'copy_code', index: 0, text: code }] };
+  return { name: VERIFY_CODE, language: TEMPLATE_LANGUAGE, params: [code], buttons: codeButton(code) };
+}
+/**
+ * The templates to try for a code, in order. Signing in uses the login words
+ * only. Anything else prefers the neutral words and falls back to the login
+ * template — a code with slightly-off words beats asking the person to say
+ * "Hi" first, while Meta is still reviewing the neutral one.
+ */
+export function codeTemplates(purpose: 'LOGIN' | 'RESET' | 'VERIFY_PHONE', code: string): WhatsAppTemplate[] {
+  return purpose === 'LOGIN' ? [loginCodeTemplate(code)] : [verifyCodeTemplate(code), loginCodeTemplate(code)];
 }
 
 /** When the 24-hour window has closed and a list cannot be sent: point at the console instead. */
@@ -334,10 +362,17 @@ export const SUBMISSIONS: Record<NotificationKind, { body: string; samples: stri
 };
 
 /** Not notification kinds, but templates all the same — submitted with the others. */
-export const EXTRA_SUBMISSIONS: Record<string, { category: 'AUTHENTICATION' | 'UTILITY'; body: string; samples: string[]; buttons?: string[] }> = {
+export const EXTRA_SUBMISSIONS: Record<string, { category: 'AUTHENTICATION' | 'UTILITY'; body: string; samples: string[]; buttons?: string[]; language?: string }> = {
   [VERIFY_CODE]: {
     category: 'AUTHENTICATION',
     body: '{{1}} is your Sckools verification code. For your security, do not share this code.',
+    samples: ['482911'],
+    buttons: ['Copy code'],
+  },
+  [LOGIN_CODE]: {
+    category: 'AUTHENTICATION',
+    language: LOGIN_CODE_LANGUAGE,
+    body: 'Your login code is {{1}}. No further action is needed if you didn’t request this.',
     samples: ['482911'],
     buttons: ['Copy code'],
   },
@@ -382,6 +417,8 @@ export interface TemplateSubmission {
   body: string;
   samples: string[];
   buttons: string[];
+  /** Meta's language code; `en` unless the template was made in another. */
+  language: string;
 }
 
 /**
@@ -402,10 +439,10 @@ export function templateSubmissions(): TemplateSubmission[] {
   };
   for (const kind of Object.keys(SUBMISSIONS) as NotificationKind[]) {
     const s = SUBMISSIONS[kind];
-    put({ name: TEMPLATE_NAMES[kind], category: 'UTILITY', body: s.body, samples: s.samples, buttons: s.buttons ?? [] });
+    put({ name: TEMPLATE_NAMES[kind], category: 'UTILITY', body: s.body, samples: s.samples, buttons: s.buttons ?? [], language: TEMPLATE_LANGUAGE });
   }
   for (const [name, s] of Object.entries(EXTRA_SUBMISSIONS)) {
-    put({ name, category: s.category, body: s.body, samples: s.samples, buttons: s.buttons ?? [] });
+    put({ name, category: s.category, body: s.body, samples: s.samples, buttons: s.buttons ?? [], language: s.language ?? TEMPLATE_LANGUAGE });
   }
   return [...out.values()];
 }
