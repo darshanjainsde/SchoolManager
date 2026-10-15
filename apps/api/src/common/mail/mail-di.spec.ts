@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import { MailModule } from './mail.module';
 import { MailService } from './mail.service';
 import { MailIdentityService } from './mail-identity.service';
+import { MailDomainCheck } from './mail-domain';
 
 /**
  * Bootstrap regression guard.
@@ -29,6 +30,10 @@ describe('MailModule DI', () => {
     // instantiation and only explode on the first email.
     const mail = moduleRef.get(MailService) as unknown as { identity: MailIdentityService };
     expect(mail.identity).toBeInstanceOf(MailIdentityService);
+    // The send-time domain check is @Optional on MailService (so specs built
+    // with `new` skip DNS) — which is exactly why it must be pinned here: if
+    // the module stopped providing it, every dead-domain letter would go out.
+    expect((moduleRef.get(MailService) as unknown as { domains: unknown }).domains).toBeInstanceOf(MailDomainCheck);
 
     await moduleRef.close();
   });

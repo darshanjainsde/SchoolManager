@@ -65,6 +65,8 @@ export class EmailSettingsService {
         accentColor: row?.accentColor ?? null,
         logoAssetId: row?.logoAssetId ?? null,
         footerLines: row?.footerLines ?? [],
+        // No row yet = the default every school starts with: on.
+        enabled: row?.enabled ?? true,
       },
       // What is actually in force, defaults resolved — this is what the admin
       // sees described on screen so the fallback is never a mystery.
@@ -131,7 +133,7 @@ export class EmailSettingsService {
     return { ok: true, email: address };
   }
 
-  /** Letterhead only — never touches the sender. */
+  /** Letterhead and the master switch — never touches the sender. */
   async update(schoolId: string, dto: UpdateEmailSettingsDto) {
     if (dto.logoAssetId) {
       // The crest must be one of THIS school's own assets; an id from another
@@ -148,6 +150,7 @@ export class EmailSettingsService {
       ...(dto.accentColor !== undefined ? { accentColor: dto.accentColor ? safeHex(dto.accentColor) : null } : {}),
       ...(dto.logoAssetId !== undefined ? { logoAssetId: dto.logoAssetId || null } : {}),
       ...(dto.footerLines !== undefined ? { footerLines: dto.footerLines } : {}),
+      ...(dto.enabled !== undefined ? { enabled: dto.enabled } : {}),
     };
     await getPlatformPrisma().emailSettings.upsert({
       where: { schoolId },

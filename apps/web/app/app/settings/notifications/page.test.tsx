@@ -54,6 +54,23 @@ describe('Settings → Notifications', () => {
     expect(screen.queryByTestId('whatsapp-recent')).toBeNull();
   });
 
+  it('the email tile says On for a school that never touched the switch', async () => {
+    renderWithProviders(<NotificationsSettingsPage />);
+    expect(await screen.findByTestId('chan-email-state')).toHaveTextContent('On');
+  });
+
+  it('the email tile says Off when the school switched email off', async () => {
+    const off = { ...EMAIL, settings: { ...EMAIL.settings, enabled: false } };
+    vi.mocked(useApi).mockReturnValue({
+      get: vi.fn((path: string) => Promise.resolve(path === '/manage/email-settings' ? off : WA)),
+      post: vi.fn(), put: vi.fn(), patch: vi.fn(), del: vi.fn(),
+    } as never);
+    renderWithProviders(<NotificationsSettingsPage />);
+    const pill = await screen.findByTestId('chan-email-state');
+    expect(pill).toHaveTextContent('Off');
+    expect(pill).toHaveAttribute('data-tone', 'neutral');
+  });
+
   it('Manage on a tile opens that channel', async () => {
     renderWithProviders(<NotificationsSettingsPage />);
     const tile = await screen.findByTestId('chan-email');
