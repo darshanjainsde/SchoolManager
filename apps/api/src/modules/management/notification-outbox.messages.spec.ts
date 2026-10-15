@@ -2,6 +2,7 @@ import type { NotificationOutboxKind } from '@skoolos/types';
 import { NOTIFICATION_OUTBOX_KINDS } from '@skoolos/types';
 import { OUTBOX_EMAIL, toNotificationMessage } from './notification-outbox.service';
 import { FIXTURES } from './notification-outbox.fixtures';
+import { actionKeys, parseAction } from '../../common/notifications/whatsapp/actions';
 
 describe('toNotificationMessage', () => {
   it.each(NOTIFICATION_OUTBOX_KINDS.map((k) => [k]))('%s renders without "undefined" anywhere', (kind) => {
@@ -37,5 +38,16 @@ describe('toNotificationMessage', () => {
 
   it('every one of the three is emailed by the drain (none has a writer that sends its own letter)', () => {
     for (const kind of ['LEAVE_CANCELLED', 'COVER_CANCELLED', 'COVER_UNFILLED'] as const) expect(OUTBOX_EMAIL[kind]).toBe(true);
+  });
+
+  it('a batch summary signs Got it and Can\'t for THAT leave and THAT teacher at send time, and does not leak the teacher id into the words', () => {
+    const msg = toNotificationMessage('COVER_BATCH', { ...(FIXTURES.COVER_BATCH as object), leaveId: 'leave-1', substituteTeacherId: 'rahul-1' }, 'x');
+    if (msg.kind !== 'COVER_BATCH') throw new Error(`rendered as ${msg.kind}`);
+    const keys = actionKeys();
+    expect(parseAction(msg.payload.ackPayload, keys)).toEqual({ ok: true, action: { kind: 'ackAll', leaveId: 'leave-1', teacherId: 'rahul-1' } });
+    expect(parseAction(msg.payload.cantPayload, keys)).toEqual({ ok: true, action: { kind: 'cantAll', leaveId: 'leave-1', teacherId: 'rahul-1' } });
+    expect(msg.payload).not.toHaveProperty('substituteTeacherId');
+    expect(msg.payload).toMatchObject({ count: 20, originalTeacherName: 'Priya Nair', dates: 'Mon 13 – Thu 16 Oct 2026' });
+    expect(OUTBOX_EMAIL.COVER_BATCH).toBe(true);
   });
 });

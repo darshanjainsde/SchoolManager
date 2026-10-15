@@ -44,7 +44,34 @@ const MESSAGES: { [K in NotificationKind]: NotificationMessage & { kind: K } } =
   LEAVE_CANCELLED: { kind: 'LEAVE_CANCELLED', payload: { schoolName: 'Raffles', leaveId: 'l1', teacherName: 'Priya Nair', dates: 'Mon 22 – Tue 23 Sep 2026', releasedCovers: 3 } },
   COVER_CANCELLED: { kind: 'COVER_CANCELLED', payload: { schoolName: 'Raffles', substitutionId: 's1', when: 'Mon 22 Sep, period 3 (10:15–11:00)', className: '9-A', why: 'LEAVE_CANCELLED' } },
   COVER_UNFILLED: { kind: 'COVER_UNFILLED', payload: { schoolName: 'Raffles', gaps: 4, forDate: '2026-09-22', forWhen: 'tomorrow, Tue 22 Sep 2026', note: null } },
+  COVER_BATCH: { kind: 'COVER_BATCH', payload: { schoolName: 'Raffles', leaveId: 'l1', count: 20, dates: 'Mon 20 – Thu 23 Oct 2026', originalTeacherName: 'Priya Nair', ackPayload: 'ba:l1:t1:sig', cantPayload: 'bn:l1:t1:sig' } },
 };
+
+describe('COVER_BATCH — one summary instead of a card per period', () => {
+  it('says how many, for whom and when, with Got it and Can\'t in that order', () => {
+    const t = templateFor(MESSAGES.COVER_BATCH);
+    expect(t).toEqual({
+      name: 'sckools_cover_batch',
+      language: 'en',
+      params: ['Raffles', '20', 'Priya Nair', 'Mon 20 – Thu 23 Oct 2026'],
+      buttons: [
+        { type: 'quick_reply', index: 0, payload: 'ba:l1:t1:sig' },
+        { type: 'quick_reply', index: 1, payload: 'bn:l1:t1:sig' },
+      ],
+    });
+    expect(SUBMISSIONS.COVER_BATCH.buttons).toEqual(['Got it', "Can't"]);
+  });
+
+  it('waits for Meta with NO fallback: an unapproved summary is skipped, never sent as 20 single cards', async () => {
+    expect(GATED_TEMPLATES.has('sckools_cover_batch')).toBe(true);
+    expect(templateFor(MESSAGES.COVER_BATCH).fallback).toBeUndefined();
+    expect(await chooseTemplate(templateFor(MESSAGES.COVER_BATCH), { isApproved: async () => false } as never)).toBeNull();
+  });
+
+  it('keeps Meta\'s two body rules: never opens or closes on a variable', () => {
+    expect(SUBMISSIONS.COVER_BATCH.body).not.toMatch(/^\{\{|\}\}$/);
+  });
+});
 
 describe('a missing template is a permanent refusal, not a blip', () => {
   it('names Meta 132001 separately so the login screen can send people to the password door', async () => {

@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto';
-import { ACTION_TTL_MS, V1_ACCEPTED_UNTIL, ackPayload, actionIdentity, actionKeys, cantPayload, coverPayload, leavePayload, parseAction } from './actions';
+import { ACTION_TTL_MS, V1_ACCEPTED_UNTIL, ackAllPayload, ackPayload, actionIdentity, actionKeys, cantAllPayload, cantPayload, coverAllPayload, coverPayload, leavePayload, oneByOnePayload, parseAction } from './actions';
 
 const K = { sign: 'k-now', verify: ['k-now'], legacy: 'meta' } as const;
 const LEAVE = '11111111-1111-1111-1111-111111111111';
@@ -94,5 +94,48 @@ describe("the Can't button", () => {
   it('a tampered or malformed Can\'t is foreign', () => {
     const good = cantPayload('sub-1', 't-kavya', keys);
     expect(parseAction(good.replace('t-kavya', 't-other'), keys)).toEqual({ ok: false, why: 'foreign' });
+  });
+});
+
+describe('the batch buttons — give the rest, one by one, and the summary\'s Got it / Can\'t', () => {
+  const K = { sign: 'k1', verify: ['k1'], legacy: null };
+  const SUB = '22222222-2222-2222-2222-222222222222';
+  const LEAVE = '11111111-1111-1111-1111-111111111111';
+  const T = '33333333-3333-3333-3333-333333333333';
+
+  it('each round-trips to exactly the action it was made for', () => {
+    expect(parseAction(coverAllPayload(SUB, T, K), K)).toEqual({ ok: true, action: { kind: 'coverAll', substitutionId: SUB, teacherId: T } });
+    expect(parseAction(oneByOnePayload(SUB, K), K)).toEqual({ ok: true, action: { kind: 'oneByOne', substitutionId: SUB } });
+    expect(parseAction(ackAllPayload(LEAVE, T, K), K)).toEqual({ ok: true, action: { kind: 'ackAll', leaveId: LEAVE, teacherId: T } });
+    expect(parseAction(cantAllPayload(LEAVE, T, K), K)).toEqual({ ok: true, action: { kind: 'cantAll', leaveId: LEAVE, teacherId: T } });
+  });
+
+  it('is no longer than the cover card\'s own Can\'t, which already travels as a template button', () => {
+    const cant = cantPayload(SUB, T, K).length;
+    for (const p of [coverAllPayload(SUB, T, K), oneByOnePayload(SUB, K), ackAllPayload(LEAVE, T, K), cantAllPayload(LEAVE, T, K)]) expect(p.length).toBeLessThanOrEqual(cant);
+  });
+
+  it('a different teacher or leave spliced into a signed body is foreign, never acted on', () => {
+    const real = ackAllPayload(LEAVE, T, K);
+    const forged = real.replace(T, '44444444-4444-4444-4444-444444444444');
+    expect(parseAction(forged, K)).toEqual({ ok: false, why: 'foreign' });
+    expect(parseAction(cantAllPayload(LEAVE, T, { sign: 'someone-else' }), K)).toEqual({ ok: false, why: 'foreign' });
+  });
+
+  it('expires like every other button, and says which action expired', () => {
+    const old = Date.now() - ACTION_TTL_MS - 60_000;
+    expect(parseAction(coverAllPayload(SUB, T, K, old), K)).toEqual({ ok: false, why: 'expired', action: { kind: 'coverAll', substitutionId: SUB, teacherId: T } });
+  });
+
+  it('a malformed body (missing the teacher) is foreign even when signed', () => {
+    const seal = (body: string) => {
+      // Re-sign a hand-made body the same way the module does, to prove the SHAPE check, not the signature, refuses it.
+      const exp = Math.floor((Date.now() + ACTION_TTL_MS) / 60_000).toString(36);
+      const head = `v2:${body}:${exp}`;
+      return `${head}:${createHmac('sha256', 'k1').update(head).digest('hex').slice(0, 12)}`;
+    };
+    expect(parseAction(seal(`ba:${LEAVE}`), K)).toEqual({ ok: false, why: 'foreign' });
+    expect(parseAction(seal(`cb:${SUB}`), K)).toEqual({ ok: false, why: 'foreign' });
+    expect(parseAction(seal(`ob:${SUB}:${T}`), K)).toEqual({ ok: false, why: 'foreign' });
   });
 });

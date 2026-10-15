@@ -5099,3 +5099,43 @@ html[data-theme='dark'] .sk-btn[data-variant="primary"],
 html[data-theme='dark'] .sk-nav[data-active="true"] { color: #211d45; }
 html[data-theme='light'] .sk-btn[data-variant="primary"],
 html[data-theme='light'] .sk-nav[data-active="true"] { color: #fff; }
+
+/* ---- leave desk: cover a leave with one teacher ----
+   The question sits under the row just picked (full width of the list, never
+   at the top of a long group), and the drawer lists every open period of the
+   leave by day. Every control clears 24px on a phone. */
+.sk-rowgroup .sk-coverall { margin-left: auto; }
+.sk-coveroffer { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin: 2px 0 10px; padding: 12px 14px; border-radius: var(--sk-r); background: var(--sk-brand-tint); min-width: 0; }
+.sk-coveroffer-t { display: grid; gap: 2px; min-width: 0; font-size: 13px; color: var(--sk-ink); }
+.sk-coveroffer-t span { font-size: 12px; color: var(--sk-ink-2); }
+.sk-coveroffer-b { display: flex; gap: 8px; flex-wrap: wrap; }
+.sk-cvd { display: grid; gap: 14px; min-width: 0; }
+.sk-cvd-change { justify-self: start; background: none; border: 0; padding: 4px 0; min-height: 24px; color: var(--sk-brand); font: inherit; font-size: 12.5px; cursor: pointer; text-decoration: underline; }
+.sk-cvd-load { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; font-size: 12px; color: var(--sk-ink-3); font-variant-numeric: tabular-nums; }
+.sk-cvd-load b { color: var(--sk-ink); font-weight: 650; }
+.sk-cvd-load [data-busy] b { color: var(--sk-amber-ink); }
+.sk-cvd-day { display: grid; min-width: 0; }
+.sk-cvd-dayh { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 10px; background: var(--sk-bg-2); border-radius: 8px; font-size: 13px; font-weight: 650; color: var(--sk-ink); }
+.sk-cvd-dayh label { display: flex; align-items: center; gap: 8px; min-height: 28px; cursor: pointer; }
+.sk-cvd-dayh .c { font-size: 11.5px; font-weight: 500; color: var(--sk-ink-3); white-space: nowrap; }
+.sk-cvd-warn { margin: 6px 10px 0; font-size: 12px; color: var(--sk-amber-ink); }
+.sk-cvd-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 9px 10px; border-bottom: 1px solid var(--sk-line); min-width: 0; }
+.sk-cvd-row label { display: grid; gap: 2px; min-width: 0; cursor: pointer; }
+.sk-cvd-row:not([data-state="FREE"]) label { cursor: default; }
+.sk-cvd-row .t { font-size: 13px; font-weight: 600; color: var(--sk-ink); overflow-wrap: anywhere; }
+.sk-cvd-row .m { font-weight: 400; color: var(--sk-ink-3); }
+.sk-cvd-row .r { font-size: 12px; color: var(--sk-ink-3); overflow-wrap: anywhere; }
+.sk-cvd-row[data-state="TEACHING"] .r, .sk-cvd-row[data-state="COVERING"] .r, .sk-cvd-row[data-state="ON_LEAVE"] .r { color: var(--sk-bad); }
+.sk-cvd-taken summary { cursor: pointer; font-size: 12.5px; color: var(--sk-ink-2); min-height: 24px; padding: 2px 0; }
+.sk-cvd-taken ul, .sk-cvd-skips { margin: 6px 0 0; padding-left: 18px; font-size: 12px; display: grid; gap: 3px; }
+.sk-cvd-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; width: 100%; min-width: 0; }
+.sk-cvd-choose { display: grid; gap: 6px; min-width: 0; }
+.sk-cvd-pick { display: flex; justify-content: space-between; gap: 10px; align-items: center; width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--sk-line-2); border-radius: 10px; background: var(--sk-card); color: var(--sk-ink); font: inherit; text-align: left; cursor: pointer; box-sizing: border-box; }
+.sk-cvd-pick:hover { border-color: var(--sk-brand); }
+.sk-cvd-pick .n { font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
+.sk-cvd-pick .c { font-size: 12px; color: var(--sk-ink-3); white-space: nowrap; }
+.sk-cvd-result { display: grid; gap: 12px; font-size: 13.5px; color: var(--sk-ink); }
+.sk-cvd-result p { margin: 0; }
+@media (max-width: 640px) {
+  .sk-cvd-row input[type="checkbox"], .sk-cvd-dayh input[type="checkbox"] { width: 24px; height: 24px; margin: 0; }
+}
