@@ -31,6 +31,12 @@ export interface SaveAttendanceRequest {
   /** YYYY-MM-DD, the school's local calendar day. */
   date: string;
   marks: AttendanceMark[];
+  /**
+   * ISO time the register was marked, sent ONLY when the app replays a save
+   * queued offline. The server refuses it (409 REGISTER_CHANGED) if the
+   * register was saved after this — a newer register is never overwritten.
+   */
+  markedOfflineAt?: string;
 }
 
 export interface SaveAttendanceResponse {

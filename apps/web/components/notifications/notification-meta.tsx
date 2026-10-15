@@ -84,11 +84,15 @@ export function routeForNotification(
       case 'FEE_REJECTED':
       case 'FEE_DUE':
         return null;
-      // The teacher's own leave: the decision, and a class to cover, both live on
-      // their leave page. LEAVE_APPLIED is the admin's copy — never a teacher's.
+      // The teacher's own leave decision lives on their leave page. A class to
+      // cover lives on the day it falls on: Today reads /my-day, which carries
+      // every cover — the leave page lists none (parity audit 2026-10-15), and
+      // the app's cover notice opens its own my-day screen the same way.
+      // LEAVE_APPLIED is the admin's copy — never a teacher's.
       case 'LEAVE_DECIDED':
-      case 'COVER_ASSIGNED':
         return '/teacher/leave';
+      case 'COVER_ASSIGNED':
+        return '/teacher';
       case 'LEAVE_APPLIED':
         return null;
       default:

@@ -12,6 +12,7 @@ import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 import { fmtDay, fmtSchoolTime, fmtWeekdayDay } from '@/lib/dates';
 import { leaveTypeLabel } from '@/lib/labels';
+import { CoverOffer, CoverSheet } from '@/components/CoverSheet';
 
 interface LeaveRow {
   id: string;
@@ -36,7 +37,12 @@ interface GapRow {
   substituteTeacherId: string | null;
   substituteTeacherName: string | null;
   acknowledgedAt: string | null;
+  /** The leave that opened this gap — null for one made by hand; absent from an older server. */
+  leaveApplicationId?: string | null;
 }
+
+/** `GET /manage/leave/:id/cover-fit` — who could take how much of a leave. */
+interface CoverFit { open: number; teachers: { id: string; name: string; free: number }[] }
 
 /** What `GET /manage/substitution/:id/candidates` returns — freeTeachersFor, ranked. */
 interface Candidate {
@@ -149,9 +155,13 @@ function Waiting() {
  * Mounted fresh each time it opens (the parent keys it), so it can never show
  * the last gap's teachers, or a teacher a 409 just said is taken.
  */
-function Candidates({ gapId, disabled, onPick, onRetry }: { gapId: string; disabled: boolean; onPick: (teacherId: string) => void; onRetry: () => void }) {
+function Candidates({ gapId, leaveId, disabled, onPick, onRetry }: { gapId: string; leaveId: string | null; disabled: boolean; onPick: (teacherId: string) => void; onRetry: () => void }) {
   const tokens = useTokens();
   const q = useQuery<Candidate[]>(`/manage/substitution/${gapId}/candidates`);
+  // "free for 19 of 26 in this leave": so the desk can pick whoever can take most of it.
+  const fit = useQuery<CoverFit>(leaveId ? `/manage/leave/${leaveId}/cover-fit` : null);
+  const freeFor = new Map((fit.data?.teachers ?? []).map((t) => [t.id, t.free]));
+  const ofLeave = (id: string) => (fit.data && fit.data.open > 1 && freeFor.has(id) ? ` · free for ${freeFor.get(id)} of ${fit.data.open} in this leave` : '');
   const note = (text: string, color: string, testID: string) => (
     <Text testID={testID} style={{ paddingHorizontal: 12, paddingVertical: 8, fontFamily: font.sans, fontSize: 13, color }}>{text}</Text>
   );
@@ -175,7 +185,7 @@ function Candidates({ gapId, disabled, onPick, onRetry }: { gapId: string; disab
           key={c.id}
           first={i === 0}
           title={c.name}
-          sub={c.teachesSubject ? 'Teaches this subject' : c.coversThatDay > 0 ? `${c.coversThatDay} ${c.coversThatDay === 1 ? 'cover' : 'covers'} that day` : 'No other covers that day'}
+          sub={`${c.teachesSubject ? 'Teaches this subject' : c.coversThatDay > 0 ? `${c.coversThatDay} ${c.coversThatDay === 1 ? 'cover' : 'covers'} that day` : 'No other covers that day'}${ofLeave(c.id)}`}
           right={<Text style={{ fontFamily: font.sans, fontSize: 14, fontWeight: '700', color: tokens.color.indigo }}>Pick</Text>}
           onPress={() => { if (!disabled) onPick(c.id); }}
           accessibilityLabel={`Give the period to ${c.name}`}
@@ -203,21 +213,27 @@ function Coverage() {
   const [busy, setBusy] = useState<string | null>(null);
   // Said under the gap it is about — at forty gaps a line at the top is off-screen.
   const [error, setError] = useState<{ gapId: string; text: string } | null>(null);
+  // "Give Rahul the rest?" — under the gap just picked, until answered; once per leave.
+  const [offer, setOffer] = useState<{ leaveId: string; gapId: string; teacherId: string } | null>(null);
+  const [declined, setDeclined] = useState<ReadonlySet<string>>(new Set());
+  const [sheet, setSheet] = useState<{ leaveId: string; teacherId: string } | null>(null);
 
   /** Forget both answers and ask again — the gaps, and who is free. */
   function lookAgain() {
-    invalidate('/manage/leave/coverage');
+    // '/manage/leave' covers the gaps, every cover preview and every "free for N of M".
+    invalidate('/manage/leave');
     invalidate('/manage/substitution');
     setAsked((n) => n + 1);
     q.reload();
   }
 
-  async function act(gapId: string, what: 'assign' | 'clear', substituteTeacherId?: string) {
+  async function act(gapId: string, what: 'assign' | 'clear', substituteTeacherId?: string, leaveId?: string | null) {
     if (busy) return;
     setBusy(gapId); setError(null);
     try {
       await api.request(`/manage/substitution/${gapId}/${what}`, { method: 'POST', body: substituteTeacherId ? { substituteTeacherId } : {} });
       setPicking(null);
+      setOffer(what === 'assign' && substituteTeacherId && leaveId && !declined.has(leaveId) ? { leaveId, gapId, teacherId: substituteTeacherId } : null);
       // One pick changes who is free for every other gap that period.
       lookAgain();
     } catch (e) {
@@ -293,8 +309,17 @@ function Coverage() {
                         key={`${g.id}:${asked}`}
                         gapId={g.id}
                         disabled={busy === g.id}
-                        onPick={(teacherId) => act(g.id, 'assign', teacherId)}
+                        leaveId={g.leaveApplicationId ?? null}
+                        onPick={(teacherId) => act(g.id, 'assign', teacherId, g.leaveApplicationId ?? null)}
                         onRetry={() => { invalidate(`/manage/substitution/${g.id}`); setAsked((n) => n + 1); }}
+                      />
+                    ) : null}
+                    {offer && offer.gapId === g.id ? (
+                      <CoverOffer
+                        leaveId={offer.leaveId}
+                        teacherId={offer.teacherId}
+                        onOpen={() => { setSheet({ leaveId: offer.leaveId, teacherId: offer.teacherId }); setOffer(null); }}
+                        onDismiss={() => { setDeclined((d) => new Set(d).add(offer.leaveId)); setOffer(null); }}
                       />
                     ) : null}
                   </View>
@@ -304,6 +329,16 @@ function Coverage() {
           );
         })
       )}
+      {sheet ? (
+        <CoverSheet
+          key={`${sheet.leaveId}:${sheet.teacherId}`}
+          open
+          leaveId={sheet.leaveId}
+          teacherId={sheet.teacherId}
+          onClose={() => setSheet(null)}
+          onDone={lookAgain}
+        />
+      ) : null}
     </>
   );
 }

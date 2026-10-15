@@ -21,7 +21,8 @@ import { api, ApiError } from './api';
  * SecureStore is the wrong place to tell.
  */
 
-import { clearCache, inflight, invalidate, readCache, store } from './cache-store';
+import { AppState, type AppStateStatus } from 'react-native';
+import { askAgain, clearCache, inflight, invalidate, markAllStale, onAskAgain, readCache, store } from './cache-store';
 
 /**
  * How long a cached answer counts as fresh on a plain focus. Tab-switching
@@ -31,7 +32,29 @@ import { clearCache, inflight, invalidate, readCache, store } from './cache-stor
  */
 export const FRESH_MS = 30_000;
 
-export { clearCache, invalidate, readCache };
+export { askAgain, clearCache, invalidate, markAllStale, readCache };
+
+/**
+ * Back from the background: every query on screen asks again if its answer is
+ * older than FRESH_MS. Installed once, the first time a query mounts, so a
+ * test that never renders a query never sees it.
+ */
+let resumeInstalled = false;
+let lastState: AppStateStatus = AppState.currentState;
+function installResume(): void {
+  if (resumeInstalled) return;
+  resumeInstalled = true;
+  AppState.addEventListener('change', (next) => {
+    const wasAway = lastState !== 'active';
+    lastState = next;
+    if (next === 'active' && wasAway) askAgain();
+  });
+}
+/** Test seam: forget the listener so a test can install its own AppState mock. */
+export function resetResumeForTests(): void {
+  resumeInstalled = false;
+  lastState = 'active';
+}
 
 /** Fetch `path`, sharing one in-flight request between concurrent callers, and remember the answer. */
 export function fetchCached<T>(path: string): Promise<T> {
@@ -119,6 +142,14 @@ export function useQuery<T>(path: string | null): QueryState<T> {
       alive.current = false;
     };
   }, []);
+
+  // The app came back, or a push said something changed: ask again (see cache-store).
+  useEffect(() => {
+    installResume();
+    return onAskAgain(() => {
+      if (alive.current) run('focus');
+    });
+  }, [run]);
 
   // A path that CHANGES after mount — a sheet that opens, a route param that
   // resolves — is a new question. The focus effect covers mount and re-focus;
