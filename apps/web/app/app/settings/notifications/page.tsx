@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { SettingsCard, SettingsSection } from '../section';
-import { EmailSettings, emailMonth, useEmailSettings } from './email-settings';
+import { EmailSettings, emailMonth, emailOn, useEmailSettings } from './email-settings';
 import { WhatsAppSettings, useWhatsAppSettings, whatsAppMonth, whatsAppState } from './whatsapp-settings';
 
 /**
@@ -72,7 +72,7 @@ function Overview({ onOpen }: { onOpen: (p: Part) => void }) {
             <button type="button" className="sk-btn go" data-size="sm" onClick={() => onOpen('whatsapp')}>Manage</button>
           </div>
           <div className="sk-chan" data-testid="chan-email">
-            <div className="hd"><b>Email</b>{email.data ? <span className="sk-pill" data-tone="good">On</span> : null}</div>
+            <div className="hd"><b>Email</b>{email.data ? <span className="sk-pill" data-tone={emailOn(email.data) ? 'good' : 'neutral'} data-testid="chan-email-state">{emailOn(email.data) ? 'On' : 'Off'}</span> : null}</div>
             <span className="v">{email.data ? em.total : dash}</span>
             <span className="h">{email.isError ? 'Could not load' : email.data ? `sent this month${em.bad ? ` · ${em.bad} not delivered` : ''}` : 'Loading…'}</span>
             <button type="button" className="sk-btn go" data-size="sm" onClick={() => onOpen('email')}>Manage</button>
@@ -90,7 +90,7 @@ function Overview({ onOpen }: { onOpen: (p: Part) => void }) {
           <ul className="sk-setrules">
             <li><b>App:</b> every message, for everyone signed in to the Sckools app.</li>
             <li><b>WhatsApp:</b> also sent when WhatsApp is on here and the person has a verified number.</li>
-            <li><b>Email:</b> also sent for messages that have an email version, when an address is on file.</li>
+            <li><b>Email:</b> also sent when Email is on here, for messages that have an email version, when an address is on file.</li>
           </ul>
         </SettingsCard>
       </SettingsSection>

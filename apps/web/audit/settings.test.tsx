@@ -42,6 +42,8 @@ const EMAIL = {
   previews: [{ template: 'BANNER', html: '<p>Preview</p>' }],
   deliveries: { thisMonth: { DELIVERED: 18_412, SENT: 1_204, BOUNCED: 37, FAILED: 4 }, recent: [], suppressed: [{ email: 'saanvi.krishnamurthy.parent@gmial.com', reason: 'BOUNCE', detail: 'mailbox does not exist', createdAt: '2026-10-01T00:00:00Z' }] },
 };
+/** The panel being written; the email-off panel reads the switched-off school. */
+let emailOff = false;
 const WHATSAPP = {
   settings: { enabled: true, phoneNumberId: null },
   platform: { configured: true, senderPhoneNumberId: '1', problem: null },
@@ -59,7 +61,7 @@ beforeEach(() => {
       if (p === '/manage/school/working-days') return { workingDays: [1, 2, 3, 4, 5, 6] };
       if (p === '/manage/school/class-note-visibility') return { classNoteVisibility: 'SUBJECT_TEACHERS' };
       if (p === '/manage/tv') return { enabled: true, url: `https://rajeshwarimemorialschool.sckools.com/tv?key=7f3a9c0e2b51d8e4a6f1c3b9d7e0a2f4` };
-      if (p === '/manage/email-settings') return EMAIL;
+      if (p === '/manage/email-settings') return emailOff ? { ...EMAIL, settings: { ...EMAIL.settings, enabled: false } } : EMAIL;
       if (p === '/manage/whatsapp-settings') return WHATSAPP;
       return [];
     }),
@@ -95,16 +97,19 @@ it('writes the real Settings tabs for a browser to measure', async () => {
     ['Settings · School year', '/app/settings', <SchoolYearPage />],
     ['Settings · Notifications · overview', '/app/settings/notifications', <NotificationsPage />],
     ['Settings · Notifications · email', '/app/settings/notifications', <NotificationsPage />, click('notif-part-email')],
+    ['Settings · Notifications · email switched off', '/app/settings/notifications', <NotificationsPage />, click('notif-part-email')],
     ['Settings · Notifications · WhatsApp & phone', '/app/settings/notifications', <NotificationsPage />, click('notif-part-whatsapp')],
     ['Settings · General', '/app/settings/general', <GeneralPage />],
   ];
   const parts: string[] = [];
   for (const [name, path, node, after] of panels) {
     pathname = path;
+    emailOff = name.endsWith('switched off');
     window.history.replaceState(null, '', path);
     const html = await markup(<><SettingsTabs />{node}</>, after);
     expect(html.length, name).toBeGreaterThan(800);
     expect(html, `${name} uses no stretching card grid`).not.toMatch(/sk-grid2/);
+    if (emailOff) expect(html, `${name} shows the off note`).toMatch(/data-testid="email-off-note"/);
     expect(html, `${name} keeps logs off the page`).not.toMatch(/data-testid="(email|whatsapp)-recent"/);
     parts.push(`<section class="panel" data-panel="${name}"><h2 class="panel-h">${name}</h2><main class="skosx sk-anim min-w-0 flex-1 overflow-auto overflow-x-hidden p-6 sm:p-10" style="background:var(--sk-paper)">${html}</main></section>`);
   }

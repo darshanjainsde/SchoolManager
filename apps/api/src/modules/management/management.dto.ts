@@ -1153,6 +1153,11 @@ export class UpdateEmailSettingsDto {
   @IsString({ each: true })
   @Length(0, 160, { each: true })
   footerLines?: string[];
+
+  /** The master switch: false stops every email this school sends on its own. */
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
 }
 
 export class UpdateEmailSenderDto {

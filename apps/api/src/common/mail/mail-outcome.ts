@@ -4,6 +4,8 @@ import { ResendApiError } from './resend-transport';
 export type MailOutcome =
   | { status: 'SENT'; providerId: string | null }
   | { status: 'SUPPRESSED'; reason: string }
+  /** The school switched its email off: nothing was tried, nothing failed. */
+  | { status: 'SKIPPED'; reason: 'channel-off' }
   | { status: 'RETRY'; error: string }
   | { status: 'FAILED'; error: string };
 

@@ -39,6 +39,9 @@ export interface MailIdentity {
  *  in one burst — without this it would be 300 identical database round-trips. */
 const CACHE_TTL_MS = 60_000;
 
+/** How long one instance trusts its copy of a school's email switch. Same as WhatsApp's. */
+export const EMAIL_SWITCH_TTL_MS = 10_000;
+
 interface CacheEntry {
   value: MailIdentity;
   expires: number;
@@ -98,6 +101,33 @@ export class MailIdentityService {
 
   invalidate(schoolId: string): void {
     this.cache.delete(schoolId);
+    this.switches.delete(schoolId);
+  }
+
+  /** The school's email master switch, per instance, for EMAIL_SWITCH_TTL_MS. */
+  private readonly switches = new Map<string, { on: boolean; expires: number }>();
+
+  /**
+   * Is this school's email switched on? Read on its own short clock, not the
+   * identity's minute: the API is stateless across many instances, and an
+   * office that switches email OFF must see the mail stop on every one of them
+   * within seconds — not after another minute of bounces. A row that does not
+   * exist is ON (the default every school starts with). A failed read is ON
+   * too: email went out before this switch existed, and a database blip must
+   * not silently stop a real school's absence notices.
+   */
+  async emailOn(schoolId: string): Promise<boolean> {
+    const hit = this.switches.get(schoolId);
+    if (hit && hit.expires > Date.now()) return hit.on;
+    let on = true;
+    try {
+      const row = await getPlatformPrisma().emailSettings.findUnique({ where: { schoolId }, select: { enabled: true } });
+      on = row?.enabled ?? true;
+    } catch (e) {
+      this.logger.warn(`Email switch for school ${schoolId} could not be read: ${(e as Error).message}`);
+    }
+    this.switches.set(schoolId, { on, expires: Date.now() + EMAIL_SWITCH_TTL_MS });
+    return on;
   }
 
   async forSchool(schoolId: string | null | undefined): Promise<MailIdentity> {
