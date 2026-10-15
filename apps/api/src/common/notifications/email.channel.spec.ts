@@ -230,6 +230,9 @@ describe('EmailChannel.attempt', () => {
   it('passes the mail service outcome through', async () => {
     expect(await withOutcome({ status: 'RETRY', error: 'SMTP 421' }).attempt('a@x', msg, 's')).toEqual({ status: 'RETRY', error: 'SMTP 421' });
     expect(await withOutcome({ status: 'SENT', providerId: 're_1' }).attempt('a@x', msg, 's')).toEqual({ status: 'SENT', providerId: 're_1' });
+    // The school switched email off: the outbox records why, and never retries.
+    expect(await withOutcome({ status: 'SKIPPED', reason: 'channel-off' }).attempt('a@x', msg, 's')).toEqual({ status: 'SKIPPED', reason: 'channel-off' });
+    expect(await withOutcome({ status: 'SUPPRESSED', reason: 'raffles.test is a test domain' }).attempt('a@x', msg, 's')).toEqual({ status: 'SUPPRESSED', reason: 'raffles.test is a test domain' });
   });
 
   it('send() is still a boolean for notify()', async () => {

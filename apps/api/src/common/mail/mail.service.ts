@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { loadEnv } from '@skoolos/config';
 import { captureError } from '../observability/sentry-lite';
 import { MailIdentityService } from './mail-identity.service';
+import { MailDomainCheck } from './mail-domain';
 import { escapeHtml, renderLetter, type Letter } from './letterhead';
 import { mailFailure, type MailOutcomeSink } from './mail-outcome';
 import type {
@@ -51,12 +52,24 @@ export { escapeHtml };
  * "this mail belongs to no school" (owner/marketing) and gets the platform
  * identity.
  */
+/**
+ * Mail that still goes when a school has switched its email off: the person
+ * reading it is the one who just asked for it (a password reset at the door,
+ * the console's own "send a test"), so it cannot be a bounce burst.
+ */
+export const SENT_EVEN_WHEN_OFF: ReadonlySet<string> = new Set(['PASSWORD_RESET', 'TEST']);
+
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
   private readonly env = loadEnv();
 
-  constructor(private readonly identity: MailIdentityService) {}
+  constructor(
+    private readonly identity: MailIdentityService,
+    // Optional so a spec that builds the service with `new` never touches DNS;
+    // the module always provides it (mail-di.spec pins that).
+    @Optional() private readonly domains?: MailDomainCheck,
+  ) {}
 
   /**
    * Renders a letter on the school's letterhead and sends it.
@@ -72,6 +85,25 @@ export class MailService {
     out?: MailOutcomeSink,
   ): Promise<boolean> {
     const address = to.trim().toLowerCase();
+    // The school's master switch. OFF means OFF for everything the school
+    // sends on its own — notices, invites, results, library and sports mail —
+    // so a test school full of made-up addresses stops bouncing back into the
+    // sender's inbox. Only mail the person asked for themselves still goes.
+    // Not a ledger row: nothing was attempted, and the school chose it.
+    if (schoolId && !SENT_EVEN_WHEN_OFF.has(kind) && !(await this.identity.emailOn(schoolId))) {
+      if (out) out.outcome = { status: 'SKIPPED', reason: 'channel-off' };
+      return false;
+    }
+    // A domain that can never take mail (a .test address, a typo'd domain
+    // with no mail server) is never handed to the sender: it could only
+    // bounce, and from a school's own mailbox that bounce lands in the
+    // office's inbox where we cannot see it to stop the next one.
+    const dead = this.domains ? await this.domains.whyUndeliverable(address) : null;
+    if (dead) {
+      if (out) out.outcome = { status: 'SUPPRESSED', reason: dead };
+      await this.ledger({ schoolId, to: address, kind, provider: 'none', status: 'SUPPRESSED', error: dead });
+      return false;
+    }
     // An address that bounced for good, or complained, is never written to
     // again — sending anyway is what gets a domain blacklisted. The office
     // sees it in the Email card's "addresses to fix" and clears it there.

@@ -33,6 +33,7 @@ describe('MailService.sendLetter reports its outcome to a sink', () => {
     Object.assign(mail, {
       logger: { error: jest.fn(), warn: jest.fn(), log: jest.fn() },
       identity: {
+        emailOn: async () => true,
         forSchool: async () => ({
           brand: platformBrand(),
           from: { name: 'Sckools', address: 'hello@sckools.com' },

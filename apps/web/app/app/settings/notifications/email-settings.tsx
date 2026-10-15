@@ -32,6 +32,8 @@ export interface EmailSettingsResponse {
     accentColor: string | null;
     logoAssetId: string | null;
     footerLines: string[];
+    /** The master switch. Missing (an older API) reads as on. */
+    enabled?: boolean;
   };
   effective: {
     schoolName: string;
@@ -64,6 +66,11 @@ export interface EmailSettingsResponse {
     canConfigure: boolean;
   };
   previews: { template: Template; html: string }[];
+}
+
+/** Is the school's email switched on? Missing reads as on — the default. */
+export function emailOn(d: EmailSettingsResponse | undefined): boolean {
+  return d?.settings.enabled !== false;
 }
 
 /** The month in three numbers, shared by the section line, the overview tile and the log. */
@@ -192,6 +199,15 @@ export function EmailSettings() {
     onError: (e) => toast.error((e as Error).message),
   });
 
+  const toggle = useMutation({
+    mutationFn: (enabled: boolean) => api.put<EmailSettingsResponse>('/manage/email-settings', { enabled }),
+    onSuccess: (d) => {
+      qc.setQueryData(['email-settings'], d);
+      toast.success(emailOn(d) ? 'Email is on. School messages go by email again.' : 'Email is off. Nothing is emailed until you turn it back on.');
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const unsuppress = useMutation({
     mutationFn: (email: string) => api.post('/manage/email-settings/unsuppress', { to: email }),
     onSuccess: () => {
@@ -234,8 +250,36 @@ export function EmailSettings() {
       : d.sender.status === 'FAILING' ? { tone: 'bad', text: 'Not working' }
         : senderSet ? { tone: 'warn', text: 'Not checked yet' } : { tone: 'neutral', text: 'Not set up' };
 
+  const on = emailOn(d);
+
   return (
     <>
+      <SettingsSection
+        title="Email"
+        hint="School messages also go to each person's email address, when one is on file."
+        testId="email-switch"
+        aside={<span className="sk-pill" data-tone={on ? 'good' : 'neutral'} data-testid="email-state">{on ? 'On' : 'Off'}</span>}
+      >
+        <SettingsCard>
+          <label className="sk-setline" style={{ cursor: 'pointer', justifyContent: 'flex-start' }}>
+            <input type="checkbox" checked={on} disabled={toggle.isPending} onChange={(e) => toggle.mutate(e.target.checked)}
+              data-testid="email-toggle" style={{ width: 20, height: 20, accentColor: 'var(--sk-brand)', flex: 'none' }} />
+            <span className="txt"><b>Send school messages by email</b><br />
+              {on
+                ? 'Turn this off for a practice school whose email addresses are made up, so nothing bounces back to you.'
+                : 'Off. No notices, invites, results or reminders are emailed.'}</span>
+          </label>
+          {on ? null : (
+            <Note>
+              <span data-testid="email-off-note">
+                Families and staff still get every message in the Sckools app, and on WhatsApp when it is on.
+                Only a password reset someone asks for, and your own test email, still go by email.
+              </span>
+            </Note>
+          )}
+        </SettingsCard>
+      </SettingsSection>
+
       <SettingsSection
         title="How emails look"
         hint="The letterhead on every email to families and staff."

@@ -77,3 +77,56 @@ describe('email settings: letterhead and own mailbox', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 });
+
+describe('email settings: the master switch', () => {
+  it('a school that never touched it is On, with the hint for practice schools', async () => {
+    stub();
+    renderWithProviders(<EmailSettingsCard />);
+    expect(await screen.findByTestId('email-state')).toHaveTextContent('On');
+    expect(screen.getByTestId('email-toggle')).toBeChecked();
+    expect(screen.getByTestId('email-switch')).toHaveTextContent('practice school');
+    expect(screen.queryByTestId('email-off-note')).toBeNull();
+  });
+
+  it('turning it off sends ONLY the switch (never the letterhead form), and the page shows Off with what still goes', async () => {
+    const api = stub();
+    api.put.mockResolvedValue({ ...BASE, settings: { ...BASE.settings, enabled: false } });
+    renderWithProviders(<EmailSettingsCard />);
+    fireEvent.click(await screen.findByTestId('email-toggle'));
+    await waitFor(() => expect(api.put).toHaveBeenCalledWith('/manage/email-settings', { enabled: false }));
+    expect(await screen.findByTestId('email-state')).toHaveTextContent('Off');
+    expect(screen.getByTestId('email-toggle')).not.toBeChecked();
+    expect(screen.getByTestId('email-off-note')).toHaveTextContent('still get every message in the Sckools app');
+    expect(screen.getByTestId('email-off-note')).toHaveTextContent('password reset');
+  });
+
+  it('turning it back on sends enabled: true', async () => {
+    const api = stub();
+    api.get.mockResolvedValue({ ...BASE, settings: { ...BASE.settings, enabled: false } });
+    api.put.mockResolvedValue({ ...BASE, settings: { ...BASE.settings, enabled: true } });
+    renderWithProviders(<EmailSettingsCard />);
+    expect(await screen.findByTestId('email-state')).toHaveTextContent('Off');
+    fireEvent.click(screen.getByTestId('email-toggle'));
+    await waitFor(() => expect(api.put).toHaveBeenCalledWith('/manage/email-settings', { enabled: true }));
+    expect(await screen.findByTestId('email-state')).toHaveTextContent('On');
+  });
+
+  it('a failed save leaves the switch where it was', async () => {
+    const api = stub();
+    api.put.mockRejectedValue(new Error('Network down'));
+    renderWithProviders(<EmailSettingsCard />);
+    fireEvent.click(await screen.findByTestId('email-toggle'));
+    await waitFor(() => expect(api.put).toHaveBeenCalled());
+    expect(screen.getByTestId('email-state')).toHaveTextContent('On');
+    expect(screen.getByTestId('email-toggle')).toBeChecked();
+  });
+
+  it('saving the letterhead never sends the switch, so it cannot flip it back', async () => {
+    const api = stub();
+    api.put.mockResolvedValue(BASE);
+    renderWithProviders(<EmailSettingsCard />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Save letterhead' }));
+    await waitFor(() => expect(api.put).toHaveBeenCalled());
+    expect(api.put.mock.calls[0][1]).not.toHaveProperty('enabled');
+  });
+});

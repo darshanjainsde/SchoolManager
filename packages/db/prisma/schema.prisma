@@ -546,6 +546,13 @@ model EmailSettings {
   lastError    String?
   lastErrorAt  DateTime?
 
+  // ── The master switch ──
+  /// false = this school sends no email at all (a test school whose made-up
+  /// addresses would only bounce). Only mail the person asked for themselves
+  /// (a password reset, the console's own test) still goes. The app and
+  /// WhatsApp are untouched.
+  enabled      Boolean  @default(true)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   school    School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
