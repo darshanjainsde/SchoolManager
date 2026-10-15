@@ -38,7 +38,9 @@ describe('offline-queue', () => {
     const request = jest.fn().mockResolvedValue({ saved: 1, absentees: 0 });
     const result = await flush({ request }, { storage });
 
-    expect(request).toHaveBeenCalledWith('/manage/attendance', { method: 'PUT', body: p });
+    // The exact payload, plus WHEN it was marked — so the server can refuse
+    // it if the register was saved after that (see the next test).
+    expect(request).toHaveBeenCalledWith('/manage/attendance', { method: 'PUT', body: { ...p, markedOfflineAt: new Date(1000).toISOString() } });
     expect(result.synced).toHaveLength(1);
     expect(result.synced[0].payload).toEqual(p);
     expect(result.rejected).toHaveLength(0);
@@ -76,8 +78,8 @@ describe('offline-queue', () => {
     const result = await flush({ request }, { storage });
 
     expect(result.synced).toHaveLength(2);
-    expect(request).toHaveBeenCalledWith('/manage/attendance', { method: 'PUT', body: a });
-    expect(request).toHaveBeenCalledWith('/manage/attendance', { method: 'PUT', body: b });
+    expect(request).toHaveBeenCalledWith('/manage/attendance', { method: 'PUT', body: { ...a, markedOfflineAt: new Date(1000).toISOString() } });
+    expect(request).toHaveBeenCalledWith('/manage/attendance', { method: 'PUT', body: { ...b, markedOfflineAt: new Date(1000).toISOString() } });
     expect(await pendingSaves({ storage })).toEqual([]);
   });
 
@@ -186,5 +188,16 @@ describe('offline-queue', () => {
 
     expect(pending).toHaveLength(1);
     expect(pending[0].payload).toEqual(p);
+  });
+
+  it('a register the office changed after it was marked offline is refused (409) and leaves the queue with the server sentence — never retried', async () => {
+    const storage = inMemoryStorage();
+    await enqueueSave(payload(), { storage, now: () => Date.parse('2026-07-30T03:30:00Z') });
+    const sentence = 'This register was saved again at 10:02 am, after you marked it without signal. Your offline marks were not applied — open the register to see it as it stands.';
+    const request = jest.fn().mockRejectedValue(new ApiError(409, sentence));
+    const result = await flush({ request }, { storage });
+    expect(request.mock.calls[0][1].body.markedOfflineAt).toBe('2026-07-30T03:30:00.000Z');
+    expect(result.rejected).toEqual([expect.objectContaining({ message: sentence })]);
+    expect(await pendingSaves({ storage })).toEqual([]);
   });
 });

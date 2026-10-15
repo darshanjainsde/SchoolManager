@@ -44,6 +44,22 @@ describe('TimetableList', () => {
     expect(within(screen.getByTestId('period-row-per-1')).getByText('Free')).toBeTruthy();
   });
 
+  it('a break is a quiet row, never bold like a class (9 Oct 2026)', () => {
+    const rows: TimetableRow[] = [
+      { period: period({ id: 'br', label: 'Break' }), slot: null, kind: 'BREAK' },
+      { period: period({ id: 'per-1' }), slot: slot({ id: 's1', periodId: 'per-1' }) },
+    ];
+    render(<TimetableList rows={rows} currentPeriodId={null} />);
+    const weight = (el: { props: { style: unknown } }) => {
+      const st = el.props.style;
+      return (Array.isArray(st) ? Object.assign({}, ...st) : st).fontWeight;
+    };
+    const brk = within(screen.getByTestId('period-row-break-br'));
+    expect(weight(brk.getAllByText('Break')[0])).toBe('400');
+    expect(brk.getByText('No class')).toBeTruthy();
+    expect(weight(within(screen.getByTestId('period-row-per-1')).getByText('7-B'))).toBe('700');
+  });
+
   it('shows no "undefined" text when a period has no startTime/endTime', () => {
     const rows: TimetableRow[] = [
       {

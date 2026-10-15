@@ -14,7 +14,7 @@ jest.mock('@skoolos/db', () => ({ ...jest.requireActual('@skoolos/db'), getPlatf
 import { NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { Prisma } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
-import { leavePayload, coverPayload, ackPayload, cantPayload, actionKeys, parseAction, ACTION_TTL_MS } from '../../common/notifications/whatsapp/actions';
+import { leavePayload, coverPayload, ackPayload, cantPayload, actionKeys, parseAction, ACTION_TTL_MS, coverAllPayload, oneByOnePayload, ackAllPayload, cantAllPayload } from '../../common/notifications/whatsapp/actions';
 import * as graphClient from '../../common/notifications/whatsapp/graph.client';
 import { WhatsAppActionsService } from './whatsapp-actions.service';
 
@@ -486,6 +486,201 @@ describe('WhatsAppActionsService', () => {
       expect(await svc().handleInbound(tap(old, 'wamid.oldcant'))).toBe('expired');
       expect(sentTexts()).toEqual([]);
       expect(leave.decline).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── "give them the rest?" and the batch summary ─────────────────────────
+
+  describe('cover the rest of the leave with one teacher', () => {
+    const RAHUL = '44444444-4444-4444-4444-444444444444';
+    const gap = { id: SUB, schoolId: SCHOOL, date: new Date('2030-01-07'), periodId: 'p1', classSectionId: 'cs', originalTeacherId: T1, substituteTeacherId: null, leaveApplicationId: LEAVE };
+    const row = (gapId: string, date: string, periodLabel: string, state: string) => ({ gapId, date, periodLabel, time: '', className: '9-A', state, reason: null });
+    const preview = (rows: ReturnType<typeof row>[]) => ({ leave: { id: LEAVE, teacherName: 'Priya Nair', dates: 'Mon 7 – Thu 10 Jan 2030' }, teacher: { id: RAHUL, name: 'Rahul Verma' }, busyDayAt: 4, days: [], rows });
+    const extra = leave as unknown as Record<string, jest.Mock>;
+    beforeEach(() => {
+      extra.coverPreview = jest.fn();
+      extra.coverBatch = jest.fn();
+      extra.acknowledgeLeave = jest.fn().mockResolvedValue({ acknowledged: 6 });
+      extra.declineLeave = jest.fn().mockResolvedValue({ declined: 6 });
+      leave.assign.mockReset().mockResolvedValue({});
+      db.substitution.findUnique.mockReset().mockResolvedValue(gap);
+      db.substitution.findFirst.mockReset().mockResolvedValue(null);
+    });
+
+    /** Runs the real send closure so the buttons Meta would receive can be read off sendButtons. */
+    function captureButtons() {
+      const spy = jest.spyOn(graphClient, 'sendButtons');
+      channel.deliverWith.mockImplementation(async (_s: string, _p: string, _k: string, label: string, fn: (c: unknown, p: null, f: unknown) => Promise<unknown>) => {
+        if (label === 'interactive:buttons') await fn({ token: 't', phoneNumberId: '1', wabaId: null, graphVersion: 'v21.0' }, null, jest.fn().mockResolvedValue({ ok: true, json: async () => ({ messages: [{ id: 'w' }] }) }));
+        return { ok: true, code: null };
+      });
+      return { msg: () => spy.mock.calls[0]?.[2] as { body: string; buttons: { id: string; title: string }[] } | undefined, restore: () => spy.mockRestore() };
+    }
+
+    it('after a pick, asks ONCE whether to give the same teacher the rest — naming what they are busy for — instead of the next list', async () => {
+      extra.coverPreview.mockResolvedValue(preview([
+        row('g1', '2030-01-07', 'Period 3', 'FREE'),
+        row('g2', '2030-01-08', 'Period 2', 'FREE'),
+        row('g3', '2030-01-07', 'Period 2', 'TEACHING'),
+        row('g4', '2030-01-10', 'Period 1', 'ON_LEAVE'),
+        row('g5', '2030-01-08', 'Period 1', 'TAKEN'),
+        row(SUB, '2030-01-07', 'Period 1', 'THEIRS'),
+      ]));
+      const cap = captureButtons();
+      expect(await svc().handleInbound(tap(coverPayload(SUB, RAHUL, actionKeys()), 'wamid.offer'))).toBe(`assigned:${RAHUL}`);
+      expect(extra.coverPreview).toHaveBeenCalledWith(SCHOOL, LEAVE, RAHUL);
+      const m = cap.msg()!;
+      cap.restore();
+      expect(m.body).toBe("Rahul Verma is also free for 2 more of Priya Nair's periods (Mon 7 – Thu 10 Jan 2030).\n\nRahul Verma is busy for 2: Mon 7 Jan Period 2, Thu 10 Jan Period 1. Those stay open.\n\nGive Rahul Verma all 2?");
+      expect(m.buttons.map((b) => b.title)).toEqual(['Give all 2', 'One by one', 'Decide in console']);
+      // Meta: three buttons at most, a title of twenty characters, an id of 256.
+      for (const b of m.buttons) {
+        expect(b.title.length).toBeLessThanOrEqual(20);
+        expect(b.id.length).toBeLessThanOrEqual(256);
+      }
+      const keys = actionKeys();
+      expect(m.buttons.map((b) => parseAction(b.id, keys))).toEqual([
+        { ok: true, action: { kind: 'coverAll', substitutionId: SUB, teacherId: RAHUL } },
+        { ok: true, action: { kind: 'oneByOne', substitutionId: SUB } },
+        { ok: true, action: { kind: 'cover', substitutionId: SUB, teacherId: 'skip' } },
+      ]);
+      // The question replaces the next list; it does not come with it.
+      expect(db.substitution.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('lists six busy periods by name and counts the rest', async () => {
+      const busy = Array.from({ length: 9 }, (_, i) => row(`b${i}`, `2030-01-0${(i % 4) + 7}`, `Period ${i + 1}`, 'COVERING'));
+      extra.coverPreview.mockResolvedValue(preview([row('g1', '2030-01-07', 'Period 3', 'FREE'), ...busy]));
+      const cap = captureButtons();
+      await svc().handleInbound(tap(coverPayload(SUB, RAHUL, actionKeys()), 'wamid.many'));
+      const body = cap.msg()!.body;
+      cap.restore();
+      expect(body).toMatch(/busy for 9: .*Period 6, and 3 more\. Those stay open\./);
+    });
+
+    it('nothing else free for them, no leave behind the gap, or a preview that fails: straight on to the next gap, as before', async () => {
+      extra.coverPreview.mockResolvedValue(preview([row('g3', '2030-01-07', 'Period 2', 'TEACHING')]));
+      await svc().handleInbound(tap(coverPayload(SUB, RAHUL, actionKeys()), 'wamid.none'));
+      expect(sentTexts().at(-1)).toBe('Every period is covered. Thank you.');
+
+      textSpy.mockClear();
+      db.substitution.findUnique.mockResolvedValue({ ...gap, leaveApplicationId: null });
+      await svc().handleInbound(tap(coverPayload(SUB, RAHUL, actionKeys()), 'wamid.noleave'));
+      expect(sentTexts().at(-1)).toBe('Every period is covered. Thank you.');
+
+      textSpy.mockClear();
+      db.substitution.findUnique.mockResolvedValue(gap);
+      extra.coverPreview.mockRejectedValue(new Error('boom'));
+      expect(await svc().handleInbound(tap(coverPayload(SUB, RAHUL, actionKeys()), 'wamid.fail'))).toBe(`assigned:${RAHUL}`);
+      expect(sentTexts().at(-1)).toBe('Every period is covered. Thank you.');
+    });
+
+    it('if the question cannot be sent, the desk is not left hanging: the next gap follows', async () => {
+      extra.coverPreview.mockResolvedValue(preview([row('g1', '2030-01-07', 'Period 3', 'FREE')]));
+      channel.deliverWith.mockImplementation(async (_s: string, _p: string, _k: string, label: string) => (label === 'interactive:buttons' ? { ok: false, code: 131047 } : { ok: true, code: null }));
+      await svc().handleInbound(tap(coverPayload(SUB, RAHUL, actionKeys()), 'wamid.nosend'));
+      expect(sentTexts().at(-1)).toBe('Every period is covered. Thank you.');
+    });
+
+    it('"Give all N" reads the preview AGAIN and gives exactly what is free now, through LeaveService.coverBatch, then moves on', async () => {
+      extra.coverPreview.mockResolvedValue(preview([row('g1', '2030-01-07', 'Period 3', 'FREE'), row('g2', '2030-01-08', 'Period 2', 'FREE'), row(SUB, '2030-01-07', 'Period 1', 'THEIRS'), row('g3', '2030-01-07', 'Period 2', 'TEACHING')]));
+      extra.coverBatch.mockResolvedValue({ given: 1, alreadyTheirs: 0, skipped: [{ gapId: 'g2', when: 'Tue 8 Jan, Period 2', className: '9-B', why: 'TAKEN', reason: 'Anita Rao already covers it.' }], stillOpen: 3 });
+      expect(await svc().handleInbound(tap(coverAllPayload(SUB, RAHUL, actionKeys()), 'wamid.all'))).toBe('cover-all:1/2');
+      expect(extra.coverBatch).toHaveBeenCalledWith(SCHOOL, LEAVE, { substituteTeacherId: RAHUL, substitutionIds: ['g1', 'g2'] });
+      expect(sentTexts()[0]).toBe("Done. Rahul Verma now covers 2 periods of Priya Nair's leave and has been told. 1 could not be given: Tue 8 Jan, Period 2 (Anita Rao already covers it).");
+      expect(sentTexts().at(-1)).toBe('Every period is covered. Thank you.');
+    });
+
+    it('"Give all N" is a leave-desk act: anyone else is told no and nothing is given', async () => {
+      identity.actorFor.mockResolvedValueOnce({ ok: false, why: 'NOT_ALLOWED' });
+      expect(await svc().handleInbound(tap(coverAllPayload(SUB, RAHUL, actionKeys()), 'wamid.stranger'))).toBe('not-allowed');
+      expect(extra.coverPreview).not.toHaveBeenCalled();
+      expect(extra.coverBatch).not.toHaveBeenCalled();
+      expect(identity.actorFor).toHaveBeenCalledWith('+919876543210', SCHOOL, { kind: 'LEAVE_DESK' });
+    });
+
+    it('"Give all N" when nothing is free any more, or the leave was withdrawn: said in words, nothing changed', async () => {
+      extra.coverPreview.mockResolvedValue(preview([row('g3', '2030-01-07', 'Period 2', 'TEACHING')]));
+      expect(await svc().handleInbound(tap(coverAllPayload(SUB, RAHUL, actionKeys()), 'wamid.zero'))).toBe('cover-all:none');
+      expect(sentTexts()[0]).toBe('Raffles: Rahul Verma is not free for any other open period of this leave now. Nothing was changed.');
+      expect(extra.coverBatch).not.toHaveBeenCalled();
+
+      textSpy.mockClear();
+      extra.coverPreview.mockRejectedValue(new ApiError('COVER_GONE', 'withdrawn', 409));
+      expect(await svc().handleInbound(tap(coverAllPayload(SUB, RAHUL, actionKeys()), 'wamid.gone2'))).toBe('leave-withdrawn');
+      expect(sentTexts()).toEqual(['Raffles: that leave was withdrawn, so its periods no longer need a teacher. Nothing was changed.']);
+    });
+
+    it('"Give all N" after the chosen teacher left the school: the service\'s own sentence, nothing given', async () => {
+      extra.coverPreview.mockRejectedValue(new ApiError('VALIDATION', 'Rahul Verma no longer works here, so cannot cover. Pick someone else.', 400));
+      expect(await svc().handleInbound(tap(coverAllPayload(SUB, RAHUL, actionKeys()), 'wamid.left'))).toBe('cover-all:refused');
+      expect(sentTexts()).toEqual(['Raffles: Rahul Verma no longer works here, so cannot cover. Pick someone else.']);
+    });
+
+    it('"One by one" carries on gap by gap, and only for the desk', async () => {
+      db.substitution.findFirst.mockResolvedValue({ id: 'next' });
+      const spy = jest.spyOn(WhatsAppActionsService.prototype, 'coverList').mockResolvedValue();
+      expect(await svc().handleInbound(tap(oneByOnePayload(SUB, actionKeys()), 'wamid.obo'))).toBe('one-by-one');
+      expect(spy).toHaveBeenCalledWith(db, SCHOOL, '+919876543210', 'next');
+      identity.actorFor.mockResolvedValueOnce({ ok: false, why: 'NOT_ALLOWED' });
+      spy.mockClear();
+      expect(await svc().handleInbound(tap(oneByOnePayload(SUB, actionKeys()), 'wamid.obo2'))).toBe('not-allowed');
+      expect(spy).not.toHaveBeenCalled();
+      spy.mockRestore();
+    });
+
+    describe('the substitute answers the summary', () => {
+      beforeEach(() => db.leaveApplication.findUnique.mockResolvedValue({ schoolId: SCHOOL }));
+      const asRahul = () => identity.actorFor.mockResolvedValueOnce({ ok: true, profile: { userId: 'u-rahul', kind: 'TEACHER', role: 'TEACHER' } });
+
+      it('Got it marks them all, as the teacher the summary was for, and names the school', async () => {
+        asRahul();
+        expect(await svc().handleInbound(tap(ackAllPayload(LEAVE, RAHUL, actionKeys()), 'wamid.ba'))).toBe('acked-all');
+        expect(identity.actorFor).toHaveBeenLastCalledWith('+919876543210', SCHOOL, { kind: 'TEACHER', teacherId: RAHUL });
+        expect(extra.acknowledgeLeave).toHaveBeenCalledWith(SCHOOL, LEAVE, 'u-rahul');
+        expect(sentTexts()).toEqual(['Raffles: noted — thank you. The office can see you have them.']);
+      });
+
+      it("Can't hands them all back through LeaveService and says how many", async () => {
+        asRahul();
+        expect(await svc().handleInbound(tap(cantAllPayload(LEAVE, RAHUL, actionKeys()), 'wamid.bn'))).toBe('declined-all:6');
+        expect(extra.declineLeave).toHaveBeenCalledWith(SCHOOL, LEAVE, 'u-rahul');
+        expect(sentTexts()).toEqual(['Raffles: okay — you are off those 6 covers. The office has been told and will find someone else.']);
+      });
+
+      it('anyone but that teacher is recorded and answered with nothing', async () => {
+        identity.actorFor.mockResolvedValue({ ok: false, why: 'NOT_ALLOWED' });
+        expect(await svc().handleInbound(tap(ackAllPayload(LEAVE, RAHUL, actionKeys()), 'wamid.ba2'))).toBe('ack-not-substitute');
+        expect(await svc().handleInbound(tap(cantAllPayload(LEAVE, RAHUL, actionKeys()), 'wamid.bn2'))).toBe('cant-not-substitute');
+        expect(extra.acknowledgeLeave).not.toHaveBeenCalled();
+        expect(extra.declineLeave).not.toHaveBeenCalled();
+        expect(sentTexts()).toEqual([]);
+      });
+
+      it('after the desk moved them all: told it already changed, nothing done', async () => {
+        asRahul();
+        extra.declineLeave.mockRejectedValueOnce(new ApiError('NOT_THE_SUBSTITUTE', 'none', 409));
+        expect(await svc().handleInbound(tap(cantAllPayload(LEAVE, RAHUL, actionKeys()), 'wamid.bn3'))).toBe('cover-moved');
+        asRahul();
+        extra.acknowledgeLeave.mockRejectedValueOnce(new ApiError('NOT_THE_SUBSTITUTE', 'none', 409));
+        expect(await svc().handleInbound(tap(ackAllPayload(LEAVE, RAHUL, actionKeys()), 'wamid.ba3'))).toBe('cover-moved');
+      });
+
+      it('an expired summary button is recorded and answered with NOTHING; an expired "Give all" is told it expired', async () => {
+        const old = Date.now() - ACTION_TTL_MS - 60_000;
+        expect(await svc().handleInbound(tap(ackAllPayload(LEAVE, RAHUL, actionKeys(), old), 'wamid.oldba'))).toBe('expired');
+        expect(await svc().handleInbound(tap(cantAllPayload(LEAVE, RAHUL, actionKeys(), old), 'wamid.oldbn'))).toBe('expired');
+        expect(sentTexts()).toEqual([]);
+        expect(await svc().handleInbound(tap(coverAllPayload(SUB, RAHUL, actionKeys(), old), 'wamid.oldcb'))).toBe('expired');
+        expect(sentTexts()).toEqual(['This button has expired. Please decide in the console or the app.']);
+        expect(extra.coverBatch).not.toHaveBeenCalled();
+      });
+
+      it('a summary for a leave that no longer exists is recorded, not answered', async () => {
+        db.leaveApplication.findUnique.mockResolvedValue(null);
+        expect(await svc().handleInbound(tap(ackAllPayload(LEAVE, RAHUL, actionKeys()), 'wamid.noleave2'))).toBe('leave-not-found');
+        expect(sentTexts()).toEqual([]);
+      });
     });
   });
 });

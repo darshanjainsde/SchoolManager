@@ -128,6 +128,13 @@ it('shows an empty state once both sources have settled with nothing', async () 
   expect(await findByText('No requests yet.')).toBeTruthy();
 });
 
+it('a one-day leave names its day once, not "9 Oct – 9 Oct" (9 Oct 2026)', async () => {
+  mockApi({ leave: [leaveRow({ startDate: '2026-07-20T00:00:00.000Z', endDate: '2026-07-20T00:00:00.000Z' })], register: [] });
+  const { findByText, queryByText } = render(<Requests />);
+  await findByText('Sick leave');
+  expect(queryByText(/ – /)).toBeNull();
+});
+
 it('shows the kind badge for each row', async () => {
   mockApi({ leave: [leaveRow()], register: [registerRow()] });
   const { findByText } = render(<Requests />);
@@ -387,10 +394,12 @@ it('shows the remaining balance for the picked type, red at zero, hidden with no
   expect(await findByTestId('apply-balance')).toHaveTextContent('7 days left this year');
 
   // Switching to CASUAL shows its zero, with the carried days named.
+  fireEvent.press(getByTestId('apply-type'));
   fireEvent.press(getByTestId('apply-type-CASUAL'));
   expect(getByTestId('apply-balance')).toHaveTextContent('0 days left this year (2 carried over)');
 
   // A type with no grant (OTHER isn't in the payload) shows nothing.
+  fireEvent.press(getByTestId('apply-type'));
   fireEvent.press(getByTestId('apply-type-OTHER'));
   expect(() => getByTestId('apply-balance')).toThrow();
 });
@@ -489,6 +498,7 @@ it('picking a leave type changes what is submitted', async () => {
   mockApi({ leave: [], register: [], postResult: leaveRow({ id: 'lv-new', type: 'CASUAL' }) });
   const { findByTestId } = render(<Requests />);
 
+  fireEvent.press(await findByTestId('apply-type'));
   fireEvent.press(await findByTestId('apply-type-CASUAL'));
   fireEvent.press(await findByTestId('apply-submit'));
 

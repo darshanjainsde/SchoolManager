@@ -4,10 +4,10 @@ import { Linking, Pressable, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import type { StudentAssignment, StudentAssignmentList } from '@/lib/portal';
+import { Button } from '@/components/Button';
 import { Card, Empty, ErrorState, Page, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
-import { font } from '@/theme/tokens';
 import { fmtDate } from '@/lib/dates';
 
 /** `StudentAssignment.dueDate` (`@db.Date`, `YYYY-MM-DD`) — a plain calendar date, no time component. */
@@ -53,11 +53,11 @@ function TodoRow({
         accessibilityRole="button"
         accessibilityState={{ expanded: isOpen }}
         onPress={onToggle}
-        style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, paddingHorizontal: 12 }}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 72, paddingVertical: 12, paddingHorizontal: 16 }}
       >
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>{a.title}</Text>
-          <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>
+          <Text style={{ fontSize: 16, fontWeight: '600', color: tokens.color.ink }}>{a.title}</Text>
+          <Text style={{ fontSize: 13, color: tokens.color.sub, marginTop: 2 }}>
             {a.subjectName} · due {formatDueDate(a.dueDate)}
           </Text>
         </View>
@@ -78,19 +78,20 @@ function TodoRow({
             borderLeftColor: tokens.color.line,
           }}
         >
-          <Text style={{ fontSize: 12.5, color: tokens.color.ink2, lineHeight: 18, paddingLeft: 10 }}>
+          <Text style={{ fontSize: 14, color: tokens.color.ink2, lineHeight: 20, paddingLeft: 10 }}>
             {a.instructions}
           </Text>
           {a.attachments.length > 0 && (
-            <View style={{ marginTop: 8, gap: 6, paddingLeft: 10 }}>
+            <View style={{ marginTop: 6, gap: 2 }}>
               {a.attachments.map((att) => (
-                <Pressable key={att.url} testID={`attachment-${att.name}`} onPress={() => void Linking.openURL(att.url)}
-                  accessibilityRole="button"
-                  >
-                  <Text style={{ fontFamily: font.mono, fontSize: 11.5, fontWeight: '700', color: tokens.color.indigo }}>
-                    {att.name}
-                  </Text>
-                </Pressable>
+                <Button
+                  key={att.url}
+                  testID={`attachment-${att.name}`}
+                  label={att.name}
+                  onPress={() => void Linking.openURL(att.url)}
+                  variant="text"
+                  size="sm"
+                />
               ))}
             </View>
           )}
@@ -165,7 +166,7 @@ export default function Assignments() {
       )}
       {list !== null && !error && upcoming.length === 0 && past.length === 0 && (
         <Card style={{ padding: 0 }}>
-          <Empty icon="assignments">No assignments yet.</Empty>
+          <Empty icon="assignments" scene="noHomework">No assignments yet.</Empty>
         </Card>
       )}
       {upcoming.length > 0 && (

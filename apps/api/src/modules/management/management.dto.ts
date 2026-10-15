@@ -675,6 +675,16 @@ export class SaveAttendanceDto {
   @ValidateNested({ each: true })
   @Type(() => AttendanceMarkDto)
   marks!: AttendanceMarkDto[];
+
+  /**
+   * Set by the app when it replays a register marked OFFLINE: the moment it
+   * was marked. A register saved after that (the office correcting it on the
+   * web) is newer than these marks, so the replay is refused, not applied.
+   * Absent on an ordinary save, and from older apps — which behave as before.
+   */
+  @IsOptional()
+  @IsDateString()
+  markedOfflineAt?: string;
 }
 
 // ── Staff attendance (teachers + non-teaching staff) ─────────────────────────
@@ -784,6 +794,23 @@ export class CreateLeaveDto {
 export class AssignSubstitutionDto {
   @IsUUID()
   substituteTeacherId!: string;
+}
+
+/** "Give one teacher these periods of a leave." 60 days × 10 periods is the ceiling, not a target. */
+export class CoverBatchDto {
+  @IsUUID()
+  substituteTeacherId!: string;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(600)
+  @IsUUID('all', { each: true })
+  substitutionIds!: string[];
+}
+
+export class CoverPreviewQueryDto {
+  @IsUUID()
+  teacherId!: string;
 }
 
 // ── Leave policy (types, allocations, carry-forward) ─────────────────────────

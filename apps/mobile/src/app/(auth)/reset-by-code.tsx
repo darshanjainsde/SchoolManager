@@ -2,15 +2,8 @@ import { useState } from 'react';
 import { TextInput } from 'react-native';
 import { router } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
-import {
-  AuthButton,
-  AuthLink,
-  AuthNote,
-  AuthScaffold,
-  AuthSlip,
-  Field,
-  fieldInputStyle,
-} from '@/components/AuthScaffold';
+import { AuthButton, AuthLink, AuthNote, AuthSlip, Field, fieldInputStyle } from '@/components/AuthScaffold';
+import { GateSheet } from '@/components/entry/GateSheet';
 import { Toast } from '@/components/ui';
 import { session } from '@/lib/session';
 import { useTokens } from '@/theme/theme-context';
@@ -74,38 +67,55 @@ export default function ResetByCode() {
 
   // `undefined` = not asked yet; `string` = mail sent there; `null` = no email
   // on file for that code.
+  // The way back from here is always the login screen. `back()` alone left a
+  // person who opened this from a reset link with nowhere to go.
+  const toLogin = () => (router.canGoBack() ? router.back() : router.replace('/(auth)/login'));
+
   if (sentTo !== undefined) {
     return (
-      <AuthScaffold title="Check the inbox" subtitle={`Student code ${normalised}`}>
-        {/* `.resetok`, in the two tones the pitch actually uses it in: green
-            when a link is genuinely on its way, amber when the code was fine
-            but there is no inbox to send it to. Dressing that second answer in
-            green would be a false success — the family would sit waiting for a
-            mail that was never sent. */}
+      // `.resetok`, in the two tones the pitch uses: green when a link is
+      // genuinely on its way, amber when the code was fine but there is no
+      // inbox to send it to. Dressing that second answer in green would be a
+      // false success — the family would sit waiting for a mail never sent.
+      <GateSheet
+        title={sentTo ? 'Check the inbox' : 'No email on file'}
+        subtitle={`Student code ${normalised}`}
+        icon={sentTo ? 'mail' : 'phone'}
+        tone={sentTo ? 'good' : 'warn'}
+      >
         <AuthSlip tone={sentTo ? 'good' : 'warn'} testID="reset-result">
           {sentTo
             ? `We've emailed a link to ${sentTo}. It works once, and expires in 30 minutes.`
             : 'That code has no email on file, so there is nowhere to send a link. Ring the school office and they can set the password for you.'}
         </AuthSlip>
-        <AuthButton
-          testID="reset-back"
-          onPress={() => router.replace('/(auth)/login')}
-          label="Back to log in"
-        />
-      </AuthScaffold>
+        <AuthButton testID="reset-back" onPress={() => router.replace('/(auth)/login')} label="Back to log in" />
+        {sentTo ? (
+          <AuthLink
+            testID="reset-again"
+            tone="muted"
+            label="Use a different code"
+            onPress={() => {
+              setSentTo(undefined);
+              setCode('');
+            }}
+          />
+        ) : null}
+      </GateSheet>
     );
   }
 
   return (
-    <AuthScaffold
+    <GateSheet
       title="Forgot the password?"
-      subtitle="Type the student code from your school letter and we’ll send a reset link to the email on file."
+      subtitle="Type the student code from your school letter. We'll send a reset link to the email the school has on file."
+      icon="key"
+      onBack={toLogin}
+      backTestID="reset-back-top"
     >
-      {/* THE one field that has to be typed exactly, so it is the one field
-          set in MONO with wide tracking: RAF-00042 is copied character by
-          character off a printed letter, and fixed-width figures with air
-          between them are what make an 0/O or a 1/l mismatch visible before
-          the tap rather than after it. */}
+      {/* THE one field that has to be typed exactly, so it is set in MONO
+          with wide tracking: RAF-00042 is copied character by character off a
+          printed letter, and fixed-width figures make an 0/O or 1/l mismatch
+          visible before the tap rather than after it. */}
       <Field label="Student code">
         <TextInput
           value={code}
@@ -114,6 +124,10 @@ export default function ResetByCode() {
           placeholderTextColor={tokens.color.placeholder}
           autoCapitalize="characters"
           autoCorrect={false}
+          returnKeyType="send"
+          onSubmitEditing={() => {
+            if (canSubmit) void submit();
+          }}
           testID="reset-code"
           style={fieldInputStyle(tokens, { focused: focused, mono: true })}
           onFocus={() => setFocused(true)}
@@ -122,13 +136,8 @@ export default function ResetByCode() {
       </Field>
       <AuthNote>Three letters, a dash, then the digits — exactly as printed on the school letter.</AuthNote>
       {error ? <Toast kind="error" message={error} /> : null}
-      <AuthButton
-        testID="reset-send"
-        onPress={submit}
-        disabled={!canSubmit}
-        label={busy ? 'Sending…' : 'Send the reset link'}
-      />
-      <AuthLink testID="reset-cancel" tone="muted" label="Back" onPress={() => router.back()} />
-    </AuthScaffold>
+      <AuthButton testID="reset-send" onPress={submit} disabled={!canSubmit} label={busy ? 'Sending…' : 'Send the reset link'} />
+      <AuthLink testID="reset-cancel" tone="muted" label="Back to log in" onPress={toLogin} />
+    </GateSheet>
   );
 }

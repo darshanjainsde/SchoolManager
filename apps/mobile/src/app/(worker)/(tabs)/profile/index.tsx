@@ -1,9 +1,10 @@
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Text } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import { useReload } from '@/lib/query';
-import { Card, ErrorState, Pill, Screen, SectionTitle } from '@/components/ui';
+import { ProfileHead, SignOutRow } from '@/components/ProfileKit';
+import { ErrorState, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { ProfileMenu } from '@/components/ProfileMenu';
 import { signOut } from '@/lib/sign-out';
@@ -11,6 +12,7 @@ import { jobFor } from '@/lib/worker-nav';
 import { useSession } from '@/lib/use-session';
 import { hasFeature } from '@/lib/features';
 import { useTokens } from '@/theme/theme-context';
+import { ask } from '@/components/ConfirmSheet';
 
 /**
  * THE NON-TEACHING STAFF PROFILE — office, support, driver, helper,
@@ -42,11 +44,16 @@ interface Me {
   name: string | null;
 }
 
-function confirmSignOut(): void {
-  Alert.alert('Sign out?', 'This removes every profile on this phone. You can sign in again with your number.', [
-    { text: 'Stay', style: 'cancel' },
-    { text: 'Sign out', style: 'destructive', onPress: () => void signOut() },
-  ]);
+function confirmSignOut(who?: { initials: string; name: string; line?: string }): void {
+  ask(
+    'Sign out?',
+    'This removes every profile on this phone. You can sign in again with your number.',
+    [
+      { text: 'Stay', style: 'cancel' },
+      { text: 'Sign out', style: 'destructive', onPress: () => void signOut() },
+    ],
+    { icon: 'signout', who, testID: 'confirm-signout' },
+  );
 }
 
 function initials(name: string): string {
@@ -87,41 +94,25 @@ export default function WorkerProfile() {
 
   return (
     <Screen onRefresh={reload}>
-      <SectionTitle title="My profile" />
+      <SectionTitle title="Profile" />
 
       {error && <ErrorState error={error} onRetry={reload} />}
       {!me && !error && <LoadingRows label="Loading your details…" rows={2} />}
 
       {me && (
-        <Card>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12 }}>
-            <View
-              style={{
-                width: 48,
-                height: 48,
-                borderRadius: 24,
-                backgroundColor: tokens.color.indigo,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Text style={{ color: tokens.color.onBrand, fontWeight: '800', fontSize: 16 }}>
-                {initials(name || 'Staff')}
-              </Text>
-            </View>
-            <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
-              <Text testID="worker-profile-name" style={{ fontSize: 15.5, fontWeight: '700', color: tokens.color.ink }}>
-                {name || 'Your school record'}
-              </Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                <Pill tone="indigo">{STAFF_ROLE_LABEL[me.staffRole ?? 'OTHER'] ?? 'Staff'}</Pill>
-              </View>
-            </View>
-          </View>
-          <Text style={{ paddingHorizontal: 12, paddingBottom: 12, fontSize: 12, lineHeight: 17, color: tokens.color.sub }}>
+        <>
+          {/* sckools-ui-standards §6 — the profile recipe. Desk staff have no
+              photo endpoint yet, so the head shows initials without a picker. */}
+          <ProfileHead
+            initials={initials(name || 'Staff')}
+            name={name || 'Your school record'}
+            nameTestID="worker-profile-name"
+            line={STAFF_ROLE_LABEL[me.staffRole ?? 'OTHER'] ?? 'Staff'}
+          />
+          <Text style={{ fontSize: 13, lineHeight: 18, color: tokens.color.sub, textAlign: 'center', marginTop: -4 }}>
             Your name and role are your school&rsquo;s record. The office changes them.
           </Text>
-        </Card>
+        </>
       )}
 
       {/* The same four doors the teacher has, so the app is one product. */}
@@ -139,25 +130,7 @@ export default function WorkerProfile() {
       {/* Sign out lives at the bottom of Profile because that is where every
           other app has taught people to look — and because before this it
           did not exist anywhere in this portal. */}
-      <Pressable
-        testID="profile-signout"
-        accessibilityRole="button"
-        accessibilityLabel="Sign out"
-        onPress={confirmSignOut}
-        style={{
-          marginTop: 4,
-          borderWidth: 1,
-          borderColor: tokens.color.red,
-          borderRadius: 12,
-          paddingVertical: 13,
-          minHeight: 44,
-          justifyContent: 'center',
-        }}
-      >
-        <Text style={{ color: tokens.color.red, fontWeight: '700', textAlign: 'center', fontSize: 14 }}>
-          Sign out
-        </Text>
-      </Pressable>
+      <SignOutRow testID="profile-signout" onPress={() => confirmSignOut(me ? { initials: initials(name || 'Staff'), name: name || 'Your school record', line: STAFF_ROLE_LABEL[me.staffRole ?? 'OTHER'] ?? 'Staff' } : undefined)} />
     </Screen>
   );
 }

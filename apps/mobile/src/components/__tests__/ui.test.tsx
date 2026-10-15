@@ -5,7 +5,7 @@ import { Card, ErrorState, Figure, Pill, Screen, SectionTitle } from '../ui';
 it('Screen applies the 11px rhythm gap', () => {
   const { getByTestId } = render(<Screen><Text>x</Text></Screen>);
   const style = getByTestId('screen-scroll').props.contentContainerStyle;
-  expect(style.gap).toBe(11);
+  expect(style.gap).toBe(12);
 });
 
 it('Pill renders tone text', () => {

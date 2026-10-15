@@ -351,7 +351,7 @@ it('in a gap between periods, says nothing is on and names the next class', asyn
   expect(screen.getByText(/at 10:00/)).toBeTruthy();
 });
 
-it('dims periods before the current one under "Earlier today" in the timeline', async () => {
+it('groups periods before the current one under "Earlier today" without fading them', async () => {
   setNow(9, 20); // inside P2, so P1 and Break are earlier
   mockDay(DAY);
   render(<Today />);
@@ -359,7 +359,8 @@ it('dims periods before the current one under "Earlier today" in the timeline', 
   expect(await screen.findByText('Earlier today')).toBeTruthy();
   // .55, not .5 — the pitch's `.rail.done` (see DayTimeline.test.tsx).
   const earlierRow = screen.getByTestId(`timeline-row-${DAY.entries[0].periodId}`);
-  expect(earlierRow.props.style).toEqual(expect.objectContaining({ opacity: 0.55 }));
+  // Finished periods stay DARK (user, 9 Oct 2026); they sit under "Earlier today" instead of fading.
+  expect(earlierRow.props.style.opacity).toBeUndefined();
 });
 
 it('tapping Take attendance in the hero navigates to the take screen with the class name', async () => {
@@ -405,9 +406,9 @@ it('flips at the bell while the teacher is still looking at it', async () => {
 
   const before = await screen.findByTestId('now-card');
   expect(within(before).getByText('8-A · Mathematics')).toBeTruthy();
-  // The Registers dome says a register is being missed RIGHT NOW (pitch №3:
-  // the amber-lit live dome replaced the old queue row's "now").
-  expect(screen.getByTestId('hometool-live-Registers')).toBeTruthy();
+  // The hero's Register action carries the open-register count (9 Oct 2026:
+  // the Registers dome moved into the hero when the two grids became one menu).
+  expect(screen.getByLabelText(/^Register, [1-9]\d* waiting$/)).toBeTruthy();
 
   await act(async () => {
     jest.advanceTimersByTime(60_000);
@@ -418,10 +419,20 @@ it('flips at the bell while the teacher is still looking at it', async () => {
   const after = screen.getByTestId('now-card');
   expect(within(after).getByText('Break')).toBeTruthy();
   expect(within(after).queryByText('8-A · Mathematics')).toBeNull();
-  // 8-A's register is still open, so the dome keeps its count — but nothing is
-  // live any more, so it stops being the lit one.
-  expect(screen.getByTestId('hometool-badge-Registers')).toBeTruthy();
-  expect(screen.queryByTestId('hometool-live-Registers')).toBeNull();
+  // 8-A's register is still open, so the hero's Register keeps its count.
+  expect(screen.getByLabelText(/^Register, [1-9]\d* waiting$/)).toBeTruthy();
+});
+
+it('a live class keeps the hero short — the day\'s figures wait for the bell (audit 9 Oct 2026)', async () => {
+  setNow(8, 44);
+  mockDay(DAY);
+  render(<Today />);
+  await screen.findByTestId('now-card');
+  expect(screen.queryByTestId('hero-figures')).toBeNull();
+  await act(async () => {
+    jest.advanceTimersByTime(60_000);
+  });
+  expect(screen.getByTestId('hero-figures')).toBeTruthy();
 });
 
 it('refetches on focus so a colleague marking the register elsewhere shows up without a manual reload', async () => {

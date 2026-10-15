@@ -5,6 +5,8 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
  *
  *   v2:<body>:<exp>:<sig>
  *   body = lv:a:<leaveId> | lv:r:<leaveId> | cv:<subId>:<teacherId|skip> | ca:<subId> | cn:<subId>:<teacherId>
+ *        | cb:<subId>:<teacherId> (give them the rest) | ob:<subId> (one by one)
+ *        | ba:<leaveId>:<teacherId> (Got it, all) | bn:<leaveId>:<teacherId> (Can't, all)
  *   exp  = minutes since the epoch, base 36, when the button stops working
  *   sig  = HMAC-SHA256("v2:<body>:<exp>").hex[0..12]
  *
@@ -26,7 +28,17 @@ export type Action =
    * teacher, and nobody else. Null only on a card rendered before 2026-10-07
    * (`cn:<subId>`), which acts for whoever covers it now.
    */
-  | { kind: 'cant'; substitutionId: string; teacherId: string | null };
+  | { kind: 'cant'; substitutionId: string; teacherId: string | null }
+  /**
+   * The desk's answer to "give Rahul the rest of Priya's leave?", asked after
+   * a pick: the gap just picked names the leave, `teacherId` the teacher.
+   */
+  | { kind: 'coverAll'; substitutionId: string; teacherId: string }
+  /** "One by one" — carry on gap by gap from the one just picked. */
+  | { kind: 'oneByOne'; substitutionId: string }
+  /** The substitute's Got it / Can't on a batch summary: every period of that leave they hold. */
+  | { kind: 'ackAll'; leaveId: string; teacherId: string }
+  | { kind: 'cantAll'; leaveId: string; teacherId: string };
 
 export type ParsedAction = { ok: true; action: Action } | { ok: false; why: 'foreign' } | { ok: false; why: 'expired'; action: Action };
 export interface ActionKeys { sign: string; verify: readonly string[]; legacy: string | null }
@@ -74,6 +86,11 @@ export const ackPayload = (substitutionId: string, keys: Pick<ActionKeys, 'sign'
 export const cantPayload = (substitutionId: string, teacherId: string | null, keys: Pick<ActionKeys, 'sign'>, now = Date.now()) =>
   seal(teacherId ? `cn:${substitutionId}:${teacherId}` : `cn:${substitutionId}`, keys, now);
 
+export const coverAllPayload = (substitutionId: string, teacherId: string, keys: Pick<ActionKeys, 'sign'>, now = Date.now()) => seal(`cb:${substitutionId}:${teacherId}`, keys, now);
+export const oneByOnePayload = (substitutionId: string, keys: Pick<ActionKeys, 'sign'>, now = Date.now()) => seal(`ob:${substitutionId}`, keys, now);
+export const ackAllPayload = (leaveId: string, teacherId: string, keys: Pick<ActionKeys, 'sign'>, now = Date.now()) => seal(`ba:${leaveId}:${teacherId}`, keys, now);
+export const cantAllPayload = (leaveId: string, teacherId: string, keys: Pick<ActionKeys, 'sign'>, now = Date.now()) => seal(`bn:${leaveId}:${teacherId}`, keys, now);
+
 /**
  * What a payload ACTS ON, without when it expires or how it was signed:
  * `v2:lv:a:<leaveId>:<exp>:<sig>` → `lv:a:<leaveId>`. The same card rendered a
@@ -94,6 +111,10 @@ function shape(parts: string[]): Action | null {
   if (parts[0] === 'ca' && parts.length === 2 && parts[1]) return { kind: 'ack', substitutionId: parts[1] };
   if (parts[0] === 'cn' && parts.length === 3 && parts[1] && parts[2]) return { kind: 'cant', substitutionId: parts[1], teacherId: parts[2] };
   if (parts[0] === 'cn' && parts.length === 2 && parts[1]) return { kind: 'cant', substitutionId: parts[1], teacherId: null };
+  if (parts[0] === 'cb' && parts.length === 3 && parts[1] && parts[2]) return { kind: 'coverAll', substitutionId: parts[1], teacherId: parts[2] };
+  if (parts[0] === 'ob' && parts.length === 2 && parts[1]) return { kind: 'oneByOne', substitutionId: parts[1] };
+  if (parts[0] === 'ba' && parts.length === 3 && parts[1] && parts[2]) return { kind: 'ackAll', leaveId: parts[1], teacherId: parts[2] };
+  if (parts[0] === 'bn' && parts.length === 3 && parts[1] && parts[2]) return { kind: 'cantAll', leaveId: parts[1], teacherId: parts[2] };
   return null;
 }
 

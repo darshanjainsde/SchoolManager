@@ -74,7 +74,7 @@ export default function Sports() {
               </Text>
               {first.n!.kind === 'heat' && (
                 <View style={{ alignSelf: 'flex-start', marginTop: 8, backgroundColor: `${tokens.color.onBrand}2E`, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
-                  <Text style={{ fontFamily: font.mono, fontSize: 11, fontWeight: '700', color: tokens.color.onBrand }}>LANE {first.n!.h.lane}</Text>
+                  <Text style={{ fontVariant: ['tabular-nums'], fontSize: 13, fontWeight: '700', color: tokens.color.onBrand }}>LANE {first.n!.h.lane}</Text>
                 </View>
               )}
             </View>
@@ -141,11 +141,11 @@ export default function Sports() {
                 const own = h.id === d.house?.id;
                 return (
                   <View key={h.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, paddingHorizontal: 12, borderTopWidth: i ? 1 : 0, borderTopColor: tokens.color.line }}>
-                    <Text style={{ width: 26, fontFamily: font.mono, fontSize: 11.5, color: tokens.color.sub }}>{ordinal(i + 1)}</Text>
+                    <Text style={{ width: 30, fontVariant: ['tabular-nums'], fontSize: 13, color: tokens.color.sub }}>{ordinal(i + 1)}</Text>
                     <View style={{ width: 10, height: 10, borderRadius: 999, backgroundColor: h.color }} />
                     <Text numberOfLines={1} style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: own ? '700' : '500', color: tokens.color.ink }}>{h.name}</Text>
                     <Text style={{ fontSize: 11, color: tokens.color.sub }}>{h.members} members</Text>
-                    <Text style={{ fontFamily: font.mono, fontSize: 13, fontWeight: '700', color: own ? tokens.color.indigo : tokens.color.ink }}>{h.points}</Text>
+                    <Text style={{ fontVariant: ['tabular-nums'], fontSize: 13, fontWeight: '700', color: own ? tokens.color.indigo : tokens.color.ink }}>{h.points}</Text>
                   </View>
                 );
               })}
@@ -159,7 +159,7 @@ export default function Sports() {
               {d.records.records.map((r, i) => (
                 <View key={r.id} style={{ paddingVertical: 9, paddingHorizontal: 12, borderTopWidth: i ? 1 : 0, borderTopColor: tokens.color.line, gap: 2 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={{ flex: 1, minWidth: 0, fontFamily: font.mono, fontSize: 14, fontWeight: '700', color: tokens.color.ink }}>{r.text}</Text>
+                    <Text style={{ flex: 1, minWidth: 0, fontVariant: ['tabular-nums'], fontSize: 14, fontWeight: '700', color: tokens.color.ink }}>{r.text}</Text>
                     <Pill tone={r.status === 'STANDING' || r.status === 'CURRENT' ? 'green' : 'neutral'}>{r.untilYear ? `${r.sinceYear}–${r.untilYear}` : `since ${r.sinceYear}`}</Pill>
                   </View>
                   <Text style={{ fontSize: 11.5, color: tokens.color.sub }}>{r.sportName} · {r.category}</Text>
@@ -174,7 +174,7 @@ export default function Sports() {
               {d.records.attempts.map((a, i) => (
                 <View key={a.id} style={{ paddingVertical: 9, paddingHorizontal: 12, borderTopWidth: i ? 1 : 0, borderTopColor: tokens.color.line, gap: 2 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={{ flex: 1, minWidth: 0, fontFamily: font.mono, fontSize: 13.5, fontWeight: '600', color: tokens.color.ink }}>{a.text}</Text>
+                    <Text style={{ flex: 1, minWidth: 0, fontVariant: ['tabular-nums'], fontSize: 13.5, fontWeight: '600', color: tokens.color.ink }}>{a.text}</Text>
                     <Pill tone={a.status === 'APPROVED' || a.status === 'RATIFIED' ? 'green' : a.status === 'REJECTED' ? 'red' : 'amber'}>{a.status.toLowerCase()}</Pill>
                   </View>
                   <Text style={{ fontSize: 11.5, color: tokens.color.sub }}>{a.sportName} · {a.category}</Text>

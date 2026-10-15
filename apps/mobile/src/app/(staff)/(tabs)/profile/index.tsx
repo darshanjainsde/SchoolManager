@@ -1,69 +1,20 @@
 import { useReload } from '@/lib/query';
-import { useCallback, useState, type ReactNode } from 'react';
-import { Pressable, Text, View, Alert } from 'react-native';
+import { useCallback, useState } from 'react';
+import { Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import type { TeacherProfile } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { signOut } from '@/lib/sign-out';
 import { ProfileMenu } from '@/components/ProfileMenu';
-import { EditableAvatar } from '@/components/EditableAvatar';
-import { Card, ErrorState, Pill, Screen, SectionTitle } from '@/components/ui';
-import { Icon, type IconName } from '@/components/icons';
+import { InfoRow, ProfileGroup, ProfileHead, SignOutRow, useInfoValueStyle } from '@/components/ProfileKit';
+import { ErrorState, Pill, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
-import { font } from '@/theme/tokens';
+import { ask } from '@/components/ConfirmSheet';
 
 /** "AR" for Asha Rao — same rule as the family profile / web pages. */
 function initials(firstName: string, lastName: string): string {
   return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
-}
-
-/**
- * `.pfrow` — one ruled row: a tinted icon tile, the field's label, and its
- * value. Shared here rather than repeated four times so the rule, the tile
- * size and the gap can only ever be set in one place.
- */
-function ProfileRow({
-  icon,
-  label,
-  children,
-}: {
-  icon: IconName;
-  label: string;
-  children: ReactNode;
-}) {
-  const tokens = useTokens();
-  return (
-    <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        gap: 11,
-        paddingVertical: 11,
-        borderTopWidth: 1,
-        borderTopColor: tokens.color.line,
-      }}
-    >
-      <View
-        style={{
-          width: 30,
-          height: 30,
-          borderRadius: 9,
-          backgroundColor: tokens.color.surfaceMuted,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <Icon name={icon} size={16} color={tokens.color.ink2} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 10.5, fontWeight: '800', letterSpacing: 0.7, color: tokens.color.sub }}>
-          {label}
-        </Text>
-        {children}
-      </View>
-    </View>
-  );
 }
 
 /**
@@ -77,11 +28,16 @@ function ProfileRow({
  * One stray thumb used to clear the session AND every child on the shelf
  * (UI audit 2026-09-22, #13). Ask first, in the words that say what is lost.
  */
-function confirmSignOut(): void {
-  Alert.alert('Sign out?', 'This removes every profile on this phone. You can sign in again with your number.', [
-    { text: 'Stay', style: 'cancel' },
-    { text: 'Sign out', style: 'destructive', onPress: () => void signOut() },
-  ]);
+function confirmSignOut(who?: { initials: string; name: string; line?: string }): void {
+  ask(
+    'Sign out?',
+    'This removes every profile on this phone. You can sign in again with your number.',
+    [
+      { text: 'Stay', style: 'cancel' },
+      { text: 'Sign out', style: 'destructive', onPress: () => void signOut() },
+    ],
+    { icon: 'signout', who, testID: 'confirm-signout' },
+  );
 }
 
 export default function Profile() {
@@ -109,67 +65,48 @@ export default function Profile() {
     }, [reloadKey]),
   );
 
-  const labelStyle = { fontSize: 11.5, fontWeight: '700' as const, color: tokens.color.sub };
-  const valueStyle = { fontSize: 14, fontWeight: '600' as const, color: tokens.color.ink, marginTop: 2 };
-  const mutedStyle = { fontSize: 13, color: tokens.color.sub, marginTop: 2 };
+  const valueStyle = useInfoValueStyle();
+  const mutedStyle = { fontSize: 14, color: tokens.color.sub, marginTop: 2 };
+  // The one line under the name: what they teach and which class is theirs,
+  // built from the same fields as the rows below so the two cannot disagree.
+  const line = profile
+    ? [
+        profile.subjects.length ? `${profile.subjects.join(', ')} teacher` : null,
+        profile.classTeacherOf.length ? `Class teacher of ${profile.classTeacherOf.join(', ')}` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : '';
 
   return (
     <Screen onRefresh={reload}>
       <SectionTitle title="Profile" />
 
       {error && <ErrorState error={error} onRetry={reload} />}
-      {profile === null && !error && (
-        <LoadingRows label="Loading profile…" rows={4} />
-      )}
+      {profile === null && !error && <LoadingRows label="Loading profile…" rows={4} />}
 
       {profile && (
         <>
-          {/* `.pfhead` — the photo centred over a serif name, the way a staff
-              record is laid out on a card rather than in a table row. The
-              avatar keeps its own component (it is shared with the family
-              profile and owns the upload flow); only its setting changed. */}
-          <View style={{ alignItems: 'center', paddingTop: 6, paddingBottom: 2 }}>
-            <EditableAvatar
-              photoUrl={profile.photoUrl}
-              initials={initials(profile.firstName, profile.lastName)}
-              onUploaded={(url) => setProfile((p) => (p ? { ...p, photoUrl: url } : p))}
-            />
-            <Text
-              style={{
-                fontFamily: font.serif,
-                fontSize: 20,
-                fontWeight: '700',
-                color: tokens.color.ink,
-                marginTop: 10,
-              }}
-            >
-              {profile.firstName} {profile.lastName}
-            </Text>
-            {/* No subject/class summary line here on purpose: the card below
-                already states both, and a profile that says the same fact
-                twice makes the reader wonder which one is authoritative. */}
-          </View>
-
-          {/* `.pfrow` — each fact on its own ruled row behind a small tile,
-              which is what turns a form-shaped stack of labels into a record
-              card. */}
-          <Card style={{ paddingVertical: 4 }}>
-            <ProfileRow icon="mail" label="Email">
-              {profile.email ? (
-                <Text style={valueStyle}>{profile.email}</Text>
-              ) : (
-                <Text style={mutedStyle}>Not on file</Text>
-              )}
-            </ProfileRow>
-            {/* Shown only when there is one: "Phone · Not on file" sat right
-                above "My WhatsApp number", two places for one fact (re-audit
-                2026-10-08). The menu row is where a number is added. */}
+          {/* sckools-ui-standards §6 — the profile recipe. */}
+          <ProfileHead
+            photoUrl={profile.photoUrl}
+            initials={initials(profile.firstName, profile.lastName)}
+            name={`${profile.firstName} ${profile.lastName}`}
+            line={line}
+            onUploaded={(url) => setProfile((p) => (p ? { ...p, photoUrl: url } : p))}
+          />
+          <View style={{ height: 16 }} />
+          <ProfileGroup label="About">
+            <InfoRow first icon="mail" label="Email">
+              {profile.email ? <Text style={valueStyle}>{profile.email}</Text> : <Text style={mutedStyle}>Not on file</Text>}
+            </InfoRow>
+            {/* Shown only when there is one: the WhatsApp row below is where a number is added. */}
             {profile.phone ? (
-              <ProfileRow icon="phone" label="Phone">
+              <InfoRow icon="phone" label="Phone">
                 <Text style={valueStyle}>{profile.phone}</Text>
-              </ProfileRow>
+              </InfoRow>
             ) : null}
-            <ProfileRow icon="library" label="Subjects taught">
+            <InfoRow icon="library" label="Subjects taught">
               {profile.subjects.length > 0 ? (
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
                   {profile.subjects.map((s) => (
@@ -181,12 +118,12 @@ export default function Profile() {
               ) : (
                 <Text style={mutedStyle}>No subjects assigned</Text>
               )}
-            </ProfileRow>
-            <ProfileRow icon="home" label="Class teacher of">
+            </InfoRow>
+            <InfoRow icon="home" label="Class teacher of">
               {profile.classTeacherOf.length > 0 ? (
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
                   {profile.classTeacherOf.map((c) => (
-                    <Pill key={c} tone="green">
+                    <Pill key={c} tone="indigo">
                       {c}
                     </Pill>
                   ))}
@@ -194,14 +131,12 @@ export default function Profile() {
               ) : (
                 <Text style={mutedStyle}>Not a class teacher</Text>
               )}
-            </ProfileRow>
-          </Card>
+            </InfoRow>
+          </ProfileGroup>
         </>
       )}
 
-      {/* THE DOORS (pitch №7): Appearance and Change password each open
-          their own pushed screen instead of sitting fully unfolded here —
-          which is what finally fits Sign out above the fold. */}
+      {/* THE DOORS (pitch №7): each opens its own pushed screen. */}
       <ProfileMenu
         rows={[
           { icon: 'palette', label: 'Appearance', route: '/(staff)/(tabs)/profile/appearance', testID: 'profile-menu-appearance' },
@@ -211,29 +146,8 @@ export default function Profile() {
         ]}
       />
 
-      {/* SIGN OUT LIVES HERE.
-          It was reachable only from the tools drawer, behind a chevron FAB —
-          the one screen on the phone where nobody looks for it. Every other app
-          has taught people that signing out is at the bottom of Profile, so it
-          is here as well as there. Styled as a quiet destructive action, not a
-          primary button: it is the last thing on the screen, not the point of
-          it. */}
-      <Pressable
-        testID="profile-signout"
-        accessibilityRole="button"
-        onPress={confirmSignOut}
-        style={{
-          marginTop: 4,
-          borderWidth: 1,
-          borderColor: tokens.color.red,
-          borderRadius: 12,
-          paddingVertical: 13,
-        }}
-      >
-        <Text style={{ color: tokens.color.red, fontWeight: '700', textAlign: 'center', fontSize: 14 }}>
-          Sign out
-        </Text>
-      </Pressable>
+      {/* Sign out: last, red, alone — and it still asks first. */}
+      <SignOutRow testID="profile-signout" onPress={() => confirmSignOut(profile ? { initials: initials(profile.firstName, profile.lastName), name: `${profile.firstName} ${profile.lastName}`, line: 'Teacher' } : undefined)} />
     </Screen>
   );
 }

@@ -79,29 +79,53 @@ beforeEach(() => {
 });
 
 it('offers only owned (non-covering) classes — Grade 6-A is covering-only and must not appear (prove by deletion: dropping the filter would show it)', async () => {
-  mockApi({});
-  const { findByText, queryByText } = render(<Assignments />);
-
+  mockApi({ classes: [...CLASSES, { classSectionId: 'cs3', name: 'Grade 7-C', studentCount: 30, covering: false }] });
+  const { findByTestId, findByText, queryByText } = render(<Assignments />);
+  fireEvent.press(await findByTestId('assign-class'));
   await findByText('Grade 5-B');
   expect(queryByText('Grade 6-A')).toBeNull();
 });
 
-it('does not show the post form until a class is picked', async () => {
-  mockApi({});
-  const { findByText, queryByTestId } = render(<Assignments />);
-  await findByText('Grade 5-B');
+it('does not show the post form until a class is picked (two classes: nothing is auto-picked)', async () => {
+  mockApi({ classes: [...CLASSES, { classSectionId: 'cs3', name: 'Grade 7-C', studentCount: 30, covering: false }] });
+  const { findByTestId, queryByTestId } = render(<Assignments />);
+  await findByTestId('assign-class');
   expect(queryByTestId('assign-submit')).toBeNull();
+});
+
+it('one owned class is picked for the teacher, and the dropdown shows its roll size', async () => {
+  mockApi({});
+  const { findByTestId, findByText } = render(<Assignments />);
+  await findByTestId('assign-submit');
+  await findByText('28 students');
+});
+
+it('the subject dropdown shows full names, not codes', async () => {
+  mockApi({});
+  const { findByTestId, findByText, queryByText } = render(<Assignments />);
+  fireEvent.press(await findByTestId('assign-subject'));
+  await findByText('Mathematics');
+  expect(queryByText('MATH — Mathematics')).toBeNull();
+});
+
+it('due-date shortcuts set tomorrow in one tap', async () => {
+  mockApi({});
+  const { findByTestId } = render(<Assignments />);
+  fireEvent.press(await findByTestId('assign-due-quick-tomorrow'));
+  const btn = await findByTestId('assign-due-quick-tomorrow');
+  expect(btn.props.accessibilityState?.selected).toBe(true);
 });
 
 it('blocks submit until subject, title, instructions and due date are all set, and fires no request', async () => {
   mockApi({});
   const { findByText, findByTestId } = render(<Assignments />);
 
-  fireEvent.press(await findByText('Grade 5-B'));
+  await findByText('Grade 5-B'); // the only owned class is auto-picked
   const submit = await findByTestId('assign-submit');
   // Due date defaults to today, but subject/title/instructions are still empty.
   expect(submit.props.accessibilityState?.disabled).toBe(true);
 
+  fireEvent.press(await findByTestId('assign-subject'));
   fireEvent.press(await findByTestId('subject-sub1'));
   expect(submit.props.accessibilityState?.disabled).toBe(true);
 
@@ -120,7 +144,8 @@ it('posts an assignment with no attachments key when nothing was attached, and s
   mockApi({});
   const { findByText, findByTestId } = render(<Assignments />);
 
-  fireEvent.press(await findByText('Grade 5-B'));
+  await findByText('Grade 5-B'); // the only owned class is auto-picked
+  fireEvent.press(await findByTestId('assign-subject'));
   fireEvent.press(await findByTestId('subject-sub1'));
   fireEvent.changeText(await findByTestId('assign-title'), 'Worksheet 3');
   fireEvent.changeText(await findByTestId('assign-instructions'), 'Do questions 1-10.');
@@ -148,10 +173,12 @@ it('attaches a PDF: uploads it first, then sends it with the post — the web pa
   });
   (api.upload as jest.Mock).mockResolvedValue({ url: 'https://files/ws3.pdf', name: 'worksheet-3.pdf', kind: 'pdf' });
   const { findByTestId, getByTestId } = render(<Assignments />);
+  fireEvent.press(await findByTestId('assign-class'));
   fireEvent.press(await findByTestId('class-cs1'));
   fireEvent.press(await findByTestId('assign-attach'));
   expect(await findByTestId('attached-worksheet-3.pdf')).toBeTruthy();
   expect((api.upload as jest.Mock).mock.calls[0][0]).toBe('/manage/assignments/upload');
+  fireEvent.press(await findByTestId('assign-subject'));
   fireEvent.press(getByTestId('subject-sub1'));
   fireEvent.changeText(getByTestId('assign-title'), 'Worksheet 3');
   fireEvent.changeText(getByTestId('assign-instructions'), 'Q1-10');
@@ -170,6 +197,7 @@ it('refuses a file over 4 MB before any upload, with a sentence', async () => {
     assets: [{ uri: 'file:///tmp/big.pdf', name: 'big.pdf', mimeType: 'application/pdf', size: 9 * 1024 * 1024 }],
   });
   const { findByTestId, findByText } = render(<Assignments />);
+  fireEvent.press(await findByTestId('assign-class'));
   fireEvent.press(await findByTestId('class-cs1'));
   fireEvent.press(await findByTestId('assign-attach'));
   expect(await findByText(/too large/)).toBeTruthy();
@@ -180,7 +208,8 @@ it('shows the server error message verbatim on a failed post', async () => {
   mockApi({ createResult: new ApiError(403, 'You can only post an assignment for your own classes.') });
   const { findByText, findByTestId } = render(<Assignments />);
 
-  fireEvent.press(await findByText('Grade 5-B'));
+  await findByText('Grade 5-B'); // the only owned class is auto-picked
+  fireEvent.press(await findByTestId('assign-subject'));
   fireEvent.press(await findByTestId('subject-sub1'));
   fireEvent.changeText(await findByTestId('assign-title'), 'Worksheet 3');
   fireEvent.changeText(await findByTestId('assign-instructions'), 'Do questions 1-10.');
@@ -193,7 +222,7 @@ it('splits assignments into upcoming and past groups, each showing its seen-coun
   mockApi({ list: { upcoming: [ASSIGNMENT], past: [PAST_ASSIGNMENT] } });
   const { findByText, findByTestId } = render(<Assignments />);
 
-  fireEvent.press(await findByText('Grade 5-B'));
+  await findByText('Grade 5-B'); // the only owned class is auto-picked
 
   expect(await findByTestId('assignment-a1')).toBeTruthy();
   expect(await findByTestId('assignment-a0')).toBeTruthy();
@@ -207,7 +236,7 @@ it('shows an empty state when the class has no assignments yet', async () => {
   mockApi({ list: { upcoming: [], past: [] } });
   const { findByText } = render(<Assignments />);
 
-  fireEvent.press(await findByText('Grade 5-B'));
+  await findByText('Grade 5-B'); // the only owned class is auto-picked
 
   expect(await findByText(/no assignments for this class yet/i)).toBeTruthy();
 });
@@ -217,7 +246,7 @@ it('deleting an assignment asks for confirmation before calling DELETE', async (
   const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   const { findByText, findByTestId } = render(<Assignments />);
 
-  fireEvent.press(await findByText('Grade 5-B'));
+  await findByText('Grade 5-B'); // the only owned class is auto-picked
   fireEvent.press(await findByTestId('delete-a1'));
 
   expect(alertSpy).toHaveBeenCalledWith(
@@ -236,7 +265,7 @@ it('confirming the delete calls DELETE and refetches the list', async () => {
   });
 
   const { findByText, findByTestId } = render(<Assignments />);
-  fireEvent.press(await findByText('Grade 5-B'));
+  await findByText('Grade 5-B'); // the only owned class is auto-picked
   await findByTestId('assignment-a1');
 
   const callsBefore = (api.request as jest.Mock).mock.calls.filter(
@@ -266,7 +295,7 @@ it('shows the server message verbatim when a delete is rejected', async () => {
   });
 
   const { findByText, findByTestId } = render(<Assignments />);
-  fireEvent.press(await findByText('Grade 5-B'));
+  await findByText('Grade 5-B'); // the only owned class is auto-picked
   await findByTestId('assignment-a1');
   fireEvent.press(await findByTestId('delete-a1'));
 

@@ -135,6 +135,7 @@ export type ErrorCode =
   | 'ANNOUNCEMENT_TARGETS_LOCKED'
   /** A past day's register is closed and has no APPROVED, unexpired RegisterChangeRequest — pair with 409. */
   | 'REGISTER_LOCKED'
+  | 'REGISTER_CHANGED'
   /** A RegisterChangeRequest already exists PENDING for this exact class+date — pair with 409. */
   | 'REGISTER_CHANGE_OPEN'
   /** A RegisterChangeRequest is no longer PENDING — already approved/rejected — pair with 409. */

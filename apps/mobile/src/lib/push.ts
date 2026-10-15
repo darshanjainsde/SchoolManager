@@ -3,12 +3,23 @@ import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { session } from './session';
 import { api } from './api';
+import { markAllStale } from './cache-store';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: false,
     shouldShowBanner: true, shouldShowList: true,
   }),
+});
+
+/**
+ * A push means somebody changed something about this person — a cover given
+ * on the console, a leave decided, a result published. Whatever is on screen
+ * asks the server again (keeping what it shows until the answer lands), so a
+ * phone that is open never shows the old picture next to the new notice.
+ */
+Notifications.addNotificationReceivedListener(() => {
+  markAllStale();
 });
 
 // The last token POSTed, per person — the same token was re-issued and

@@ -163,7 +163,7 @@ describe("the accounts officer's leave desk", () => {
     routes['/manage/leave/coverage'] = () => { throw new ApiError(403, 'Forbidden'); };
     render(<LeaveDesk />);
     fireEvent.press(await screen.findByTestId('leavedesk-view-coverage'));
-    expect(await screen.findByText('You do not have the right to cover classes.')).toBeTruthy();
+    expect(await screen.findByText('Cover needs a right')).toBeTruthy();
   });
 
   it('a failed load shows the error with a retry, never an empty week', async () => {
@@ -188,10 +188,13 @@ describe('Waiting', () => {
       leave('d', 'Lata Iyer', { endDate: '2026-10-10T00:00:00.000Z' }),
     ];
     render(<LeaveDesk />);
-    expect(await screen.findByText('Casual leave · 8 Oct · Half day · morning')).toBeTruthy();
-    expect(screen.getByText('Casual leave · 8 Oct · Half day · afternoon')).toBeTruthy();
-    expect(screen.getByText('Casual leave · 8 Oct · Half day')).toBeTruthy();
-    expect(screen.getByText('Casual leave · 8 Oct – 10 Oct')).toBeTruthy();
+    // UI v2: one card per request (components/LeaveRequestCard) — type in
+    // bold, weekday names, the half named, a tabular day count.
+    expect(await screen.findByTestId('leave-card-a')).toHaveTextContent(/Casual leave · half day · morning.*Thu, 8 Oct/);
+    expect(screen.getByTestId('leave-card-b')).toHaveTextContent(/half day · afternoon.*Thu, 8 Oct/);
+    expect(screen.getByTestId('leave-card-c')).toHaveTextContent(/· half day.*Thu, 8 Oct/);
+    expect(screen.getByTestId('leave-card-c')).not.toHaveTextContent(/morning|afternoon/);
+    expect(screen.getByTestId('leave-card-d')).toHaveTextContent(/· 3 days.*Thu, 8 Oct – Sat, 10 Oct/);
   });
 
   it('a decision asks again, so the decided row leaves (a 30 s cache must not keep it)', async () => {
@@ -211,7 +214,9 @@ describe('Waiting', () => {
     render(<LeaveDesk />);
     await screen.findByText('Asha Verma');
     routes['/manage/leave'] = [];
+    // Reject confirms first (every approval product asks on reject, never on approve).
     fireEvent.press(screen.getByTestId('reject-a'));
+    fireEvent.press(await screen.findByTestId('reject-confirm-a'));
     expect(await screen.findByText(sentence)).toBeTruthy();
     await waitFor(() => expect(screen.queryByText('Asha Verma')).toBeNull());
   });

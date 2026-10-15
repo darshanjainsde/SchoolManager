@@ -9,6 +9,7 @@ import { formatDate } from '@/lib/portal';
 import { Empty, ErrorState, Figure, Page, PageHeader, Pill, Screen, SectionTitle } from '@/components/ui';
 import { Row, Swatch } from '@/components/desk';
 import { LoadingRows } from '@/components/Loading';
+import { RoleHero } from '@/components/HeroDeck';
 import { NotificationBell } from '@/components/NotificationBell';
 import { useTokens } from '@/theme/theme-context';
 
@@ -45,16 +46,37 @@ export default function SportsToday() {
 
       {!loading && !error && (
         <>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Figure testID="desk-live" label="Live meets" value={String(live.length)} hint={live[0]?.name ?? 'none running'} tone={live.length ? 'good' : undefined} onPress={() => router.push('/(worker)/(tabs)/meets')} />
-            <Figure testID="desk-pending" label="To verify" value={String(records.data?.pending ?? 0)} hint={records.data?.pending ? 'record attempts' : 'nothing waiting'} tone={records.data?.pending ? 'warn' : undefined} onPress={() => router.push('/(worker)/(tabs)/records')} />
-            <Figure testID="desk-leader" label="Leading" value={leader ? leader.name : '—'} hint={leader ? `${leader.points} pts` : 'no houses yet'} onPress={() => router.push('/(worker)/(tabs)/houses')} />
-          </View>
+          {/* THE HERO (9 Oct 2026): what is live, who leads, the desk's verbs. */}
+          <RoleHero
+            testID="desk-hero"
+            quiet={live.length === 0}
+            eyebrow="Sports desk"
+            title={live.length ? `${live.length} ${live.length === 1 ? 'meet' : 'meets'} live` : 'No meet is live'}
+            line={leader ? `${leader.name} lead the house table with ${leader.points} pts` : 'Houses appear once the office sets them up'}
+            figures={[
+              { testID: 'desk-live', value: String(live.length), label: 'live meets', onPress: () => router.push('/(worker)/(tabs)/meets') },
+              { testID: 'desk-pending', value: String(records.data?.pending ?? 0), label: 'to verify', onPress: () => router.push('/(worker)/(tabs)/records') },
+              { testID: 'desk-leader', value: leader ? leader.name : '—', label: leader ? `leading · ${leader.points} pts` : 'no houses', onPress: () => router.push('/(worker)/(tabs)/houses') },
+            ]}
+            actions={[
+              { label: 'Meets', icon: 'sports', testID: 'hero-act-meets', onPress: () => router.push('/(worker)/(tabs)/meets') },
+              { label: 'Records', icon: 'results', testID: 'hero-act-records', badge: records.data?.pending ?? 0, onPress: () => router.push('/(worker)/(tabs)/records') },
+              { label: 'Houses', icon: 'assignments', testID: 'hero-act-houses', onPress: () => router.push('/(worker)/(tabs)/houses') },
+              { label: 'Rules', icon: 'notes', testID: 'hero-act-rules', onPress: () => router.push('/(worker)/(tabs)/desk/rules') },
+            ]}
+          />
 
           <Page testID="desk-live-list">
             <PageHeader title="Running now" icon="sports" />
             {live.length === 0 ? (
-              <Empty icon="sports">{can(me.data, 'CREATE') ? 'No meet is live. Start one from Meets, or from the web desk for a big one.' : 'No meet is live today.'}</Empty>
+              <Empty
+                kind="first"
+                icon="sports"
+                title="No meet is live"
+                action={can(me.data, 'CREATE') ? { label: 'Open Meets', onPress: () => router.push('/(worker)/(tabs)/meets'), testID: 'desk-open-meets' } : undefined}
+              >
+                {can(me.data, 'CREATE') ? 'Start one from Meets, or from the web desk for a big one.' : 'Nothing is running today.'}
+              </Empty>
             ) : (
               live.map((t, i) => (
                 <Row key={t.id} first={i === 0} testID={`desk-meet-${t.id}`} title={t.name} sub={`${formatDate(t.startsOn)} – ${formatDate(t.endsOn)} · ${t.events} event${t.events === 1 ? '' : 's'}`} right={<Pill tone={t.published ? 'green' : 'amber'}>{t.published ? 'Published' : 'Draft'}</Pill>} onPress={() => router.push(`/(worker)/(tabs)/meets/${t.id}`)} />

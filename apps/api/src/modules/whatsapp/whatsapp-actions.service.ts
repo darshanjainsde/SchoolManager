@@ -3,9 +3,9 @@ import { getPlatformPrisma, type PrismaClient } from '@skoolos/db';
 import { ApiError } from '../../common/errors/api-error';
 import { isP2002 } from '../../common/errors/prisma-errors';
 import { WhatsAppChannel } from '../../common/notifications/whatsapp.channel';
-import { actionKeys, coverPayload, parseAction, type Action } from '../../common/notifications/whatsapp/actions';
+import { actionKeys, coverAllPayload, coverPayload, oneByOnePayload, parseAction, type Action } from '../../common/notifications/whatsapp/actions';
 import { toE164 } from '../../common/notifications/whatsapp/phone';
-import { sendList, sendTemplate, sendText } from '../../common/notifications/whatsapp/graph.client';
+import { sendButtons, sendList, sendTemplate, sendText } from '../../common/notifications/whatsapp/graph.client';
 import { coverPendingTemplate, COVER_PENDING } from '../../common/notifications/whatsapp/templates';
 import { isoWeekdayOf, LeaveService, liveSlotWhere, toDateStr } from '../management';
 import { InboundIdentityService } from './inbound-identity.service';
@@ -84,7 +84,7 @@ export class WhatsAppActionsService {
           schoolId = await this.schoolOf(db, parsed.action);
           // An expired Got it / Can't is recorded and NOT answered: a
           // substitute has nothing to decide in the console.
-          if (schoolId && parsed.action.kind !== 'ack' && parsed.action.kind !== 'cant') await this.text(schoolId, phone, 'This button has expired. Please decide in the console or the app.');
+          if (schoolId && !WhatsAppActionsService.SUBSTITUTE_KINDS.has(parsed.action.kind)) await this.text(schoolId, phone, 'This button has expired. Please decide in the console or the app.');
           result = 'expired';
         } else ({ result, schoolId } = await this.act(db, parsed.action, phone));
       }
@@ -111,8 +111,11 @@ export class WhatsAppActionsService {
     return result;
   }
 
+  /** Taps only a substitute makes: an expired one is recorded, never answered. */
+  private static readonly SUBSTITUTE_KINDS: ReadonlySet<Action['kind']> = new Set(['ack', 'cant', 'ackAll', 'cantAll']);
+
   private async schoolOf(db: Db, a: Action): Promise<string | null> {
-    if (a.kind === 'leave') return (await db.leaveApplication.findUnique({ where: { id: a.leaveId }, select: { schoolId: true } }))?.schoolId ?? null;
+    if (a.kind === 'leave' || a.kind === 'ackAll' || a.kind === 'cantAll') return (await db.leaveApplication.findUnique({ where: { id: a.leaveId }, select: { schoolId: true } }))?.schoolId ?? null;
     return (await db.substitution.findUnique({ where: { id: a.substitutionId }, select: { schoolId: true } }))?.schoolId ?? null;
   }
 
@@ -120,6 +123,10 @@ export class WhatsAppActionsService {
     if (action.kind === 'leave') return this.onLeave(db, action, phone);
     if (action.kind === 'cover') return this.onCover(db, action, phone);
     if (action.kind === 'cant') return this.onCant(db, action, phone);
+    if (action.kind === 'coverAll') return this.onCoverAll(db, action, phone);
+    if (action.kind === 'oneByOne') return this.onOneByOne(db, action, phone);
+    if (action.kind === 'ackAll') return this.onAckAll(db, action, phone);
+    if (action.kind === 'cantAll') return this.onCantAll(db, action, phone);
     return this.onAck(db, action, phone);
   }
 
@@ -168,7 +175,7 @@ export class WhatsAppActionsService {
   // ── cover: a pick from the list ────────────────────────────────────────
 
   private async onCover(db: Db, a: Extract<Action, { kind: 'cover' }>, phone: string) {
-    const sub = await db.substitution.findUnique({ where: { id: a.substitutionId }, select: { id: true, schoolId: true, date: true, periodId: true, classSectionId: true, originalTeacherId: true, substituteTeacherId: true } });
+    const sub = await db.substitution.findUnique({ where: { id: a.substitutionId }, select: { id: true, schoolId: true, date: true, periodId: true, classSectionId: true, originalTeacherId: true, substituteTeacherId: true, leaveApplicationId: true } });
     if (!sub) return { result: 'gap-not-found', schoolId: null };
     const actor = await this.deskActor(db, sub.schoolId, phone);
     if ('refused' in actor) return { result: actor.refused, schoolId: sub.schoolId };
@@ -207,8 +214,145 @@ export class WhatsAppActionsService {
     const t = await db.teacher.findFirst({ where: { id: a.teacherId, schoolId: sub.schoolId }, select: { firstName: true, lastName: true } });
     const when = await this.whenOf(db, sub.schoolId, sub.date, sub.periodId, sub.classSectionId);
     await this.text(sub.schoolId, phone, `Done — ${t ? `${t.firstName} ${t.lastName ?? ''}`.trim() : 'the teacher'} covers ${when.className} on ${when.when}. They have been told.`);
-    await this.nextGap(db, sub, phone);
+    // Before the next gap: can the teacher just picked take the rest?
+    if (!(await this.offerTheRest(sub, a.teacherId, phone))) await this.nextGap(db, sub, phone);
     return { result: `assigned:${a.teacherId}`, schoolId: sub.schoolId };
+  }
+
+  // ── "give them the rest?" — asked once after a pick ───────────────────
+
+  /**
+   * After a pick: if the teacher is free for other open periods of the same
+   * leave, ask ONCE whether to give them all of those, naming the ones they
+   * are busy for. Resolves false when there is nothing to offer (or the
+   * question could not be sent) so the caller carries on gap by gap.
+   */
+  private async offerTheRest(sub: { id: string; schoolId: string; leaveApplicationId: string | null }, teacherId: string, phone: string): Promise<boolean> {
+    if (!sub.leaveApplicationId) return false;
+    const preview = await this.leave.coverPreview(sub.schoolId, sub.leaveApplicationId, teacherId).catch(() => null);
+    if (!preview) return false;
+    const free = preview.rows.filter((r) => r.state === 'FREE');
+    if (free.length === 0) return false;
+    const busy = preview.rows.filter((r) => r.state === 'TEACHING' || r.state === 'COVERING' || r.state === 'ON_LEAVE');
+    const short = (r: { date: string; periodLabel: string }) => `${LeaveService.datesLabel(r.date, r.date).replace(/ \d{4}$/, '')} ${r.periodLabel}`;
+    const SHOWN = 6;
+    const busyLine = busy.length
+      ? `\n\n${preview.teacher.name} is busy for ${busy.length}: ${busy.slice(0, SHOWN).map(short).join(', ')}${busy.length > SHOWN ? `, and ${busy.length - SHOWN} more` : ''}. Those stay open.`
+      : '';
+    const body = `${preview.teacher.name} is also free for ${free.length} more of ${preview.leave.teacherName}'s periods (${preview.leave.dates}).${busyLine}\n\nGive ${preview.teacher.name} all ${free.length}?`;
+    const keys = this.keys();
+    const sent = await this.channel.deliverWith(sub.schoolId, phone, 'COVER_OFFER', 'interactive:buttons', (cfg, pnid, f) =>
+      sendButtons(cfg, phone, {
+        body,
+        buttons: [
+          // Button titles are 20 characters at most: the number, never the name.
+          { id: coverAllPayload(sub.id, teacherId, keys), title: `Give all ${free.length}` },
+          { id: oneByOnePayload(sub.id, keys), title: 'One by one' },
+          { id: coverPayload(sub.id, 'skip', keys), title: 'Decide in console' },
+        ],
+      }, { phoneNumberId: pnid, fetchImpl: f }),
+    );
+    return sent.ok;
+  }
+
+  /**
+   * "Give all N": the SAME preview the console draws, read again now (it may
+   * have changed since the question), and every period still free goes in one
+   * LeaveService.coverBatch — which checks each again under the day locks and
+   * skips anything that moved. Then on to whatever is left.
+   */
+  private async onCoverAll(db: Db, a: Extract<Action, { kind: 'coverAll' }>, phone: string) {
+    const sub = await db.substitution.findUnique({ where: { id: a.substitutionId }, select: { id: true, schoolId: true, date: true, originalTeacherId: true, leaveApplicationId: true } });
+    if (!sub) return { result: 'gap-not-found', schoolId: null };
+    const actor = await this.deskActor(db, sub.schoolId, phone);
+    if ('refused' in actor) return { result: actor.refused, schoolId: sub.schoolId };
+    const school = await this.schoolName(db, sub.schoolId);
+    if (!sub.leaveApplicationId) {
+      await this.nextGap(db, sub, phone);
+      return { result: 'no-leave', schoolId: sub.schoolId };
+    }
+    try {
+      const preview = await this.leave.coverPreview(sub.schoolId, sub.leaveApplicationId, a.teacherId);
+      const ids = preview.rows.filter((r) => r.state === 'FREE').map((r) => r.gapId);
+      const theirs = preview.rows.filter((r) => r.state === 'THEIRS').length;
+      if (ids.length === 0) {
+        await this.text(sub.schoolId, phone, `${school}: ${preview.teacher.name} is not free for any other open period of this leave now. Nothing was changed.`);
+        await this.nextGap(db, sub, phone);
+        return { result: 'cover-all:none', schoolId: sub.schoolId };
+      }
+      const r = await this.leave.coverBatch(sub.schoolId, sub.leaveApplicationId, { substituteTeacherId: a.teacherId, substitutionIds: ids });
+      const total = theirs + r.given + r.alreadyTheirs;
+      const missed = r.skipped.length
+        ? ` ${r.skipped.length} could not be given: ${r.skipped.slice(0, 3).map((s) => `${s.when} (${s.reason.replace(/\.$/, '')})`).join('; ')}${r.skipped.length > 3 ? `; and ${r.skipped.length - 3} more` : ''}.`
+        : '';
+      await this.text(sub.schoolId, phone, `Done. ${preview.teacher.name} now covers ${total} period${total === 1 ? '' : 's'} of ${preview.leave.teacherName}'s leave and has been told.${missed}`);
+      await this.nextGap(db, sub, phone);
+      return { result: `cover-all:${r.given}/${ids.length}`, schoolId: sub.schoolId };
+    } catch (e) {
+      const code = apiCode(e);
+      if (code === 'COVER_GONE' || e instanceof NotFoundException) {
+        await this.text(sub.schoolId, phone, `${school}: that leave was withdrawn, so its periods no longer need a teacher. Nothing was changed.`);
+        return { result: 'leave-withdrawn', schoolId: sub.schoolId };
+      }
+      if (code === 'VALIDATION') {
+        await this.text(sub.schoolId, phone, `${school}: ${((e as ApiError).getResponse() as { message: string }).message}`);
+        return { result: 'cover-all:refused', schoolId: sub.schoolId };
+      }
+      throw e;
+    }
+  }
+
+  /** "One by one" — the next open gap of this teacher's leave, as before. */
+  private async onOneByOne(db: Db, a: Extract<Action, { kind: 'oneByOne' }>, phone: string) {
+    const sub = await db.substitution.findUnique({ where: { id: a.substitutionId }, select: { id: true, schoolId: true, date: true, originalTeacherId: true } });
+    if (!sub) return { result: 'gap-not-found', schoolId: null };
+    const actor = await this.deskActor(db, sub.schoolId, phone);
+    if ('refused' in actor) return { result: actor.refused, schoolId: sub.schoolId };
+    await this.nextGap(db, sub, phone);
+    return { result: 'one-by-one', schoolId: sub.schoolId };
+  }
+
+  // ── the substitute answers a batch summary ─────────────────────────────
+
+  /** Got it, for every period of that leave they hold. Silent to anyone but that teacher. */
+  private async onAckAll(db: Db, a: Extract<Action, { kind: 'ackAll' }>, phone: string) {
+    const schoolId = (await db.leaveApplication.findUnique({ where: { id: a.leaveId }, select: { schoolId: true } }))?.schoolId ?? null;
+    if (!schoolId) return { result: 'leave-not-found', schoolId: null };
+    const who = await this.identity.actorFor(phone, schoolId, { kind: 'TEACHER', teacherId: a.teacherId });
+    if (!who.ok) return { result: 'ack-not-substitute', schoolId };
+    const school = await this.schoolName(db, schoolId);
+    try {
+      await this.leave.acknowledgeLeave(schoolId, a.leaveId, who.profile.userId);
+    } catch (e) {
+      if (apiCode(e) === 'NOT_THE_SUBSTITUTE') {
+        await this.text(schoolId, phone, `${school}: these covers have changed and none is yours now. Open the Sckools app to see your day.`);
+        return { result: 'cover-moved', schoolId };
+      }
+      throw e;
+    }
+    await this.text(schoolId, phone, `${school}: noted — thank you. The office can see you have them.`);
+    return { result: 'acked-all', schoolId };
+  }
+
+  /** Can't, for every period of that leave they still hold: back to the desk, which is told. */
+  private async onCantAll(db: Db, a: Extract<Action, { kind: 'cantAll' }>, phone: string) {
+    const schoolId = (await db.leaveApplication.findUnique({ where: { id: a.leaveId }, select: { schoolId: true } }))?.schoolId ?? null;
+    if (!schoolId) return { result: 'leave-not-found', schoolId: null };
+    const who = await this.identity.actorFor(phone, schoolId, { kind: 'TEACHER', teacherId: a.teacherId });
+    if (!who.ok) return { result: 'cant-not-substitute', schoolId };
+    const school = await this.schoolName(db, schoolId);
+    let declined: number;
+    try {
+      ({ declined } = await this.leave.declineLeave(schoolId, a.leaveId, who.profile.userId));
+    } catch (e) {
+      if (apiCode(e) === 'NOT_THE_SUBSTITUTE') {
+        await this.text(schoolId, phone, `${school}: these covers have already changed, so nothing was done. Open the Sckools app to see your day as it stands.`);
+        return { result: 'cover-moved', schoolId };
+      }
+      throw e;
+    }
+    await this.text(schoolId, phone, `${school}: okay — you are off ${declined === 1 ? 'that cover' : `those ${declined} covers`}. The office has been told and will find someone else.`);
+    return { result: `declined-all:${declined}`, schoolId };
   }
 
   private async nextGap(db: Db, sub: { schoolId: string; date: Date; originalTeacherId: string; id: string }, phone: string): Promise<void> {

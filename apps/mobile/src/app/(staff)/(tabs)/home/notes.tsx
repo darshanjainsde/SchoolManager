@@ -6,7 +6,6 @@ import { api, ApiError } from '@/lib/api';
 import { Card, Pill, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
-import { font } from '@/theme/tokens';
 
 /**
  * Notes & To-dos — the per-class history tab. The live "Today" panel
@@ -51,7 +50,7 @@ export default function Notes() {
   return (
     <Screen>
       <SectionTitle title="Notes & to-dos" />
-      <Text style={{ fontSize: 11, color: tokens.color.sub, marginHorizontal: 4, marginTop: -6 }}>
+      <Text style={{ fontSize: 14, color: tokens.color.sub, marginHorizontal: 4, marginTop: -6 }}>
         Every class you teach and its full notes history — pick up where you left off, or add more any
         time.
       </Text>
@@ -80,16 +79,17 @@ export default function Notes() {
           testID={`note-class-${c.classSectionId}-${c.subjectId}`}
           onPress={() => open(c)}
           accessibilityRole="button"
+          style={({ pressed }) => ({ minHeight: 72, borderRadius: tokens.radius.card, opacity: pressed ? 0.8 : 1 })}
           >
-          {/* `.clsrow` — the same 34px serif-initial tile the attendance
-              class list uses, so a class is the same object on both screens. */}
-          <Card style={{ gap: 7 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 11 }}>
+          {/* `.clsrow` — the same initial tile the attendance class list
+              uses, so a class is the same object on both screens. */}
+          <Card style={{ gap: 8, minHeight: 72, justifyContent: 'center' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <View
                 style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 10,
+                  width: 36,
+                  height: 36,
+                  borderRadius: tokens.radius.chip,
                   backgroundColor: tokens.color.indigo,
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -97,9 +97,8 @@ export default function Notes() {
               >
                 <Text
                   style={{
-                    fontFamily: font.serif,
                     fontWeight: '700',
-                    fontSize: 14,
+                    fontSize: 15,
                     color: tokens.color.onBrand,
                   }}
                 >
@@ -108,9 +107,8 @@ export default function Notes() {
               </View>
               <Text
                 style={{
-                  fontFamily: font.serif,
-                  fontSize: 15,
-                  fontWeight: '700',
+                  fontSize: 16,
+                  fontWeight: '600',
                   color: tokens.color.ink,
                   flex: 1,
                 }}
@@ -121,12 +119,12 @@ export default function Notes() {
                 {c.isClassTeacher ? 'Class teacher' : 'Subject teacher'}
               </Pill>
             </View>
-            {/* Counts in mono — figures that must line up row to row. */}
-            <View style={{ flexDirection: 'row', gap: 14, marginLeft: 45 }}>
-              <Text style={{ fontFamily: font.mono, fontSize: 11, color: tokens.color.sub }}>
+            {/* Counts in tabular figures — they must line up row to row. */}
+            <View style={{ flexDirection: 'row', gap: 14, marginLeft: 48 }}>
+              <Text style={{ fontVariant: ['tabular-nums'], fontSize: 13, color: tokens.color.sub }}>
                 {`${c.noteCount} ${c.noteCount === 1 ? 'note' : 'notes'}`}
               </Text>
-              <Text style={{ fontFamily: font.mono, fontSize: 11, color: tokens.color.sub }}>
+              <Text style={{ fontVariant: ['tabular-nums'], fontSize: 13, color: tokens.color.sub }}>
                 {`✓ ${c.openTodoCount} open ${c.openTodoCount === 1 ? 'to-do' : 'to-dos'}`}
               </Text>
             </View>

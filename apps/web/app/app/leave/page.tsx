@@ -9,6 +9,8 @@ import { useApi } from '@/lib/use-api';
 import { ApiError } from '@/lib/api';
 import { useHost } from '@/components/use-host';
 import { Cell, Row, RowList, RowTitle } from '@/components/ui/kit';
+import { CoverOffer, CoverOneTeacherDrawer, fitKey, type CoverFit } from './cover-one-teacher';
+import { LIVE_DESK_MS } from '@/app/providers';
 import { OWN_LEAVE_HINT, isDecidedElsewhere, isOwnLeave, leaveSpan, refreshLeaveDesk } from '@/lib/leave-desk';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -46,6 +48,8 @@ interface CoverageGap {
   substituteTeacherName: string | null;
   /** When the substitute tapped "Got it" (ISO) — null until they do. */
   acknowledgedAt: string | null;
+  /** The leave that opened this gap; null for a gap made by hand. Older API: absent. */
+  leaveApplicationId?: string | null;
 }
 
 /** What `GET /manage/substitution/:id/candidates` returns — freeTeachersFor, ranked. */
@@ -150,6 +154,15 @@ function CoverPicker({ gap, disabled, onPick }: { gap: CoverageGap; disabled: bo
     enabled: !!host && open,
     queryFn: () => api.get<CoverCandidate[]>(`/manage/substitution/${gap.id}/candidates`),
   });
+  // "free for 19 of 26 in this leave" — so the desk can pick whoever can take
+  // most of it. One question per leave, asked only once a picker is opened.
+  const leaveId = gap.leaveApplicationId ?? null;
+  const fit = useQuery({
+    queryKey: fitKey(leaveId ?? ''),
+    enabled: !!host && open && !!leaveId,
+    queryFn: () => api.get<CoverFit>(`/manage/leave/${leaveId}/cover-fit`),
+  });
+  const freeFor = new Map((fit.data?.teachers ?? []).map((t) => [t.id, t.free]));
   const options = candidates.data ?? [];
   const keepCurrent = !!gap.substituteTeacherId && !options.some((c) => c.id === gap.substituteTeacherId);
   const opening = () => {
@@ -189,6 +202,7 @@ function CoverPicker({ gap, disabled, onPick }: { gap: CoverageGap; disabled: bo
         <option key={c.id} value={c.id}>
           {c.name}
           {c.teachesSubject ? ' · teaches this subject' : c.coversThatDay > 0 ? ` · ${c.coversThatDay} cover${c.coversThatDay === 1 ? '' : 's'} that day` : ''}
+          {fit.data && fit.data.open > 1 && freeFor.has(c.id) ? ` · free for ${freeFor.get(c.id)} of ${fit.data.open} in this leave` : ''}
         </option>
       ))}
     </select>
@@ -233,11 +247,19 @@ export default function AdminLeavePage() {
   // the two desks share the gesture because they share the decision.
   const [decided, setDecided] = useState<Record<string, 'approved' | 'rejected'>>({});
 
+  // "Give Rahul the rest?" — the pick it follows, until answered. One per desk.
+  const [offer, setOffer] = useState<{ leaveId: string; gapId: string; teacherId: string } | null>(null);
+  // Leaves the desk said "No thanks" to: not asked again this visit.
+  const [declinedOffers, setDeclinedOffers] = useState<ReadonlySet<string>>(new Set());
+  const [drawer, setDrawer] = useState<{ leaveId: string; teacherId: string | null } | null>(null);
+
   // Pending opens first: it is the decision actually waiting on the admin.
   const [tab, setTab] = useState<LeaveTab>('pending');
 
   const pending = useQuery({
     queryKey: ['a-leave-pending'],
+    // Teachers apply, withdraw and get covers from the app: an open desk re-checks.
+    refetchInterval: LIVE_DESK_MS,
     enabled: !!host,
     queryFn: () => api.get<LeaveApplication[]>('/manage/leave?status=PENDING'),
   });
@@ -253,6 +275,8 @@ export default function AdminLeavePage() {
 
   const approved = useQuery({
     queryKey: ['a-leave-approved'],
+    // Teachers apply, withdraw and get covers from the app: an open desk re-checks.
+    refetchInterval: LIVE_DESK_MS,
     enabled: !!host,
     queryFn: () => api.get<LeaveApplication[]>('/manage/leave?status=APPROVED'),
   });
@@ -267,6 +291,8 @@ export default function AdminLeavePage() {
 
   const coverage = useQuery({
     queryKey: ['a-leave-coverage', range.from, range.to],
+    // Teachers apply, withdraw and get covers from the app: an open desk re-checks.
+    refetchInterval: LIVE_DESK_MS,
     enabled: !!host && !!range.from && !!range.to,
     queryFn: () =>
       api.get<CoverageGap[]>(
@@ -327,6 +353,8 @@ export default function AdminLeavePage() {
   const refreshCover = () => {
     void qc.invalidateQueries({ queryKey: ['a-leave-coverage'] });
     void qc.invalidateQueries({ queryKey: ['a-cover-candidates'] });
+    void qc.invalidateQueries({ queryKey: ['a-cover-preview'] });
+    void qc.invalidateQueries({ queryKey: ['a-cover-fit'] });
   };
   const coverError = (e: Error) => {
     toast.error(e.message);
@@ -339,11 +367,13 @@ export default function AdminLeavePage() {
   }
 
   const assign = useMutation({
-    mutationFn: ({ gapId, substituteTeacherId }: { gapId: string; substituteTeacherId: string }) =>
-      api.post(`/manage/substitution/${gapId}/assign`, { substituteTeacherId }),
-    onSuccess: () => {
+    mutationFn: ({ gap, substituteTeacherId }: { gap: CoverageGap; substituteTeacherId: string }) =>
+      api.post(`/manage/substitution/${gap.id}/assign`, { substituteTeacherId }),
+    onSuccess: (_r, { gap, substituteTeacherId }) => {
       toast.success('Substitute assigned.');
       refreshCover();
+      const leaveId = gap.leaveApplicationId ?? null;
+      setOffer(leaveId && !declinedOffers.has(leaveId) ? { leaveId, gapId: gap.id, teacherId: substituteTeacherId } : null);
     },
     onError: coverError,
   });
@@ -358,6 +388,16 @@ export default function AdminLeavePage() {
   const approvedApps = approved.data ?? [];
   const gaps = [...(coverage.data ?? [])].sort((a, b) => a.date.localeCompare(b.date));
   const uncoveredCount = gaps.filter((g) => !g.substituteTeacherId).length;
+  // One group per leave, in the order its first gap falls; gaps made by hand
+  // (no leave) last. The rows inside keep the API's date-then-period order.
+  const groups: { leaveId: string | null; teacher: string; gaps: CoverageGap[] }[] = [];
+  for (const g of gaps) {
+    const id = g.leaveApplicationId ?? null;
+    const into = groups.find((x) => x.leaveId === id);
+    if (into) into.gaps.push(g);
+    else groups.push({ leaveId: id, teacher: g.originalTeacherName, gaps: [g] });
+  }
+  groups.sort((a, b) => Number(a.leaveId === null) - Number(b.leaveId === null));
 
   return (
     <>
@@ -628,9 +668,24 @@ export default function AdminLeavePage() {
                 start at the same x, whatever the class name or teacher. */}
             {gaps.length > 0 && (
               <RowList columns="minmax(0, 1.3fr) minmax(0, 1fr) auto auto" label="Classes to cover">
-                {gaps.map((gap) => {
+                {groups.map((group) => {
+                  const open = group.gaps.filter((g) => !g.substituteTeacherId).length;
+                  return [
+                    <div key={`h-${group.leaveId ?? 'none'}`} className="sk-rowgroup" data-testid={`cover-group-${group.leaveId ?? 'none'}`}>
+                      <span className="t">{group.leaveId ? `${group.teacher}'s leave` : 'Other classes to cover'}</span>
+                      <span className="c">
+                        {open === 0 ? 'all covered' : `${open} of ${group.gaps.length} need cover`}
+                      </span>
+                      {group.leaveId && open > 1 ? (
+                        <button type="button" className="sk-btn sk-press sk-coverall" onClick={() => setDrawer({ leaveId: group.leaveId!, teacherId: null })}>
+                          Cover with one teacher
+                        </button>
+                      ) : null}
+                    </div>,
+                    ...group.gaps.map((gap) => {
                   const covered = !!gap.substituteTeacherId;
-                  return (
+                  const offerHere = offer && offer.gapId === gap.id && offer.leaveId === gap.leaveApplicationId;
+                  return [
                     <Row key={gap.id} testId={`cover-${gap.id}`}>
                       <Cell>
                         <RowTitle
@@ -647,7 +702,7 @@ export default function AdminLeavePage() {
                         <CoverPicker
                           gap={gap}
                           disabled={assign.isPending}
-                          onPick={(substituteTeacherId) => assign.mutate({ gapId: gap.id, substituteTeacherId })}
+                          onPick={(substituteTeacherId) => assign.mutate({ gap, substituteTeacherId })}
                         />
                       </Cell>
                       <Cell>
@@ -672,8 +727,25 @@ export default function AdminLeavePage() {
                           )}
                         </div>
                       </Cell>
-                    </Row>
-                  );
+                    </Row>,
+                    offerHere ? (
+                      <CoverOffer
+                        key={`offer-${gap.id}`}
+                        leaveId={offer.leaveId}
+                        teacherId={offer.teacherId}
+                        onOpen={() => {
+                          setDrawer({ leaveId: offer.leaveId, teacherId: offer.teacherId });
+                          setOffer(null);
+                        }}
+                        onDismiss={() => {
+                          setDeclinedOffers((d) => new Set(d).add(offer.leaveId));
+                          setOffer(null);
+                        }}
+                      />
+                    ) : null,
+                  ];
+                    }),
+                  ];
                 })}
               </RowList>
             )}
@@ -682,6 +754,15 @@ export default function AdminLeavePage() {
         </div>
       )}
 
+      {drawer ? (
+        <CoverOneTeacherDrawer
+          key={`${drawer.leaveId}-${drawer.teacherId ?? 'choose'}`}
+          leaveId={drawer.leaveId}
+          teacherId={drawer.teacherId}
+          onClose={() => setDrawer(null)}
+          onDone={refreshCover}
+        />
+      ) : null}
     </>
   );
 }

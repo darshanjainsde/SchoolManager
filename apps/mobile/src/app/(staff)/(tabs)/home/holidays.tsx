@@ -7,7 +7,6 @@ import { holidayDateParts, type Holiday } from '@/lib/portal';
 import { Card, ErrorState, Pill, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
-import { font } from '@/theme/tokens';
 import { DUR, pinStyle, useGesture } from '@/theme/motion';
 import { holidayTypeLabel } from '@/lib/labels';
 
@@ -80,6 +79,7 @@ export default function Holidays() {
       )}
       {items?.map((h, i) => {
         const { day, weekday } = holidayDateParts(h.startDate);
+        const month = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][new Date(h.startDate).getUTCMonth()];
         return (
           <PinnedNotice key={h.id} index={i}>
             {/* ORDINARY PAPER. The repaint painted the whole card amber and
@@ -89,25 +89,26 @@ export default function Holidays() {
                 tint stays where it reads: on the date cell, and on the type
                 Pill that already colour-codes the row. */}
             <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 11 }}>
+              {/* Month over day, like the accounts Today tile: a bare "20"
+                  said nothing about WHEN (v2 crawl 2026-10-08). */}
               <View
                 style={{
                   width: 44,
-                  height: 44,
-                  borderRadius: 12,
+                  height: 48,
+                  borderRadius: tokens.radius.field,
                   backgroundColor: tokens.color.indigo50,
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
               >
-                {/* The date numeral in the serif, the way a wall calendar
-                    prints it. */}
-                <Text style={{ fontFamily: font.serif, fontSize: 18, fontWeight: '700', color: tokens.color.indigo }}>
+                <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 0.5, color: tokens.color.indigo }}>{month}</Text>
+                <Text style={{ fontSize: 17, lineHeight: 20, fontWeight: '700', color: tokens.color.indigo, fontVariant: ['tabular-nums'] }}>
                   {day}
                 </Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 13, fontWeight: '600', color: tokens.color.ink }}>{h.name}</Text>
-                <Text style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 2 }}>{weekday}</Text>
+                <Text style={{ fontSize: 15, fontWeight: '600', color: tokens.color.ink }}>{h.name}</Text>
+                <Text style={{ fontSize: 13, color: tokens.color.sub, marginTop: 2 }}>{weekday}</Text>
               </View>
               <Pill tone={typeTone(h.type)}>{holidayTypeLabel(h.type)}</Pill>
             </Card>

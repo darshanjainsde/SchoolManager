@@ -29,6 +29,7 @@ export const MESSAGE_WORDS: Record<string, string> = {
   COVER_ASSIGNED: 'Cover assigned',
   COVER_CANCELLED: 'Cover cancelled',
   COVER_UNFILLED: 'Cover still needed',
+  COVER_BATCH: 'Several covers at once',
   CONCERN_RAISED: 'Concern raised',
   CONCERN_REPLIED: 'Concern answered',
   CONCERN_RESOLVED: 'Concern resolved',

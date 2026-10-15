@@ -31,6 +31,12 @@ export interface SaveAttendanceRequest {
   /** YYYY-MM-DD, the school's local calendar day. */
   date: string;
   marks: AttendanceMark[];
+  /**
+   * ISO time the register was marked, sent ONLY when the app replays a save
+   * queued offline. The server refuses it (409 REGISTER_CHANGED) if the
+   * register was saved after this — a newer register is never overwritten.
+   */
+  markedOfflineAt?: string;
 }
 
 export interface SaveAttendanceResponse {
@@ -585,7 +591,7 @@ export interface TeacherReplyInput {
 // HolidayTypeValue above, both also String columns).
 
 /** The events that write a `NotificationOutbox` row today. */
-export const NOTIFICATION_OUTBOX_KINDS = ['RESULT_PUBLISHED', 'EXAM_SCHEDULED', 'ASSIGNMENT_POSTED', 'MESSAGE_RECEIVED', 'LIBRARY_NOTICE', 'SESSION_STARTED', 'SPORTS_NOTICE', 'FEE_VERIFIED', 'FEE_REJECTED', 'FEE_DUE', 'LEAVE_APPLIED', 'LEAVE_DECIDED', 'COVER_ASSIGNED', 'CONCERN_RAISED', 'CONCERN_REPLIED', 'CONCERN_RESOLVED', 'LEAVE_CANCELLED', 'COVER_CANCELLED', 'COVER_UNFILLED'] as const;
+export const NOTIFICATION_OUTBOX_KINDS = ['RESULT_PUBLISHED', 'EXAM_SCHEDULED', 'ASSIGNMENT_POSTED', 'MESSAGE_RECEIVED', 'LIBRARY_NOTICE', 'SESSION_STARTED', 'SPORTS_NOTICE', 'FEE_VERIFIED', 'FEE_REJECTED', 'FEE_DUE', 'LEAVE_APPLIED', 'LEAVE_DECIDED', 'COVER_ASSIGNED', 'CONCERN_RAISED', 'CONCERN_REPLIED', 'CONCERN_RESOLVED', 'LEAVE_CANCELLED', 'COVER_CANCELLED', 'COVER_UNFILLED', 'COVER_BATCH'] as const;
 export type NotificationOutboxKind = (typeof NOTIFICATION_OUTBOX_KINDS)[number];
 
 /**

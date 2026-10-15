@@ -28,13 +28,13 @@ A guardian's number is often shared by two or three children, so every notice AB
 
 ## Phone login (design 2026-09-21)
 
-`sckools_verify_code` carries every one-time code: login (`POST /auth/otp/request` → `verify` → `choose` when a number opens several profiles), password reset (`forgot-password` now also starts a code when the login has a phone; `reset-with-otp` sets the password), and proving a number on a profile. One engine (`apps/api/src/common/otp`), every enabled sender (WhatsApp now, SMS when the MSG91 keys exist). Limits: one code a minute, three an hour, ten a day per phone and purpose; 10 minutes; 5 tries. Admins never log in by code — their profile appears only in a password session's *Switch profile* list. Spec: `docs/superpowers/specs/2026-09-21-whatsapp-identity-and-actions-design.md`.
+`sckoolsverify` carries every one-time code: login (`POST /auth/otp/request` → `verify` → `choose` when a number opens several profiles), password reset (`forgot-password` now also starts a code when the login has a phone; `reset-with-otp` sets the password), and proving a number on a profile. One engine (`apps/api/src/common/otp`), every enabled sender (WhatsApp now, SMS when the MSG91 keys exist). Limits: one code a minute, three an hour, ten a day per phone and purpose; 10 minutes; 5 tries. Admins never log in by code — their profile appears only in a password session's *Switch profile* list. Spec: `docs/superpowers/specs/2026-09-21-whatsapp-identity-and-actions-design.md`.
 
 ## Actions and identity (the second batch)
 
 | Name | Category | Body | Buttons | Samples |
 |---|---|---|---|---|
-| `sckools_verify_code` | **Authentication** | *(Meta fixes the body for this category — choose "Copy code" button, code expiry 10 minutes)* | Copy code | 482911 |
+| `sckoolsverify` | **Authentication** | *(Meta fixes the body for this category — choose "Copy code" button, code expiry 10 minutes)* | Copy code | 482911 |
 | `sckools_leave_applied` | Utility | {{1}}: {{2}} has applied for leave on {{3}} ({{4}} days). Reason: {{5}}. {{6}} periods would need cover. Approve or reject below; you can also do this in the console. | Quick reply **Approve**, Quick reply **Reject** (in that order) | Raffles Public School · Priya Nair · Mon 22 – Tue 23 Sep 2026 · 2 · Family function · 5 |
 | `sckools_leave_decided` | Utility | {{1}}: your leave for {{3}} has been {{2}} by {{4}}. Open the Sckools app for the details. | — | Raffles Public School · approved · Mon 22 – Tue 23 Sep 2026 · Darshan Jain |
 | `sckools_cover_assigned` | Utility | {{1}}: you are covering {{3}} ({{4}}) on {{2}}, for {{5}}. Tap below to confirm you have seen this. | Quick reply **Got it** | Raffles Public School · Mon 22 Sep, period 3 (10:15–11:00) · 9-A · Mathematics · Priya Nair |
@@ -88,7 +88,9 @@ START or END with a `{{n}}` variable — every one of ours opened with the schoo
 body needs enough words for the number of variables it carries. The bodies in `templates.ts`
 were rewritten for both, with the parameter ORDER unchanged, so `templateFor` still lines up.
 
-**`sckools_verify_code` cannot be created through the API on this account.** Meta answers
+**UPDATE 2026-10-14: the category opened.** `sckoolsverify` (English US, copy-code button, 10-minute send TTL) was created in WhatsApp Manager and is in review. The code sends that exact name and language; until Meta approves it, the send answers 132001 and the old "say Hi first" fallback still works. History below.
+
+**`sckoolsverify` cannot be created through the API on this account.** Meta answers
 `Application does not have permission for this action` (subcode 2388185) for anything in the
 AUTHENTICATION category, while every UTILITY template on the same token goes through. This is an
 account-level entitlement, not a bug in the payload: a bare authentication template with no

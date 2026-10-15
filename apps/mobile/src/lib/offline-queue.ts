@@ -177,7 +177,10 @@ export async function flush(api: FlushApi, deps: QueueDeps = {}): Promise<FlushR
 
   for (const entry of Object.values(queue)) {
     try {
-      await api.request('/manage/attendance', { method: 'PUT', body: entry.payload });
+      // markedOfflineAt: the server refuses the replay if the register was
+      // saved after this (the office corrected it on the web) — a 409 that
+      // lands in `rejected` below with its sentence.
+      await api.request('/manage/attendance', { method: 'PUT', body: { ...entry.payload, markedOfflineAt: new Date(entry.queuedAt).toISOString() } });
       synced.push(entry);
       delete queue[entry.key];
     } catch (e) {

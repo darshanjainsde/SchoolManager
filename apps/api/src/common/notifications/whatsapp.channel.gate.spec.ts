@@ -91,3 +91,22 @@ describe('WhatsAppChannel — a template Meta has not approved yet', () => {
   });
 });
 
+describe('WhatsAppChannel — a school switching WhatsApp off', () => {
+  it('another server stops sending within SETTINGS_TTL_MS (10 s), and a burst inside it reads the switch once', async () => {
+    const { SETTINGS_TTL_MS } = jest.requireActual('./whatsapp.channel');
+    expect(SETTINGS_TTL_MS).toBe(10_000);
+    const d = db();
+    const f = okFetch();
+    const ch = new WhatsAppChannel(d as never, () => CFG, f, () => null, { isApproved: async () => true });
+    const now = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    expect((await ch.attempt('u1', MSG, SCHOOL)).status).toBe('SENT');
+    expect((await ch.attempt('u2', { ...MSG, payload: { ...MSG.payload, studentName: 'Diya' } }, SCHOOL)).status).toBe('SENT');
+    expect(d.whatsAppSettings.findUnique).toHaveBeenCalledTimes(1);
+    // The school switches it off — saved by ANOTHER instance, so this one is not told.
+    d.whatsAppSettings.findUnique.mockResolvedValue({ enabled: false, phoneNumberId: null });
+    now.mockReturnValue(1_000_000 + SETTINGS_TTL_MS + 1);
+    expect(await ch.attempt('u3', { ...MSG, payload: { ...MSG.payload, studentName: 'Kabir' } }, SCHOOL)).toEqual({ status: 'SKIPPED', reason: 'channel-off' });
+    now.mockRestore();
+  });
+});
+

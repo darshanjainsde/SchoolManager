@@ -2,7 +2,8 @@ import { fetchCached, useReload } from '@/lib/query';
 import { useCallback, useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import type { ClassNoteRow, ClassTodoRow, TeacherDay, TeacherDayEntry } from '@skoolos/types';
+import { HeroDeck } from '@/components/HeroDeck';
+import type { ClassNoteRow, ClassTodoRow, TeacherDay } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { session } from '@/lib/session';
 import { todayISO } from '@/lib/attendance';
@@ -14,7 +15,7 @@ import { PeriodSheet } from '@/components/PeriodSheet';
 import { Card, ErrorState, Screen } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { NotificationBell } from '@/components/NotificationBell';
-import { HomeToolGrid } from '@/components/HomeToolGrid';
+import { HomeMenu } from '@/components/HomeToolGrid';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 import { salutation } from '@/lib/greeting';
@@ -170,10 +171,6 @@ export default function Today() {
     router.push(`/(staff)/(tabs)/home/class/${classSectionId}?${params.toString()}`);
   }
 
-  function isLive(e: TeacherDayEntry): boolean {
-    return entry?.periodId === e.periodId;
-  }
-
   return (
     <Screen onRefresh={refresh} refreshing={refreshing}>
       {/* `.greet` + `.kidchip` — the teacher's name in the diary serif, the
@@ -259,11 +256,42 @@ export default function Today() {
             nextEntry={nextEntry}
             onTakeAttendance={goToAttendance}
             onOpenClass={goToClass}
-            summary={{ classesTaught: classes.length, studentsMarked }}
+            summary={{ classesTaught: classes.length, studentsMarked, pendingRegisters: pending, firstPendingClassId: needsInk[0]?.slot?.classSectionId }}
             notesCount={periodCounts.notes}
             todosLeft={periodCounts.todosLeft}
             onOpenNotes={liveSlot ? () => setSheet('notes') : undefined}
             onOpenTodos={liveSlot ? () => setSheet('todos') : undefined}
+            deck={
+              <HeroDeck
+                // While a class is live the hero already carries the period,
+                // its tools and its button; the day's figures made it three
+                // rows of controls tall and pushed the menu off the screen
+                // (audit 9 Oct 2026). They return the moment the bell goes.
+                figures={
+                  liveSlot
+                    ? []
+                    : [
+                        { value: `${taken}/${classes.length}`, label: 'registers', testID: 'hero-fig-registers' },
+                        { value: String(studentsMarked), label: 'marked', testID: 'hero-fig-marked' },
+                        { value: String(unreadMsgs), label: unreadMsgs === 1 ? 'message' : 'messages', testID: 'hero-fig-messages' },
+                      ]
+                }
+                // The hero DOES (quick verbs); the tiles below GO (places).
+                actions={[
+                  {
+                    label: 'Register',
+                    icon: 'take',
+                    testID: 'hero-act-register',
+                    badge: needsInk.length,
+                    onPress: () =>
+                      needsInk[0]?.slot ? goToAttendance(needsInk[0].slot.classSectionId) : router.push('/(staff)/(tabs)/attendance'),
+                  },
+                  { label: 'Homework', icon: 'assignments', testID: 'hero-act-homework', onPress: () => router.push('/(staff)/(tabs)/home/assignments') },
+                  { label: 'Notice', icon: 'notices', testID: 'hero-act-notice', onPress: () => router.push('/(staff)/(tabs)/home/post') },
+                  { label: 'Test', icon: 'results', testID: 'hero-act-test', onPress: () => router.push('/(staff)/(tabs)/home/tests') },
+                ]}
+              />
+            }
           />
 
           {liveSlot && (
@@ -282,52 +310,25 @@ export default function Today() {
             />
           )}
 
-          {/* NEEDS YOU TODAY (pitch №3) — the tools carrying today's asks, as
-              badged domes instead of the old five-row "Needs your ink" list
-              (which said "register — not taken" five different ways). The
-              Registers dome carries the open-register count and lights amber
-              while a register is live RIGHT NOW — still the only filled thing
-              on this screen. Nothing is lost with the list: Registers lands on
-              the Attendance tab (the full class list), and the day timeline
-              below still shows every period's register state in place. */}
-          <Text style={eyebrow(tokens)}>Needs you today</Text>
-          <HomeToolGrid
-            testID="grid-needs"
+          {/* THE MENU — one card instead of "Needs you today" + "Go to" (user,
+              9 Oct 2026: "make that menu together"). Register, Homework,
+              Notice and Test are the hero's quick actions (the register count
+              rides there as a badge), so they are not drawn twice; every
+              other door is here, badged ones first. */}
+          <HomeMenu
             tools={[
-              {
-                label: 'Registers',
-                icon: 'take',
-                route: '/(staff)/(tabs)/attendance',
-                tone: 'amber',
-                badge: needsInk.length,
-                live: needsInk.some((e) => isLive(e)),
-              },
-              { label: 'Messages', icon: 'messages', route: '/(staff)/(tabs)/home/messages', tone: 'amber', badge: unreadMsgs },
+              { label: 'Messages', icon: 'messages', route: '/(staff)/(tabs)/home/messages', badge: unreadMsgs },
               { label: 'Diary', icon: 'diary', route: '/(staff)/(tabs)/home/diary' },
-              { label: 'Requests', icon: 'requests', route: '/(staff)/(tabs)/home/requests', tone: 'amber' },
-            ]}
-          />
-
-          {/* The rule between "asked of you" and "merely available". */}
-          <View style={{ borderTopWidth: 1, borderTopColor: tokens.color.line, marginHorizontal: 2 }} />
-
-          {/* GO TO — every remaining tab as an icon; navigation, nothing else. */}
-          <Text style={eyebrow(tokens)}>Go to</Text>
-          <HomeToolGrid
-            testID="grid-goto"
-            tools={[
-              { label: 'Assignments', icon: 'assignments', route: '/(staff)/(tabs)/home/assignments' },
+              { label: 'Requests', icon: 'requests', route: '/(staff)/(tabs)/home/requests' },
               { label: 'Notes', icon: 'notes', route: '/(staff)/(tabs)/home/notes' },
-              { label: 'Tests & Results', icon: 'results', route: '/(staff)/(tabs)/home/tests' },
-              { label: 'Announcements', icon: 'notices', route: '/(staff)/(tabs)/home/post', tone: 'amber' },
-              { label: 'Holidays', icon: 'holidays', route: '/(staff)/(tabs)/home/holidays', tone: 'green' },
-              // The teacher's own shelf (second edition) — only for a school with the library on.
+              { label: 'Holidays', icon: 'holidays', route: '/(staff)/(tabs)/home/holidays' },
+              // The teacher's own shelf — only for a school with the library on.
               ...(hasFeature(s, 'LIBRARY') ? [{ label: 'Library', icon: 'library', route: '/(staff)/(tabs)/home/library' }] : []),
               // Pay slips, only where the school runs pay on Sckools.
-              ...(hasFeature(s, 'SALARY') ? [{ label: 'My pay', icon: 'fees', route: '/(staff)/(tabs)/home/salary', tone: 'green' as const }] : []),
+              ...(hasFeature(s, 'SALARY') ? [{ label: 'My pay', icon: 'fees', route: '/(staff)/(tabs)/home/salary' }] : []),
               // Concerns the class teacher's families raised. Free, so always
               // drawn — it was on no screen before 2026-10-07 (nav-reachability).
-              { label: 'Complaint Box', icon: 'concern', route: '/(staff)/(tabs)/home/concerns', tone: 'amber' },
+              { label: 'Complaint Box', icon: 'concern', route: '/(staff)/(tabs)/home/concerns' },
             ]}
           />
 
@@ -338,15 +339,3 @@ export default function Today() {
   );
 }
 
-/** The small letter-spaced label that titles a block on Home. */
-function eyebrow(tokens: ReturnType<typeof useTokens>) {
-  return {
-    marginHorizontal: 4,
-    marginBottom: -2,
-    fontSize: 10,
-    letterSpacing: 1.3,
-    textTransform: 'uppercase' as const,
-    fontWeight: '700' as const,
-    color: tokens.color.sub,
-  };
-}

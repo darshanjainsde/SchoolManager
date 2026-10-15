@@ -8,7 +8,7 @@ import { RequireFeature, RequireFeatureGuard } from '../features';
 import { TenantContextService } from '../tenancy';
 import { LeaveDeskGuard } from './internal/leave-desk.guard';
 import { LeaveService } from './leave.service';
-import { AssignSubstitutionDto, CreateLeaveDto } from './management.dto';
+import { AssignSubstitutionDto, CoverBatchDto, CoverPreviewQueryDto, CreateLeaveDto } from './management.dto';
 
 @Controller('manage/leave')
 @UseGuards(SchoolJwtGuard, RequireFeatureGuard, RolesGuard)
@@ -61,6 +61,30 @@ export class LeaveController {
   @UseGuards(LeaveDeskGuard)
   reject(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() u: SchoolJwtPayload) {
     return this.leave.reject(this.sid(), id, u.sub);
+  }
+
+  /** Who could take the most of this leave's open periods — "free for 19 of 26". */
+  @Get(':id/cover-fit')
+  @Roles('SCHOOL_ADMIN', 'STAFF')
+  @UseGuards(LeaveDeskGuard)
+  coverFit(@Param('id', ParseUUIDPipe) id: string) {
+    return this.leave.coverFit(this.sid(), id);
+  }
+
+  /** Every period of the leave, today on, as one teacher stands for it — the cover drawer. */
+  @Get(':id/cover-preview')
+  @Roles('SCHOOL_ADMIN', 'STAFF')
+  @UseGuards(LeaveDeskGuard)
+  coverPreview(@Param('id', ParseUUIDPipe) id: string, @Query() q: CoverPreviewQueryDto) {
+    return this.leave.coverPreview(this.sid(), id, q.teacherId);
+  }
+
+  /** Give one teacher the ticked periods; each is checked again, and what changed is skipped and named. */
+  @Post(':id/cover-batch')
+  @Roles('SCHOOL_ADMIN', 'STAFF')
+  @UseGuards(LeaveDeskGuard)
+  coverBatch(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CoverBatchDto) {
+    return this.leave.coverBatch(this.sid(), id, dto);
   }
 
   /**

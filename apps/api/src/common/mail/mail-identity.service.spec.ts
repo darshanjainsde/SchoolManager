@@ -145,6 +145,25 @@ describe('MailIdentityService', () => {
     expect(schoolFindUnique).toHaveBeenCalledTimes(2);
   });
 
+  it('a corrected mailbox password is used at once — the connection is keyed on it, and the old one is closed', async () => {
+    schoolFindUnique.mockResolvedValue(schoolRow(customSender({ smtpPassEnc: encryptSecret('wrong-password') })));
+    const before = (await svc.forSchool(SCHOOL_ID)).transporter as unknown as { options: { auth?: { pass?: string } }; close: () => void };
+    expect(before.options.auth?.pass).toBe('wrong-password');
+    const closed = jest.spyOn(before, 'close');
+
+    // The school fixes the password; the identity is re-read (invalidate on save).
+    schoolFindUnique.mockResolvedValue(schoolRow(customSender({ smtpPassEnc: encryptSecret('right-password') })));
+    svc.invalidate(SCHOOL_ID);
+    const after = (await svc.forSchool(SCHOOL_ID)).transporter as unknown as { options: { auth?: { pass?: string } } };
+    expect(after).not.toBe(before);
+    expect(after.options.auth?.pass).toBe('right-password');
+    expect(closed).toHaveBeenCalled();
+
+    // Same password again: the same connection is reused, not reopened.
+    svc.invalidate(SCHOOL_ID);
+    expect((await svc.forSchool(SCHOOL_ID)).transporter).toBe(after);
+  });
+
   it('needs no school at all for platform mail', async () => {
     const id = await svc.forSchool(null);
     expect(id.brand.schoolName).toBe('Sckools');
