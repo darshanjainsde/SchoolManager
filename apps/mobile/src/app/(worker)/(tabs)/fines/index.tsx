@@ -1,14 +1,22 @@
 import { useMemo, useState } from 'react';
-import { Alert, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import { useQuery } from '@/lib/query';
 import { borrowerLine, rupees, type FineEntry, type FinesView } from '@/lib/library-desk';
 import { Empty, ErrorState, Figure, Page, PageHeader, Pill, Screen, SectionTitle, Toast } from '@/components/ui';
-import { Button, Row } from '@/components/desk';
+import { Row } from '@/components/desk';
+import { Button } from '@/components/Button';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
-import { font } from '@/theme/tokens';
+import { ask } from '@/components/ConfirmSheet';
+import { fmtDate } from '@/lib/dates';
+
+/** The server writes the fine's detail with ISO dates ("returned 2026-07-06");
+ * people read "6 Jul 2026" everywhere else in the app (audit 9 Oct 2026). */
+export function readableDetail(detail: string): string {
+  return detail.replace(/\b(\d{4}-\d{2}-\d{2})\b/g, (iso) => fmtDate(iso));
+}
 
 /**
  * FINES — what is owed, by whom, and the two things a librarian does about
@@ -39,11 +47,11 @@ export default function Fines() {
       setToast({ kind: 'error', message: err instanceof ApiError ? err.message : 'Could not settle that fine.' });
     } finally { setBusy(null); }
   }
-  function ask(e: FineEntry, how: 'collect' | 'waive') {
-    Alert.alert(how === 'collect' ? `Collect ${rupees(e.amountRupees)}?` : `Waive ${rupees(e.amountRupees)}?`, `${e.borrower.name} · ${e.title}`, [
+  function askSettle(e: FineEntry, how: 'collect' | 'waive') {
+    ask(how === 'collect' ? `Collect ${rupees(e.amountRupees)}?` : `Waive ${rupees(e.amountRupees)}?`, `${e.borrower.name} · ${e.title}`, [
       { text: 'No', style: 'cancel' },
       { text: how === 'collect' ? 'Collected' : 'Waive', style: how === 'waive' ? 'destructive' : 'default', onPress: () => void settle(e, how) },
-    ]);
+    ], { icon: 'fees' });
   }
   async function remind() {
     setBusy('remind');
@@ -60,7 +68,7 @@ export default function Fines() {
 
   return (
     <Screen onRefresh={q.refresh} refreshing={q.refreshing}>
-      <SectionTitle title="Fines" actionLabel={total ? 'Remind all' : undefined} onAction={total ? () => Alert.alert('Remind every reader who owes?', `${total} notice${total === 1 ? '' : 's'} go out through the school's channels.`, [{ text: 'No', style: 'cancel' }, { text: 'Send', onPress: () => void remind() }]) : undefined} />
+      <SectionTitle title="Fines" actionLabel={total ? 'Remind all' : undefined} onAction={total ? () => ask('Remind every reader who owes?', `${total} notice${total === 1 ? '' : 's'} go out through the school's channels.`, [{ text: 'No', style: 'cancel' }, { text: 'Send', onPress: () => void remind() }], { icon: 'bell' }) : undefined} />
       {q.loading && <LoadingRows label="Adding up the fines…" rows={3} />}
       {q.error && !q.data && <ErrorState error={q.error} onRetry={q.reload} />}
       {q.data && (
@@ -78,13 +86,17 @@ export default function Fines() {
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Text numberOfLines={1} style={{ fontWeight: '700', color: tokens.color.ink, fontSize: 14 }}>{e.borrower.name}</Text>
-                      <Text numberOfLines={1} style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 1 }}>{borrowerLine(e.borrower)} · {e.title} · {e.reason === 'LOST' ? 'lost' : e.detail}</Text>
+                      <Text numberOfLines={1} style={{ fontSize: 13, color: tokens.color.sub, marginTop: 1 }}>{borrowerLine(e.borrower)} · {e.title} · {e.reason === 'LOST' ? 'lost' : readableDetail(e.detail)}</Text>
                     </View>
-                    <Text style={{ fontFamily: font.mono, fontWeight: '700', fontSize: 15, color: tokens.color.red }}>{rupees(e.amountRupees)}</Text>
+                    <Text style={{ fontVariant: ['tabular-nums'], fontWeight: '700', fontSize: 16, color: tokens.color.red }}>{rupees(e.amountRupees)}</Text>
                   </View>
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <View style={{ flex: 1 }}><Button small variant="ghost" testID={`waive-${e.id}`} label="Waive" onPress={() => ask(e, 'waive')} busy={busy === e.id} /></View>
-                    <View style={{ flex: 1 }}><Button small testID={`collect-${e.id}`} label="Collected" onPress={() => ask(e, 'collect')} busy={busy === e.id} /></View>
+                  {/* Forty rows × a filled button is a wall (ledger:
+                      control-sized-for-the-demo). The row's action is tonal
+                      and the rarer Waive a text button, both right-aligned
+                      so the figure above and the button below share an edge. */}
+                  <View style={{ flexDirection: 'row', gap: 4, justifyContent: 'flex-end' }}>
+                    <Button variant="text" size="sm" testID={`waive-${e.id}`} label="Waive" onPress={() => askSettle(e, 'waive')} disabled={busy === e.id} />
+                    <Button variant="tonal" size="sm" icon="check" testID={`collect-${e.id}`} label="Collected" onPress={() => askSettle(e, 'collect')} busy={busy === e.id} />
                   </View>
                 </View>
               ))}
@@ -94,7 +106,7 @@ export default function Fines() {
             <Page testID="fines-growing">
               <PageHeader title="Still growing" icon="library" />
               {groups.growing.map((e, i) => (
-                <Row key={e.id} first={i === 0} testID={`growing-${e.id}`} title={e.borrower.name} sub={`${e.title} · ${e.detail} · settle when it is back`} right={<Pill tone="amber">{rupees(e.amountRupees)}</Pill>} onPress={() => router.push(`/(worker)/(tabs)/counter/member/${e.borrower.kind.toLowerCase()}/${e.borrower.id}`)} />
+                <Row key={e.id} first={i === 0} testID={`growing-${e.id}`} title={e.borrower.name} sub={`${e.title} · ${readableDetail(e.detail)} · settle when it is back`} right={<Pill tone="amber">{rupees(e.amountRupees)}</Pill>} onPress={() => router.push(`/(worker)/(tabs)/counter/member/${e.borrower.kind.toLowerCase()}/${e.borrower.id}`)} />
               ))}
             </Page>
           )}

@@ -164,7 +164,7 @@ function PaperProbe() {
 }
 
 describe('the paper a person opens the app on', () => {
-  it('defaults to warm cream on plain paper, not the old near-white', () => {
+  it('defaults to Fresh — white cards on a cool page (UI v2, 2026-10-08)', () => {
     // The decision, pinned. `classic` shipped first only so that ADDING grounds
     // could not restyle anyone before a shade had been judged on a real phone.
     mockUseColorScheme.mockReturnValue('light');
@@ -173,8 +173,8 @@ describe('the paper a person opens the app on', () => {
         <PaperProbe />
       </ThemeProvider>,
     );
-    expect(getByTestId('ground').props.children).toBe('cream');
-    expect(getByTestId('appBg').props.children).toBe(GROUNDS.cream.light.appBg);
+    expect(getByTestId('ground').props.children).toBe('fresh');
+    expect(getByTestId('appBg').props.children).toBe(GROUNDS.fresh.light.appBg);
   });
 
   it('reaches the tokens, so every screen inherits the choice at once', async () => {

@@ -31,7 +31,7 @@ if cmd=='tap':
 elif cmd=='type': sh('shell','input','text',sys.argv[2].replace(' ','%s'))
 elif cmd=='key': sh('shell','input','keyevent',sys.argv[2])
 elif cmd=='shot':
-    time.sleep(float(os.environ.get('WAIT','1.5'))); os.makedirs(os.environ.get('AUDIT_OUT','/tmp/sckools-audit'),exist_ok=True); open(os.path.join(os.environ.get('AUDIT_OUT','/tmp/sckools-audit'),sys.argv[2]+'.png'),'wb').write(sh('exec-out','screencap','-p').stdout); print(sys.argv[2])
+    time.sleep(float(os.environ.get('WAIT','1.5'))); open(f'{S}/{sys.argv[2]}.png','wb').write(sh('exec-out','screencap','-p').stdout); print(f'{S}/{sys.argv[2]}.png')
 elif cmd=='find':
     n,b=find(sys.argv[2]); print(b if n is not None else 'NOTFOUND')
 elif cmd=='dump':

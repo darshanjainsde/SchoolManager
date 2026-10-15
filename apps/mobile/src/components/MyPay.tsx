@@ -10,7 +10,6 @@ import * as Sharing from 'expo-sharing';
 import { isPayslipDoc, payslipFileName, payslipHtml, type PayslipDoc } from '@skoolos/types';
 import { PayDetails } from '@/components/PayDetails';
 import { useTokens } from '@/theme/theme-context';
-import { font } from '@/theme/tokens';
 
 export interface PayLine { key: string; name: string; kind: 'EARNING' | 'DEDUCTION' | 'EMPLOYER_COST'; amountMinor: number; order: number }
 export interface MySlip {
@@ -107,7 +106,7 @@ export function MyPay({ title = 'My pay' }: { title?: string }) {
             <Page testID="pay-employer">
               <PageHeader title="Your school also paid in" icon="assignments" />
               {open.lines.filter((l) => l.kind === 'EMPLOYER_COST').map((l, i) => (
-                <Row key={l.key} first={i === 0} title={l.name} right={<Text style={{ fontFamily: font.mono, fontSize: 13.5, color: tokens.color.ink }}>{rupees(l.amountMinor)}</Text>} />
+                <Row key={l.key} first={i === 0} title={l.name} right={<Text style={{ fontVariant: ['tabular-nums'], fontSize: 13.5, color: tokens.color.ink }}>{rupees(l.amountMinor)}</Text>} />
               ))}
               <Text style={{ paddingHorizontal: 12, paddingVertical: 10, fontSize: 11.5, lineHeight: 17, color: tokens.color.sub }}>
                 This is on top of your pay, not out of it. It goes to the provident fund in your name.
@@ -119,8 +118,8 @@ export function MyPay({ title = 'My pay' }: { title?: string }) {
 
           <Page>
             <PageHeader title="This year" icon="results" />
-            <Row first title="Earned so far" right={<Text style={{ fontFamily: font.mono, color: tokens.color.ink }}>{rupees(open.ytdGrossMinor)}</Text>} />
-            <Row title="Tax so far" sub={open.taxRegime === 'NEW' ? 'new tax regime' : 'old tax regime'} right={<Text style={{ fontFamily: font.mono, color: tokens.color.ink }}>{rupees(open.ytdTaxMinor)}</Text>} />
+            <Row first title="Earned so far" right={<Text style={{ fontVariant: ['tabular-nums'], fontWeight: '600', color: tokens.color.ink }}>{rupees(open.ytdGrossMinor)}</Text>} />
+            <Row title="Tax so far" sub={open.taxRegime === 'NEW' ? 'new tax regime' : 'old tax regime'} right={<Text style={{ fontVariant: ['tabular-nums'], fontWeight: '600', color: tokens.color.ink }}>{rupees(open.ytdTaxMinor)}</Text>} />
             {d?.declaration ? (
               <Row title="Tax declaration" sub={d.taxYearLabel} right={<Pill tone={d.declaration.status === 'SUBMITTED' ? 'green' : 'amber'}>{d.declaration.status === 'SUBMITTED' ? 'Sent' : 'Draft'}</Pill>} />
             ) : (
@@ -145,7 +144,7 @@ export function MyPay({ title = 'My pay' }: { title?: string }) {
               sub={p.daysPaid === p.daysInMonth ? 'full month' : `${p.daysPaid} of ${p.daysInMonth} days`}
               right={
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Text style={{ fontFamily: font.mono, fontWeight: '700', color: tokens.color.ink }}>{rupees(p.netMinor)}</Text>
+                  <Text style={{ fontVariant: ['tabular-nums'], fontWeight: '700', color: tokens.color.ink }}>{rupees(p.netMinor)}</Text>
                   {open?.id === p.id ? <Pill tone="indigo">Open</Pill> : null}
                 </View>
               }
@@ -170,11 +169,11 @@ function Ledger({ title, icon, lines, total, totalLabel }: { title: string; icon
     <Page testID={`pay-${title.toLowerCase().replace(/\s/g, '-')}`}>
       <PageHeader title={title} icon={icon} />
       {lines.map((l, i) => (
-        <Row key={l.key} first={i === 0} title={l.name} right={<Text style={{ fontFamily: font.mono, fontSize: 13.5, color: tokens.color.ink }}>{rupees(l.amountMinor)}</Text>} />
+        <Row key={l.key} first={i === 0} title={l.name} right={<Text style={{ fontVariant: ['tabular-nums'], fontSize: 13.5, color: tokens.color.ink }}>{rupees(l.amountMinor)}</Text>} />
       ))}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: tokens.color.line2 }}>
         <Text style={{ fontWeight: '700', fontSize: 13.5, color: tokens.color.ink }}>{totalLabel}</Text>
-        <Text style={{ fontFamily: font.mono, fontWeight: '700', fontSize: 13.5, color: tokens.color.ink }}>{rupees(total)}</Text>
+        <Text style={{ fontVariant: ['tabular-nums'], fontWeight: '700', fontSize: 13.5, color: tokens.color.ink }}>{rupees(total)}</Text>
       </View>
     </Page>
   );
@@ -226,7 +225,7 @@ function SharePayslip({ payslipId }: { payslipId: string }) {
       <PageHeader title="Keep a copy" icon="fees" />
       <View style={{ paddingHorizontal: 12, paddingBottom: 12, gap: 8 }}>
         <Text style={{ fontSize: 12, lineHeight: 18, color: tokens.color.sub }}>
-          A PDF of this payslip \u2014 the same one your school has on file. Banks and landlords ask for it.
+          A PDF of this payslip — the same one your school has on file. Banks and landlords ask for it.
         </Text>
         <Button label={busy ? 'Making the PDF\u2026' : 'Save or share the PDF'} onPress={() => void share()} disabled={busy} testID="pay-share-pdf" />
         {problem ? <Text style={{ fontSize: 12, color: tokens.color.red }}>{problem}</Text> : null}

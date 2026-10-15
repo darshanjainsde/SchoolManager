@@ -7,7 +7,7 @@ sys_argv=sys.argv; sys.argv=['ui','noop']
 try: spec.loader.exec_module(ui)
 except SystemExit: pass
 sys.argv=sys_argv
-role,email=sys.argv[1],sys.argv[2]; OUT=os.path.join(os.environ.get('AUDIT_OUT','/tmp/sckools-audit'),role); os.makedirs(OUT,exist_ok=True)
+role,email=sys.argv[1],sys.argv[2]; OUT=os.path.join(H,os.environ.get('AUDIT','audit'),role); os.makedirs(OUT,exist_ok=True)
 def sh(*a): return ui.sh(*a)
 def shot(name):
     time.sleep(1.2); p=os.path.join(OUT,name+'.png'); open(p,'wb').write(sh('exec-out','screencap','-p').stdout)
@@ -25,8 +25,22 @@ def ids(prefix):
     return out
 sh('shell','pm','clear','com.sckools.app'); sh('shell','logcat','-c')
 sh('shell','am','start','-n','com.sckools.app/.MainActivity'); time.sleep(9)
-tapq('login-id'); sh('shell','input','text',email); sh('shell','input','tap','940','2127'); time.sleep(1)
-sh('shell','input','text',os.environ.get('AUDIT_PASSWORD','password')); sh('shell','input','tap','940','2127'); time.sleep(10)
+tapq('login-id'); time.sleep(2)
+for _ in range(3):
+    sh('shell','input','text',email); time.sleep(1)
+    n,b=ui.find('login-id')
+    if n is not None and n.get('text')==email: break
+    print('retyping email, field had', n.get('text') if n is not None else None)
+    sh('shell','input','keycombination','KEYCODE_CTRL_LEFT','KEYCODE_A'); sh('shell','input','keyevent','KEYCODE_DEL'); time.sleep(0.5)
+sh('shell','input','keyevent','KEYCODE_BACK'); time.sleep(0.6)   # close the keyboard so the password box is where the dump says
+for _ in range(3):
+    tapq('login-pw'); time.sleep(1.5)
+    sh('shell','input','text','password'); time.sleep(1)
+    n,b=ui.find('login-pw')
+    if n is not None and len(n.get('text') or '')==8: break
+    print('retyping password, field had', len(n.get('text') or '') if n is not None else None, 'chars')
+    sh('shell','input','keycombination','KEYCODE_CTRL_LEFT','KEYCODE_A'); sh('shell','input','keyevent','KEYCODE_DEL'); time.sleep(0.5)
+sh('shell','input','keyevent','KEYCODE_BACK'); time.sleep(0.5); tapq('login-btn'); time.sleep(10)
 shot('00-landing')
 tabs=ids('tab-'); print('tabs',tabs)
 for t in tabs:

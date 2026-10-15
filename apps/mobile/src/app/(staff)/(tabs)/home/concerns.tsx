@@ -4,6 +4,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { CONCERN_CATEGORY_LABEL, CONCERN_STATUS_LABEL, type ConcernCounts, type ConcernRow } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { Empty, ErrorState, Page, Pill, Screen, SectionTitle } from '@/components/ui';
+import { Chip, ChipRow } from '@/components/Chip';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 
@@ -41,7 +42,7 @@ export default function StaffConcerns() {
   return (
     <Screen onRefresh={() => void load(showAll)}>
       {/* No second "Complaint Box": the back-chip header already says it (re-audit 2026-10-08). */}
-      <Text style={{ fontSize: 13.5, color: tokens.color.sub, marginTop: 4, lineHeight: 19 }}>
+      <Text style={{ fontSize: 14, color: tokens.color.sub, marginTop: 4, lineHeight: 20 }}>
         What the families of your class raised with you. Opening one marks it read — you can answer, or send it to the office.
       </Text>
 
@@ -55,10 +56,10 @@ export default function StaffConcerns() {
 
       {error && rows !== null ? <Text style={{ marginTop: 10, fontSize: 13, color: tokens.color.red }}>{error}</Text> : null}
 
-      <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
-        <Toggle label="Open" on={!showAll} onPress={() => setShowAll(false)} />
-        <Toggle label="All" on={showAll} onPress={() => setShowAll(true)} />
-      </View>
+      <ChipRow style={{ marginTop: 14 }}>
+        <Chip label="Open" selected={!showAll} onPress={() => setShowAll(false)} />
+        <Chip label="All" selected={showAll} onPress={() => setShowAll(true)} />
+      </ChipRow>
 
       <SectionTitle title={showAll ? 'Everything' : 'Open'} />
       {rows === null && error ? <ErrorState error={error} onRetry={() => void load(showAll)} /> : rows === null ? <LoadingRows label="Loading concerns" rows={3} /> : rows.length === 0 ? (
@@ -73,16 +74,16 @@ export default function StaffConcerns() {
               accessibilityRole="button"
               testID={`t-concern-${r.id}`}
               onPress={() => router.push(`/(staff)/(tabs)/home/concerns/${r.id}`)}
-              style={{ padding: 13, gap: 4, minHeight: 64, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: tokens.color.line }}
+              style={({ pressed }) => ({ paddingVertical: 12, paddingHorizontal: 16, gap: 4, minHeight: 72, justifyContent: 'center', borderTopWidth: i === 0 ? 0 : 1, borderTopColor: tokens.color.line, opacity: pressed ? 0.8 : 1 })}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                {r.unread && <View accessibilityLabel="unread" style={{ width: 7, height: 7, borderRadius: 999, backgroundColor: tokens.color.indigo }} />}
-                <Text style={{ flex: 1, fontSize: 14.5, fontWeight: '600', color: tokens.color.ink }} numberOfLines={1}>{r.title}</Text>
+                {r.unread && <View accessibilityLabel="unread" style={{ width: 8, height: 8, borderRadius: 999, backgroundColor: tokens.color.indigo }} />}
+                <Text style={{ flex: 1, fontSize: 16, fontWeight: '600', color: tokens.color.ink }} numberOfLines={1}>{r.title}</Text>
                 <Pill tone={r.status === 'RESOLVED' ? 'green' : r.status === 'IN_PROGRESS' ? 'amber' : 'indigo'}>
                   {CONCERN_STATUS_LABEL[r.status]}
                 </Pill>
               </View>
-              <Text style={{ fontSize: 12, color: tokens.color.sub }}>
+              <Text style={{ fontSize: 13, color: tokens.color.sub }}>
                 {CONCERN_CATEGORY_LABEL[r.category]} · {r.student.name}{r.student.className ? ` · ${r.student.className}` : ''}
               </Text>
             </Pressable>
@@ -97,27 +98,9 @@ function Stat({ label, value, tone }: { label: string; value: number; tone: 'amb
   const tokens = useTokens();
   const fg = tone === 'amber' ? tokens.color.late : tone === 'green' ? tokens.color.green : tokens.color.ink;
   return (
-    <View style={{ flex: 1, borderWidth: 1, borderColor: tokens.color.line, borderRadius: 12, padding: 11, backgroundColor: tokens.color.surface }}>
-      <Text style={{ fontSize: 11.5, fontWeight: '700', color: tokens.color.sub }}>{label}</Text>
+    <View style={{ flex: 1, borderWidth: 1, borderColor: tokens.color.line, borderRadius: tokens.radius.field, padding: 12, backgroundColor: tokens.color.surface }}>
+      <Text style={{ fontSize: 13, fontWeight: '600', color: tokens.color.sub }}>{label}</Text>
       <Text style={{ fontSize: 20, fontWeight: '800', color: fg, marginTop: 2 }}>{value}</Text>
     </View>
-  );
-}
-
-function Toggle({ label, on, onPress }: { label: string; on: boolean; onPress: () => void }) {
-  const tokens = useTokens();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected: on }}
-      onPress={onPress}
-      style={{
-        minHeight: 40, paddingHorizontal: 14, borderRadius: 999, justifyContent: 'center',
-        borderWidth: 1.5, borderColor: on ? tokens.color.indigo : tokens.color.line,
-        backgroundColor: on ? tokens.color.indigo50 : tokens.color.surface,
-      }}
-    >
-      <Text style={{ fontSize: 13, fontWeight: on ? '700' : '500', color: on ? tokens.color.indigo : tokens.color.ink }}>{label}</Text>
-    </Pressable>
   );
 }

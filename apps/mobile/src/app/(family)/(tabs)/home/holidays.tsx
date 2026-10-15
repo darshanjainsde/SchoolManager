@@ -7,7 +7,6 @@ import { holidayDateParts, type Holiday } from '@/lib/portal';
 import { Card, Empty, ErrorState, Page, Pill, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
-import { font } from '@/theme/tokens';
 import { holidayTypeLabel } from '@/lib/labels';
 
 const TYPE_TONE = { PUBLIC: 'green', FESTIVAL: 'amber', SCHOOL: 'indigo' } as const;
@@ -77,38 +76,40 @@ export default function Holidays() {
         <Page>
           {items.map((h, i) => {
             const { day, weekday } = holidayDateParts(h.startDate);
+            const month = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'][new Date(h.startDate).getUTCMonth()];
             return (
               <View
                 key={h.id}
+                testID={`holiday-${h.id}`}
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  gap: 11,
-                  paddingVertical: 10,
-                  paddingHorizontal: 12,
+                  gap: 12,
+                  minHeight: 72,
+                  paddingVertical: 12,
+                  paddingHorizontal: 16,
                   borderTopWidth: i === 0 ? 0 : 1,
                   borderTopColor: tokens.color.line,
                 }}
               >
+                {/* Month over day, the same cell as the teacher's Holidays:
+                    "FRI 25" alone never said WHICH month (audit 9 Oct 2026). */}
                 <View
                   style={{
                     width: 44,
-                    borderWidth: 1,
-                    borderColor: tokens.color.amber,
-                    backgroundColor: tokens.color.amber50,
-                    borderRadius: 11,
-                    paddingTop: 5,
-                    paddingBottom: 6,
+                    height: 48,
+                    borderRadius: tokens.radius.field,
+                    backgroundColor: tokens.color.indigo50,
                     alignItems: 'center',
+                    justifyContent: 'center',
                   }}
                 >
-                  <Text style={{ fontSize: 8.5, fontWeight: '800', letterSpacing: 0.5, color: tokens.color.late }}>
-                    {weekday.toUpperCase()}
-                  </Text>
-                  <Text style={{ fontFamily: font.serif, fontSize: 15, color: tokens.color.late }}>{day}</Text>
+                  <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 0.5, color: tokens.color.indigo }}>{month}</Text>
+                  <Text style={{ fontSize: 17, lineHeight: 20, fontWeight: '700', color: tokens.color.indigo, fontVariant: ['tabular-nums'] }}>{day}</Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 12.5, fontWeight: '600', color: tokens.color.ink }}>{h.name}</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: tokens.color.ink }}>{h.name}</Text>
+                  <Text style={{ fontSize: 13, color: tokens.color.sub, marginTop: 2 }}>{weekday}</Text>
                 </View>
                 <Pill tone={typeTone(h.type)}>{holidayTypeLabel(h.type)}</Pill>
               </View>

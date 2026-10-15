@@ -1,4 +1,6 @@
-Sign in is simpler: the app opens straight on the sign-in screen.
-The Complaint Box is now on the home screen, for families and teachers.
-Fixes for the Profile tab and for staff notifications.
-Works with Android 16: the back button goes back instead of closing the app.
+A new, cleaner look for everyone.
+Home now shows today's class, your key numbers and quick buttons at the top, with one simple menu below.
+Choose your app colour in Profile → Appearance (12 colours).
+Easier forms: pick class, subject and date from lists instead of rows of buttons.
+Sign out and other "are you sure?" questions now open in one clear panel.
+Works better on tablets and large screens, and uses less memory.

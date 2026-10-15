@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, memo, useMemo } from 'react';
-import { Alert, Animated, Pressable, Text, TextInput, View, type TextStyle } from 'react-native';
+import { Animated, Text, TextInput, View, type TextStyle } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import type {
   Exam,
@@ -12,11 +12,13 @@ import type {
 import { api, ApiError } from '@/lib/api';
 import { buildResultsPayload, markOutOfRange, marksValid } from '@/lib/exams';
 import { Card, Empty, Pill, Screen, SectionTitle, Toast } from '@/components/ui';
+import { Button } from '@/components/Button';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
 import { DUR, inkWidth, play, stampStyle, useGesture, useReduceMotion } from '@/theme/motion';
 import { fmtDateTime } from '@/lib/dates';
+import { ask } from '@/components/ConfirmSheet';
 
 /**
  * THE INK LINE (`.mprog`) — a rule drawing itself along as the sheet fills.
@@ -73,14 +75,14 @@ function CompleteStamp({ label }: { label: string }) {
           {
             borderWidth: 2.5,
             borderColor: tokens.color.green,
-            borderRadius: 10,
+            borderRadius: tokens.radius.chip,
             paddingVertical: 6,
             paddingHorizontal: 16,
           },
           stampStyle(land),
         ]}
       >
-        <Text style={{ fontFamily: font.serif, fontWeight: '700', fontSize: 15, color: tokens.color.green }}>
+        <Text style={{ fontWeight: '700', fontSize: 17, color: tokens.color.green }}>
           {label}
         </Text>
       </Animated.View>
@@ -134,16 +136,17 @@ const MarkRow = memo(function MarkRow({
       style={{
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 9,
-        paddingVertical: 7,
+        gap: 10,
+        minHeight: 56,
+        paddingVertical: 6,
         borderBottomWidth: 1,
         borderBottomColor: tokens.color.line,
       }}
     >
-      <Text style={{ fontFamily: font.mono, fontSize: 10.5, color: tokens.color.sub, width: 24, textAlign: 'right' }}>
+      <Text style={{ fontFamily: font.mono, fontSize: 13, color: tokens.color.sub, width: 28, textAlign: 'right' }}>
         {student.rollNo ?? '—'}
       </Text>
-      <Text style={{ fontWeight: '600', fontSize: 13, color: tokens.color.ink, flex: 1 }}>
+      <Text style={{ fontWeight: '600', fontSize: 15, color: tokens.color.ink, flex: 1 }}>
         {student.firstName} {student.lastName}
       </Text>
       <TextInput
@@ -170,23 +173,23 @@ const MarkRow = memo(function MarkRow({
 
 export default function ExamResults() {
   const tokens = useTokens();
-  // `.mkrow input` — a small mono box, because a column of marks is a column
-  // of figures and figures only line up in a mono face.
+  // `.mkrow input` — a small figure box with tabular digits, because a column
+  // of marks is a column of figures and must line up.
   // useMemo, both of them: MarkRow is React.memo'd so that a keystroke in one
   // box does not re-render fifty rows, and a fresh style object per render
   // defeated that memo entirely (the typing lag of perf audit #4, back).
   const inputStyle = useMemo(() => ({
     borderWidth: 1.5,
     borderColor: tokens.color.line,
-    borderRadius: 9,
+    borderRadius: tokens.radius.chip,
     paddingVertical: 7,
     paddingHorizontal: 6,
-    fontFamily: font.mono,
-    fontSize: 13,
+    fontVariant: ['tabular-nums' as const],
+    fontSize: 15,
     fontWeight: '700' as const,
     color: tokens.color.ink,
     backgroundColor: tokens.color.appBg,
-    width: 56,
+    width: 64,
     // 32 dp tall before — under the 44 a thumb needs, forty times down a
     // column where a mis-tap lands on the wrong student (UI audit #2).
     minHeight: 44,
@@ -359,10 +362,10 @@ export default function ExamResults() {
   // button to press at all.
   const confirmPublish = () => {
     if (!exam) return;
-    Alert.alert(`Publish results for ${exam.title}?`, PUBLISH_WARNING, [
+    ask(`Publish results for ${exam.title}?`, PUBLISH_WARNING, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Yes, publish', style: 'destructive', onPress: () => void doPublish() },
-    ]);
+    ], { icon: 'send' });
   };
 
   return (
@@ -401,13 +404,13 @@ export default function ExamResults() {
                 a class of forty is several screens down, so "how many are
                 still blank" stopped being answerable without scrolling to the
                 bottom. The line below still draws it; this states it. */}
-            <Text style={{ fontFamily: font.serif, fontWeight: '700', fontSize: 15, color: tokens.color.ink }}>
+            <Text style={{ fontWeight: '700', fontSize: 17, color: tokens.color.ink }}>
               Out of {exam.maxMarks} · {parsed.length} of {students.length} entered
             </Text>
             {alreadyPublished && <Pill tone="green">Published</Pill>}
           </View>
           {alreadyPublished && publishedAt && (
-            <Text testID="published-at" style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 6 }}>
+            <Text testID="published-at" style={{ fontSize: 13, color: tokens.color.sub, marginTop: 6 }}>
               Published {fmtDateTime(publishedAt)}
             </Text>
           )}
@@ -446,7 +449,7 @@ export default function ExamResults() {
           {/* THE INK LINE plus its count — the pitch's `.mprog` + `#mkcount`. */}
           <View style={{ paddingTop: 10, paddingBottom: 12, gap: 4 }}>
             <InkProgress done={parsed.length} total={students.length} />
-            <Text style={{ fontSize: 10, color: tokens.color.sub }}>
+            <Text style={{ fontSize: 13, color: tokens.color.sub }}>
               {parsed.length} of {students.length} entered
             </Text>
           </View>
@@ -458,59 +461,42 @@ export default function ExamResults() {
       )}
 
       {exam && parsed.length > 0 && !valid && (
-        <Text testID="marks-range-error" style={{ color: tokens.color.red, fontSize: 12.5, marginHorizontal: 4 }}>
+        <Text testID="marks-range-error" style={{ color: tokens.color.red, fontSize: 13, marginHorizontal: 4 }}>
           Every mark must be between 0 and {exam.maxMarks}.
         </Text>
       )}
 
       {saveError && (
-        <Text testID="save-error" style={{ color: tokens.color.red, fontSize: 12.5, marginHorizontal: 4 }}>
+        <Text testID="save-error" style={{ color: tokens.color.red, fontSize: 13, marginHorizontal: 4 }}>
           {saveError}
         </Text>
       )}
       {publishError && (
-        <Text testID="publish-error" style={{ color: tokens.color.red, fontSize: 12.5, marginHorizontal: 4 }}>
+        <Text testID="publish-error" style={{ color: tokens.color.red, fontSize: 13, marginHorizontal: 4 }}>
           {publishError}
         </Text>
       )}
 
       {exam && students.length > 0 && (
         <View style={{ flexDirection: 'row', gap: 10 }}>
-          <Pressable
+          <Button
             testID="save-marks"
+            style={{ flex: 1 }}
+            busy={saving}
             disabled={!valid || saving}
+            label={saving ? 'Saving…' : 'Save marks'}
             onPress={() => void save()}
-            style={{
-              flex: 1,
-              backgroundColor: tokens.color.indigo,
-              borderRadius: 13,
-              padding: 12,
-              opacity: !valid || saving ? 0.6 : 1,
-            }}
-            accessibilityRole="button"
-            >
-            <Text style={{ color: tokens.color.onBrand, fontWeight: '700', textAlign: 'center', fontSize: 13 }}>
-              {saving ? 'Saving…' : 'Save marks'}
-            </Text>
-          </Pressable>
+          />
           {!alreadyPublished && (
-            <Pressable
+            <Button
               testID="publish-results"
+              variant="outlined"
+              style={{ flex: 1 }}
+              busy={publishing}
               disabled={publishing}
+              label={publishing ? 'Publishing…' : 'Publish results'}
               onPress={confirmPublish}
-              style={{
-                flex: 1,
-                backgroundColor: tokens.color.amber50,
-                borderRadius: 13,
-                padding: 12,
-                opacity: publishing ? 0.6 : 1,
-              }}
-              accessibilityRole="button"
-              >
-              <Text style={{ color: tokens.color.late, fontWeight: '700', textAlign: 'center', fontSize: 13 }}>
-                {publishing ? 'Publishing…' : 'Publish results'}
-              </Text>
-            </Pressable>
+            />
           )}
         </View>
       )}

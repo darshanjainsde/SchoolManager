@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Alert, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { AGE_GROUPS, SPORTS, type Band } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { useQuery } from '@/lib/query';
@@ -12,8 +12,8 @@ import { Sheet } from '@/components/Sheet';
 import { SegmentedField } from '@/components/Field';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
-import { font } from '@/theme/tokens';
 import { sportsGroupLine } from '@/lib/labels';
+import { ask } from '@/components/ConfirmSheet';
 
 interface Settings { grouping: 'BANDS' | 'AGE'; bands: Band[] }
 
@@ -58,12 +58,12 @@ export default function Records() {
       } finally { setDeciding(null); }
     };
     if (approve) {
-      Alert.alert('Approve as a school record?', `${a.student.name} · ${a.sportName} ${sportsGroupLine(a.groupKey, a.category, bands)} · ${a.text}`, [
+      ask('Approve as a school record?', `${a.student.name} · ${a.sportName} ${sportsGroupLine(a.groupKey, a.category, bands)} · ${a.text}`, [
         { text: 'Not yet', style: 'cancel' },
         { text: 'Approve', onPress: () => void go() },
-      ]);
+      ], { icon: 'sports' });
     } else {
-      Alert.alert('Reject this attempt?', 'It stays in the log as rejected. The child is not told.', [
+      ask('Reject this attempt?', 'It stays in the log as rejected. The child is not told.', [
         { text: 'Keep', style: 'cancel' },
         { text: 'Reject', style: 'destructive', onPress: () => void go('Rejected at the desk') },
       ]);
@@ -87,9 +87,9 @@ export default function Records() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text numberOfLines={1} style={{ fontWeight: '700', color: tokens.color.ink, fontSize: 14 }}>{a.student.name}{a.student.classLabel ? ` · ${a.student.classLabel}` : ''}</Text>
-                  <Text numberOfLines={1} style={{ fontSize: 11.5, color: tokens.color.sub, marginTop: 1 }}>{a.sportName} · {sportsGroupLine(a.groupKey, a.category, bands)} · {a.source === 'TRIAL' ? 'trial' : 'practice'}{a.witnessed ? ' · witnessed' : ''} · {formatDate(a.createdAt)}</Text>
+                  <Text numberOfLines={1} style={{ fontSize: 13, color: tokens.color.sub, marginTop: 1 }}>{a.sportName} · {sportsGroupLine(a.groupKey, a.category, bands)} · {a.source === 'TRIAL' ? 'trial' : 'practice'}{a.witnessed ? ' · witnessed' : ''} · {formatDate(a.createdAt)}</Text>
                 </View>
-                <Text style={{ fontFamily: font.mono, fontWeight: '700', fontSize: 15, color: tokens.color.ink }}>{a.text}</Text>
+                <Text style={{ fontVariant: ['tabular-nums'], fontWeight: '700', fontSize: 15, color: tokens.color.ink }}>{a.text}</Text>
               </View>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <View style={{ flex: 1 }}><Button small variant="danger" testID={`reject-${a.id}`} label="Reject" onPress={() => decide(a, false)} busy={deciding === a.id} /></View>
@@ -106,7 +106,7 @@ export default function Records() {
           <Eyebrow>{sport}</Eyebrow>
           <Page>
             {rows.map((r, i) => (
-              <Row key={r.id} first={i === 0} testID={`record-${r.id}`} title={sportsGroupLine(r.groupKey, r.category, bands)} sub={`${r.holderName} · since ${r.sinceYear}`} right={<Text style={{ fontFamily: font.mono, fontWeight: '700', color: tokens.color.ink }}>{r.text}</Text>} />
+              <Row key={r.id} first={i === 0} testID={`record-${r.id}`} title={sportsGroupLine(r.groupKey, r.category, bands)} sub={`${r.holderName} · since ${r.sinceYear}`} right={<Text style={{ fontVariant: ['tabular-nums'], fontWeight: '700', color: tokens.color.ink }}>{r.text}</Text>} />
             ))}
           </Page>
         </View>
@@ -170,7 +170,7 @@ function LogAttemptSheet({ onClose, onSaved }: { onClose: () => void; onSaved: (
         )}
         {groups.length > 0 && (
           <View style={{ gap: 4 }}>
-            <Text style={{ fontSize: 11, fontWeight: '700', color: tokens.color.sub, textTransform: 'uppercase', letterSpacing: 0.5 }}>Group</Text>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: tokens.color.sub, textTransform: 'uppercase', letterSpacing: 0.5 }}>Group</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
               {groups.map((g) => <Button key={g.id} small variant={groupKey === g.id ? 'primary' : 'ghost'} testID={`group-${g.id}`} label={g.label} onPress={() => setGroupKey(g.id)} />)}
             </View>

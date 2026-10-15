@@ -38,9 +38,10 @@ export function NotificationBell({ group }: { group: NotificationGroup }) {
       onPress={() => router.push(group === '(worker)' ? '/(worker)/(tabs)/today/notifications' : `/${group}/(tabs)/home/notifications`)}
       hitSlop={8}
       style={({ pressed }) => ({
-        width: 38,
-        height: 38,
-        borderRadius: 12,
+        // sckools-ui-standards §3: the same 44 dp circle as the back button.
+        width: 44,
+        height: 44,
+        borderRadius: 22,
         backgroundColor: tokens.color.surface,
         borderColor: tokens.color.line,
         borderWidth: 1,

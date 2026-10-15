@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -8,6 +8,7 @@ import { useQuery } from '@/lib/query';
 import { formatDate } from '@/lib/portal';
 import { rupees } from '@/lib/money';
 import { METHOD_LABEL, type FeePaymentMethod } from '@/lib/fees';
+import { Button } from '@/components/Button';
 import { ErrorState, Page, Screen, Toast } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
@@ -54,12 +55,12 @@ export default function Receipt() {
       {r && (
         <>
           <Page testID="receipt" style={{ paddingHorizontal: 16, paddingVertical: 18, alignItems: 'center', gap: 6 }}>
-            <Text style={{ fontFamily: font.serif, fontSize: 18, fontWeight: '700', color: tokens.color.ink, textAlign: 'center' }}>{r.school.name}</Text>
-            <Text style={{ fontSize: 10.5, fontWeight: '700', letterSpacing: 1.2, textTransform: 'uppercase', color: tokens.color.sub }}>Fee receipt</Text>
+            <Text style={{ fontSize: 20, lineHeight: 26, fontWeight: '700', color: tokens.color.ink, textAlign: 'center' }}>{r.school.name}</Text>
+            <Text style={{ fontSize: 12, fontWeight: '700', letterSpacing: 1.2, textTransform: 'uppercase', color: tokens.color.sub }}>Fee receipt</Text>
             <Animated.View style={[stampStyle(stamp), { marginTop: 10, borderWidth: 3, borderColor: tokens.color.green, borderRadius: 6, paddingHorizontal: 16, paddingVertical: 5 }]}>
               <Text style={{ fontFamily: font.serif, fontSize: 20, fontWeight: '700', letterSpacing: 3, color: tokens.color.green }}>PAID</Text>
             </Animated.View>
-            <Text style={{ fontFamily: font.mono, fontSize: 28, fontWeight: '700', color: tokens.color.ink, marginTop: 10 }}>{rupees(r.amountMinor)}</Text>
+            <Text style={{ fontVariant: ['tabular-nums'], fontSize: 28, fontWeight: '700', color: tokens.color.ink, marginTop: 10 }}>{rupees(r.amountMinor)}</Text>
             <View style={{ alignSelf: 'stretch', marginTop: 12, borderTopWidth: 1, borderTopColor: tokens.color.line }}>
               <Fact label="Receipt no." value={r.number} />
               <Fact label="Received from" value={`${r.student.name}${r.student.className ? ` · ${r.student.className}` : ''} · Adm. ${r.student.admissionNo}`} />
@@ -67,19 +68,18 @@ export default function Receipt() {
               <Fact label="Paid on" value={`${formatDate(r.paidOn)} · ${METHOD_LABEL[r.method as FeePaymentMethod] ?? r.method}${r.providerRef ? ` · ref ${r.providerRef}` : ''}`} />
               <Fact label="Confirmed" value={r.verifiedAt ? formatDate(r.verifiedAt) : '—'} />
             </View>
-            <Text style={{ fontSize: 10, color: tokens.color.sub, textAlign: 'center', marginTop: 8 }}>Issued {formatDate(r.issuedAt)} · valid without a signature</Text>
+            <Text style={{ fontSize: 13, color: tokens.color.sub, textAlign: 'center', marginTop: 8 }}>Issued {formatDate(r.issuedAt)} · valid without a signature</Text>
           </Page>
-          <Pressable
+          <Button
             testID="receipt-share"
-            accessibilityRole="button"
-            accessibilityState={{ disabled: sharing }}
-            disabled={sharing}
+            label={sharing ? 'Making the PDF…' : 'Share as PDF'}
             onPress={() => void share()}
-            style={({ pressed }) => ({ minHeight: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: tokens.color.indigo, opacity: sharing ? 0.6 : pressed ? 0.8 : 1 })}
-          >
-            <Text style={{ color: tokens.color.onBrand, fontWeight: '700', fontSize: 14 }}>{sharing ? 'Making the PDF…' : 'Share as PDF'}</Text>
-          </Pressable>
-          <Text style={{ fontFamily: font.serif, fontStyle: 'italic', fontSize: 11.5, color: tokens.color.sub, textAlign: 'center' }}>Made on this phone. Nothing is sent anywhere until you share it.</Text>
+            disabled={sharing}
+            busy={sharing}
+            variant="filled"
+            block
+          />
+          <Text style={{ fontFamily: font.serif, fontStyle: 'italic', fontSize: 13, color: tokens.color.sub, textAlign: 'center' }}>Made on this phone. Nothing is sent anywhere until you share it.</Text>
           {problem && <Toast kind="error" message={problem} testID="receipt-share-error" />}
         </>
       )}
@@ -90,9 +90,9 @@ export default function Receipt() {
 function Fact({ label, value }: { label: string; value: string }) {
   const tokens = useTokens();
   return (
-    <View style={{ flexDirection: 'row', gap: 10, paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: tokens.color.line }}>
-      <Text style={{ width: 92, fontSize: 10, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: tokens.color.sub, paddingTop: 2 }}>{label}</Text>
-      <Text style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: tokens.color.ink, lineHeight: 17 }}>{value}</Text>
+    <View style={{ flexDirection: 'row', gap: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: tokens.color.line }}>
+      <Text style={{ width: 108, fontSize: 12, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: tokens.color.sub, paddingTop: 3 }}>{label}</Text>
+      <Text style={{ flex: 1, minWidth: 0, fontSize: 14, color: tokens.color.ink, lineHeight: 20 }}>{value}</Text>
     </View>
   );
 }

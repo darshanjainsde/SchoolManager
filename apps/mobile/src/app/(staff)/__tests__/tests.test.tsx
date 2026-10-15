@@ -83,8 +83,8 @@ it('shows an empty state when the teacher has no classes', async () => {
 
 it('does not show the schedule form until a class is picked', async () => {
   mockApi({});
-  const { findByText, queryByTestId } = render(<Tests />);
-  await findByText('Grade 5-B');
+  const { findByTestId, queryByTestId } = render(<Tests />);
+  await findByTestId('test-class');
   expect(queryByTestId('schedule-submit')).toBeNull();
 });
 
@@ -94,11 +94,13 @@ it('blocks submit until subject, title and a positive integer maxMarks are all s
   mockApi({});
   const { findByText, findByTestId } = render(<Tests />);
 
-  fireEvent.press(await findByText('Grade 5-B'));
+  fireEvent.press(await findByTestId('test-class'));
+  fireEvent.press(await findByTestId('class-cs1'));
   const submit = await findByTestId('schedule-submit');
   // maxMarks defaults to '100', but subject and title are still empty.
   expect(submit.props.accessibilityState?.disabled).toBe(true);
 
+  fireEvent.press(await findByTestId('test-subject'));
   fireEvent.press(await findByTestId('subject-sub1'));
   expect(submit.props.accessibilityState?.disabled).toBe(true); // still no title
 
@@ -110,7 +112,9 @@ it('blocks submit for maxMarks of 0 and fires no request', async () => {
   mockApi({});
   const { findByText, findByTestId } = render(<Tests />);
 
-  fireEvent.press(await findByText('Grade 5-B'));
+  fireEvent.press(await findByTestId('test-class'));
+  fireEvent.press(await findByTestId('class-cs1'));
+  fireEvent.press(await findByTestId('test-subject'));
   fireEvent.press(await findByTestId('subject-sub1'));
   fireEvent.changeText(await findByTestId('test-title'), 'Unit test 1');
   fireEvent.changeText(await findByTestId('test-max-marks'), '0');
@@ -128,7 +132,8 @@ it('the max-marks field strips non-digit characters, so a negative sign can neve
   mockApi({});
   const { findByText, findByTestId } = render(<Tests />);
 
-  fireEvent.press(await findByText('Grade 5-B'));
+  fireEvent.press(await findByTestId('test-class'));
+  fireEvent.press(await findByTestId('class-cs1'));
   const input = await findByTestId('test-max-marks');
   fireEvent.changeText(input, '-5');
   // '-5'.replace(/\D/g, '') === '5' — the minus sign never survives.
@@ -139,7 +144,9 @@ it('blocks submit for a blank maxMarks (cleared by the user) and fires no reques
   mockApi({});
   const { findByText, findByTestId } = render(<Tests />);
 
-  fireEvent.press(await findByText('Grade 5-B'));
+  fireEvent.press(await findByTestId('test-class'));
+  fireEvent.press(await findByTestId('class-cs1'));
+  fireEvent.press(await findByTestId('test-subject'));
   fireEvent.press(await findByTestId('subject-sub1'));
   fireEvent.changeText(await findByTestId('test-title'), 'Unit test 1');
   fireEvent.changeText(await findByTestId('test-max-marks'), '');
@@ -157,7 +164,8 @@ it('blocks submit with no subject selected and fires no request', async () => {
   mockApi({});
   const { findByText, findByTestId } = render(<Tests />);
 
-  fireEvent.press(await findByText('Grade 5-B'));
+  fireEvent.press(await findByTestId('test-class'));
+  fireEvent.press(await findByTestId('class-cs1'));
   fireEvent.changeText(await findByTestId('test-title'), 'Unit test 1');
 
   const submit = await findByTestId('schedule-submit');
@@ -175,7 +183,9 @@ it('schedules a test and shows a success toast noting the class is notified by e
   mockApi({});
   const { findByText, findByTestId } = render(<Tests />);
 
-  fireEvent.press(await findByText('Grade 5-B'));
+  fireEvent.press(await findByTestId('test-class'));
+  fireEvent.press(await findByTestId('class-cs1'));
+  fireEvent.press(await findByTestId('test-subject'));
   fireEvent.press(await findByTestId('subject-sub1'));
   fireEvent.changeText(await findByTestId('test-title'), 'Unit test 1');
 
@@ -200,7 +210,9 @@ it('shows the server error message verbatim on a failed schedule', async () => {
   mockApi({ createResult: new ApiError(404, 'classSectionId not found') });
   const { findByText, findByTestId } = render(<Tests />);
 
-  fireEvent.press(await findByText('Grade 5-B'));
+  fireEvent.press(await findByTestId('test-class'));
+  fireEvent.press(await findByTestId('class-cs1'));
+  fireEvent.press(await findByTestId('test-subject'));
   fireEvent.press(await findByTestId('subject-sub1'));
   fireEvent.changeText(await findByTestId('test-title'), 'Unit test 1');
   fireEvent.press(await findByTestId('schedule-submit'));
@@ -214,7 +226,8 @@ it('splits scheduled tests into upcoming and past groups', async () => {
   mockApi({ examList: { upcoming: [EXAM], past: [PAST_EXAM] } });
   const { findByText, findByTestId } = render(<Tests />);
 
-  fireEvent.press(await findByText('Grade 5-B'));
+  fireEvent.press(await findByTestId('test-class'));
+  fireEvent.press(await findByTestId('class-cs1'));
 
   expect(await findByTestId(`exam-${EXAM.id}`)).toBeTruthy();
   expect(await findByTestId(`exam-${PAST_EXAM.id}`)).toBeTruthy();
@@ -224,9 +237,10 @@ it('splits scheduled tests into upcoming and past groups', async () => {
 
 it('shows an empty state when the class has no tests yet', async () => {
   mockApi({ examList: { upcoming: [], past: [] } });
-  const { findByText } = render(<Tests />);
+  const { findByText, findByTestId } = render(<Tests />);
 
-  fireEvent.press(await findByText('Grade 5-B'));
+  fireEvent.press(await findByTestId('test-class'));
+  fireEvent.press(await findByTestId('class-cs1'));
 
   expect(await findByText(/no tests for this class yet/i)).toBeTruthy();
 });
@@ -237,7 +251,8 @@ it('tapping a scheduled test navigates to its results screen with the class sect
   mockApi({ examList: { upcoming: [EXAM], past: [] } });
   const { findByText, findByTestId } = render(<Tests />);
 
-  fireEvent.press(await findByText('Grade 5-B'));
+  fireEvent.press(await findByTestId('test-class'));
+  fireEvent.press(await findByTestId('class-cs1'));
   fireEvent.press(await findByTestId(`exam-${EXAM.id}`));
 
   expect(mockPush).toHaveBeenCalledWith(`/(staff)/(tabs)/home/results/${EXAM.id}?classSectionId=cs1`);
@@ -255,7 +270,7 @@ describe('the Result Room’s clock (second edition)', () => {
 
   it('draws nothing when no window has a result day', async () => {
     mockApi({});
-    const { findByText, queryByTestId } = render(<Tests />);
+    const { findByText, queryByTestId, findByTestId } = render(<Tests />);
     await findByText('Tests');
     expect(queryByTestId('result-day')).toBeNull();
   });

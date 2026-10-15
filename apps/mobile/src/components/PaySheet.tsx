@@ -81,9 +81,9 @@ export function PaySheet({ open, onClose, invoiceId, dueMinor, onSubmitted }: Pa
                 }}
               >
                 <DetailRow label="Name" value={b.accountName} />
-                <DetailRow label="Account" value={b.accountNumber} />
-                <DetailRow label="IFSC" value={b.ifsc} />
-                {b.upiId ? <DetailRow label="UPI" value={b.upiId} /> : null}
+                <DetailRow code label="Account" value={b.accountNumber} />
+                <DetailRow code label="IFSC" value={b.ifsc} />
+                {b.upiId ? <DetailRow code label="UPI" value={b.upiId} /> : null}
                 <DetailRow label="Bank" value={b.branch ? `${b.bankName} · ${b.branch}` : b.bankName} last />
               </View>
               {b.instructions ? (
@@ -134,7 +134,8 @@ export function PaySheet({ open, onClose, invoiceId, dueMinor, onSubmitted }: Pa
   );
 }
 
-function DetailRow({ label, value, last }: { label: string; value: string; last?: boolean }) {
+/** `code` sets the value in mono — an account number, an IFSC, a UPI id — something read character by character. */
+function DetailRow({ label, value, last, code }: { label: string; value: string; last?: boolean; code?: boolean }) {
   const tokens = useTokens();
   return (
     <View
@@ -150,7 +151,7 @@ function DetailRow({ label, value, last }: { label: string; value: string; last?
     >
       <Text style={{ fontSize: 12, color: tokens.color.sub }}>{label}</Text>
       {/* Selectable, so a long press copies it — no clipboard dependency. */}
-      <Text selectable style={{ fontFamily: font.mono, fontSize: 13, color: tokens.color.ink, flexShrink: 1, textAlign: 'right' }}>
+      <Text selectable style={{ ...(code ? { fontFamily: font.mono } : { fontVariant: ['tabular-nums' as const] }), fontSize: 13, color: tokens.color.ink, flexShrink: 1, textAlign: 'right' }}>
         {value}
       </Text>
     </View>

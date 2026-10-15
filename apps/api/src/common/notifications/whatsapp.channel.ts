@@ -39,7 +39,14 @@ interface SchoolSettings {
   phoneNumberId: string | null;
 }
 
-const SETTINGS_TTL_MS = 60_000;
+/**
+ * How long one server reuses a school's WhatsApp switch. Each serverless
+ * instance keeps its own copy and a save clears only the instance that saved
+ * it, so this is the longest any OTHER instance keeps sending after a school
+ * switches WhatsApp off. 60 s was a minute of messages after "off"; 10 s still
+ * turns a 300-family fan-out into one read.
+ */
+export const SETTINGS_TTL_MS = 10_000;
 
 /**
  * An established-but-stalled Redis socket never rejects, and the outbox drain

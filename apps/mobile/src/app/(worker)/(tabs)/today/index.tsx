@@ -1,35 +1,21 @@
 import { useReload } from '@/lib/query';
-import { formatDate } from '@/lib/portal';
 import { useCallback, useState } from 'react';
 import { Text, View } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
-import { Empty, ErrorState, Page, PageHeader, Pill, Screen, SectionTitle } from '@/components/ui';
+import { useQuery } from '@/lib/query';
+import { useSession } from '@/lib/use-session';
+import { jobFor } from '@/lib/worker-nav';
+import { todayISO } from '@/lib/attendance';
+import { fmtDate, fmtLongDay, fmtMonthYear, fmtWeekdayDay } from '@/lib/dates';
+import { AccountsToday } from '@/components/AccountsToday';
+import { Button } from '@/components/Button';
+import { Icon } from '@/components/icons';
+import { Card, Empty, ErrorState, Pill, Screen } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
+import { RoleHero } from '@/components/HeroDeck';
 import { NotificationBell } from '@/components/NotificationBell';
 import { useTokens } from '@/theme/theme-context';
-import { font } from '@/theme/tokens';
-
-// ── The paper skin, for the staff who are not teachers ───────────────────────
-// There is no pitch page for this role, so nothing here is invented: every
-// piece is the same object a teacher already sees somewhere else — the pitch's
-// `.regstat` figure boxes, a `.page` of ruled rows, a serif `.ph` heading, and
-// the diary's own italic hand for a page with nothing written on it. Driver,
-// office and security staff open the same app as the teachers; the one thing
-// this screen must never look like is a different product.
-//
-// Deliberately no motion. The six gestures all mark a CHANGE to the page (a
-// tick, a stamp, a pin…), and nothing on this screen changes: it is a record
-// someone else wrote about you, read back. Animating it would be decoration
-// pretending to be an event.
-
-// ── Types ────────────────────────────────────────────────────────────────────
-// Mirrors StaffAttendanceService.mine's MyStaffAttendanceResult
-// (apps/api/src/modules/management/staff-attendance.service.ts) and the
-// web's local copy (apps/web/app/staff/page.tsx) — kept local here too,
-// same convention as this app's other screens (e.g. AttendanceSummary in
-// lib/portal.ts is the one shared shape; most `/manage/*` response shapes
-// are typed at the call site instead).
 
 type Status = 'PRESENT' | 'ABSENT' | 'LATE' | 'ON_LEAVE';
 
@@ -53,6 +39,8 @@ interface MyStaffAttendance {
   summary: PersonSummary;
 }
 
+interface Holiday { id: string; name: string; startDate: string; endDate: string | null }
+
 const STATUS_LABEL: Record<Status, string> = {
   PRESENT: 'Present',
   ABSENT: 'Absent',
@@ -74,62 +62,91 @@ const STAFF_ROLE_LABEL: Record<string, string> = {
   HELPER: 'Helper',
   SECURITY: 'Security',
   LIBRARIAN: 'Librarian',
-  // Was missing, so a sports teacher read as the generic "Staff".
   SPORTS: 'Sports teacher',
   ACCOUNTS: 'Accounts officer',
   ADMISSIONS: 'Admissions officer',
   OTHER: 'Staff',
 };
 
-/**
- * The pitch's `.regstat` — a figure box off the register.
- *
- * The number is MONO because these three sit side by side and a percentage, a
- * count and another count only read as one row of figures when their digits are
- * the same width. The label under it is the pitch's small-caps meta: uppercase,
- * tracked, dim, in the UI sans — chrome a paper register would not contain, so
- * it stays out of the book face the headings use.
- */
-function StatBox({ testID, value, label, color }: { testID: string; value: string; label: string; color: string }) {
+/** A figure box: the number large and tabular, the label a sentence under it. */
+function Figure({ testID, value, label, color }: { testID: string; value: string; label: string; color: string }) {
   const tokens = useTokens();
   return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: tokens.color.surface,
-        borderColor: tokens.color.line,
-        borderWidth: 1,
-        borderRadius: 11,
-        paddingVertical: 9,
-        paddingHorizontal: 10,
-        alignItems: 'center',
-      }}
-    >
-      <Text testID={testID} style={{ fontFamily: font.mono, fontSize: 19, fontWeight: '700', color }}>
-        {value}
-      </Text>
-      <Text
-        style={{
-          fontSize: 8.5,
-          fontWeight: '700',
-          letterSpacing: 0.55,
-          textTransform: 'uppercase',
-          color: tokens.color.sub,
-          marginTop: 3,
-        }}
-      >
-        {label}
-      </Text>
+    <View style={{ flex: 1, backgroundColor: tokens.color.surface, borderColor: tokens.color.line, borderWidth: 1, borderRadius: 16, paddingVertical: 10, paddingHorizontal: 12 }}>
+      <Text testID={testID} style={{ fontSize: 22, lineHeight: 28, fontWeight: '700', color, fontVariant: ['tabular-nums'] }}>{value}</Text>
+      <Text style={{ fontSize: 12, lineHeight: 16, color: tokens.color.sub }}>{label}</Text>
+    </View>
+  );
+}
+
+/**
+ * THE MONTH, AS A STRIP OF DAYS. The same data the "Recent" list held, but
+ * it fills the screen with meaning: a square per day, present in green,
+ * absent in red, leave in indigo, a Sunday quiet, today ringed. The emptiest
+ * screen in the app (71% blank) was this one with three figures and a
+ * four-row list (re-audit 2026-10-08).
+ */
+function MonthStrip({ days, today }: { days: PersonDay[]; today: string }) {
+  const tokens = useTokens();
+  const c = tokens.color;
+  const ym = today.slice(0, 7);
+  const [y, m] = ym.split('-').map(Number);
+  const first = new Date(y, m - 1, 1);
+  const lead = (first.getDay() + 6) % 7; // Monday first
+  const count = new Date(y, m, 0).getDate();
+  const byDate = new Map(days.map((d) => [d.date.slice(0, 10), d.status] as const));
+  const cells: { key: string; n: string; bg: string; ink: string; ring: boolean }[] = [];
+  for (let i = 0; i < lead; i += 1) cells.push({ key: `b${i}`, n: '', bg: 'transparent', ink: c.sub, ring: false });
+  for (let n = 1; n <= count; n += 1) {
+    const iso = `${ym}-${String(n).padStart(2, '0')}`;
+    const dow = (lead + n - 1) % 7;
+    const status = byDate.get(iso);
+    const tone = status === 'PRESENT' ? { bg: c.green50, ink: c.green } : status === 'ABSENT' ? { bg: c.red50, ink: c.red } : status === 'LATE' ? { bg: c.amber50, ink: c.late } : status === 'ON_LEAVE' ? { bg: c.indigo50, ink: c.indigo } : dow === 6 ? { bg: c.surfaceMuted, ink: c.placeholder } : { bg: c.surface, ink: c.ink2 };
+    cells.push({ key: iso, n: String(n), bg: tone.bg, ink: tone.ink, ring: iso === today });
+  }
+  return (
+    <View style={{ gap: 4 }}>
+      <View style={{ flexDirection: 'row', gap: 4 }}>
+        {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
+          <Text key={`${d}${i}`} style={{ flex: 1, textAlign: 'center', fontSize: 10.5, fontWeight: '700', color: c.sub }}>{d}</Text>
+        ))}
+      </View>
+      {Array.from({ length: Math.ceil(cells.length / 7) }, (_, r) => (
+        <View key={r} style={{ flexDirection: 'row', gap: 4 }}>
+          {cells.slice(r * 7, r * 7 + 7).map((cell) => (
+            <View key={cell.key} style={{ flex: 1, height: 34, borderRadius: 9, backgroundColor: cell.bg, alignItems: 'center', justifyContent: 'center', borderWidth: cell.ring ? 2 : cell.n ? 1 : 0, borderColor: cell.ring ? c.indigo : c.line }}>
+              <Text style={{ fontSize: 12, fontWeight: cell.ring ? '700' : '500', color: cell.ink }}>{cell.n}</Text>
+            </View>
+          ))}
+          {cells.slice(r * 7, r * 7 + 7).length < 7
+            ? Array.from({ length: 7 - cells.slice(r * 7, r * 7 + 7).length }, (_, i) => <View key={`t${i}`} style={{ flex: 1 }} />)
+            : null}
+        </View>
+      ))}
     </View>
   );
 }
 
 export default function Today() {
+  const session = useSession();
+  const job = jobFor(session);
+  if (job === 'ACCOUNTS') return <AccountsToday firstName={session?.displayName?.split(' ')[0] ?? 'there'} />;
+  return <StaffToday />;
+}
+
+/**
+ * OFFICE, DRIVERS, SECURITY, SUPPORT: a Today that fills the phone without
+ * any record existing — today's standing, the month as a strip, the two
+ * things they come for (leave, payslip), and the next holiday.
+ */
+function StaffToday() {
   const tokens = useTokens();
-  // Try again / pull-to-refresh for this screen's own focus effect.
+  const c = tokens.color;
   const [reloadKey, reload] = useReload();
   const [data, setData] = useState<MyStaffAttendance | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const holidays = useQuery<Holiday[]>('/me/holidays');
+  const today = todayISO();
 
   useFocusEffect(
     useCallback(() => {
@@ -151,78 +168,120 @@ export default function Today() {
 
   const summary = data?.summary;
   const marked = summary ? summary.present + summary.absent + summary.late + summary.onLeave : 0;
-  const recent = summary ? [...summary.days].reverse().slice(0, 10) : [];
+  const todayStatus = summary?.days.find((d) => d.date.slice(0, 10) === today)?.status;
+  const nextHoliday = (holidays.data ?? [])
+    .filter((h) => h.startDate.slice(0, 10) >= today)
+    .sort((a, b) => a.startDate.localeCompare(b.startDate))[0];
+  const [y, m] = today.split('-').map(Number);
 
   return (
     <Screen onRefresh={reload}>
-      <SectionTitle
-        title={data ? `Hi, ${data.person.firstName}` : 'Today'}
-        right={<NotificationBell group="(worker)" />}
-      />
-      {data && (
-        // The pitch's `.gatesub` — the one line under a serif heading that says
-        // whose page this is, in the UI sans so it never competes with it.
-        <Text style={{ marginHorizontal: 4, marginTop: -6, fontSize: 11.5, color: tokens.color.sub }}>
-          {STAFF_ROLE_LABEL[data.person.role] ?? 'Staff'}
-        </Text>
-      )}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 13, color: c.sub, fontWeight: '500' }}>
+            {fmtLongDay(new Date())}{data ? ` · ${STAFF_ROLE_LABEL[data.person.role] ?? 'Staff'}` : ''}
+          </Text>
+          <Text style={{ fontSize: 26, lineHeight: 32, fontWeight: '700', letterSpacing: -0.4, color: c.ink }}>
+            {data ? `Hi, ${data.person.firstName}` : 'Today'}
+          </Text>
+        </View>
+        <NotificationBell group="(worker)" />
+      </View>
 
       {error && <ErrorState error={error} onRetry={reload} />}
-      {data === null && !error && (
-        <LoadingRows label="Loading your attendance…" rows={3} />
-      )}
+      {data === null && !error && <LoadingRows label="Loading your attendance…" rows={3} />}
 
-      {summary && !error && marked === 0 && (
-        // A month nobody has marked yet is a clean page, not a failure — so it
-        // is said in the diary's own italic hand rather than in system grey.
-        <Page>
-          <PageHeader title="This month" icon="timetable" />
-          <Empty icon="take">No attendance has been recorded for you yet this month.</Empty>
-        </Page>
-      )}
-
-      {summary && !error && marked > 0 && (
+      {summary && !error && (
         <>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <StatBox testID="stat-percent" value={`${summary.percent}%`} label="This month" color={tokens.color.green} />
-            <StatBox testID="stat-present" value={String(summary.present)} label="Present" color={tokens.color.ink} />
-            <StatBox testID="stat-absent" value={String(summary.absent)} label="Absent" color={tokens.color.red} />
+          {/* Today's standing: the hero (9 Oct 2026 — bigger, with the month
+              in figures and the quick actions this person has). */}
+          <RoleHero
+            testID="today-hero"
+            titleTestID="today-standing"
+            quiet={!todayStatus}
+            eyebrow="Today"
+            title={todayStatus ? `Marked ${STATUS_LABEL[todayStatus].toLowerCase()}` : 'Not marked yet'}
+            line={todayStatus ? 'By the office' : 'The office marks staff attendance during the day'}
+            figures={
+              marked === 0
+                ? []
+                : [
+                    { testID: 'stat-percent', value: `${summary.percent}%`, label: 'this month' },
+                    { testID: 'stat-present', value: String(summary.present), label: 'days present' },
+                    { testID: 'stat-absent', value: String(summary.absent), label: 'absent' },
+                  ]
+            }
+            actions={[
+              { label: 'My pay', icon: 'fees', testID: 'hero-act-mypay', onPress: () => router.push('/(worker)/(tabs)/profile/salary') },
+              { label: 'Password', icon: 'key', testID: 'hero-act-password', onPress: () => router.push('/(worker)/(tabs)/profile/password') },
+              { label: 'WhatsApp', icon: 'phone', testID: 'hero-act-phone', onPress: () => router.push('/(worker)/(tabs)/profile/phone') },
+              { label: 'Profile', icon: 'person', testID: 'hero-act-profile', onPress: () => router.push('/(worker)/(tabs)/profile') },
+            ]}
+          />
+
+          {marked === 0 ? (
+            <Card style={{ padding: 0 }}>
+              <Empty kind="done" title={`${fmtMonthYear(y, m - 1)} starts clean`}>
+                No attendance has been recorded for you yet this month.
+              </Empty>
+            </Card>
+          ) : (
+            <>
+              <Card style={{ gap: 10 }} testID="recent-days">
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', letterSpacing: 0.6, color: c.sub }}>{fmtMonthYear(y, m - 1).toUpperCase()}</Text>
+                  <Text style={{ fontSize: 12, color: c.sub }}>{marked} {marked === 1 ? 'day' : 'days'} marked</Text>
+                </View>
+                <MonthStrip days={summary.days} today={today} />
+                <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap' }}>
+                  {(['PRESENT', 'ABSENT', 'LATE', 'ON_LEAVE'] as Status[]).map((s) => (
+                    <View key={s} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                      <Pill tone={STATUS_TONE[s]}>{STATUS_LABEL[s]}</Pill>
+                    </View>
+                  ))}
+                </View>
+                {/* The most recent day, in words, so a glance still reads a date. */}
+                {summary.days.length > 0 ? (
+                  <Text style={{ fontSize: 12.5, color: c.sub }}>
+                    Last marked {fmtDate(summary.days[summary.days.length - 1].date)} · {STATUS_LABEL[summary.days[summary.days.length - 1].status]}
+                  </Text>
+                ) : null}
+              </Card>
+            </>
+          )}
+
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <Card style={{ flex: 1, gap: 6, padding: 14 }} testID="today-leave-tile">
+              <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: c.indigo50, alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name="lock" size={20} color={c.indigo} fillOpacity={0.15} />
+              </View>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: c.ink }}>Leave</Text>
+              <Text style={{ fontSize: 12, lineHeight: 17, color: c.sub }}>Apply through the office for now. On the app soon.</Text>
+            </Card>
+            <Card style={{ flex: 1, gap: 6, padding: 14 }} testID="today-pay-tile">
+              <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: c.indigo50, alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name="fees" size={20} color={c.indigo} fillOpacity={0.15} />
+              </View>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: c.ink }}>My pay</Text>
+              <Text style={{ fontSize: 12, lineHeight: 17, color: c.sub }}>Payslips, as they are issued</Text>
+              <Button label="Open" variant="text" size="sm" onPress={() => router.push('/(worker)/(tabs)/profile/salary')} style={{ marginLeft: -12 }} />
+            </Card>
           </View>
 
-          {/* A `.page` of ruled rows, not a stack of cards: these days are
-              consecutive lines in one register, and a rule between them is what
-              says so. The date is MONO so the column of dates lines up the way
-              a register's does; the status keeps the same `Pill` tones the
-              teacher's attendance screens use, so PRESENT is the same green
-              everywhere in the app. */}
-          <Page testID="recent-days">
-            <PageHeader title="Recent" icon="report" />
-            {recent.map((d, i) => (
-              <View
-                key={d.date}
-                style={{
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  paddingVertical: 9,
-                  paddingHorizontal: 12,
-                  borderTopWidth: i === 0 ? 0 : 1,
-                  borderTopColor: tokens.color.line,
-                }}
-              >
-                <Text style={{ fontFamily: font.mono, fontSize: 12, color: tokens.color.ink2 }}>{formatDate(d.date)}</Text>
-                <Pill tone={STATUS_TONE[d.status]}>{STATUS_LABEL[d.status]}</Pill>
+          {nextHoliday ? (
+            <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 }} testID="today-holiday">
+              <View style={{ width: 40, height: 42, borderRadius: 12, backgroundColor: c.indigo50, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 9.5, fontWeight: '700', color: c.indigo }}>{['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][new Date(nextHoliday.startDate.slice(0, 10)).getMonth()]}</Text>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: c.indigo, lineHeight: 18 }}>{new Date(nextHoliday.startDate.slice(0, 10)).getDate()}</Text>
               </View>
-            ))}
-          </Page>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text numberOfLines={1} style={{ fontSize: 14.5, fontWeight: '600', color: c.ink }}>{nextHoliday.name} · next holiday</Text>
+                <Text style={{ fontSize: 12.5, color: c.sub }}>{fmtWeekdayDay(nextHoliday.startDate.slice(0, 10))} · school closed</Text>
+              </View>
+            </Card>
+          ) : null}
         </>
       )}
-
-      {/* No Leave card until staff can apply. The placeholder said "isn't
-          available here yet" on the one desk where leave is the main reason
-          to open the app — a dead end on every visit (re-audit 2026-10-08).
-          LeaveApplication is Teacher-row-scoped; a Staff-row path is real
-          schema work, tracked as its own feature. */}
     </Screen>
   );
 }

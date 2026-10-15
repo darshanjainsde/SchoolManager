@@ -12,6 +12,7 @@ jest.mock('expo-notifications', () => ({
   requestPermissionsAsync: jest.fn(),
   getExpoPushTokenAsync: jest.fn(),
   setNotificationHandler: jest.fn(),
+  addNotificationReceivedListener: jest.fn(),
 }));
 
 it('no-ops on a non-device (simulator/emulator) without requesting permission', async () => {

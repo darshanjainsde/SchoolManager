@@ -405,6 +405,29 @@ export class AttendanceService {
 
       const markedById = teacher?.id ?? callerUserId;
 
+      // AN OFFLINE REPLAY NEVER OVERWRITES A NEWER REGISTER. The app queues a
+      // register marked without signal and sends it when signal returns,
+      // which can be hours later. If anyone saved this register after it was
+      // marked (the office correcting it on the web), those marks are the
+      // newer truth: refuse the replay and say so. Rows are recreated on every
+      // save, so the newest createdAt IS the last save.
+      if (dto.markedOfflineAt) {
+        const last = await tx.attendance.findFirst({
+          where: { schoolId, classSectionId: dto.classSectionId, date: day },
+          orderBy: { createdAt: 'desc' },
+          select: { createdAt: true },
+        });
+        if (last && last.createdAt > new Date(dto.markedOfflineAt)) {
+          const at = last.createdAt.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' }).toLowerCase();
+          throw new ApiError(
+            'REGISTER_CHANGED',
+            `This register was saved again at ${at}, after you marked it without signal. Your offline marks were not applied — open the register to see it as it stands.`,
+            409,
+            'date',
+          );
+        }
+      }
+
       // Read the marks as they stand BEFORE this save, inside the same
       // transaction as the upserts, so "was this student already absent?" is
       // answered against a consistent snapshot. Anything not in this map has

@@ -10,6 +10,7 @@ import { ApiError } from '@/lib/api';
 import { useHost } from '@/components/use-host';
 import { Cell, Row, RowList, RowTitle } from '@/components/ui/kit';
 import { CoverOffer, CoverOneTeacherDrawer, fitKey, type CoverFit } from './cover-one-teacher';
+import { LIVE_DESK_MS } from '@/app/providers';
 import { OWN_LEAVE_HINT, isDecidedElsewhere, isOwnLeave, leaveSpan, refreshLeaveDesk } from '@/lib/leave-desk';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -257,6 +258,8 @@ export default function AdminLeavePage() {
 
   const pending = useQuery({
     queryKey: ['a-leave-pending'],
+    // Teachers apply, withdraw and get covers from the app: an open desk re-checks.
+    refetchInterval: LIVE_DESK_MS,
     enabled: !!host,
     queryFn: () => api.get<LeaveApplication[]>('/manage/leave?status=PENDING'),
   });
@@ -272,6 +275,8 @@ export default function AdminLeavePage() {
 
   const approved = useQuery({
     queryKey: ['a-leave-approved'],
+    // Teachers apply, withdraw and get covers from the app: an open desk re-checks.
+    refetchInterval: LIVE_DESK_MS,
     enabled: !!host,
     queryFn: () => api.get<LeaveApplication[]>('/manage/leave?status=APPROVED'),
   });
@@ -286,6 +291,8 @@ export default function AdminLeavePage() {
 
   const coverage = useQuery({
     queryKey: ['a-leave-coverage', range.from, range.to],
+    // Teachers apply, withdraw and get covers from the app: an open desk re-checks.
+    refetchInterval: LIVE_DESK_MS,
     enabled: !!host && !!range.from && !!range.to,
     queryFn: () =>
       api.get<CoverageGap[]>(

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Alert, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import { useQuery } from '@/lib/query';
@@ -11,7 +11,7 @@ import { Sheet } from '@/components/Sheet';
 import { SegmentedField } from '@/components/Field';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
-import { font } from '@/theme/tokens';
+import { ask } from '@/components/ConfirmSheet';
 
 /**
  * ONE MEET, ON THE DAY. Events grouped by the noun the teacher says out loud
@@ -45,10 +45,10 @@ export default function Meet() {
 
   function confirmPublish() {
     if (!t) return;
-    Alert.alert('Publish this meet?', 'Every child in it sees their fixtures and results in the app.', [
+    ask('Publish this meet?', 'Every child in it sees their fixtures and results in the app.', [
       { text: 'Not yet', style: 'cancel' },
       { text: 'Publish', onPress: () => void doPublish() },
-    ]);
+    ], { icon: 'send' });
   }
   async function doPublish() {
     if (!t) return;
@@ -72,7 +72,7 @@ export default function Meet() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 4, flexWrap: 'wrap' }}>
             <Pill tone={t.status === 'LIVE' ? 'green' : t.status === 'DONE' ? 'neutral' : 'amber'}>{t.status === 'LIVE' ? 'Live' : t.status === 'DONE' ? 'Done' : 'Draft'}</Pill>
             <Pill tone={t.published ? 'green' : 'amber'}>{t.published ? 'Published' : 'Not published'}</Pill>
-            {work && (work.matches + work.heats > 0) && <Text testID="meet-open-work" style={{ fontSize: 12, color: tokens.color.sub }}>{work.matches} match{work.matches === 1 ? '' : 'es'} · {work.heats} heat{work.heats === 1 ? '' : 's'} to enter</Text>}
+            {work && (work.matches + work.heats > 0) && <Text testID="meet-open-work" style={{ fontSize: 13, color: tokens.color.sub }}>{work.matches} match{work.matches === 1 ? '' : 'es'} · {work.heats} heat{work.heats === 1 ? '' : 's'} to enter</Text>}
           </View>
 
           {next && (
@@ -108,8 +108,8 @@ export default function Meet() {
                         right={
                           m.winner || m.bye ? (
                             <View style={{ alignItems: 'flex-end' }}>
-                              {line ? <Text numberOfLines={1} style={{ fontFamily: font.mono, fontSize: 12.5, color: tokens.color.ink, fontWeight: '700' }}>{line}</Text> : null}
-                              <Text style={{ fontSize: 11, color: tokens.color.green }}>{m.bye ? 'Bye' : `${sideName(t, m.winner)} won`}</Text>
+                              {line ? <Text numberOfLines={1} style={{ fontVariant: ['tabular-nums'], fontSize: 13, color: tokens.color.ink, fontWeight: '700' }}>{line}</Text> : null}
+                              <Text style={{ fontSize: 13, color: tokens.color.green }}>{m.bye ? 'Bye' : `${sideName(t, m.winner)} won`}</Text>
                             </View>
                           ) : enter && playable ? (
                             <Button small variant="ghost" testID={`enter-${m.id}`} label="Enter" onPress={() => setScoring({ e, m })} />
@@ -193,7 +193,7 @@ function ScoreSheet({ t, e, m, onClose, onSaved }: { t: TournamentDetail; e: Eve
             </View>
             {a.map((_, i) => (
               <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 }}>
-                <Text style={{ width: 80, fontSize: 12.5, color: tokens.color.sub }}>{maxSets > 1 ? `Set ${i + 1}` : e.scoring.type === 'SINGLE' ? e.scoring.decider : 'Score'}</Text>
+                <Text style={{ width: 80, fontSize: 13, color: tokens.color.sub }}>{maxSets > 1 ? `Set ${i + 1}` : e.scoring.type === 'SINGLE' ? e.scoring.decider : 'Score'}</Text>
                 <View style={{ flex: 1, alignItems: 'center' }}><NumberBox testID={`score-a-${i}`} value={a[i]} onChangeText={(v) => setA(a.map((x, j) => (j === i ? v.replace(/\D/g, '') : x)))} placeholder="0" /></View>
                 <View style={{ flex: 1, alignItems: 'center' }}><NumberBox testID={`score-b-${i}`} value={b[i]} onChangeText={(v) => setB(b.map((x, j) => (j === i ? v.replace(/\D/g, '') : x)))} placeholder="0" /></View>
               </View>
@@ -233,10 +233,10 @@ function MarksSheet({ e, h, names, onClose, onSaved }: { e: EventDetail; h: Heat
     }
   }
   function confirmDone() {
-    Alert.alert('Close this heat?', 'Marks are ranked, points go to houses, and records are checked. A lane left blank counts as no mark.', [
+    ask('Close this heat?', 'Marks are ranked, points go to houses, and records are checked. A lane left blank counts as no mark.', [
       { text: 'Keep open', style: 'cancel' },
       { text: 'Close heat', onPress: () => void save(true) },
-    ]);
+    ], { icon: 'sports' });
   }
 
   return (
@@ -250,10 +250,10 @@ function MarksSheet({ e, h, names, onClose, onSaved }: { e: EventDetail; h: Heat
       <View style={{ gap: 6 }}>
         {lanes.map((l, i) => (
           <View key={l.studentId} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4, borderTopWidth: i ? 1 : 0, borderTopColor: tokens.color.line }}>
-            <Text style={{ width: 24, fontFamily: font.mono, color: tokens.color.sub, fontSize: 12 }}>{l.lane}</Text>
+            <Text style={{ width: 24, fontVariant: ['tabular-nums'], color: tokens.color.sub, fontSize: 13 }}>{l.lane}</Text>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text numberOfLines={1} style={{ fontWeight: '600', color: tokens.color.ink, fontSize: 14 }}>{names.get(l.studentId) ?? l.side}</Text>
-              {l.mark != null && <Text style={{ fontSize: 11, color: tokens.color.sub }}>was {markText(e.scoring, l.mark)}</Text>}
+              {l.mark != null && <Text style={{ fontSize: 13, color: tokens.color.sub }}>was {markText(e.scoring, l.mark)}</Text>}
             </View>
             <NumberBox decimal width={92} testID={`mark-${l.studentId}`} value={marks[l.studentId] ?? ''} placeholder={unit || '—'} onChangeText={(v) => setMarks({ ...marks, [l.studentId]: v.replace(/[^0-9.]/g, '') })} />
           </View>

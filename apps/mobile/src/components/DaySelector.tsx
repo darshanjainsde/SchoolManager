@@ -97,12 +97,12 @@ export function DaySelector({ days, selectedDay, todayDayOfWeek, onSelect }: Day
               backgroundColor: isSelected
                 ? tokens.color.indigo
                 : isToday
-                  ? tokens.color.amber50
+                  ? tokens.color.indigo50
                   : tokens.color.surface,
               borderColor: isSelected
                 ? tokens.color.indigo
                 : isToday
-                  ? tokens.color.amber
+                  ? tokens.color.indigo
                   : tokens.color.line,
             }}
           >
@@ -111,7 +111,7 @@ export function DaySelector({ days, selectedDay, todayDayOfWeek, onSelect }: Day
                 fontSize: 11,
                 fontWeight: '800',
                 letterSpacing: 0.5,
-                color: isSelected ? tokens.color.onBrand : isToday ? tokens.color.late : tokens.color.sub,
+                color: isSelected ? tokens.color.onBrand : isToday ? tokens.color.indigo : tokens.color.sub,
               }}
             >
               {DAY_LABELS[day] ?? `D${day}`}
@@ -121,7 +121,7 @@ export function DaySelector({ days, selectedDay, todayDayOfWeek, onSelect }: Day
                 fontFamily: font.serif,
                 fontSize: 15,
                 marginTop: 1,
-                color: isSelected ? tokens.color.onBrand : isToday ? tokens.color.late : tokens.color.ink,
+                color: isSelected ? tokens.color.onBrand : isToday ? tokens.color.indigo : tokens.color.ink,
               }}
             >
               {dateOfWeekday(day)}
@@ -137,7 +137,7 @@ export function DaySelector({ days, selectedDay, todayDayOfWeek, onSelect }: Day
                   fontSize: 8.5,
                   fontWeight: '800',
                   marginTop: 2,
-                  color: isSelected ? tokens.color.onBrand : tokens.color.late,
+                  color: isSelected ? tokens.color.onBrand : tokens.color.indigo,
                 }}
               >
                 Today

@@ -37,7 +37,9 @@ function makeProps(overrides: Partial<StaffTabBarProps> = {}): StaffTabBarProps 
 }
 
 it('renders the four core tabs, and nothing between them', () => {
-  const { getByText } = render(<StaffTabBar {...makeProps()} />);
+  // Floating pill (sckools-ui-standards §4): only the open tab shows its word;
+  // every tab is still named for screen readers, which is what we check.
+  const { getByLabelText: getByText } = render(<StaffTabBar {...makeProps()} />);
   for (const { title } of VISIBLE_TABS) {
     expect(getByText(title)).toBeTruthy();
   }
@@ -76,4 +78,12 @@ it('has no tools FAB — the drawer it opened is gone, and every tab is equal', 
   // side toward the edges. Its removal is what makes the four tabs even.
   const { queryByTestId } = render(<StaffTabBar {...makeProps({})} />);
   expect(queryByTestId('tools-fab')).toBeNull();
+});
+
+it('floating pill: only the open tab shows its word, inside the brand pill', () => {
+  const { getByTestId, queryByText, getByText } = render(<StaffTabBar {...makeProps()} />);
+  expect(getByTestId('tab-bar-pill')).toBeTruthy();
+  expect(getByText('Home')).toBeTruthy();
+  expect(queryByText('Attendance')).toBeNull();
+  expect(getByTestId('tab-indicator-home')).toBeTruthy();
 });

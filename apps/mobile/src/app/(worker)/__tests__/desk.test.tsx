@@ -49,10 +49,10 @@ describe('sports desk — Today', () => {
       { id: 'h2', name: 'Blue', color: '#00c', order: 1, members: 310, points: 150 },
     ];
     render(<SportsToday />);
-    // A pressable Figure announces itself as "label, value, hint".
-    expect(await screen.findByLabelText(/^Live meets, 1,/)).toBeTruthy();
-    expect(screen.getByLabelText(/^To verify, 4,/)).toBeTruthy();
-    expect(screen.getByLabelText(/^Leading, Blue, 150 pts/)).toBeTruthy();
+    // The hero's figures announce themselves as "label, value" (HeroDeck).
+    expect(await screen.findByLabelText(/^live meets, 1$/)).toBeTruthy();
+    expect(screen.getByLabelText(/^to verify, 4$/)).toBeTruthy();
+    expect(screen.getByLabelText(/^leading · 150 pts, Blue$/)).toBeTruthy();
     fireEvent.press(screen.getByTestId('desk-pending'));
     expect(mockPush).toHaveBeenCalledWith('/(worker)/(tabs)/records');
     fireEvent.press(screen.getByTestId('desk-meet-t1'));

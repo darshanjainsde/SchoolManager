@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { createTransport, type Transporter } from 'nodemailer';
 import { ResendTransport, type MailTransport } from './resend-transport';
@@ -221,9 +222,22 @@ export class MailIdentityService {
   }
 
   private schoolTransport(host: string, port: number, user: string | null, pass: string | null): Transporter {
-    const cacheKey = `${host}:${port}:${user ?? ''}`;
+    // The PASSWORD is part of the signature (hashed — never kept as a key in
+    // the clear). Keyed on host:port:user alone, a school that fixed a wrong
+    // password kept failing on every warm instance until it was recycled:
+    // the old transporter, with the old password, was found and reused.
+    const mailbox = `${host}:${port}:${user ?? ''}`;
+    const cacheKey = `${mailbox}:${pass ? createHash('sha256').update(pass).digest('hex').slice(0, 16) : ''}`;
     const existing = this.schoolTransports.get(cacheKey);
     if (existing) return existing;
+    // A changed password replaces the old connection for that mailbox, so the
+    // map holds one per mailbox rather than one per password ever tried.
+    for (const [k, t] of this.schoolTransports) {
+      if (k.startsWith(`${mailbox}:`)) {
+        t.close();
+        this.schoolTransports.delete(k);
+      }
+    }
     const t = createTransport({
       host,
       port,

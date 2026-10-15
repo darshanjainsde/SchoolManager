@@ -37,7 +37,9 @@ function makeProps(overrides: Partial<FamilyTabBarProps> = {}): FamilyTabBarProp
 }
 
 it('renders the four core tabs, and nothing between them', () => {
-  const { getByText } = render(<FamilyTabBar {...makeProps()} />);
+  // Floating pill (sckools-ui-standards §4): only the open tab shows its word;
+  // every tab is still named for screen readers, which is what we check.
+  const { getByLabelText: getByText } = render(<FamilyTabBar {...makeProps()} />);
   for (const { title } of VISIBLE_TABS) {
     expect(getByText(title)).toBeTruthy();
   }

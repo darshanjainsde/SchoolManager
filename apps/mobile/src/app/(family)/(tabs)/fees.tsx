@@ -139,7 +139,7 @@ export default function Fees() {
             />
           ) : (
             <Page>
-              <Empty icon="fees">
+              <Empty icon="fees" scene={d.planReady ? 'feesPaid' : undefined}>
                 {!d.planReady
                   ? `The school hasn’t set up fees for ${d.student.className ?? 'this class'} this year yet. There’s nothing to pay.`
                   : d.balanceMinor < 0
@@ -228,7 +228,7 @@ function PendingCard({ p }: { p: FeePaymentRow }) {
         </Text>
         <Pill tone="amber">{STATUS_LABEL.SUBMITTED}</Pill>
       </View>
-      <Text style={{ fontFamily: font.mono, fontSize: 16, fontWeight: '700', color: tokens.color.ink }}>
+      <Text style={{ fontVariant: ['tabular-nums'], fontSize: 16, fontWeight: '700', color: tokens.color.ink }}>
         {rupees(p.amountMinor)}
         <Text style={{ fontFamily: font.sans, fontSize: 12, fontWeight: '500', color: tokens.color.sub }}>
           {'  '}· {METHOD_LABEL[p.method]} · sent {formatDate(p.submittedAt)}
@@ -280,7 +280,7 @@ function InvoicePage({ inv, lateFeeRule, how, onPay }: { inv: FeeInvoice; lateFe
                 <Text style={{ fontSize: 11, color: tokens.color.green, marginTop: 1 }}>−{rupees(l.concessionMinor)} · {l.concessionReason}</Text>
               ) : null}
             </View>
-            <Text style={{ fontFamily: font.mono, fontSize: 13, fontWeight: '600', color: tokens.color.ink }}>{rupees(l.netMinor)}</Text>
+            <Text style={{ fontVariant: ['tabular-nums'], fontSize: 13, fontWeight: '600', color: tokens.color.ink }}>{rupees(l.netMinor)}</Text>
           </View>
         ))}
         {inv.lateFeeMinor > 0 && (
@@ -289,12 +289,12 @@ function InvoicePage({ inv, lateFeeRule, how, onPay }: { inv: FeeInvoice; lateFe
               <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.late }}>Late fee</Text>
               {lateFeeRule ? <Text style={{ fontSize: 11, color: tokens.color.sub, lineHeight: 15 }}>{lateFeeRule}</Text> : null}
             </View>
-            <Text style={{ fontFamily: font.mono, fontSize: 13, fontWeight: '600', color: tokens.color.late }}>{rupees(inv.lateFeeMinor)}</Text>
+            <Text style={{ fontVariant: ['tabular-nums'], fontSize: 13, fontWeight: '600', color: tokens.color.late }}>{rupees(inv.lateFeeMinor)}</Text>
           </View>
         )}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 10, borderTopWidth: 1.5, borderTopColor: tokens.color.line2, marginTop: 2 }}>
           <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.ink }}>Due now</Text>
-          <Text testID={`invoice-${inv.id}-due`} style={{ fontFamily: font.mono, fontSize: 18, fontWeight: '700', color: inv.isOverdue ? tokens.color.red : tokens.color.ink }}>
+          <Text testID={`invoice-${inv.id}-due`} style={{ fontVariant: ['tabular-nums'], fontSize: 18, fontWeight: '700', color: inv.isOverdue ? tokens.color.red : tokens.color.ink }}>
             {rupees(inv.dueMinor)}
           </Text>
         </View>
@@ -336,7 +336,7 @@ function PaymentRow({ p, first, onSendAgain, onReceipt }: { p: FeePaymentRow; fi
   const row = (
     <View testID={`payment-${p.id}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 12, borderTopWidth: first ? 0 : 1, borderTopColor: tokens.color.line }}>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={{ fontFamily: font.mono, fontSize: 14, fontWeight: '700', color: tokens.color.ink }}>
+        <Text style={{ fontVariant: ['tabular-nums'], fontSize: 14, fontWeight: '700', color: tokens.color.ink }}>
           {rupees(p.amountMinor)}
           <Text style={{ fontFamily: font.sans, fontSize: 11.5, fontWeight: '500', color: tokens.color.sub }}>{'  '}· {METHOD_LABEL[p.method]}</Text>
         </Text>
@@ -409,7 +409,7 @@ function NextCard({ n, onPay }: { n: NonNullable<StudentFees['nextDue']>; onPay?
         {overdue ? 'Overdue' : n.billed ? 'Due' : 'Next instalment'}
       </Text>
       <Text style={{ fontFamily: font.serif, fontSize: 17, fontWeight: '600', color: tokens.color.ink }}>{n.name}</Text>
-      <Text style={{ fontFamily: font.mono, fontSize: 22, fontWeight: '700', color: overdue ? tokens.color.red : tokens.color.ink }}>{rupees(n.amountMinor)}</Text>
+      <Text style={{ fontVariant: ['tabular-nums'], fontSize: 22, fontWeight: '700', color: overdue ? tokens.color.red : tokens.color.ink }}>{rupees(n.amountMinor)}</Text>
       <Text style={{ fontSize: 11.5, color: tokens.color.ink2 }}>{when}{n.billed ? '' : ' · bill not issued yet'}</Text>
       {onPay ? (
         <Touchable testID="fees-next-pay" onPress={onPay} accessibilityLabel={`Pay ${rupees(n.amountMinor)} by bank transfer`}

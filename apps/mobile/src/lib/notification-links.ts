@@ -85,8 +85,12 @@ export function routeFor(group: NotificationGroup, n: NotificationRow): Href | n
   }
   // staff
   if (n.kind === 'LIBRARY') return '/(staff)/(tabs)/home/library';
-  // The teacher's own leave: the decision, and a class to cover.
-  if (n.kind === 'LEAVE_DECIDED' || n.kind === 'COVER_ASSIGNED' || n.kind === 'LEAVE_APPLIED') return '/(staff)/(tabs)/home/requests';
+  // A class to cover lives on the day it falls on: the Timetable tab reads
+  // /my-day, which carries every cover ("· cover"). Requests lists none, so a
+  // cover notice that opened it led nowhere (parity audit 2026-10-15).
+  if (n.kind === 'COVER_ASSIGNED') return '/(staff)/(tabs)/timetable';
+  // The teacher's own leave: the decision.
+  if (n.kind === 'LEAVE_DECIDED' || n.kind === 'LEAVE_APPLIED') return '/(staff)/(tabs)/home/requests';
   if (n.kind === 'REQUEST_DECISION') return '/(staff)/(tabs)/home/requests';
   if (n.kind === 'DIARY') return '/(staff)/(tabs)/home/diary';
   return null;

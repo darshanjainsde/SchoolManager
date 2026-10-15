@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import type { RegisterChangeRow } from '@skoolos/types';
+import { LIVE_DESK_MS } from '@/app/providers';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { OWN_LEAVE_HINT, isDecidedElsewhere, isOwnLeave, leaveSpan } from '@/lib/leave-desk';
@@ -116,6 +117,8 @@ export default function AdminRequestsPage() {
   // one cache entry and either page's mutations keep the other fresh.
   const leaveQuery = useQuery({
     queryKey: ['a-leave-pending'],
+    // Requests come in from the app: an open desk re-checks.
+    refetchInterval: LIVE_DESK_MS,
     enabled: !!host,
     queryFn: () => api.get<PendingLeave[]>('/manage/leave?status=PENDING'),
   });
@@ -131,6 +134,8 @@ export default function AdminRequestsPage() {
 
   const registerQuery = useQuery({
     queryKey: ['a-register-pending'],
+    // Requests come in from the app: an open desk re-checks.
+    refetchInterval: LIVE_DESK_MS,
     enabled: !!host,
     queryFn: () => api.get<RegisterChangeRow[]>('/manage/register-changes'),
   });
