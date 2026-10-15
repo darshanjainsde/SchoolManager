@@ -56,6 +56,7 @@ export const TEMPLATE_NAMES: Record<NotificationKind, string> = {
   COVER_CANCELLED: `${TEMPLATE_PREFIX}cover_cancelled`,
   // The approved "periods still need cover" pointer.
   COVER_UNFILLED: `${TEMPLATE_PREFIX}cover_pending`,
+  COVER_BATCH: `${TEMPLATE_PREFIX}cover_batch`,
 };
 
 /** One narrow Utility template per notice topic — what lets a holiday or fee date reach WhatsApp with its facts. */
@@ -66,10 +67,38 @@ export const NOTICE_TEMPLATES: Record<NoticeTopic['kind'], string> = {
   FEE: `${TEMPLATE_PREFIX}fee_due`,
 };
 
-/** AUTHENTICATION category: Meta fixes the body; only the code is a parameter, and the copy-code button repeats it. */
+/**
+ * The AUTHENTICATION templates. Meta fixes the body for this category; only
+ * the code is a parameter, and the copy-code button repeats it.
+ *
+ * Two, because the words differ and the words are Meta's, not ours:
+ *  · `sckoolsverify` (en_US) says "Your login code is …" — right for signing
+ *    in, made in WhatsApp Manager the day the category opened (2026-10-14).
+ *  · `sckools_verify_code` (en) says "… is your verification code" — right
+ *    for proving a number on a profile, or resetting a password, where the
+ *    person is not logging in. Submitted 2026-10-15.
+ * A name AND its language are the template's identity at Meta; send either
+ * wrong and Meta answers 132001 "does not exist". So both are spelled
+ * exactly as Meta holds them.
+ */
+export const LOGIN_CODE = 'sckoolsverify';
+export const LOGIN_CODE_LANGUAGE = 'en_US';
 export const VERIFY_CODE = `${TEMPLATE_PREFIX}verify_code`;
+const codeButton = (code: string): TemplateButton[] => [{ type: 'copy_code', index: 0, text: code }];
+export function loginCodeTemplate(code: string): WhatsAppTemplate {
+  return { name: LOGIN_CODE, language: LOGIN_CODE_LANGUAGE, params: [code], buttons: codeButton(code) };
+}
 export function verifyCodeTemplate(code: string): WhatsAppTemplate {
-  return { name: VERIFY_CODE, language: TEMPLATE_LANGUAGE, params: [code], buttons: [{ type: 'copy_code', index: 0, text: code }] };
+  return { name: VERIFY_CODE, language: TEMPLATE_LANGUAGE, params: [code], buttons: codeButton(code) };
+}
+/**
+ * The templates to try for a code, in order. Signing in uses the login words
+ * only. Anything else prefers the neutral words and falls back to the login
+ * template — a code with slightly-off words beats asking the person to say
+ * "Hi" first, while Meta is still reviewing the neutral one.
+ */
+export function codeTemplates(purpose: 'LOGIN' | 'RESET' | 'VERIFY_PHONE', code: string): WhatsAppTemplate[] {
+  return purpose === 'LOGIN' ? [loginCodeTemplate(code)] : [verifyCodeTemplate(code), loginCodeTemplate(code)];
 }
 
 /** When the 24-hour window has closed and a list cannot be sent: point at the console instead. */
@@ -94,7 +123,9 @@ export const COVER_CANCELLED = `${TEMPLATE_PREFIX}cover_cancelled`;
  * else in this file was approved before the code that sends it shipped.
  * Remove a name once it is approved on production.
  */
-export const GATED_TEMPLATES: ReadonlySet<string> = new Set([COVER_ASSIGNED_V2, COVER_CANCELLED]);
+/** One summary for a teacher given several periods of a leave at once (2026-10-15). */
+export const COVER_BATCH = `${TEMPLATE_PREFIX}cover_batch`;
+export const GATED_TEMPLATES: ReadonlySet<string> = new Set([COVER_ASSIGNED_V2, COVER_CANCELLED, COVER_BATCH]);
 
 /** Meta's sample template on every new number — the pipeline smoke test. */
 export const HELLO_WORLD: WhatsAppTemplate = { name: 'hello_world', language: 'en_US', params: [] };
@@ -240,6 +271,19 @@ export function templateFor(message: NotificationMessage, ctx: TemplateContext =
     }
     case 'COVER_UNFILLED':
       return coverPendingTemplate(message.payload.schoolName, message.payload.gaps);
+    case 'COVER_BATCH': {
+      const p = message.payload;
+      // No fallback: until Meta approves it the summary is NOT sent as a pile of
+      // per-period cards — the bell and the push carry it (chooseTemplate skips).
+      return {
+        name, language,
+        params: [param(p.schoolName), String(p.count), param(p.originalTeacherName), param(p.dates)],
+        buttons: [
+          { type: 'quick_reply', index: 0, payload: p.ackPayload },
+          { type: 'quick_reply', index: 1, payload: p.cantPayload },
+        ],
+      };
+    }
     default: {
       const _exhaustive: never = message;
       return _exhaustive;
@@ -277,6 +321,11 @@ const COVER_ASSIGNED_V2_BODY = {
 const COVER_CANCELLED_BODY = {
   body: 'A change at {{1}}: {{2}} on {{3}} is called off, because {{4}}. Open the Sckools app to see the day as it now stands.',
   samples: ['Raffles Public School', 'your cover of 9-A, period 3', 'Mon 22 Sep 2026', 'the leave it was for was cancelled'],
+};
+const COVER_BATCH_BODY = {
+  body: "Cover duties at {{1}}: you are covering {{2}} periods for {{3}}, {{4}}. Open the Sckools app to see each class and time. Tap Got it, or Can't so the office can find someone else.",
+  samples: ['Raffles Public School', '20', 'Priya Nair', 'Mon 20 – Thu 23 Oct 2026'],
+  buttons: ['Got it', "Can't"],
 };
 const COVER_PENDING_BODY = {
   body: 'A message from {{1}}. {{2}} periods still need cover after the leave you approved. Open the console to assign teachers.',
@@ -331,13 +380,21 @@ export const SUBMISSIONS: Record<NotificationKind, { body: string; samples: stri
   LEAVE_CANCELLED: COVER_CANCELLED_BODY,
   COVER_CANCELLED: COVER_CANCELLED_BODY,
   COVER_UNFILLED: COVER_PENDING_BODY,
+  COVER_BATCH: COVER_BATCH_BODY,
 };
 
 /** Not notification kinds, but templates all the same — submitted with the others. */
-export const EXTRA_SUBMISSIONS: Record<string, { category: 'AUTHENTICATION' | 'UTILITY'; body: string; samples: string[]; buttons?: string[] }> = {
+export const EXTRA_SUBMISSIONS: Record<string, { category: 'AUTHENTICATION' | 'UTILITY'; body: string; samples: string[]; buttons?: string[]; language?: string }> = {
   [VERIFY_CODE]: {
     category: 'AUTHENTICATION',
     body: '{{1}} is your Sckools verification code. For your security, do not share this code.',
+    samples: ['482911'],
+    buttons: ['Copy code'],
+  },
+  [LOGIN_CODE]: {
+    category: 'AUTHENTICATION',
+    language: LOGIN_CODE_LANGUAGE,
+    body: 'Your login code is {{1}}. No further action is needed if you didn’t request this.',
     samples: ['482911'],
     buttons: ['Copy code'],
   },
@@ -382,6 +439,8 @@ export interface TemplateSubmission {
   body: string;
   samples: string[];
   buttons: string[];
+  /** Meta's language code; `en` unless the template was made in another. */
+  language: string;
 }
 
 /**
@@ -402,10 +461,10 @@ export function templateSubmissions(): TemplateSubmission[] {
   };
   for (const kind of Object.keys(SUBMISSIONS) as NotificationKind[]) {
     const s = SUBMISSIONS[kind];
-    put({ name: TEMPLATE_NAMES[kind], category: 'UTILITY', body: s.body, samples: s.samples, buttons: s.buttons ?? [] });
+    put({ name: TEMPLATE_NAMES[kind], category: 'UTILITY', body: s.body, samples: s.samples, buttons: s.buttons ?? [], language: TEMPLATE_LANGUAGE });
   }
   for (const [name, s] of Object.entries(EXTRA_SUBMISSIONS)) {
-    put({ name, category: s.category, body: s.body, samples: s.samples, buttons: s.buttons ?? [] });
+    put({ name, category: s.category, body: s.body, samples: s.samples, buttons: s.buttons ?? [], language: s.language ?? TEMPLATE_LANGUAGE });
   }
   return [...out.values()];
 }

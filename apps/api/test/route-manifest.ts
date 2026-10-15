@@ -99,6 +99,8 @@ export const AUTHZ_REVIEWED: string[] = [
   "GET /manage/tv",
   "GET /manage/tv/rotate",
   "GET /manage/tv/disable",
+  "POST /manage/tv/rotate",
+  "POST /manage/tv/disable",
   "GET /manage/press/overview",
   // The Result Room — press-authz OFFICE_ROUTES (admin+staff in, teacher/
   // student/anon refused); the gate's 409 + override is unit-proven.
@@ -283,6 +285,11 @@ export const AUTHZ_REVIEWED: string[] = [
   "GET /internal/cron/cover-nudge",
   "POST /internal/cron/cover-nudge",
   "GET /manage/substitution/:id/candidates",
+  // "Cover with one teacher" (2026-10-15): the same leave-desk door (LeaveDeskGuard),
+  // proved per role in leave-cover-batch.e2e-spec.ts.
+  "GET /manage/leave/:id/cover-fit",
+  "GET /manage/leave/:id/cover-preview",
+  "POST /manage/leave/:id/cover-batch",
   "GET /manage/announcements/mine",
   "GET /manage/assignments",
   "GET /manage/classes",

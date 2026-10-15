@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Submit `sckools_verify_code` — the one template OTP needs.
+ * Submit `sckoolsverify` — the one template OTP needs. Normally unnecessary:
+ * it was created in WhatsApp Manager on 2026-10-14. Kept for a new account.
  *
  * Meta FIXES the body for the AUTHENTICATION category: you do not send your
  * own words, you declare the security line, the expiry and the copy-code
@@ -25,8 +26,8 @@ const waba = process.env.WHATSAPP_WABA_ID;
 if (!token || !waba) { console.error('Need the token file and WHATSAPP_WABA_ID.'); process.exit(2); }
 
 const body = {
-  name: 'sckools_verify_code',
-  language: 'en',
+  name: 'sckoolsverify',
+  language: 'en_US',
   category: 'AUTHENTICATION',
   // `message_send_ttl_seconds` matches our own 10-minute code life: Meta will
   // not keep trying to deliver a code that has already expired.

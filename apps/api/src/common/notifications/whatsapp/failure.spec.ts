@@ -15,7 +15,7 @@ describe('whose problem a WhatsApp failure is', () => {
   });
 
   it('blames the template when Meta has not approved it', () => {
-    // OTP fails this way until `sckools_verify_code` exists on the account.
+    // OTP fails this way until `sckoolsverify` exists on the account.
     expect(failureBlame(132001)).toBe('CONTENT');
     expect(failureBlame(132000)).toBe('CONTENT');
   });

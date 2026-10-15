@@ -182,6 +182,7 @@ describe('shared portal contracts', () => {
       'CONCERN_RESOLVED',
       // A substitute told which class to cover.
       'COVER_ASSIGNED',
+      'COVER_BATCH',
       // A cover called off, and classes still uncovered (to the leave desk).
       'COVER_CANCELLED',
       'COVER_UNFILLED',

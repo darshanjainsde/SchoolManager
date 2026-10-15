@@ -297,6 +297,24 @@ export interface CoverAssignedPayload {
   cantPayload: string;
 }
 
+/**
+ * Payload for COVER_BATCH — ONE message to a substitute given several periods
+ * of a leave at once ("you cover 20 periods for Priya Nair, Mon 20 – Thu 23
+ * Oct"), instead of a card per period. Got it / Can't act on every period of
+ * that leave, today on, the teacher holds.
+ */
+export interface CoverBatchPayload {
+  schoolName: string;
+  leaveId: string;
+  /** Every period of this leave, today on, the substitute now covers. */
+  count: number;
+  /** "Mon 20 – Thu 23 Oct 2026". */
+  dates: string;
+  originalTeacherName: string;
+  ackPayload: string;
+  cantPayload: string;
+}
+
 /** Payload for LEAVE_CANCELLED — to the leave desk: a request (or an approved leave) was withdrawn. */
 export interface LeaveCancelledPayload {
   schoolName: string;
@@ -359,6 +377,7 @@ export interface NotificationPayloadMap {
   LEAVE_CANCELLED: LeaveCancelledPayload;
   COVER_CANCELLED: CoverCancelledPayload;
   COVER_UNFILLED: CoverUnfilledPayload;
+  COVER_BATCH: CoverBatchPayload;
 }
 
 /**

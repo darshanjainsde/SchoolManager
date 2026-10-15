@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { loadEnv } from '@skoolos/config';
 import { WhatsAppChannel } from '../notifications/whatsapp.channel';
 import { sendTemplate, sendText } from '../notifications/whatsapp/graph.client';
-import { VERIFY_CODE, verifyCodeTemplate } from '../notifications/whatsapp/templates';
+import { codeTemplates } from '../notifications/whatsapp/templates';
 
 /**
  * WHERE A ONE-TIME CODE GOES. One code, every enabled sender, in parallel:
@@ -44,13 +44,19 @@ export class WhatsAppOtpSender implements OtpSender {
     return this.channel.senderNumber();
   }
   async send(phone: string, code: string, ctx: OtpSendContext): Promise<OtpSendResult> {
-    // The AUTHENTICATION template: Meta writes the body, we supply the code
+    // The AUTHENTICATION templates: Meta writes the body, we supply the code
     // and the copy-code button. Bypasses nothing — the per-school switch is
     // about notices, and deliverWith does not consult it; a code is identity.
-    const r = await this.channel.deliverWith(ctx.schoolId, phone, `OTP_${ctx.purpose}`, VERIFY_CODE, (cfg, pnid, f) =>
-      sendTemplate(cfg, phone, verifyCodeTemplate(code), { phoneNumberId: pnid, fetchImpl: f }),
-    );
-    if (r.ok) return { ok: true, code: null };
+    // Tried in order; only "does not exist" (132001) moves to the next one —
+    // any other refusal (not on WhatsApp, a bad number) would refuse them all.
+    let r: { ok: boolean; code: number | null } = { ok: false, code: 132001 };
+    for (const t of codeTemplates(ctx.purpose, code)) {
+      r = await this.channel.deliverWith(ctx.schoolId, phone, `OTP_${ctx.purpose}`, t.name, (cfg, pnid, f) =>
+        sendTemplate(cfg, phone, t, { phoneNumberId: pnid, fetchImpl: f }),
+      );
+      if (r.ok) return { ok: true, code: null };
+      if (r.code !== 132001) break;
+    }
 
     // ── The session-window fallback ───────────────────────────────────────
     // 132001 means the template does not exist on this business account, and

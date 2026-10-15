@@ -97,4 +97,23 @@ describe('sckools tv', () => {
 
     await request(app.getHttpServer()).get(`/public/tv?key=${key}`).set(asHost).expect(404);
   });
+
+  it('rotate and disable are POSTs, and only the SCHOOL_ADMIN may call them', async () => {
+    for (const path of ['/manage/tv/rotate', '/manage/tv/disable']) {
+      await request(app.getHttpServer()).post(path).set(asHost).expect(401);
+      for (const token of [studentToken, teacherToken, staffToken]) {
+        await request(app.getHttpServer()).post(path).set({ ...asHost, Authorization: `Bearer ${token}` }).expect(403);
+      }
+    }
+    const rotated = await request(app.getHttpServer())
+      .post('/manage/tv/rotate')
+      .set({ ...asHost, Authorization: `Bearer ${adminToken}` })
+      .expect(200);
+    expect(rotated.body.enabled).toBe(true);
+    const off = await request(app.getHttpServer())
+      .post('/manage/tv/disable')
+      .set({ ...asHost, Authorization: `Bearer ${adminToken}` })
+      .expect(200);
+    expect(off.body.enabled).toBe(false);
+  });
 });
