@@ -9,7 +9,7 @@ import { assertNotificationOutboxKind, type NotificationOutboxKind } from '@skoo
 import { EmailChannel } from '../../common/notifications/email.channel';
 import { PushChannel } from '../../common/notifications/push.channel';
 import { WhatsAppChannel } from '../../common/notifications/whatsapp.channel';
-import { ackPayload, actionKeys, cantPayload, leavePayload } from '../../common/notifications/whatsapp/actions';
+import { ackAllPayload, ackPayload, actionKeys, cantAllPayload, cantPayload, leavePayload } from '../../common/notifications/whatsapp/actions';
 import { resolveRecipientUsers } from '../../common/notifications/recipients';
 import { isDeliverySchemaMissing } from '../../common/errors/prisma-errors';
 import type {
@@ -129,6 +129,7 @@ export const OUTBOX_EMAIL: Record<NotificationOutboxKind, boolean> = {
   LEAVE_CANCELLED: true,
   COVER_CANCELLED: true,
   COVER_UNFILLED: true,
+  COVER_BATCH: true,
 };
 
 /**
@@ -279,6 +280,12 @@ export function toNotificationMessage(kind: NotificationOutboxKind, payload: unk
       // Can't names the teacher the card is for, so a tap after the desk moved
       // the period can be answered to them (a row from before it carried one: null).
       return { kind: 'COVER_ASSIGNED', payload: { ...p, ackPayload: ackPayload(p.substitutionId, keys), cantPayload: cantPayload(p.substitutionId, substituteTeacherId ?? null, keys) } };
+    }
+    case 'COVER_BATCH': {
+      // Got it / Can't for the whole set, signed at send time like every button.
+      const { substituteTeacherId, ...p } = payload as { schoolName: string; leaveId: string; substituteTeacherId: string; count: number; dates: string; originalTeacherName: string };
+      const keys = actionKeys();
+      return { kind: 'COVER_BATCH', payload: { ...p, ackPayload: ackAllPayload(p.leaveId, substituteTeacherId, keys), cantPayload: cantAllPayload(p.leaveId, substituteTeacherId, keys) } };
     }
     // The leave desk's own notices: their kind and words, never an ANNOUNCEMENT.
     case 'LEAVE_CANCELLED':

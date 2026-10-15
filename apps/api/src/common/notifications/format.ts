@@ -152,6 +152,11 @@ export function formatNotification(message: NotificationMessage): NotificationTe
         title: `You cover ${message.payload.className}`,
         body: `${message.payload.when}${message.payload.subjectName ? ` · ${message.payload.subjectName}` : ''}, for ${message.payload.originalTeacherName}.`,
       };
+    case 'COVER_BATCH':
+      return {
+        title: `You cover ${message.payload.count} periods for ${message.payload.originalTeacherName}`,
+        body: `${message.payload.dates}. Open the app to see each one.`,
+      };
     case 'LEAVE_CANCELLED': {
       const n = message.payload.releasedCovers;
       const u = message.payload.unreached;

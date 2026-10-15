@@ -56,6 +56,7 @@ export const TEMPLATE_NAMES: Record<NotificationKind, string> = {
   COVER_CANCELLED: `${TEMPLATE_PREFIX}cover_cancelled`,
   // The approved "periods still need cover" pointer.
   COVER_UNFILLED: `${TEMPLATE_PREFIX}cover_pending`,
+  COVER_BATCH: `${TEMPLATE_PREFIX}cover_batch`,
 };
 
 /** One narrow Utility template per notice topic — what lets a holiday or fee date reach WhatsApp with its facts. */
@@ -94,7 +95,9 @@ export const COVER_CANCELLED = `${TEMPLATE_PREFIX}cover_cancelled`;
  * else in this file was approved before the code that sends it shipped.
  * Remove a name once it is approved on production.
  */
-export const GATED_TEMPLATES: ReadonlySet<string> = new Set([COVER_ASSIGNED_V2, COVER_CANCELLED]);
+/** One summary for a teacher given several periods of a leave at once (2026-10-15). */
+export const COVER_BATCH = `${TEMPLATE_PREFIX}cover_batch`;
+export const GATED_TEMPLATES: ReadonlySet<string> = new Set([COVER_ASSIGNED_V2, COVER_CANCELLED, COVER_BATCH]);
 
 /** Meta's sample template on every new number — the pipeline smoke test. */
 export const HELLO_WORLD: WhatsAppTemplate = { name: 'hello_world', language: 'en_US', params: [] };
@@ -240,6 +243,19 @@ export function templateFor(message: NotificationMessage, ctx: TemplateContext =
     }
     case 'COVER_UNFILLED':
       return coverPendingTemplate(message.payload.schoolName, message.payload.gaps);
+    case 'COVER_BATCH': {
+      const p = message.payload;
+      // No fallback: until Meta approves it the summary is NOT sent as a pile of
+      // per-period cards — the bell and the push carry it (chooseTemplate skips).
+      return {
+        name, language,
+        params: [param(p.schoolName), String(p.count), param(p.originalTeacherName), param(p.dates)],
+        buttons: [
+          { type: 'quick_reply', index: 0, payload: p.ackPayload },
+          { type: 'quick_reply', index: 1, payload: p.cantPayload },
+        ],
+      };
+    }
     default: {
       const _exhaustive: never = message;
       return _exhaustive;
@@ -277,6 +293,11 @@ const COVER_ASSIGNED_V2_BODY = {
 const COVER_CANCELLED_BODY = {
   body: 'A change at {{1}}: {{2}} on {{3}} is called off, because {{4}}. Open the Sckools app to see the day as it now stands.',
   samples: ['Raffles Public School', 'your cover of 9-A, period 3', 'Mon 22 Sep 2026', 'the leave it was for was cancelled'],
+};
+const COVER_BATCH_BODY = {
+  body: "Cover duties at {{1}}: you are covering {{2}} periods for {{3}}, {{4}}. Open the Sckools app to see each class and time. Tap Got it, or Can't so the office can find someone else.",
+  samples: ['Raffles Public School', '20', 'Priya Nair', 'Mon 20 – Thu 23 Oct 2026'],
+  buttons: ['Got it', "Can't"],
 };
 const COVER_PENDING_BODY = {
   body: 'A message from {{1}}. {{2}} periods still need cover after the leave you approved. Open the console to assign teachers.',
@@ -331,6 +352,7 @@ export const SUBMISSIONS: Record<NotificationKind, { body: string; samples: stri
   LEAVE_CANCELLED: COVER_CANCELLED_BODY,
   COVER_CANCELLED: COVER_CANCELLED_BODY,
   COVER_UNFILLED: COVER_PENDING_BODY,
+  COVER_BATCH: COVER_BATCH_BODY,
 };
 
 /** Not notification kinds, but templates all the same — submitted with the others. */

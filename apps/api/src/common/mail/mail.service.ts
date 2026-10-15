@@ -8,6 +8,7 @@ import type {
   AbsenceNoticePayload,
   AnnouncementPayload,
   CoverAssignedPayload,
+  CoverBatchPayload,
   CoverCancelledPayload,
   CoverUnfilledPayload,
   LeaveAppliedPayload,
@@ -374,6 +375,19 @@ export class MailService {
         { label: 'For', value: p.originalTeacherName },
       ],
     }, 'COVER_ASSIGNED', out);
+  }
+
+  async sendCoverBatch(to: string, p: CoverBatchPayload, schoolId: string | null = null, out?: MailOutcomeSink): Promise<boolean> {
+    return this.sendLetter(to, schoolId, `You are covering ${p.count} periods for ${p.originalTeacherName}`, {
+      title: 'Classes to cover',
+      intro: `You have been given ${p.count} periods of ${p.originalTeacherName}'s leave, ${p.dates}.`,
+      rows: [
+        { label: 'Periods', value: String(p.count) },
+        { label: 'Dates', value: p.dates },
+        { label: 'For', value: p.originalTeacherName },
+      ],
+      note: 'Open the Sckools app to see each class and time. If you cannot take them, tell the office.',
+    }, 'COVER_BATCH', out);
   }
 
   async sendLeaveCancelled(to: string, p: LeaveCancelledPayload, schoolId: string | null = null, out?: MailOutcomeSink): Promise<boolean> {

@@ -786,6 +786,23 @@ export class AssignSubstitutionDto {
   substituteTeacherId!: string;
 }
 
+/** "Give one teacher these periods of a leave." 60 days × 10 periods is the ceiling, not a target. */
+export class CoverBatchDto {
+  @IsUUID()
+  substituteTeacherId!: string;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(600)
+  @IsUUID('all', { each: true })
+  substitutionIds!: string[];
+}
+
+export class CoverPreviewQueryDto {
+  @IsUUID()
+  teacherId!: string;
+}
+
 // ── Leave policy (types, allocations, carry-forward) ─────────────────────────
 
 export class CreateLeaveTypeDefDto {
