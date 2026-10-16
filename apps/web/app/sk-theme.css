@@ -5178,6 +5178,7 @@ html[data-theme='light'] .sk-nav[data-active="true"] { color: #fff; }
 .sk-syl-leaf.sub { padding-left: 14px; border-left: 2px solid var(--sk-line-2); }
 .sk-syl-leaf .ctl { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .sk-syl-leaf .ctl .sk-seg { flex: 1 1 240px; }
+.sk-syl-leaf.sub > .sk-btn { justify-self: start; }
 .sk-syl-note { display: grid; gap: 6px; }
 .sk-syl-note textarea { width: 100%; box-sizing: border-box; min-height: 56px; border: 1px solid var(--sk-line-2); border-radius: 10px; background: var(--sk-card); color: var(--sk-ink); padding: 8px 10px; font: inherit; font-size: 13px; resize: vertical; }
 .sk-syl-note textarea:focus-visible { outline: none; border-color: var(--sk-brand); box-shadow: 0 0 0 3px var(--sk-brand-tint); }

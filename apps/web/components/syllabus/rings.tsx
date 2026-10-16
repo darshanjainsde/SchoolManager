@@ -58,7 +58,7 @@ export const REVISED_COLOR = 'var(--sk-t1)';
 export function PaceRings({ pct, expectedPct, size, stroke, testId }: { pct: number; expectedPct: number; size?: number; stroke?: number; testId?: string }) {
   return (
     <Rings outer={{ pct, color: TAUGHT_COLOR, label: 'Taught' }} inner={{ pct: expectedPct, color: EXPECTED_COLOR, label: 'Expected by today' }} size={size} stroke={stroke} testId={testId}>
-      <b>{pct}%</b>
+      {(size ?? 96) >= 56 ? <b>{pct}%</b> : null}
     </Rings>
   );
 }
@@ -67,7 +67,7 @@ export function PaceRings({ pct, expectedPct, size, stroke, testId }: { pct: num
 export function StudyRings({ pct, revisedPct, size, stroke, testId }: { pct: number; revisedPct: number; size?: number; stroke?: number; testId?: string }) {
   return (
     <Rings outer={{ pct, color: TAUGHT_COLOR, label: 'Taught' }} inner={{ pct: revisedPct, color: REVISED_COLOR, label: 'Revised by me' }} size={size} stroke={stroke} testId={testId}>
-      <b>{pct}%</b>
+      {(size ?? 96) >= 56 ? <b>{pct}%</b> : null}
     </Rings>
   );
 }

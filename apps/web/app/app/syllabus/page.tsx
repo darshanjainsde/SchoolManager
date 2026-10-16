@@ -113,6 +113,7 @@ export default function SyllabusOverviewPage() {
                 t={{ pct: avg, expectedPct: d.year.expectedPct, pace: measured.length ? (behind.length ? 'bad' : slightly.length ? 'warn' : 'ok') : 'none', leaves: measured.length, done: 0, now: null }}
                 title={measured.length ? `${behind.length + slightly.length} of ${measured.length} ${measured.length === 1 ? 'track is' : 'tracks are'} behind` : 'Nothing to measure yet'}
                 line={`${d.year.name} · ${d.year.expectedPct}% of working days gone`}
+                aggregate
               />
               <Figures count={3}>
                 <Figure value={rows.filter((t) => t.pace === 'ok').length} label="On pace" />

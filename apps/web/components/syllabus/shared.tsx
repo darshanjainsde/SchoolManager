@@ -16,7 +16,7 @@ export function NotInPlan() {
 export const isPlanRefusal = (e: unknown) => e instanceof ApiError && e.status === 403;
 
 /** The hero of a track or of the whole school: rings, the legend, the verdict. */
-export function TrackHero({ t, title, line, children }: { t: Pick<SyllabusTrackSummary, 'pct' | 'expectedPct' | 'pace' | 'leaves' | 'done' | 'now'>; title: string; line?: string; children?: React.ReactNode }) {
+export function TrackHero({ t, title, line, children, aggregate }: { t: Pick<SyllabusTrackSummary, 'pct' | 'expectedPct' | 'pace' | 'leaves' | 'done' | 'now'>; title: string; line?: string; children?: React.ReactNode; /** Many tracks at once: no "now" line. */ aggregate?: boolean }) {
   return (
     <div className="sk-syl-hero" data-testid="syl-hero">
       <PaceRings pct={t.pct} expectedPct={t.expectedPct} size={112} stroke={11} />
@@ -27,8 +27,8 @@ export function TrackHero({ t, title, line, children }: { t: Pick<SyllabusTrackS
           <span className="sk-pill" data-tone={PACE_TONE[t.pace]}>{PACE_LABEL[t.pace]}</span>
           {line ? <> &nbsp;{line}</> : null}
         </p>
-        {t.now && <p>Now: <b>{t.now.title}</b></p>}
-        {!t.now && t.leaves > 0 && <p>Every chapter is done.</p>}
+        {!aggregate && t.now && <p>Now: <b>{t.now.title}</b></p>}
+        {!aggregate && !t.now && t.leaves > 0 && <p>Every chapter is done.</p>}
         {children}
       </div>
     </div>
