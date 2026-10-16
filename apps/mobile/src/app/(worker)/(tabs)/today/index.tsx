@@ -202,7 +202,7 @@ function StaffToday() {
           {/* The desk's doors, once, on the grid (direction C). */}
           <HomeMenu
             tools={[
-              { label: 'My pay', icon: 'pay', testID: 'hero-act-mypay', route: '/(worker)/(tabs)/profile/salary' },
+              { label: 'My pay', icon: 'fees', testID: 'hero-act-mypay', route: '/(worker)/(tabs)/profile/salary' },
               { label: 'Password', icon: 'key', testID: 'hero-act-password', route: '/(worker)/(tabs)/profile/password' },
               { label: 'WhatsApp', icon: 'phone', testID: 'hero-act-phone', route: '/(worker)/(tabs)/profile/phone' },
               { label: 'Profile', icon: 'person', testID: 'hero-act-profile', route: '/(worker)/(tabs)/profile' },

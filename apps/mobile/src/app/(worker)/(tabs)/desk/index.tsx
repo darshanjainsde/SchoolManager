@@ -64,10 +64,10 @@ export default function SportsToday() {
           {/* The desk's doors, once, on the grid (direction C). */}
           <HomeMenu
             tools={[
-              { label: 'Meets', icon: 'meets', testID: 'hero-act-meets', route: '/(worker)/(tabs)/meets' },
-              { label: 'Records', icon: 'records', testID: 'hero-act-records', badge: records.data?.pending ?? 0, route: '/(worker)/(tabs)/records' },
-              { label: 'Houses', icon: 'houses', testID: 'hero-act-houses', route: '/(worker)/(tabs)/houses' },
-              { label: 'Rules', icon: 'rules', testID: 'hero-act-rules', route: '/(worker)/(tabs)/desk/rules' },
+              { label: 'Meets', icon: 'sports', testID: 'hero-act-meets', route: '/(worker)/(tabs)/meets' },
+              { label: 'Records', icon: 'results', testID: 'hero-act-records', badge: records.data?.pending ?? 0, route: '/(worker)/(tabs)/records' },
+              { label: 'Houses', icon: 'assignments', testID: 'hero-act-houses', route: '/(worker)/(tabs)/houses' },
+              { label: 'Rules', icon: 'notes', testID: 'hero-act-rules', route: '/(worker)/(tabs)/desk/rules' },
             ]}
           />
 

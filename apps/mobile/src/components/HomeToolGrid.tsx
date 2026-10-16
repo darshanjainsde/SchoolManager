@@ -34,10 +34,10 @@ export interface HomeTool {
 /**
  * THE TILE GRID EVERY HOME IS BUILT FROM (direction C, 16 Oct 2026).
  *
- * A tile is a 58 dp squircle in its FAMILY's soft tint carrying a duotone
- * object in the family's ink (theme/families.ts): teal for attendance and
- * requests, gold for money, coral for people, sky for school life, the
- * accent for learning. State rides ON the tile — a red count, the date, a
+ * A tile is a 58 dp squircle in its family's soft tint (every family a shade
+ * of the ONE accent, theme/families.ts — the user tried five real hues on
+ * 16 Oct 2026 and sent them back: "way too bad") carrying a duotone glyph in
+ * the family's ink. State rides ON the tile — a red count, the date, a
  * progress ring — so the grid is glanceable, not just a menu. One tile may be
  * `live` (filled) when something is genuinely outstanding.
  */
@@ -78,7 +78,7 @@ export function HomeToolGrid({ tools, testID }: { tools: HomeTool[]; testID?: st
                   style={{ width: 58, height: 58, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: bg }}
                 >
                   {isIconName(tool.icon) && (
-                    <Icon name={tool.icon} size={30} color={ink} knockColor={bg} fillOpacity={tool.live ? 0.3 : 0.22} />
+                    <Icon name={tool.icon} size={26} color={ink} fillOpacity={tool.live ? 0.3 : 0.18} />
                   )}
                 </View>
                 {badge !== undefined && (

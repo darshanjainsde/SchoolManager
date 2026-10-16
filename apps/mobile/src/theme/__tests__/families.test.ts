@@ -9,9 +9,7 @@ describe('icon families', () => {
   it('maps tools to the part of school life they belong to', () => {
     expect(familyOf('fees')).toBe('money');
     expect(familyOf('take')).toBe('care');
-    expect(familyOf('library')).toBe('school');
-    expect(familyOf('messages')).toBe('people');
-    expect(familyOf('pay')).toBe('money');
+    expect(familyOf('library')).toBe('sport');
     expect(familyOf('something-new')).toBe('learn');
     expect(familyTone('fees', 'dark').ink).toBe(FAMILIES.money.dark.ink);
   });
@@ -69,43 +67,4 @@ describe('the open tab on the dark floating bar stays readable on every accent',
       expect(contrastRatio(c.indigo, c.barBg)).toBeGreaterThanOrEqual(3);
     });
   }
-});
-
-describe('five real hues (direction C, 16 Oct 2026)', () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { deriveFamilies } = require('../families') as typeof import('../families');
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { ACCENTS } = require('../accents') as typeof import('../accents');
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { applyAccent } = require('../accents') as typeof import('../accents');
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { palette } = require('../tokens') as typeof import('../tokens');
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { contrastRatio } = require('../school-brand') as typeof import('../school-brand');
-
-  it('care, money, people and school are fixed hues that do NOT move with the accent', () => {
-    const navy = applyAccent(palette.light, ACCENTS.navy.light!);
-    const a = deriveFamilies(palette.light, 'light');
-    const b = deriveFamilies(navy, 'light');
-    for (const k of ['care', 'money', 'people', 'school'] as const) expect(b[k]).toEqual(a[k]);
-    expect(b.learn.fill).not.toBe(a.learn.fill);
-  });
-
-  it('every family is a different hue from its neighbours, in both schemes', () => {
-    for (const scheme of ['light', 'dark'] as const) {
-      const f = deriveFamilies(palette[scheme], scheme);
-      const fills = Object.values(f).map((t) => t.fill.toLowerCase());
-      expect(new Set(fills).size).toBe(fills.length);
-    }
-  });
-
-  it('ink on soft and white-or-ink on fill clear 4.5:1 in both schemes', () => {
-    for (const scheme of ['light', 'dark'] as const) {
-      const f = deriveFamilies(palette[scheme], scheme);
-      for (const t of Object.values(f)) {
-        expect(contrastRatio(t.ink, t.soft)).toBeGreaterThanOrEqual(4.5);
-        expect(contrastRatio(scheme === 'dark' ? '#0B0D18' : '#FFFFFF', t.fill)).toBeGreaterThanOrEqual(4.5);
-      }
-    }
-  });
 });

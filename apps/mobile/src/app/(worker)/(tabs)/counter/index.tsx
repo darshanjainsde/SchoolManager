@@ -82,10 +82,10 @@ export default function Counter() {
               {/* The counter's doors, once, on the grid (direction C). */}
               <HomeMenu
                 tools={[
-                  { label: 'Books', icon: 'books', testID: 'hero-act-books', route: '/(worker)/(tabs)/books' },
-                  { label: 'Hall', icon: 'hall', testID: 'hero-act-hall', route: '/(worker)/(tabs)/hall' },
-                  { label: 'Fines', icon: 'fines', testID: 'hero-act-fines', route: '/(worker)/(tabs)/fines' },
-                  { label: 'My pay', icon: 'pay', testID: 'hero-act-mypay', route: '/(worker)/(tabs)/profile/salary' },
+                  { label: 'Books', icon: 'library', testID: 'hero-act-books', route: '/(worker)/(tabs)/books' },
+                  { label: 'Hall', icon: 'take', testID: 'hero-act-hall', route: '/(worker)/(tabs)/hall' },
+                  { label: 'Fines', icon: 'fees', testID: 'hero-act-fines', route: '/(worker)/(tabs)/fines' },
+                  { label: 'My pay', icon: 'report', testID: 'hero-act-mypay', route: '/(worker)/(tabs)/profile/salary' },
                 ]}
               />
               <Page testID="counter-soon">

@@ -51,7 +51,7 @@ describe('RoleHero — the sheet', () => {
   });
 
   it('accepts (and ignores) the old actions prop so no desk home breaks', () => {
-    mount(<RoleHero eyebrow="Desk" title="Quiet" actions={[{ label: 'Meets', icon: 'meets', onPress: jest.fn(), testID: 'old' }]} />);
+    mount(<RoleHero eyebrow="Desk" title="Quiet" actions={[{ label: 'Meets', icon: 'sports', onPress: jest.fn(), testID: 'old' }]} />);
     expect(screen.queryByTestId('old')).toBeNull();
     expect(screen.getByText('Quiet')).toBeTruthy();
   });

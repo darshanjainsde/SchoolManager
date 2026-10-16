@@ -244,7 +244,7 @@ export default function Home() {
             tools={[
               // The asks ride on the tiles as badges (direction C: the grid is
               // the one place): an unread message, an unsigned diary remark, a late bill.
-              { label: 'Ask teacher', icon: 'ask', testID: 'hero-act-ask', badge: unreadMsgs, route: '/(family)/(tabs)/home/messages' },
+              { label: 'Ask teacher', icon: 'messages', testID: 'hero-act-ask', badge: unreadMsgs, route: '/(family)/(tabs)/home/messages' },
               { label: 'Diary', icon: 'diary', testID: 'hero-act-diary', badge: diary?.unsignedCount ?? 0, route: '/(family)/(tabs)/home/diary' },
               { label: 'Homework', icon: 'assignments', testID: 'hero-act-homework', route: '/(family)/(tabs)/home/assignments' },
               ...(hasFeature(s, 'FEES')

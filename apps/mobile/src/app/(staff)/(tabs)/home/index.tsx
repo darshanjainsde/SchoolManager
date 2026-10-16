@@ -264,7 +264,7 @@ export default function Today() {
               },
               { label: 'Homework', icon: 'assignments', testID: 'hero-act-homework', route: '/(staff)/(tabs)/home/assignments' },
               { label: 'Notice', icon: 'notices', testID: 'hero-act-notice', route: '/(staff)/(tabs)/home/post' },
-              { label: 'Test', icon: 'test', testID: 'hero-act-test', route: '/(staff)/(tabs)/home/tests' },
+              { label: 'Test', icon: 'results', testID: 'hero-act-test', route: '/(staff)/(tabs)/home/tests' },
               { label: 'Messages', icon: 'messages', route: '/(staff)/(tabs)/home/messages', badge: unreadMsgs },
               { label: 'Diary', icon: 'diary', route: '/(staff)/(tabs)/home/diary' },
               { label: 'Requests', icon: 'requests', route: '/(staff)/(tabs)/home/requests' },
@@ -273,7 +273,7 @@ export default function Today() {
               // The teacher's own shelf — only for a school with the library on.
               ...(hasFeature(s, 'LIBRARY') ? [{ label: 'Library', icon: 'library', route: '/(staff)/(tabs)/home/library' }] : []),
               // Pay slips, only where the school runs pay on Sckools.
-              ...(hasFeature(s, 'SALARY') ? [{ label: 'My pay', icon: 'pay', route: '/(staff)/(tabs)/home/salary' }] : []),
+              ...(hasFeature(s, 'SALARY') ? [{ label: 'My pay', icon: 'fees', route: '/(staff)/(tabs)/home/salary' }] : []),
               // Where each class has reached — only where the owner switched the tracker on.
               ...(hasFeature(s, 'COURSE_MANAGEMENT') ? [{ label: 'Syllabus', icon: 'syllabus', route: '/(staff)/(tabs)/home/syllabus' }] : []),
               // Concerns the class teacher's families raised. Free, so always
