@@ -115,7 +115,7 @@ export function richShade(hex: string, lightness: number): string {
   let h = 0;
   if (d !== 0) h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
   h = (h * 60 + 360) % 360;
-  const sat = s0 < 0.25 ? s0 : Math.max(s0, 0.6);
+  const sat = s0 < 0.25 ? s0 : Math.min(0.6, Math.max(s0, 0.5));
   const c = (1 - Math.abs(2 * lightness - 1)) * sat;
   const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
   const m = lightness - c / 2;

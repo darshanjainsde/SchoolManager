@@ -103,7 +103,8 @@ describe('dark fills keep the hue rich (16 Oct 2026)', () => {
   const { contrastRatio } = require('../school-brand') as typeof import('../school-brand');
   const sat = (hex: string) => { const n = parseInt(hex.slice(1), 16); const v = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((x) => x / 255); const mx = Math.max(...v), mn = Math.min(...v); const l = (mx + mn) / 2; return mx === mn ? 0 : (mx - mn) / (1 - Math.abs(2 * l - 1)); };
   it('a pale accent becomes a saturated deep shade; a grey stays grey', () => {
-    expect(sat(richShade('#8B87FF', 0.2))).toBeGreaterThanOrEqual(0.59);
+    expect(sat(richShade("#8B87FF", 0.2))).toBeGreaterThanOrEqual(0.49);
+    expect(sat(richShade("#8B87FF", 0.2))).toBeLessThanOrEqual(0.61);
     expect(sat(richShade('#AAB4C3', 0.2))).toBeLessThan(0.3);
   });
   it('the dark filled surface carries white at 4.5:1 and is a rich colour', () => {
