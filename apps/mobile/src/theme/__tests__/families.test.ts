@@ -68,3 +68,28 @@ describe('the open tab on the dark floating bar stays readable on every accent',
     });
   }
 });
+
+describe('the band is the deepest shade of the chosen colour (16 Oct 2026)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { bandStops } = require('../families') as typeof import('../families');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { ACCENTS, ACCENT_NAMES, applyAccent } = require('../accents') as typeof import('../accents');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { palette } = require('../tokens') as typeof import('../tokens');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { contrastRatio, luminance } = require('../school-brand') as typeof import('../school-brand');
+
+  it('white clears 7:1 on both stops, and both are darker than the accent deep, for every accent in both schemes', () => {
+    for (const name of ACCENT_NAMES) {
+      for (const scheme of ['light', 'dark'] as const) {
+        const tone = ACCENTS[name][scheme];
+        const c = tone ? applyAccent(palette[scheme], tone) : palette[scheme];
+        const [top, bottom] = bandStops(c, scheme);
+        expect(contrastRatio('#FFFFFF', top)).toBeGreaterThanOrEqual(7);
+        expect(contrastRatio('#FFFFFF', bottom)).toBeGreaterThanOrEqual(7);
+        expect(luminance(top)).toBeLessThan(luminance(c.indigoDeep));
+        expect(luminance(bottom)).toBeLessThanOrEqual(luminance(top));
+      }
+    }
+  });
+});

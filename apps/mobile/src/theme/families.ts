@@ -115,6 +115,26 @@ export function accentFill(c: ColorPalette, scheme: ColorScheme): { bg: string; 
   return { bg: legible(mix(c.indigoDeep, night, 0.28), '#FFFFFF', night), fg: '#FFFFFF' };
 }
 
+/**
+ * THE BAND (user, 16 Oct 2026: "the green part should be properly dark green
+ * or chosen color"). The band behind the name is the DEEPEST shade of the
+ * school's chosen colour, never a mid tone washed with white: light mode runs
+ * deep → deeper, dark mode runs the same pair taken further toward night so
+ * it sits in a dark app without glowing. White text clears 7:1 on both stops.
+ */
+export function bandStops(c: ColorPalette, scheme: ColorScheme): readonly [string, string] {
+  const night = '#0B0D14';
+  const base = c.indigoDeep;
+  const top = scheme === 'dark' ? mix(base, night, 0.55) : mix(base, '#000000', 0.12);
+  const bottom = scheme === 'dark' ? mix(base, night, 0.72) : mix(base, '#000000', 0.38);
+  const deep = (x: string) => {
+    let out = x;
+    for (let i = 0; i < 24 && contrastRatio(out, '#FFFFFF') < 7; i++) out = mix(out, night, 0.1);
+    return out;
+  };
+  return [deep(top), deep(bottom)] as const;
+}
+
 /** Gradient stops for a hero card that always carries WHITE text. */
 export function heroStops(c: ColorPalette, scheme: ColorScheme, kind: 'live' | 'quiet' = 'live'): readonly [string, string] {
   // In dark the accent tokens are light (made for dark paper), so the hero

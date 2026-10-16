@@ -6,7 +6,7 @@ import { useFocusEffect, useSegments } from 'expo-router';
 import { setStatusBarStyle } from 'expo-status-bar';
 import { ApiError } from '@/lib/api';
 import { useTheme, useTokens } from '@/theme/theme-context';
-import { heroStops } from '@/theme/families';
+import { bandStops } from '@/theme/families';
 import { BAND_HEIGHT } from './BandHeader';
 import { CONTENT_MAX, brand, font, type ColorPalette } from '@/theme/tokens';
 import { DASH, DUR, inkWidth, strokeDashoffset, useGesture } from '@/theme/motion';
@@ -161,18 +161,18 @@ function useBandStatusBar() {
 function Band() {
   const tokens = useTokens();
   const { scheme } = useTheme();
-  const stops = heroStops(tokens.color, scheme);
+  const stops = bandStops(tokens.color, scheme);
   useBandStatusBar();
   return (
     <View pointerEvents="none" style={{ position: 'absolute', top: -10, left: -16, right: -16, height: BAND_HEIGHT + 10, backgroundColor: stops[0] }}>
       <Svg width="100%" height="100%" preserveAspectRatio="none" viewBox="0 0 100 100">
         <Defs>
           <LinearGradient id="band-g" x1="0" y1="0" x2="1" y2="1">
-            <Stop offset="0" stopColor={stops[1]} />
-            <Stop offset="1" stopColor={stops[0]} />
+            <Stop offset="0" stopColor={stops[0]} />
+            <Stop offset="1" stopColor={stops[1]} />
           </LinearGradient>
           <LinearGradient id="band-s" x1="1" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor={brand.onHero} stopOpacity="0.16" />
+            <Stop offset="0" stopColor={brand.onHero} stopOpacity="0.05" />
             <Stop offset="0.55" stopColor={brand.onHero} stopOpacity="0" />
           </LinearGradient>
         </Defs>
@@ -204,7 +204,8 @@ export function Screen({
 }>) {
   const tokens = useTokens();
   const { scheme } = useTheme();
-  const bandDeep = heroStops(tokens.color, scheme)[1];
+  // The strip above the band is the band's top stop, so the colour runs unbroken into the status bar.
+  const bandDeep = bandStops(tokens.color, scheme)[0];
   // Top safe-area inset (Phase 5·0b): with headerShown:false the tab
   // navigator renders from the very top of the display, so without this the
   // first line of every screen ("Hi, {name}") sits under the status bar on
