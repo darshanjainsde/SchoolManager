@@ -110,9 +110,9 @@ export function deriveFamilies(c: ColorPalette, scheme: ColorScheme): Record<Fam
  */
 export function accentFill(c: ColorPalette, scheme: ColorScheme): { bg: string; fg: string } {
   if (scheme !== 'dark') return { bg: c.indigo, fg: c.onBrand };
-  const night = '#0B0D14';
-  // Deep shade, then pushed darker until white clears 4.5:1 on it.
-  return { bg: legible(mix(c.indigoDeep, night, 0.28), '#FFFFFF', night), fg: '#FFFFFF' };
+  // Mix the bright dark-mode accent toward true black, not a grey night:
+  // the hue stays saturated and rich instead of turning to slate.
+  return { bg: legible(mix(c.indigo, '#000000', 0.5), '#FFFFFF', '#000000'), fg: '#FFFFFF' };
 }
 
 /**
@@ -123,13 +123,14 @@ export function accentFill(c: ColorPalette, scheme: ColorScheme): { bg: string; 
  * it sits in a dark app without glowing. White text clears 7:1 on both stops.
  */
 export function bandStops(c: ColorPalette, scheme: ColorScheme): readonly [string, string] {
-  const night = '#0B0D14';
-  const base = c.indigoDeep;
-  const top = scheme === 'dark' ? mix(base, night, 0.55) : mix(base, '#000000', 0.12);
-  const bottom = scheme === 'dark' ? mix(base, night, 0.72) : mix(base, '#000000', 0.38);
+  // Toward true black in both schemes, so the hue stays saturated (a grey
+  // "night" turned the dark band to slate). Dark starts from the bright dark
+  // accent and goes further down, so it sits in a dark app without glowing.
+  const top = scheme === 'dark' ? mix(c.indigo, '#000000', 0.64) : mix(c.indigoDeep, '#000000', 0.12);
+  const bottom = scheme === 'dark' ? mix(c.indigo, '#000000', 0.8) : mix(c.indigoDeep, '#000000', 0.38);
   const deep = (x: string) => {
     let out = x;
-    for (let i = 0; i < 24 && contrastRatio(out, '#FFFFFF') < 7; i++) out = mix(out, night, 0.1);
+    for (let i = 0; i < 24 && contrastRatio(out, '#FFFFFF') < 7; i++) out = mix(out, '#000000', 0.1);
     return out;
   };
   return [deep(top), deep(bottom)] as const;

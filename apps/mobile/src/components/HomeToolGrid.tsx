@@ -3,8 +3,8 @@ import Svg, { Circle } from 'react-native-svg';
 import { router } from 'expo-router';
 import { Touchable } from './Touchable';
 import { Icon, isIconName } from './icons';
-import { useTokens } from '@/theme/theme-context';
-import { useFamilyTone } from '@/theme/families';
+import { useTheme, useTokens } from '@/theme/theme-context';
+import { accentFill, useFamilyTone } from '@/theme/families';
 import type { MoreTone } from '@/lib/staff-nav';
 
 export interface HomeTool {
@@ -51,14 +51,17 @@ export function HomeToolGrid({ tools, testID }: { tools: HomeTool[]; testID?: st
   const tokens = useTokens();
   const cols = toolColumns(tools.length);
   const familyTone = useFamilyTone();
+  const { scheme } = useTheme();
+  // The live tile is THE filled surface: same deep fill as the one button (accentFill).
+  const fill = accentFill(tokens.color, scheme);
 
   return (
     <View testID={testID} style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 14, columnGap: 0 }}>
       {tools.map((tool) => {
         const badge = tool.badge && tool.badge > 0 ? tool.badge : undefined;
         const t = familyTone(tool.icon);
-        const bg = tool.live ? t.ink : t.soft;
-        const ink = tool.live ? tokens.color.onBrand : t.ink;
+        const bg = tool.live ? fill.bg : t.soft;
+        const ink = tool.live ? fill.fg : t.ink;
         const go = () => {
           if (tool.onPress) tool.onPress();
           else if (tool.route) router.push(tool.route as never);
