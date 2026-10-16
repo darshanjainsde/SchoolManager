@@ -7,7 +7,7 @@ export const BAND_HEIGHT = 236;
 
 /**
  * THE GREETING ON THE BAND (direction C, 16 Oct 2026). Every role Home opens
- * the same way: a small tracked eyebrow (the salutation or the date), the
+ * the same way: a small tracked eyebrow (the date), the
  * NAME as a title, one line of fact, and whatever sits in the right margin
  * (the bell). White ink only: the band's stops are pushed to 4.5:1 for white
  * in both schemes (theme/families.ts heroStops), so nothing here needs a check.

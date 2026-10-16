@@ -32,7 +32,7 @@ function initials(name: string): string {
   return ((p[0]?.[0] ?? '') + (p[p.length - 1]?.[0] ?? '')).toUpperCase();
 }
 
-export function AccountsToday({ firstName }: { firstName: string }) {
+export function AccountsToday({ name }: { name: string }) {
   const tokens = useTokens();
   const c = tokens.color;
   const today = todayISO();
@@ -50,14 +50,12 @@ export function AccountsToday({ firstName }: { firstName: string }) {
     .sort((a, b) => a.startDate.localeCompare(b.startDate))
     .slice(0, 2);
   const payLocked = pay.error instanceof ApiError && (pay.error.status === 403 || pay.error.status === 404);
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
   return (
     <Screen band onRefresh={() => { pending.refresh(); coverage.refresh(); holidays.refresh(); }} refreshing={pending.refreshing}>
       <BandGreeting
         eyebrow={`${fmtLongDay(new Date())} · Accounts`}
-        title={`${greeting}, ${firstName}`}
+        title={name}
         titleTestID="accounts-greeting"
         right={<NotificationBell group="(worker)" onBand />}
       />

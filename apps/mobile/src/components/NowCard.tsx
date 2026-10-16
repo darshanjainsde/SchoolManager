@@ -211,7 +211,7 @@ function KitTile({
       })}
     >
       <Icon name={icon} size={17} color={on} fillOpacity={0.3} />
-      <Text style={{ color: on, fontSize: 10.5, fontWeight: '700' }}>{label}</Text>
+      <Text style={{ color: on, fontSize: 12, fontWeight: '700' }}>{label}</Text>
       {badge > 0 && (
         <View
           testID={testID ? `${testID}-badge` : undefined}
@@ -537,7 +537,7 @@ export function NowCard({
 
       <NowProgress on={acc} percent={pct} />
 
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9, marginTop: 10, flexWrap: 'wrap' }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
         {register?.taken ? (
           <>
             <HeroChip on={tokens.color.green}>{`${register.present}/${register.total} present`}</HeroChip>
@@ -559,15 +559,15 @@ export function NowCard({
               style={{
                 backgroundColor: fill.bg,
                 borderRadius: 24,
-                minHeight: 44,
-                paddingVertical: 11,
-                paddingHorizontal: 18,
+                minHeight: 48,
+                paddingVertical: 12,
+                paddingHorizontal: 24,
                 alignSelf: 'flex-start',
                 justifyContent: 'center',
               }}
               accessibilityRole="button"
               >
-              <Text style={{ color: fill.fg, fontWeight: '700', fontSize: 14 }}>
+              <Text style={{ color: fill.fg, fontWeight: '700', fontSize: 15 }}>
                 Take attendance →
               </Text>
             </Pressable>
@@ -583,7 +583,7 @@ export function NowCard({
           decoration on the tappable card) so a screen reader gets real,
           named buttons. */}
       {(openable || onOpenNotes || onOpenTodos) && (
-        <View style={{ flexDirection: 'row', gap: 7, marginTop: 13 }}>
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
           {openable && (
             <KitTile
               on={acc}

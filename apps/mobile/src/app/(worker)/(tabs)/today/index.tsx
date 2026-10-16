@@ -122,7 +122,7 @@ function MonthStrip({ days, today }: { days: PersonDay[]; today: string }) {
 export default function Today() {
   const session = useSession();
   const job = jobFor(session);
-  if (job === 'ACCOUNTS') return <AccountsToday firstName={session?.displayName?.split(' ')[0] ?? 'there'} />;
+  if (job === 'ACCOUNTS') return <AccountsToday name={session?.displayName ?? 'Accounts'} />;
   return <StaffToday />;
 }
 
@@ -170,7 +170,7 @@ function StaffToday() {
     <Screen band onRefresh={reload}>
       <BandGreeting
         eyebrow={`${fmtLongDay(new Date())}${data ? ` · ${STAFF_ROLE_LABEL[data.person.role] ?? 'Staff'}` : ''}`}
-        title={data ? `Hi, ${data.person.firstName}` : 'Today'}
+        title={data ? `${data.person.firstName} ${data.person.lastName}`.trim() : 'Today'}
         right={<NotificationBell group="(worker)" onBand />}
       />
 

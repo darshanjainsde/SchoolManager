@@ -47,7 +47,7 @@ export default function Counter() {
 
   return (
     <Screen band onRefresh={dash.refresh} refreshing={dash.refreshing}>
-      <BandGreeting eyebrow="Library counter" title={session?.displayName ? `Hi, ${session.displayName.split(' ')[0]}` : 'Counter'} right={<NotificationBell group="(worker)" onBand />} />
+      <BandGreeting eyebrow="Library counter" title={session?.displayName ?? 'Counter'} right={<NotificationBell group="(worker)" onBand />} />
 
       <SearchBox testID="counter-search" value={q} onChangeText={setQ} placeholder="Child's name or code, or a teacher" />
       {searchErr && <ErrorState error={searchErr} onRetry={() => setQ(`${q} `.trimEnd())} />}

@@ -192,7 +192,7 @@ export default function Home() {
       {myBirthday && profile ? <BirthdayBanner firstName={profile.firstName} /> : null}
       <BandGreeting
         eyebrow={fmtLongDay(new Date())}
-        title={profile ? `Hi, ${profile.firstName}` : 'Home'}
+        title={profile ? `${profile.firstName} ${profile.lastName ?? ''}`.trim() : 'Home'}
         line={profile ? `${profile.className ?? 'No class assigned'}${profile.rollNo ? ` · Roll ${profile.rollNo}` : ''}` : undefined}
         right={<NotificationBell group="(family)" onBand />}
       />

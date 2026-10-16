@@ -120,7 +120,7 @@ function Cell({ on, bg, value, label }: { on: string; bg: string; value: string;
       }}
     >
       {/* Figures in the sans face with tabular digits, like every figure in the app. */}
-      <Text style={{ color: on, fontVariant: ['tabular-nums'], fontSize: 18, fontWeight: '700' }}>{value}</Text>
+      <Text style={{ color: on, fontVariant: ['tabular-nums'], fontSize: 19, fontWeight: '700' }}>{value}</Text>
       <Text style={{ color: on, opacity: 0.9, fontSize: 12, fontWeight: '600', marginTop: 1 }}>{label}</Text>
     </View>
   );

@@ -40,7 +40,7 @@ export default function SportsToday() {
 
   return (
     <Screen band onRefresh={refresh} refreshing={meets.refreshing}>
-      <BandGreeting eyebrow="Sports desk" title={session?.displayName ? `Hi, ${session.displayName.split(' ')[0]}` : 'Sports desk'} right={<NotificationBell group="(worker)" onBand />} />
+      <BandGreeting eyebrow="Sports desk" title={session?.displayName ?? 'Sports desk'} right={<NotificationBell group="(worker)" onBand />} />
 
       {error && <ErrorState error={error} onRetry={meets.reload} />}
       {loading && !error && <LoadingRows label="Opening the desk…" rows={3} />}
