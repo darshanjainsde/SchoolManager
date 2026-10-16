@@ -48,24 +48,25 @@ export interface StudentHeroProps {
  */
 function heroText(on: string): { eyebrow: TextStyle; title: TextStyle; meta: TextStyle } {
   return {
+    // The sheet's scale (sckools-ui-standards §3c): eyebrow 12/700, headline 24/30, line 14/20.
     eyebrow: {
-      fontSize: 10.5,
-      fontWeight: '800',
-      letterSpacing: 1.2,
+      fontSize: 12,
+      fontWeight: '700',
+      letterSpacing: 1.1,
       textTransform: 'uppercase',
       color: on,
-      opacity: 0.94,
+      opacity: 0.9,
     },
     title: {
       fontFamily: font.serif,
       fontSize: 24,
-      lineHeight: 29,
-      fontWeight: '600',
+      lineHeight: 30,
+      fontWeight: '700',
       letterSpacing: -0.3,
       color: on,
       marginTop: 6,
     },
-    meta: { fontSize: 12.5, color: on, opacity: 0.93, marginTop: 3 },
+    meta: { fontSize: 14, lineHeight: 20, color: on, opacity: 0.85, marginTop: 4 },
   };
 }
 

@@ -18,7 +18,7 @@ import { LoadingRows } from '@/components/Loading';
 import { NotificationBell } from '@/components/NotificationBell';
 import { HomeMenu } from '@/components/HomeToolGrid';
 import { useTokens } from '@/theme/theme-context';
-import { salutation } from '@/lib/greeting';
+import { fmtLongDay } from '@/lib/dates';
 import { hasFeature } from '@/lib/features';
 import { useSession } from '@/lib/use-session';
 
@@ -175,9 +175,8 @@ export default function Today() {
     <Screen band onRefresh={refresh} refreshing={refreshing}>
       {/* Direction C: the greeting sits on the band; the sheet (NowCard) overlaps it. */}
       <BandGreeting
-        eyebrow={salutation()}
+        eyebrow={fmtLongDay(new Date())}
         title={name ?? 'Today'}
-        line={day === null && !error ? 'Loading your day…' : `${classes.length} class${classes.length === 1 ? '' : 'es'} today · ${taken} taken · ${pending} pending`}
         right={<NotificationBell group="(staff)" onBand />}
       />
 
@@ -215,6 +214,7 @@ export default function Today() {
             todosLeft={periodCounts.todosLeft}
             onOpenNotes={liveSlot ? () => setSheet('notes') : undefined}
             onOpenTodos={liveSlot ? () => setSheet('todos') : undefined}
+            dayLine={`${classes.length} class${classes.length === 1 ? '' : 'es'} today · ${taken} taken · ${pending} pending`}
             deck={
               <HeroDeck
                 // While a class is live the hero already carries the period,

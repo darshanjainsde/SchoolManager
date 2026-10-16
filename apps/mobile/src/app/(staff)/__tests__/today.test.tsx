@@ -163,7 +163,8 @@ it('greets the teacher by name and shows the classes/taken/pending summary', asy
   // eyebrow above it, so the name is a title rather than the tail of a
   // sentence. Asserted as its own text node for exactly that reason.
   expect(await screen.findByText('Priya Sharma')).toBeTruthy();
-  expect(await screen.findByText('Good morning')).toBeTruthy();
+  // The salutation is gone (16 Oct 2026): the band carries the date and the name only.
+  expect(screen.queryByText('Good morning')).toBeNull();
   expect(await screen.findByText('2 classes today · 0 taken · 2 pending')).toBeTruthy();
 });
 

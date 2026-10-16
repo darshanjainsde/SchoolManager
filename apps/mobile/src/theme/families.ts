@@ -74,13 +74,15 @@ export function deriveFamilies(c: ColorPalette, scheme: ColorScheme): Record<Fam
     // ONE tint for every tile (user, 9 Oct 2026: the Fees tile read greyer
     // than its neighbours — it was mixed from the deep shade). Families now
     // differ only in the glyph's ink, never in the tile.
+    // Deeper tiles in dark (0.86 toward the surface, was 0.78): the tint is
+    // a shadow of the accent, not a lighter patch on the card.
     return {
-      learn: tone(F, F, 0.78),
-      money: tone(mix(F, '#FFFFFF', 0.25), F, 0.78),
-      care: tone(mix(F, D, 0.3), F, 0.78),
-      people: tone(mix(F, '#FFFFFF', 0.15), F, 0.78),
-      sport: tone(F, F, 0.78),
-      school: tone(mix(F, '#FFFFFF', 0.3), F, 0.78),
+      learn: tone(F, F, 0.86),
+      money: tone(mix(F, '#FFFFFF', 0.25), F, 0.86),
+      care: tone(mix(F, D, 0.3), F, 0.86),
+      people: tone(mix(F, '#FFFFFF', 0.15), F, 0.86),
+      sport: tone(F, F, 0.86),
+      school: tone(mix(F, '#FFFFFF', 0.3), F, 0.86),
     };
   }
   const W = '#FFFFFF';
@@ -98,14 +100,31 @@ export function deriveFamilies(c: ColorPalette, scheme: ColorScheme): Record<Fam
   };
 }
 
+/**
+ * THE ONE FILLED SURFACE (user, 16 Oct 2026: "the dark of every color should
+ * be proper dark like darkest shade to look classy"). In light it is the
+ * accent with its on-fill ink. In dark it is the accent's DEEPEST shade with
+ * white ink — never the pale dark-mode fill as a slab. Every filled button,
+ * the band, the tab pill and the sheet's main action read from here, so the
+ * app has one idea of "filled" per scheme.
+ */
+export function accentFill(c: ColorPalette, scheme: ColorScheme): { bg: string; fg: string } {
+  if (scheme !== 'dark') return { bg: c.indigo, fg: c.onBrand };
+  const night = '#0B0D14';
+  // Deep shade, then pushed darker until white clears 4.5:1 on it.
+  return { bg: legible(mix(c.indigoDeep, night, 0.28), '#FFFFFF', night), fg: '#FFFFFF' };
+}
+
 /** Gradient stops for a hero card that always carries WHITE text. */
 export function heroStops(c: ColorPalette, scheme: ColorScheme, kind: 'live' | 'quiet' = 'live'): readonly [string, string] {
   // In dark the accent tokens are light (made for dark paper), so the hero
   // takes them down toward night; a "quiet" hero (free period, holiday) is
   // the deep shade of the same colour.
   const night = '#0B0D14';
-  const F = scheme === 'dark' ? mix(c.indigo, night, 0.55) : c.indigo;
-  const D = scheme === 'dark' ? mix(c.indigoDeep, night, 0.6) : c.indigoDeep;
+  // Dark = the deepest shade: the band is the accent's deep stop taken down
+  // toward night, never the pale fill greyed out (which read as mud).
+  const F = scheme === 'dark' ? mix(c.indigoDeep, night, 0.3) : c.indigo;
+  const D = scheme === 'dark' ? mix(c.indigoDeep, night, 0.62) : c.indigoDeep;
   const pair: [string, string] = kind === 'quiet' ? [mix(D, night, 0.35), D] : [F, D];
   // Never let white fall under 4.5:1 on the lighter stop.
   return [legible(pair[0], '#FFFFFF', night), legible(pair[1], '#FFFFFF', night)] as const;

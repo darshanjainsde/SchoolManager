@@ -4,7 +4,8 @@ import type { TeacherDayEntry } from '@skoolos/types';
 import { Icon, type IconName } from './icons';
 import { Touchable } from './Touchable';
 import { CountUp } from './CountUp';
-import { useTokens } from '@/theme/theme-context';
+import { useTheme, useTokens } from '@/theme/theme-context';
+import { accentFill } from '@/theme/families';
 import { sheetStyle } from './HeroDeck';
 import { brand, font } from '@/theme/tokens';
 import { DUR, inkWidth, useGesture, useReduceMotion } from '@/theme/motion';
@@ -39,6 +40,8 @@ export interface NowCardProps {
    * omitted the hero is simply not tappable, rather than tappable-and-inert.
    */
   onOpenClass?: (classSectionId: string) => void;
+  /** The day in one line ("4 classes today · 0 taken · 4 pending"), carried on the sheet since the band dropped it. */
+  dayLine?: string;
   /**
    * Day-complete wrap-up figures, used only in the "day over" state
    * (`entry === null && nextEntry === null`). Optional so the other states
@@ -75,26 +78,30 @@ function entryLabel(e: TeacherDayEntry): string {
 // still a page of the same book.
 function heroStyles(on: string): { eyebrow: TextStyle; title: TextStyle; meta: TextStyle } {
   return {
+    // The sheet's scale (sckools-ui-standards §3c, 16 Oct 2026): eyebrow 12/700
+    // tracked, headline 24/30, line 14/20 — the same three sizes RoleHero uses,
+    // so every role's sheet reads as one object.
     eyebrow: {
-      fontSize: 9.5,
-      fontWeight: '800',
-      letterSpacing: 1.33, // .14em at 9.5px
+      fontSize: 12,
+      fontWeight: '700',
+      letterSpacing: 1.1,
       textTransform: 'uppercase',
       color: on,
       opacity: 0.9,
     },
     title: {
       fontFamily: font.serif,
-      fontSize: 20,
-      fontWeight: '600',
+      fontSize: 24,
+      lineHeight: 30,
+      fontWeight: '700',
+      letterSpacing: -0.3,
       color: on,
-      marginTop: 5,
-      marginBottom: 1,
+      marginTop: 6,
     },
     meta: {
-      // 12.5, not the repaint's 11: this line carries the class, the subject and
-      // who is being covered for, on the one card a teacher reads mid-corridor.
-      fontSize: 12.5,
+      fontSize: 14,
+      lineHeight: 20,
+      marginTop: 4,
       color: on,
       opacity: 0.93,
     },
@@ -400,6 +407,7 @@ export function NowCard({
   onOpenNotes,
   onOpenTodos,
   deck,
+  dayLine,
 }: NowCardProps) {
   const tokens = useTokens();
   // Pitch №3: the wrap and live heroes paint with the CHOSEN accent — the
@@ -409,10 +417,13 @@ export function NowCard({
   // Heroes follow the active accent and stay legible under white text in dark (families.ts).
   // On the sheet the words are ink; the accent is kept for the one filled
   // button, the progress line and the chips.
+  const { scheme } = useTheme();
   const accentColors = [tokens.color.indigo, tokens.color.indigoDeep] as const;
   const on: string = tokens.color.ink;
   const acc: string = tokens.color.indigo;
+  const fill = accentFill(tokens.color, scheme);
   const hero = heroStyles(on);
+  const day = dayLine ? <Text style={[hero.meta, { color: tokens.color.sub }]}>{dayLine}</Text> : null;
 
   // Nothing is current: either the day is over (a wrap-up hero) or we're before
   // school / in a gap (a plain "nothing on" card that names the next class).
@@ -426,18 +437,17 @@ export function NowCard({
           <GradientHero id="hero-open" colors={accentColors} testID="now-card">
             <Text style={hero.eyebrow}>Periods are over</Text>
             <Text style={hero.title}>{open === 1 ? '1 register still open' : `${open} registers still open`}</Text>
-            <Text style={hero.meta}>Families see who was in class once you take it.</Text>
-            {/* THE one big action (UI v2): a full-width white pill, the
-                biggest target on the screen, for the thing the day still owes. */}
+            <Text style={hero.meta}>{dayLine ?? 'Families see who was in class once you take it.'}</Text>
+            {deck}
+            {/* THE one action, last on the sheet and in the thumb zone. */}
             <Pressable
               testID={`now-take-open-${first}`}
               onPress={() => onTakeAttendance(first)}
               accessibilityRole="button"
-              style={{ marginTop: 14, minHeight: 52, borderRadius: 26, backgroundColor: acc, alignItems: 'center', justifyContent: 'center' }}
+              style={{ marginTop: 16, minHeight: 48, borderRadius: 24, backgroundColor: fill.bg, alignItems: 'center', justifyContent: 'center' }}
             >
-              <Text style={{ color: tokens.color.onBrand, fontWeight: '800', fontSize: 16 }}>Take register</Text>
+              <Text style={{ color: fill.fg, fontWeight: '700', fontSize: 15 }}>Take register</Text>
             </Pressable>
-            {deck}
           </GradientHero>
         );
       }
@@ -448,6 +458,7 @@ export function NowCard({
           <Text style={hero.meta}>
             {`${s.classesTaught} ${s.classesTaught === 1 ? 'class' : 'classes'} taught`}
           </Text>
+          {day}
           <View testID="now-summary" style={{ flexDirection: 'row', gap: 8, marginTop: 13 }}>
             <SummaryCell on={acc} testID="summary-classes" value={s.classesTaught} label="classes taught" />
             <SummaryCell on={tokens.color.green} testID="summary-marked" value={s.studentsMarked} label="students marked" />
@@ -461,6 +472,7 @@ export function NowCard({
         <Text style={hero.eyebrow}>Right now</Text>
         <Text style={hero.title}>Nothing on right now</Text>
         <Text style={hero.meta}>{`Next up: ${entryLabel(nextEntry)} at ${nextEntry.startTime}`}</Text>
+        {day}
         {deck}
       </GradientHero>
     );
@@ -474,6 +486,7 @@ export function NowCard({
         <Text style={hero.meta}>
           {nextEntry ? `Next up: ${entryLabel(nextEntry)} at ${nextEntry.startTime}` : 'Nothing scheduled after this.'}
         </Text>
+        {day}
         {deck}
       </GradientHero>
     );
@@ -494,6 +507,7 @@ export function NowCard({
         <View style={{ marginTop: 12 }}>
           <HeroChip on={tokens.color.green}>Use it to prep or catch up</HeroChip>
         </View>
+        {day}
         {deck}
           </GradientHero>
     );
@@ -519,6 +533,7 @@ export function NowCard({
       {slot?.covering && (
         <Text style={[hero.meta, { fontWeight: '700' }]}>{`Covering for ${slot.coveringFor}`}</Text>
       )}
+      {day}
 
       <NowProgress on={acc} percent={pct} />
 
@@ -542,15 +557,17 @@ export function NowCard({
               // 9x14 padding — this is the card's ONE call to action, and the
               // hardest tap in the app to land while walking.
               style={{
-                backgroundColor: acc,
-                borderRadius: 12,
+                backgroundColor: fill.bg,
+                borderRadius: 24,
+                minHeight: 44,
                 paddingVertical: 11,
-                paddingHorizontal: 16,
+                paddingHorizontal: 18,
                 alignSelf: 'flex-start',
+                justifyContent: 'center',
               }}
               accessibilityRole="button"
               >
-              <Text style={{ color: tokens.color.onBrand, fontWeight: '800', fontSize: 13 }}>
+              <Text style={{ color: fill.fg, fontWeight: '700', fontSize: 14 }}>
                 Take attendance →
               </Text>
             </Pressable>

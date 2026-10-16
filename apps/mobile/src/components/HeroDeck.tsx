@@ -1,7 +1,7 @@
 import { Pressable, Text, View } from 'react-native';
 import type { IconName } from './icons';
-import { useTokens } from '@/theme/theme-context';
-import { useFamilies, type Family } from '@/theme/families';
+import { useTheme, useTokens } from '@/theme/theme-context';
+import { accentFill, useFamilies, type Family } from '@/theme/families';
 import { brand } from '@/theme/tokens';
 
 /**
@@ -114,7 +114,9 @@ export function RoleHero({
   titleTestID?: string;
 }) {
   const tokens = useTokens();
+  const { scheme } = useTheme();
   const c = tokens.color;
+  const fill = accentFill(c, scheme);
   return (
     <View testID={testID} style={sheetStyle(c)}>
       <Text style={{ color: quiet ? c.sub : c.indigo, fontSize: 12, fontWeight: '700', letterSpacing: 1.1, textTransform: 'uppercase' }}>{eyebrow}</Text>
@@ -126,9 +128,9 @@ export function RoleHero({
           testID={primary.testID}
           accessibilityRole="button"
           onPress={primary.onPress}
-          style={({ pressed }) => ({ marginTop: 14, minHeight: 48, borderRadius: 24, backgroundColor: c.indigo, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.85 : 1 })}
+          style={({ pressed }) => ({ marginTop: 16, minHeight: 48, borderRadius: 24, backgroundColor: fill.bg, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.85 : 1 })}
         >
-          <Text style={{ color: c.onBrand, fontWeight: '700', fontSize: 15 }}>{primary.label}</Text>
+          <Text style={{ color: fill.fg, fontWeight: '700', fontSize: 15 }}>{primary.label}</Text>
         </Pressable>
       ) : null}
     </View>
