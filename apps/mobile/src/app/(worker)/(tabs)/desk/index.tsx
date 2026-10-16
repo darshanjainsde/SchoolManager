@@ -6,10 +6,12 @@ import { useSession } from '@/lib/use-session';
 import { useDeskMe } from '@/lib/use-desk';
 import { can, standings, type HouseRow, type RecordView, type TournamentRow } from '@/lib/sports-desk';
 import { formatDate } from '@/lib/portal';
-import { Empty, ErrorState, Figure, Page, PageHeader, Pill, Screen, SectionTitle } from '@/components/ui';
+import { Empty, ErrorState, Page, PageHeader, Pill, Screen } from '@/components/ui';
 import { Row, Swatch } from '@/components/desk';
 import { LoadingRows } from '@/components/Loading';
 import { RoleHero } from '@/components/HeroDeck';
+import { BandGreeting } from '@/components/BandHeader';
+import { HomeMenu } from '@/components/HomeToolGrid';
 import { NotificationBell } from '@/components/NotificationBell';
 import { useTokens } from '@/theme/theme-context';
 
@@ -37,9 +39,8 @@ export default function SportsToday() {
   const refresh = () => { meets.refresh(); records.refresh(); houses.refresh(); me.refresh(); };
 
   return (
-    <Screen onRefresh={refresh} refreshing={meets.refreshing}>
-      <SectionTitle title={session?.displayName ? `Hi, ${session.displayName.split(' ')[0]}` : 'Sports desk'} right={<NotificationBell group="(worker)" />} />
-      <Text style={{ marginHorizontal: 4, marginTop: -6, fontSize: 11.5, color: tokens.color.sub }}>Sports desk</Text>
+    <Screen band onRefresh={refresh} refreshing={meets.refreshing}>
+      <BandGreeting eyebrow="Sports desk" title={session?.displayName ?? 'Sports desk'} right={<NotificationBell group="(worker)" onBand />} />
 
       {error && <ErrorState error={error} onRetry={meets.reload} />}
       {loading && !error && <LoadingRows label="Opening the desk…" rows={3} />}
@@ -54,15 +55,19 @@ export default function SportsToday() {
             title={live.length ? `${live.length} ${live.length === 1 ? 'meet' : 'meets'} live` : 'No meet is live'}
             line={leader ? `${leader.name} lead the house table with ${leader.points} pts` : 'Houses appear once the office sets them up'}
             figures={[
-              { testID: 'desk-live', value: String(live.length), label: 'live meets', onPress: () => router.push('/(worker)/(tabs)/meets') },
-              { testID: 'desk-pending', value: String(records.data?.pending ?? 0), label: 'to verify', onPress: () => router.push('/(worker)/(tabs)/records') },
-              { testID: 'desk-leader', value: leader ? leader.name : '—', label: leader ? `leading · ${leader.points} pts` : 'no houses', onPress: () => router.push('/(worker)/(tabs)/houses') },
+              { testID: 'desk-live', value: String(live.length), label: 'live meets', family: 'school', onPress: () => router.push('/(worker)/(tabs)/meets') },
+              { testID: 'desk-pending', value: String(records.data?.pending ?? 0), label: 'to verify', tone: (records.data?.pending ?? 0) > 0 ? 'warn' : 'good', onPress: () => router.push('/(worker)/(tabs)/records') },
+              { testID: 'desk-leader', value: leader ? leader.name : '—', label: leader ? `leading · ${leader.points} pts` : 'no houses', family: 'learn', onPress: () => router.push('/(worker)/(tabs)/houses') },
             ]}
-            actions={[
-              { label: 'Meets', icon: 'sports', testID: 'hero-act-meets', onPress: () => router.push('/(worker)/(tabs)/meets') },
-              { label: 'Records', icon: 'results', testID: 'hero-act-records', badge: records.data?.pending ?? 0, onPress: () => router.push('/(worker)/(tabs)/records') },
-              { label: 'Houses', icon: 'assignments', testID: 'hero-act-houses', onPress: () => router.push('/(worker)/(tabs)/houses') },
-              { label: 'Rules', icon: 'notes', testID: 'hero-act-rules', onPress: () => router.push('/(worker)/(tabs)/desk/rules') },
+          />
+
+          {/* The desk's doors, once, on the grid (direction C). */}
+          <HomeMenu
+            tools={[
+              { label: 'Meets', icon: 'sports', testID: 'hero-act-meets', route: '/(worker)/(tabs)/meets' },
+              { label: 'Records', icon: 'results', testID: 'hero-act-records', badge: records.data?.pending ?? 0, route: '/(worker)/(tabs)/records' },
+              { label: 'Houses', icon: 'assignments', testID: 'hero-act-houses', route: '/(worker)/(tabs)/houses' },
+              { label: 'Rules', icon: 'notes', testID: 'hero-act-rules', route: '/(worker)/(tabs)/desk/rules' },
             ]}
           />
 

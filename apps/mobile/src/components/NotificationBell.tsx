@@ -22,7 +22,7 @@ import { brand } from '@/theme/tokens';
  * 'center'` seats the tile on the optical centre of the two-line name block
  * beside it instead of hanging from the row's top edge.
  */
-export function NotificationBell({ group }: { group: NotificationGroup }) {
+export function NotificationBell({ group, onBand = false }: { group: NotificationGroup; onBand?: boolean }) {
   const tokens = useTokens();
   // Through the shared cache: the same answer as the notifications screen,
   // deduped with it, and fresh-for-30-s on a plain focus. A badge must never
@@ -42,8 +42,9 @@ export function NotificationBell({ group }: { group: NotificationGroup }) {
         width: 44,
         height: 44,
         borderRadius: 22,
-        backgroundColor: tokens.color.surface,
-        borderColor: tokens.color.line,
+        // On a Home's band the bell is a glass circle in the band's own white (direction C).
+        backgroundColor: onBand ? 'rgba(255,255,255,0.16)' : tokens.color.surface,
+        borderColor: onBand ? 'rgba(255,255,255,0.22)' : tokens.color.line,
         borderWidth: 1,
         alignItems: 'center',
         justifyContent: 'center',
@@ -51,7 +52,7 @@ export function NotificationBell({ group }: { group: NotificationGroup }) {
         opacity: pressed ? 0.6 : 1,
       })}
     >
-      <Icon name="bell" size={20} color={tokens.color.ink} />
+      <Icon name="bell" size={20} color={onBand ? brand.onHero : tokens.color.ink} />
       {count > 0 && (
         <View
           testID="notification-bell-badge"
@@ -70,7 +71,7 @@ export function NotificationBell({ group }: { group: NotificationGroup }) {
             // The 2px cut-out is the PAGE colour, not the bell's, so the
             // badge reads as sitting on top of the page rather than inside
             // the bell's own outline.
-            borderColor: tokens.color.appBg,
+            borderColor: onBand ? 'transparent' : tokens.color.appBg,
             borderWidth: 2,
             alignItems: 'center',
             justifyContent: 'center',

@@ -1,13 +1,12 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { Animated, Easing, Pressable, Text, View, type TextStyle, AppState } from 'react-native';
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import type { TeacherDayEntry } from '@skoolos/types';
-import { Card } from './ui';
 import { Icon, type IconName } from './icons';
 import { Touchable } from './Touchable';
 import { CountUp } from './CountUp';
 import { useTheme, useTokens } from '@/theme/theme-context';
-import { heroStops } from '@/theme/families';
+import { accentFill } from '@/theme/families';
+import { sheetStyle } from './HeroDeck';
 import { brand, font } from '@/theme/tokens';
 import { DUR, inkWidth, useGesture, useReduceMotion } from '@/theme/motion';
 
@@ -41,6 +40,8 @@ export interface NowCardProps {
    * omitted the hero is simply not tappable, rather than tappable-and-inert.
    */
   onOpenClass?: (classSectionId: string) => void;
+  /** The day in one line ("4 classes today · 0 taken · 4 pending"), carried on the sheet since the band dropped it. */
+  dayLine?: string;
   /**
    * Day-complete wrap-up figures, used only in the "day over" state
    * (`entry === null && nextEntry === null`). Optional so the other states
@@ -77,26 +78,30 @@ function entryLabel(e: TeacherDayEntry): string {
 // still a page of the same book.
 function heroStyles(on: string): { eyebrow: TextStyle; title: TextStyle; meta: TextStyle } {
   return {
+    // The sheet's scale (sckools-ui-standards §3c, 16 Oct 2026): eyebrow 12/700
+    // tracked, headline 24/30, line 14/20 — the same three sizes RoleHero uses,
+    // so every role's sheet reads as one object.
     eyebrow: {
-      fontSize: 9.5,
-      fontWeight: '800',
-      letterSpacing: 1.33, // .14em at 9.5px
+      fontSize: 12,
+      fontWeight: '700',
+      letterSpacing: 1.1,
       textTransform: 'uppercase',
       color: on,
       opacity: 0.9,
     },
     title: {
       fontFamily: font.serif,
-      fontSize: 20,
-      fontWeight: '600',
+      fontSize: 24,
+      lineHeight: 30,
+      fontWeight: '700',
+      letterSpacing: -0.3,
       color: on,
-      marginTop: 5,
-      marginBottom: 1,
+      marginTop: 6,
     },
     meta: {
-      // 12.5, not the repaint's 11: this line carries the class, the subject and
-      // who is being covered for, on the one card a teacher reads mid-corridor.
-      fontSize: 12.5,
+      fontSize: 14,
+      lineHeight: 20,
+      marginTop: 4,
       color: on,
       opacity: 0.93,
     },
@@ -126,43 +131,13 @@ function GradientHero({
   padding?: number;
   children: ReactNode;
 }) {
-  const [size, setSize] = useState({ w: 0, h: 0 });
+  // Direction C (16 Oct 2026): the hero is a white SHEET over the band, not a
+  // gradient card. `id` and `colors` stay in the signature so every state's
+  // call site is untouched; the band behind the greeting carries the colour.
+  const tokens = useTokens();
+  void id; void colors;
   return (
-    <View
-      testID={testID}
-      onLayout={(e) => {
-        const { width, height } = e.nativeEvent.layout;
-        setSize((s) => (s.w === width && s.h === height ? s : { w: width, h: height }));
-      }}
-      style={{
-        // sckools-ui-standards §3: hero cards are r28 and flat (elevation is
-        // reserved for the floating bar and sheets).
-        borderRadius: 28,
-        padding,
-        overflow: 'hidden',
-        backgroundColor: colors[0],
-        shadowOpacity: 0,
-        elevation: 0,
-      }}
-    >
-      {size.w > 0 && (
-        <Svg
-          width={size.w}
-          height={size.h}
-          style={{ position: 'absolute', top: 0, left: 0 }}
-          pointerEvents="none"
-        >
-          <Defs>
-            {/* 135deg, exactly as the pitch writes it. */}
-            <LinearGradient id={id} x1="0" y1="0" x2="1" y2="1">
-              {colors.map((c, i) => (
-                <Stop key={c + String(i)} offset={String(i / (colors.length - 1))} stopColor={c} />
-              ))}
-            </LinearGradient>
-          </Defs>
-          <Rect width={size.w} height={size.h} fill={`url(#${id})`} />
-        </Svg>
-      )}
+    <View testID={testID} style={sheetStyle(tokens.color, padding)}>
       {children}
     </View>
   );
@@ -236,7 +211,7 @@ function KitTile({
       })}
     >
       <Icon name={icon} size={17} color={on} fillOpacity={0.3} />
-      <Text style={{ color: on, fontSize: 10.5, fontWeight: '700' }}>{label}</Text>
+      <Text style={{ color: on, fontSize: 12, fontWeight: '700' }}>{label}</Text>
       {badge > 0 && (
         <View
           testID={testID ? `${testID}-badge` : undefined}
@@ -432,6 +407,7 @@ export function NowCard({
   onOpenNotes,
   onOpenTodos,
   deck,
+  dayLine,
 }: NowCardProps) {
   const tokens = useTokens();
   // Pitch №3: the wrap and live heroes paint with the CHOSEN accent — the
@@ -439,11 +415,15 @@ export function NowCard({
   // Profile choice, the school brand and the colour scheme. The free hero
   // stays the fixed green below: there, green MEANS "you're free".
   // Heroes follow the active accent and stay legible under white text in dark (families.ts).
+  // On the sheet the words are ink; the accent is kept for the one filled
+  // button, the progress line and the chips.
   const { scheme } = useTheme();
-  const accentColors = heroStops(tokens.color, scheme);
-  // White on every hero: heroStops guarantees 4.5:1 in both schemes.
-  const on: string = brand.onHero;
+  const accentColors = [tokens.color.indigo, tokens.color.indigoDeep] as const;
+  const on: string = tokens.color.ink;
+  const acc: string = tokens.color.indigo;
+  const fill = accentFill(tokens.color, scheme);
   const hero = heroStyles(on);
+  const day = dayLine ? <Text style={[hero.meta, { color: tokens.color.sub }]}>{dayLine}</Text> : null;
 
   // Nothing is current: either the day is over (a wrap-up hero) or we're before
   // school / in a gap (a plain "nothing on" card that names the next class).
@@ -457,18 +437,17 @@ export function NowCard({
           <GradientHero id="hero-open" colors={accentColors} testID="now-card">
             <Text style={hero.eyebrow}>Periods are over</Text>
             <Text style={hero.title}>{open === 1 ? '1 register still open' : `${open} registers still open`}</Text>
-            <Text style={hero.meta}>Families see who was in class once you take it.</Text>
-            {/* THE one big action (UI v2): a full-width white pill, the
-                biggest target on the screen, for the thing the day still owes. */}
+            <Text style={hero.meta}>{dayLine ?? 'Families see who was in class once you take it.'}</Text>
+            {deck}
+            {/* THE one action, last on the sheet and in the thumb zone. */}
             <Pressable
               testID={`now-take-open-${first}`}
               onPress={() => onTakeAttendance(first)}
               accessibilityRole="button"
-              style={{ marginTop: 14, minHeight: 52, borderRadius: 26, backgroundColor: on, alignItems: 'center', justifyContent: 'center' }}
+              style={{ marginTop: 16, minHeight: 48, borderRadius: 24, backgroundColor: fill.bg, alignItems: 'center', justifyContent: 'center' }}
             >
-              <Text style={{ color: tokens.color.indigoDeep, fontWeight: '800', fontSize: 16 }}>Take register</Text>
+              <Text style={{ color: fill.fg, fontWeight: '700', fontSize: 15 }}>Take register</Text>
             </Pressable>
-            {deck}
           </GradientHero>
         );
       }
@@ -479,19 +458,21 @@ export function NowCard({
           <Text style={hero.meta}>
             {`${s.classesTaught} ${s.classesTaught === 1 ? 'class' : 'classes'} taught`}
           </Text>
+          {day}
           <View testID="now-summary" style={{ flexDirection: 'row', gap: 8, marginTop: 13 }}>
-            <SummaryCell on={on} testID="summary-classes" value={s.classesTaught} label="classes taught" />
-            <SummaryCell on={on} testID="summary-marked" value={s.studentsMarked} label="students marked" />
+            <SummaryCell on={acc} testID="summary-classes" value={s.classesTaught} label="classes taught" />
+            <SummaryCell on={tokens.color.green} testID="summary-marked" value={s.studentsMarked} label="students marked" />
           </View>
           {deck}
           </GradientHero>
       );
     }
     return (
-      <GradientHero id="hero-gap" colors={heroStops(tokens.color, scheme, 'quiet')} testID="now-card">
+      <GradientHero id="hero-gap" colors={accentColors} testID="now-card">
         <Text style={hero.eyebrow}>Right now</Text>
         <Text style={hero.title}>Nothing on right now</Text>
         <Text style={hero.meta}>{`Next up: ${entryLabel(nextEntry)} at ${nextEntry.startTime}`}</Text>
+        {day}
         {deck}
       </GradientHero>
     );
@@ -499,12 +480,13 @@ export function NowCard({
 
   if (entry.kind === 'BREAK') {
     return (
-      <GradientHero id="hero-break" colors={heroStops(tokens.color, scheme, 'quiet')} testID="now-card">
+      <GradientHero id="hero-break" colors={accentColors} testID="now-card">
         <Text style={hero.eyebrow}>Right now</Text>
         <Text style={hero.title}>{entry.label}</Text>
         <Text style={hero.meta}>
           {nextEntry ? `Next up: ${entryLabel(nextEntry)} at ${nextEntry.startTime}` : 'Nothing scheduled after this.'}
         </Text>
+        {day}
         {deck}
       </GradientHero>
     );
@@ -512,11 +494,9 @@ export function NowCard({
 
   if (entry.kind === 'FREE') {
     const remaining = Math.max(0, total - elapsed);
-    // Fixed white on the fixed green — deliberately NOT the accent's onBrand,
-    // which can be dark ink and would vanish on this gradient.
-    const freeHero = heroStyles(brand.onHero);
+    const freeHero = heroStyles(on);
     return (
-      <GradientHero id="hero-green" colors={heroStops(tokens.color, scheme, 'quiet')} testID="now-card">
+      <GradientHero id="hero-green" colors={accentColors} testID="now-card">
         <Text style={freeHero.eyebrow}>{`${entry.label} · Free period`}</Text>
         <Text style={freeHero.title}>{`You're free — ${remaining} min`}</Text>
         <Text style={freeHero.meta}>
@@ -525,8 +505,9 @@ export function NowCard({
             : `${entry.startTime}–${entry.endTime}`}
         </Text>
         <View style={{ marginTop: 12 }}>
-          <HeroChip on={brand.onHero}>Use it to prep or catch up</HeroChip>
+          <HeroChip on={tokens.color.green}>Use it to prep or catch up</HeroChip>
         </View>
+        {day}
         {deck}
           </GradientHero>
     );
@@ -544,7 +525,7 @@ export function NowCard({
   const card = (
     <GradientHero id="hero-indigo" colors={accentColors} testID="now-card" padding={16}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
-        <LiveDot on={on} />
+        <LiveDot on={acc} />
         <Text style={hero.eyebrow}>{`${entry.label} · Live now`}</Text>
       </View>
       <Text style={hero.title}>{slot ? `${slot.className} · ${slot.subjectName}` : entry.label}</Text>
@@ -552,13 +533,14 @@ export function NowCard({
       {slot?.covering && (
         <Text style={[hero.meta, { fontWeight: '700' }]}>{`Covering for ${slot.coveringFor}`}</Text>
       )}
+      {day}
 
-      <NowProgress on={on} percent={pct} />
+      <NowProgress on={acc} percent={pct} />
 
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9, marginTop: 10, flexWrap: 'wrap' }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
         {register?.taken ? (
           <>
-            <HeroChip on={on}>{`${register.present}/${register.total} present`}</HeroChip>
+            <HeroChip on={tokens.color.green}>{`${register.present}/${register.total} present`}</HeroChip>
             {register.markedBy && (
               <Text style={hero.meta}>{`Marked by ${register.markedBy}`}</Text>
             )}
@@ -575,15 +557,17 @@ export function NowCard({
               // 9x14 padding — this is the card's ONE call to action, and the
               // hardest tap in the app to land while walking.
               style={{
-                backgroundColor: on,
-                borderRadius: 12,
-                paddingVertical: 11,
-                paddingHorizontal: 16,
+                backgroundColor: fill.bg,
+                borderRadius: 24,
+                minHeight: 48,
+                paddingVertical: 12,
+                paddingHorizontal: 24,
                 alignSelf: 'flex-start',
+                justifyContent: 'center',
               }}
               accessibilityRole="button"
               >
-              <Text style={{ color: tokens.color.indigoDeep, fontWeight: '800', fontSize: 13 }}>
+              <Text style={{ color: fill.fg, fontWeight: '700', fontSize: 15 }}>
                 Take attendance →
               </Text>
             </Pressable>
@@ -599,11 +583,11 @@ export function NowCard({
           decoration on the tappable card) so a screen reader gets real,
           named buttons. */}
       {(openable || onOpenNotes || onOpenTodos) && (
-        <View style={{ flexDirection: 'row', gap: 7, marginTop: 13 }}>
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
           {openable && (
             <KitTile
-              on={on}
-              deep={tokens.color.indigoDeep}
+              on={acc}
+              deep={tokens.color.surface}
               icon="person"
               label="Who's in"
               onPress={openable}
@@ -613,8 +597,8 @@ export function NowCard({
           )}
           {onOpenNotes && (
             <KitTile
-              on={on}
-              deep={tokens.color.indigoDeep}
+              on={acc}
+              deep={tokens.color.surface}
               icon="notes"
               label="Notes"
               badge={notesCount}
@@ -629,8 +613,8 @@ export function NowCard({
           )}
           {onOpenTodos && (
             <KitTile
-              on={on}
-              deep={tokens.color.indigoDeep}
+              on={acc}
+              deep={tokens.color.surface}
               icon="take"
               label="To-dos"
               badge={todosLeft}

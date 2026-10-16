@@ -119,9 +119,10 @@ function mockEndpoints(overrides: Partial<Record<string, unknown>> = {}) {
 describe('identity card — role-neutral copy', () => {
   it('renders the student\'s own name, class and roll number', async () => {
     mockEndpoints();
-    const { findByText } = render(<Home />);
+    const { findByText, queryByText } = render(<Home />);
 
-    expect(await findByText('Hi, Aarav')).toBeTruthy();
+    expect(await findByText('Aarav Sharma')).toBeTruthy();
+    expect(queryByText(/^(Hi,|Good (morning|afternoon|evening))/)).toBeNull();
     expect(await findByText(/Grade 5-B/)).toBeTruthy();
     expect(await findByText(/Roll 12/)).toBeTruthy();
   });
@@ -134,7 +135,7 @@ describe('identity card — role-neutral copy', () => {
     mockEndpoints();
     const { findByText, queryByText } = render(<Home />);
 
-    await findByText('Hi, Aarav'); // let the screen settle first
+    await findByText('Aarav Sharma'); // let the screen settle first
     expect(queryByText('Your child')).toBeNull();
   });
 
@@ -179,7 +180,7 @@ describe('next test', () => {
   it('the badge is absent when there are no upcoming exams', async () => {
     mockEndpoints();
     const { findByText, queryByTestId } = render(<Home />);
-    await findByText('Hi, Aarav');
+    await findByText('Aarav Sharma');
     expect(queryByTestId('hometool-badge-Results')).toBeNull();
   });
 
@@ -437,7 +438,7 @@ describe('second edition — the doors the web portal had first', () => {
       },
     });
     const { findByText, queryByTestId } = render(<Home />);
-    await findByText('Hi, Aarav');
+    await findByText('Aarav Sharma');
     expect(queryByTestId('birthday-banner')).toBeNull();
   });
 });

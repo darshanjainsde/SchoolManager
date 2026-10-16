@@ -14,6 +14,8 @@ import { Icon } from '@/components/icons';
 import { Card, Empty, ErrorState, Pill, Screen } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { RoleHero } from '@/components/HeroDeck';
+import { BandGreeting } from '@/components/BandHeader';
+import { HomeMenu } from '@/components/HomeToolGrid';
 import { NotificationBell } from '@/components/NotificationBell';
 import { useTokens } from '@/theme/theme-context';
 
@@ -68,16 +70,6 @@ const STAFF_ROLE_LABEL: Record<string, string> = {
   OTHER: 'Staff',
 };
 
-/** A figure box: the number large and tabular, the label a sentence under it. */
-function Figure({ testID, value, label, color }: { testID: string; value: string; label: string; color: string }) {
-  const tokens = useTokens();
-  return (
-    <View style={{ flex: 1, backgroundColor: tokens.color.surface, borderColor: tokens.color.line, borderWidth: 1, borderRadius: 16, paddingVertical: 10, paddingHorizontal: 12 }}>
-      <Text testID={testID} style={{ fontSize: 22, lineHeight: 28, fontWeight: '700', color, fontVariant: ['tabular-nums'] }}>{value}</Text>
-      <Text style={{ fontSize: 12, lineHeight: 16, color: tokens.color.sub }}>{label}</Text>
-    </View>
-  );
-}
 
 /**
  * THE MONTH, AS A STRIP OF DAYS. The same data the "Recent" list held, but
@@ -130,7 +122,7 @@ function MonthStrip({ days, today }: { days: PersonDay[]; today: string }) {
 export default function Today() {
   const session = useSession();
   const job = jobFor(session);
-  if (job === 'ACCOUNTS') return <AccountsToday firstName={session?.displayName?.split(' ')[0] ?? 'there'} />;
+  if (job === 'ACCOUNTS') return <AccountsToday name={session?.displayName ?? 'Accounts'} />;
   return <StaffToday />;
 }
 
@@ -175,18 +167,12 @@ function StaffToday() {
   const [y, m] = today.split('-').map(Number);
 
   return (
-    <Screen onRefresh={reload}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 13, color: c.sub, fontWeight: '500' }}>
-            {fmtLongDay(new Date())}{data ? ` · ${STAFF_ROLE_LABEL[data.person.role] ?? 'Staff'}` : ''}
-          </Text>
-          <Text style={{ fontSize: 26, lineHeight: 32, fontWeight: '700', letterSpacing: -0.4, color: c.ink }}>
-            {data ? `Hi, ${data.person.firstName}` : 'Today'}
-          </Text>
-        </View>
-        <NotificationBell group="(worker)" />
-      </View>
+    <Screen band onRefresh={reload}>
+      <BandGreeting
+        eyebrow={`${fmtLongDay(new Date())}${data ? ` · ${STAFF_ROLE_LABEL[data.person.role] ?? 'Staff'}` : ''}`}
+        title={data ? `${data.person.firstName} ${data.person.lastName}`.trim() : 'Today'}
+        right={<NotificationBell group="(worker)" onBand />}
+      />
 
       {error && <ErrorState error={error} onRetry={reload} />}
       {data === null && !error && <LoadingRows label="Loading your attendance…" rows={3} />}
@@ -206,16 +192,20 @@ function StaffToday() {
               marked === 0
                 ? []
                 : [
-                    { testID: 'stat-percent', value: `${summary.percent}%`, label: 'this month' },
-                    { testID: 'stat-present', value: String(summary.present), label: 'days present' },
-                    { testID: 'stat-absent', value: String(summary.absent), label: 'absent' },
+                    { testID: 'stat-percent', value: `${summary.percent}%`, label: 'this month', family: 'care' },
+                    { testID: 'stat-present', value: String(summary.present), label: 'days present', tone: 'good' },
+                    { testID: 'stat-absent', value: String(summary.absent), label: 'absent', tone: summary.absent > 0 ? 'bad' : 'good' },
                   ]
             }
-            actions={[
-              { label: 'My pay', icon: 'fees', testID: 'hero-act-mypay', onPress: () => router.push('/(worker)/(tabs)/profile/salary') },
-              { label: 'Password', icon: 'key', testID: 'hero-act-password', onPress: () => router.push('/(worker)/(tabs)/profile/password') },
-              { label: 'WhatsApp', icon: 'phone', testID: 'hero-act-phone', onPress: () => router.push('/(worker)/(tabs)/profile/phone') },
-              { label: 'Profile', icon: 'person', testID: 'hero-act-profile', onPress: () => router.push('/(worker)/(tabs)/profile') },
+          />
+
+          {/* The desk's doors, once, on the grid (direction C). */}
+          <HomeMenu
+            tools={[
+              { label: 'My pay', icon: 'fees', testID: 'hero-act-mypay', route: '/(worker)/(tabs)/profile/salary' },
+              { label: 'Password', icon: 'key', testID: 'hero-act-password', route: '/(worker)/(tabs)/profile/password' },
+              { label: 'WhatsApp', icon: 'phone', testID: 'hero-act-phone', route: '/(worker)/(tabs)/profile/phone' },
+              { label: 'Profile', icon: 'person', testID: 'hero-act-profile', route: '/(worker)/(tabs)/profile' },
             ]}
           />
 

@@ -61,7 +61,9 @@ it('renders the identity greeting, stat boxes, and recent days from the real MyS
   );
   render(<Today />);
 
-  expect(await screen.findByText('Hi, Sam')).toBeTruthy();
+  // The band carries the date and the person's name — no salutation (16 Oct 2026).
+  expect(await screen.findByText('Sam Staff')).toBeTruthy();
+  expect(screen.queryByText(/^(Hi,|Good (morning|afternoon|evening))/)).toBeNull();
   expect(screen.getByText(/Office staff/)).toBeTruthy();
   expect(screen.getByTestId('stat-percent')).toHaveTextContent(/^67%/);
   expect(screen.getByTestId('stat-present')).toHaveTextContent(/^2/);

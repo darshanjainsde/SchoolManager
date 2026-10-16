@@ -1,8 +1,9 @@
 import { fetchCached, useReload } from '@/lib/query';
 import { useCallback, useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Text } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { HeroDeck } from '@/components/HeroDeck';
+import { BandGreeting } from '@/components/BandHeader';
 import type { ClassNoteRow, ClassTodoRow, TeacherDay } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
 import { session } from '@/lib/session';
@@ -17,8 +18,7 @@ import { LoadingRows } from '@/components/Loading';
 import { NotificationBell } from '@/components/NotificationBell';
 import { HomeMenu } from '@/components/HomeToolGrid';
 import { useTokens } from '@/theme/theme-context';
-import { font } from '@/theme/tokens';
-import { salutation } from '@/lib/greeting';
+import { fmtLongDay } from '@/lib/dates';
 import { hasFeature } from '@/lib/features';
 import { useSession } from '@/lib/use-session';
 
@@ -172,60 +172,13 @@ export default function Today() {
   }
 
   return (
-    <Screen onRefresh={refresh} refreshing={refreshing}>
-      {/* `.greet` + `.kidchip` — the teacher's name in the diary serif, the
-          bell out in the right margin.
-
-          Two lines, not one: the greeting is the same every morning, the NAME
-          is the part that is theirs. Setting the salutation as a small
-          letter-spaced eyebrow lets the name take the full serif line at a size
-          that reads as a title, instead of both sharing one 20px run where the
-          name is just the tail of a sentence. */}
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginHorizontal: 2 }}>
-        <View style={{ flex: 1 }}>
-          <Text
-            maxFontSizeMultiplier={1.4}
-            style={{
-              fontSize: 11,
-              letterSpacing: 1.2,
-              textTransform: 'uppercase',
-              color: tokens.color.sub,
-              marginBottom: 1,
-            }}
-          >
-            {salutation()}
-          </Text>
-          <Text
-            maxFontSizeMultiplier={1.4}
-            numberOfLines={1}
-            // Bold serif with a touch of negative tracking: the NAME is the
-            // one personal thing on this screen, so it is set like a book
-            // title, not a form value.
-            style={{
-              fontFamily: font.serif,
-              fontSize: 26,
-              lineHeight: 31,
-              fontWeight: '700',
-              letterSpacing: -0.4,
-              color: tokens.color.ink,
-            }}
-          >
-            {name ?? 'Today'}
-          </Text>
-        </View>
-        {/* One bell, no gear (pitch №3): appearance lives in Profile, and the
-            gear pointed at a settings screen that held nothing else. The bell
-            centres itself on this two-line block via its own alignSelf. */}
-        <NotificationBell group="(staff)" />
-      </View>
-
-      {/* The day in one line, in the pitch's `.gatesub` voice — a note under
-          the greeting rather than a card competing with the hero below it. */}
-      <Text style={{ marginHorizontal: 4, marginTop: -2, fontSize: 12, color: tokens.color.sub }}>
-        {day === null && !error
-          ? 'Loading your day…'
-          : `${classes.length} class${classes.length === 1 ? '' : 'es'} today · ${taken} taken · ${pending} pending`}
-      </Text>
+    <Screen band onRefresh={refresh} refreshing={refreshing}>
+      {/* Direction C: the greeting sits on the band; the sheet (NowCard) overlaps it. */}
+      <BandGreeting
+        eyebrow={fmtLongDay(new Date())}
+        title={name ?? 'Today'}
+        right={<NotificationBell group="(staff)" onBand />}
+      />
 
       {error && <ErrorState error={error} onRetry={reload} />}
 
@@ -261,6 +214,7 @@ export default function Today() {
             todosLeft={periodCounts.todosLeft}
             onOpenNotes={liveSlot ? () => setSheet('notes') : undefined}
             onOpenTodos={liveSlot ? () => setSheet('todos') : undefined}
+            dayLine={`${classes.length} class${classes.length === 1 ? '' : 'es'} today · ${taken} taken · ${pending} pending`}
             deck={
               <HeroDeck
                 // While a class is live the hero already carries the period,
@@ -271,25 +225,11 @@ export default function Today() {
                   liveSlot
                     ? []
                     : [
-                        { value: `${taken}/${classes.length}`, label: 'registers', testID: 'hero-fig-registers' },
-                        { value: String(studentsMarked), label: 'marked', testID: 'hero-fig-marked' },
-                        { value: String(unreadMsgs), label: unreadMsgs === 1 ? 'message' : 'messages', testID: 'hero-fig-messages' },
+                        { value: `${taken}/${classes.length}`, label: 'registers', testID: 'hero-fig-registers', family: 'care' },
+                        { value: String(studentsMarked), label: 'marked', testID: 'hero-fig-marked', tone: 'good' },
+                        { value: String(unreadMsgs), label: unreadMsgs === 1 ? 'message' : 'messages', testID: 'hero-fig-messages', family: 'people' },
                       ]
                 }
-                // The hero DOES (quick verbs); the tiles below GO (places).
-                actions={[
-                  {
-                    label: 'Register',
-                    icon: 'take',
-                    testID: 'hero-act-register',
-                    badge: needsInk.length,
-                    onPress: () =>
-                      needsInk[0]?.slot ? goToAttendance(needsInk[0].slot.classSectionId) : router.push('/(staff)/(tabs)/attendance'),
-                  },
-                  { label: 'Homework', icon: 'assignments', testID: 'hero-act-homework', onPress: () => router.push('/(staff)/(tabs)/home/assignments') },
-                  { label: 'Notice', icon: 'notices', testID: 'hero-act-notice', onPress: () => router.push('/(staff)/(tabs)/home/post') },
-                  { label: 'Test', icon: 'results', testID: 'hero-act-test', onPress: () => router.push('/(staff)/(tabs)/home/tests') },
-                ]}
               />
             }
           />
@@ -317,11 +257,19 @@ export default function Today() {
               other door is here, badged ones first. */}
           <HomeMenu
             tools={[
+              // The four verbs that used to ride on the hero (direction C: the grid is the one place).
+              {
+                label: 'Register', icon: 'take', testID: 'hero-act-register', badge: needsInk.length, live: needsInk.length > 0,
+                onPress: () => (needsInk[0]?.slot ? goToAttendance(needsInk[0].slot.classSectionId) : router.push('/(staff)/(tabs)/attendance')),
+              },
+              { label: 'Homework', icon: 'assignments', testID: 'hero-act-homework', route: '/(staff)/(tabs)/home/assignments' },
+              { label: 'Notice', icon: 'notices', testID: 'hero-act-notice', route: '/(staff)/(tabs)/home/post' },
+              { label: 'Test', icon: 'results', testID: 'hero-act-test', route: '/(staff)/(tabs)/home/tests' },
               { label: 'Messages', icon: 'messages', route: '/(staff)/(tabs)/home/messages', badge: unreadMsgs },
               { label: 'Diary', icon: 'diary', route: '/(staff)/(tabs)/home/diary' },
               { label: 'Requests', icon: 'requests', route: '/(staff)/(tabs)/home/requests' },
               { label: 'Notes', icon: 'notes', route: '/(staff)/(tabs)/home/notes' },
-              { label: 'Holidays', icon: 'holidays', route: '/(staff)/(tabs)/home/holidays' },
+              { label: 'Holidays', icon: 'holidays', route: '/(staff)/(tabs)/home/holidays', date: String(new Date().getDate()) },
               // The teacher's own shelf — only for a school with the library on.
               ...(hasFeature(s, 'LIBRARY') ? [{ label: 'Library', icon: 'library', route: '/(staff)/(tabs)/home/library' }] : []),
               // Pay slips, only where the school runs pay on Sckools.
