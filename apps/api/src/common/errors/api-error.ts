@@ -366,6 +366,10 @@ export type ErrorCode =
   | 'PACK_NAME_TAKEN'
   /** The pack's export job has not finished, so it cannot be used or removed — 409. */
   | 'PACK_BUILDING'
+  /** Syllabus: pair with 404 */
+  | 'CHAPTER_NOT_FOUND'
+  /** Syllabus: pair with 403 — the teacher does not teach this subject here */
+  | 'SUBJECT_NOT_OWNED'
   | 'INTERNAL';
 
 export interface ApiErrorBody {

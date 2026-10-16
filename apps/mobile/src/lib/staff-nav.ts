@@ -114,7 +114,7 @@ export interface MoreItem {
   /** Icon-tile tint. Defaults to indigo when omitted. */
   tone?: MoreTone;
   /** The paid module this tool belongs to; Home draws it only when the school has it on. */
-  feature?: 'LIBRARY' | 'SALARY';
+  feature?: 'LIBRARY' | 'SALARY' | 'COURSE_MANAGEMENT';
 }
 
 export const MORE_ITEMS: readonly MoreItem[] = [

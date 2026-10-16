@@ -89,6 +89,8 @@ export const BUCKET_OF: Readonly<Record<string, Bucket>> = {
   Subject: 'setup',
   Period: 'setup',
   TimetableSlot: 'setup',
+  // Syllabus chapters belong to Grade + Subject and outlive the year.
+  SyllabusChapter: 'setup',
   Room: 'setup',
   /* ── setup: the people on the roll ─────────────────────────────────────── */
   Teacher: 'setup',
@@ -139,6 +141,9 @@ export const BUCKET_OF: Readonly<Record<string, Bucket>> = {
   ClassNote: 'day',
   ClassTodo: 'day',
   DiaryEntry: 'day',
+  // What a section has reached this year, and a child's own revision notes.
+  SyllabusProgress: 'day',
+  SyllabusStudentNote: 'day',
   DiaryRecipient: 'day',
   DiaryAck: 'day',
   SessionPlan: 'day',

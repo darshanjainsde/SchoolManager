@@ -65,6 +65,7 @@ const ALL_FEATURES = [
   'PRESS',
   'SPORTS',
   'SALARY',
+  'COURSE_MANAGEMENT',
 ] as const;
 
 type FeatureKey = (typeof ALL_FEATURES)[number];

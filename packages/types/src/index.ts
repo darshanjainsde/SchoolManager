@@ -1819,3 +1819,127 @@ export interface ClassTeacherDesk {
   /** The session to copy from, when this one is not set up yet. */
   previousYear: { id: string; name: string; assigned: number } | null;
 }
+
+/* ── Syllabus tracker (COURSE_MANAGEMENT feature) ──────────────────────── */
+
+export const SYLLABUS_STATUSES = ['NOT_STARTED', 'TEACHING', 'DONE'] as const;
+export type SyllabusStatus = (typeof SYLLABUS_STATUSES)[number];
+/** How a section stands against the year: `none` = no chapters to measure. */
+export type SyllabusPace = 'ok' | 'warn' | 'bad' | 'none';
+
+export interface SyllabusYear {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  /** Working days elapsed ÷ working days in the year, 0–100. What "on pace" means. */
+  expectedPct: number;
+}
+
+/** One (class section, subject) pair — a "track" — as every dashboard lists it. */
+export interface SyllabusTrackSummary {
+  classSectionId: string;
+  /** "9-A" */
+  className: string;
+  gradeId: string;
+  gradeName: string;
+  gradeOrder: number;
+  sectionName: string;
+  subjectId: string;
+  subjectName: string;
+  teacher: { id: string; name: string } | null;
+  /** Teacher view only: the caller is this section's class teacher. */
+  isClassTeacher?: boolean;
+  /** Leaves = sub-topics where a chapter has them, else the chapter itself. */
+  leaves: number;
+  done: number;
+  teaching: number;
+  pct: number;
+  expectedPct: number;
+  pace: SyllabusPace;
+  now: { chapterId: string; title: string } | null;
+  lastUpdatedAt: string | null;
+}
+
+export interface SyllabusLeaf {
+  id: string;
+  title: string;
+  order: number;
+  status: SyllabusStatus;
+  note: string | null;
+  updatedAt: string | null;
+  updatedBy: string | null;
+}
+
+/** A chapter; its own `status` is derived from its sub-topics when it has any. */
+export interface SyllabusChapterRow extends SyllabusLeaf {
+  children: SyllabusLeaf[];
+}
+
+export interface SyllabusTrack {
+  summary: SyllabusTrackSummary;
+  year: SyllabusYear;
+  /** False for an admin and for a one-day substitute: they read, they do not mark. */
+  canEdit: boolean;
+  chapters: SyllabusChapterRow[];
+}
+
+export interface SyllabusOverview {
+  year: SyllabusYear | null;
+  tracks: SyllabusTrackSummary[];
+  grades: { id: string; name: string; order: number }[];
+  sections: { id: string; gradeId: string; name: string; label: string }[];
+  subjects: { id: string; name: string }[];
+  teachers: { id: string; name: string }[];
+}
+
+export interface SyllabusChapterList {
+  gradeId: string;
+  gradeName: string;
+  subjectId: string;
+  subjectName: string;
+  canEdit: boolean;
+  chapters: { id: string; title: string; order: number; children: { id: string; title: string; order: number }[] }[];
+}
+
+/* Student side */
+
+export interface StudentSyllabusSubject {
+  subjectId: string;
+  subjectName: string;
+  teacher: string | null;
+  leaves: number;
+  done: number;
+  teaching: number;
+  pct: number;
+  /** Leaves the child has written a note on. */
+  revised: number;
+  revisedPct: number;
+  now: { chapterId: string; title: string } | null;
+}
+
+export interface StudentSyllabusHome {
+  className: string | null;
+  year: SyllabusYear | null;
+  subjects: StudentSyllabusSubject[];
+}
+
+export interface StudentSyllabusLeaf {
+  id: string;
+  title: string;
+  order: number;
+  status: SyllabusStatus;
+  teacherNote: string | null;
+  myNote: string | null;
+  updatedAt: string | null;
+}
+
+export interface StudentSyllabusChapter extends StudentSyllabusLeaf {
+  children: StudentSyllabusLeaf[];
+}
+
+export interface StudentSyllabusSubjectDetail {
+  subject: StudentSyllabusSubject;
+  year: SyllabusYear | null;
+  chapters: StudentSyllabusChapter[];
+}

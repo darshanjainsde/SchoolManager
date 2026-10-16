@@ -57,7 +57,7 @@ export class SetStatusDto {
  * unreachable no matter what the UI offers.
  */
 export class SetFeatureDto {
-  @IsIn(['PUBLIC_SITE', 'GALLERY', 'ENQUIRY', 'SOCIAL', 'ABOUT_CONTACT', 'EVENTS', 'MANAGEMENT', 'BLOG', 'HIRING', 'LIBRARY', 'ALUMNI', 'FEES', 'PRESS', 'SPORTS', 'SALARY'])
+  @IsIn(['PUBLIC_SITE', 'GALLERY', 'ENQUIRY', 'SOCIAL', 'ABOUT_CONTACT', 'EVENTS', 'MANAGEMENT', 'BLOG', 'HIRING', 'LIBRARY', 'ALUMNI', 'FEES', 'PRESS', 'SPORTS', 'SALARY', 'COURSE_MANAGEMENT'])
   featureKey!: string;
   @IsBoolean() enabled!: boolean;
 }
