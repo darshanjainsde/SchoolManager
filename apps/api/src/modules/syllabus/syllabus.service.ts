@@ -91,7 +91,13 @@ export class SyllabusService {
       const tracks = [...pairs.values()].map(({ section, subjectId }) =>
         this.summary(section, subjectId, subjects.get(subjectId) ?? '', chapters, progress, described, slots, teacher.id),
       );
-      return { year: described, tracks: sortTracks(tracks) };
+      // The subjects I teach myself first; the rest of my own section (as its
+      // class teacher) after — a class teacher of V-C holds eight subjects there
+      // and should not hunt for their own English among them.
+      const own = new Set(slots.filter((s) => s.teacherId === teacher.id).map((s) => `${s.classSectionId}:${s.subjectId}`));
+      const mine = sortTracks(tracks.filter((t) => own.has(`${t.classSectionId}:${t.subjectId}`)));
+      const rest = sortTracks(tracks.filter((t) => !own.has(`${t.classSectionId}:${t.subjectId}`)));
+      return { year: described, tracks: [...mine, ...rest] };
     });
   }
 

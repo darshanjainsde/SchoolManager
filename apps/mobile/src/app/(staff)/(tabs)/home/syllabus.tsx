@@ -55,8 +55,12 @@ export default function Syllabus() {
 
   const tracks = data?.tracks ?? [];
   const year = data?.year ?? null;
-  const behind = tracks.filter((t) => t.pace === 'bad' || t.pace === 'warn').length;
-  const avg = tracks.length ? Math.round(tracks.reduce((s, t) => s + t.pct, 0) / tracks.length) : 0;
+  // Only tracks with chapters are measured: a class teacher holds eight subjects
+  // and most have no list yet — those must not drag the average to a false 11%.
+  const measured = tracks.filter((t) => t.pace !== 'none');
+  const unmeasured = tracks.length - measured.length;
+  const behind = measured.filter((t) => t.pace === 'bad' || t.pace === 'warn').length;
+  const avg = measured.length ? Math.round(measured.reduce((s, t) => s + t.pct, 0) / measured.length) : 0;
 
   const header = (
     <View style={{ gap: 12 }}>
@@ -73,13 +77,13 @@ export default function Syllabus() {
             />
             <View style={{ flex: 1, gap: 8, minWidth: 0 }}>
               <Text style={{ fontSize: 16, fontWeight: '700', color: tokens.color.ink }}>
-                {behind ? `${behind} of ${tracks.length} ${tracks.length === 1 ? 'class' : 'classes'} behind` : 'Every class on pace'}
+                {!measured.length ? 'No chapters yet' : behind ? `${behind} of ${measured.length} ${measured.length === 1 ? 'class' : 'classes'} behind` : measured.length === 1 ? 'On pace' : 'Every class on pace'}
               </Text>
               <RingLegend
                 outer={{ pct: avg, color: colors.taught, label: 'Taught (average)' }}
                 inner={{ pct: year.expectedPct, color: colors.expected, label: 'Expected by today' }}
               />
-              <Text style={{ fontSize: 12.5, color: tokens.color.sub }}>{`${year.name} · ${year.expectedPct}% of working days gone`}</Text>
+              <Text style={{ fontSize: 12.5, color: tokens.color.sub }}>{`${year.name} · ${year.expectedPct}% of working days gone${unmeasured ? ` · ${unmeasured} without chapters` : ''}`}</Text>
             </View>
           </View>
         </Card>

@@ -107,7 +107,8 @@ export default function SyllabusTrackScreen() {
     </View>
   );
 
-  const footer = track?.canEdit ? (
+  // The empty state carries its own "Add the first chapter"; the footer button is for a list that exists.
+  const footer = track?.canEdit && rows.length > 0 ? (
     <View style={{ paddingTop: 8 }}>
       <Button variant="tonal" label="Add a chapter" onPress={() => setAdding(true)} testID="track-add-chapter" block />
       <Text style={{ fontSize: 12.5, color: tokens.color.sub, marginTop: 8 }}>
