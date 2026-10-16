@@ -131,7 +131,7 @@ export function AppearanceSetting() {
         </View>
         {/* The family this choice builds: the six tool shades, live. */}
         <View testID="accent-family-preview" style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
-          {(['learn', 'money', 'care', 'people', 'sport', 'school'] as const).map((k) => {
+          {(['learn', 'care', 'money', 'people', 'school'] as const).map((k) => {
             const f = family[k];
             return (
               <View key={k} style={{ flex: 1, height: 40, borderRadius: 12, backgroundColor: f.soft, alignItems: 'center', justifyContent: 'center' }}>

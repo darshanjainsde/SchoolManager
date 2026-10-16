@@ -55,7 +55,7 @@ function Picture({ scene, height }: { scene: Scene; height: number }) {
           <Rect x={120} y={20} width={40} height={16} rx={6} fill={f('learn').ink} />
           <Rect x={110} y={50} width={60} height={6} rx={3} fill={faint} />
           <Rect x={110} y={62} width={44} height={6} rx={3} fill={faint} />
-          <Circle cx={140} cy={106} r={24} fill={f('sport').ink} />
+          <Circle cx={140} cy={106} r={24} fill={f('school').ink} />
           <Path d="M128 106l8 8 16-17" fill="none" stroke={ART.white} strokeWidth={6} strokeLinecap="round" strokeLinejoin="round" />
         </Svg>
       );
@@ -74,8 +74,8 @@ function Picture({ scene, height }: { scene: Scene; height: number }) {
     case 'nothingOut':
       return (
         <Svg {...common}>
-          <Rect x={0} y={0} width={280} height={170} rx={20} fill={f('sport').soft} />
-          <Rect x={70} y={128} width={140} height={22} rx={5} fill={f('sport').ink} />
+          <Rect x={0} y={0} width={280} height={170} rx={20} fill={f('school').soft} />
+          <Rect x={70} y={128} width={140} height={22} rx={5} fill={f('school').ink} />
           <Rect x={82} y={104} width={120} height={24} rx={5} fill={f('learn').ink} />
           <Rect x={76} y={82} width={128} height={22} rx={5} fill={ART.amber} />
           <Rect x={90} y={60} width={104} height={22} rx={5} fill={f('money').ink} />
@@ -91,8 +91,8 @@ function Picture({ scene, height }: { scene: Scene; height: number }) {
           <Rect x={108} y={38} width={64} height={6} rx={3} fill={faint} />
           <Rect x={108} y={52} width={48} height={6} rx={3} fill={faint} />
           <G transform="rotate(-12 140 104)">
-            <Rect x={104} y={88} width={72} height={32} rx={8} fill="none" stroke={f('sport').ink} strokeWidth={4} />
-            <SvgText x={140} y={111} textAnchor="middle" fontSize={18} fontWeight="700" fill={f('sport').ink}>PAID</SvgText>
+            <Rect x={104} y={88} width={72} height={32} rx={8} fill="none" stroke={f('school').ink} strokeWidth={4} />
+            <SvgText x={140} y={111} textAnchor="middle" fontSize={18} fontWeight="700" fill={f('school').ink}>PAID</SvgText>
           </G>
           <Ellipse cx={212} cy={140} rx={20} ry={7} fill={ART.coinDark} />
           <Ellipse cx={212} cy={132} rx={20} ry={7} fill={ART.amber} />

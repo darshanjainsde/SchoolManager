@@ -51,3 +51,32 @@ describe('the icon vocabularies', () => {
     }
   });
 });
+
+describe('duotone objects (16 Oct 2026)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { render } = require('@testing-library/react-native') as typeof import('@testing-library/react-native');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { Icon, isIconName } = require('../icons') as typeof import('../icons');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { Path } = require('react-native-svg') as typeof import('react-native-svg');
+
+  it('every door on every Home has a glyph of its own', () => {
+    for (const n of ['test', 'pay', 'ask', 'books', 'hall', 'fines', 'members', 'meets', 'records', 'houses', 'rules', 'decide', 'cover', 'staff', 'present', 'syllabus']) {
+      expect(isIconName(n)).toBe(true);
+    }
+  });
+
+  it('Messages carries its three dots as solid ink over the soft bubble', () => {
+    const v = render(<Icon name="messages" color="#1C3B5A" />);
+    const paths = v.UNSAFE_getAllByType(Path);
+    const solid = paths.filter((p) => p.props.fill === '#1C3B5A' && p.props.fillOpacity === undefined);
+    expect(solid.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('a cut-out layer takes the tile colour only when one is given', () => {
+    const bare = render(<Icon name="requests" color="#111111" />).UNSAFE_getAllByType(Path).filter((p) => p.props.fill === '#EEEEEE');
+    expect(bare).toHaveLength(0);
+    const knocked = render(<Icon name="requests" color="#111111" knockColor="#EEEEEE" />).UNSAFE_getAllByType(Path).filter((p) => p.props.fill === '#EEEEEE');
+    expect(knocked.length).toBeGreaterThanOrEqual(1);
+  });
+});

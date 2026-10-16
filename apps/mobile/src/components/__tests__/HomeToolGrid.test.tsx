@@ -75,3 +75,28 @@ describe('toolColumns — never one tile alone on a row (re-audit 2026-10-08)', 
     if (n > cols) expect(lastRow).not.toBe(1);
   });
 });
+
+describe('tile state (direction C, 16 Oct 2026)', () => {
+  it('Holidays wears the date; Syllabus wears its taught-so-far ring; a count beats both', () => {
+    render(<HomeToolGrid tools={[
+      { label: 'Holidays', icon: 'holidays', route: '/h', date: '16' },
+      { label: 'Syllabus', icon: 'syllabus', route: '/s', arc: 51 },
+      { label: 'Diary', icon: 'diary', route: '/d', badge: 2, date: '16', arc: 10 },
+    ]} />);
+    expect(screen.getByTestId('hometool-date-Holidays')).toHaveTextContent('16');
+    expect(screen.getByTestId('hometool-arc-Syllabus')).toBeTruthy();
+    expect(screen.getByLabelText('51% so far')).toBeTruthy();
+    expect(screen.getByTestId('hometool-badge-Diary')).toBeTruthy();
+    expect(screen.queryByTestId('hometool-date-Diary')).toBeNull();
+    expect(screen.queryByTestId('hometool-arc-Diary')).toBeNull();
+  });
+
+  it('a tile may run its own onPress instead of a route, and keep a desk test id', () => {
+    const go = jest.fn();
+    render(<HomeToolGrid tools={[{ label: 'Register', icon: 'take', onPress: go, testID: 'hero-act-register', badge: 4 }]} />);
+    fireEvent.press(screen.getByTestId('hero-act-register'));
+    expect(go).toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Register, 4 waiting')).toBeTruthy();
+  });
+});

@@ -18,7 +18,7 @@ import { NotificationBell } from '@/components/NotificationBell';
 import { HomeMenu } from '@/components/HomeToolGrid';
 import { Touchable } from '@/components/Touchable';
 import { Icon, isIconName } from '@/components/icons';
-import { HeroDeck } from '@/components/HeroDeck';
+import { BandGreeting } from '@/components/BandHeader';
 import { StudentHero } from '@/components/StudentHero';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
@@ -37,40 +37,6 @@ function fullTeacherName(t: { firstName: string; lastName: string }): string {
   return `${t.firstName} ${t.lastName}`.trim();
 }
 
-/**
- * `.dateline` — the date written at the top of a diary page, in the serif
- * italic a person writes a date in, with the amber TODAY tab so a reader can
- * tell at a glance that this page is the current one and not one they have
- * scrolled back to.
- */
-function Dateline() {
-  const tokens = useTokens();
-  const today = fmtLongDay(new Date());
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8, marginHorizontal: 2 }}>
-      <Text
-        style={{ fontFamily: font.serif, fontStyle: 'italic', fontSize: 12.5, color: tokens.color.sub }}
-      >
-        {today}
-      </Text>
-      <Text
-        style={{
-          fontSize: 9.5,
-          fontWeight: '800',
-          letterSpacing: 0.95,
-          color: tokens.color.indigo,
-          backgroundColor: tokens.color.indigo50,
-          borderRadius: 5,
-          paddingHorizontal: 7,
-          paddingVertical: 2,
-          overflow: 'hidden',
-        }}
-      >
-        TODAY
-      </Text>
-    </View>
-  );
-}
 
 /**
  * A card that ARRIVED — a scheduled test, a circular from the office. It
@@ -220,46 +186,16 @@ export default function Home() {
   }
 
   return (
-    <Screen onRefresh={refresh} refreshing={refreshing}>
-      {/* On the child's birthday the dateline becomes the banner — the only
-          thing on the page that changes, in the amber the day is allowed. */}
-      {myBirthday && profile ? <BirthdayBanner firstName={profile.firstName} /> : <Dateline />}
-
-      {/* `.greet` + `.kidchip` — the greeting in the diary serif, with the
-          bell and the student's initial pushed to the right margin. */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 2 }}>
-        {/* Same bold-serif treatment as the staff greeting: the name is set
-            like a title, not a form value. */}
-        <Text
-          style={{
-            fontFamily: font.serif,
-            fontSize: 20,
-            fontWeight: '700',
-            letterSpacing: -0.3,
-            color: tokens.color.ink,
-            flex: 1,
-          }}
-        >
-          {profile ? `Hi, ${profile.firstName}` : 'Home'}
-        </Text>
-        <NotificationBell group="(family)" />
-        {profile && (
-          <View
-            style={{
-              width: 30,
-              height: 30,
-              borderRadius: 15,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: tokens.color.indigo,
-            }}
-          >
-            <Text style={{ fontFamily: font.serif, fontSize: 13, fontWeight: '700', color: tokens.color.onBrand }}>
-              {profile.firstName.slice(0, 1)}
-            </Text>
-          </View>
-        )}
-      </View>
+    <Screen band onRefresh={refresh} refreshing={refreshing}>
+      {/* Direction C: the dateline and the greeting sit on the band; the
+          child's sheet overlaps it. On the birthday the banner keeps its place above. */}
+      {myBirthday && profile ? <BirthdayBanner firstName={profile.firstName} /> : null}
+      <BandGreeting
+        eyebrow={fmtLongDay(new Date())}
+        title={profile ? `Hi, ${profile.firstName}` : 'Home'}
+        line={profile ? `${profile.className ?? 'No class assigned'}${profile.rollNo ? ` · Roll ${profile.rollNo}` : ''}` : undefined}
+        right={<NotificationBell group="(family)" onBand />}
+      />
 
       {error && <ErrorState error={error} onRetry={home.reload} />}
       {profile === null && !error && (
@@ -271,27 +207,7 @@ export default function Home() {
           {/* Class + roll are the student's OWN (not a parent-facing "your
               child" label) — one shared STUDENT login can't tell who's holding
               the phone, so this must read to either. */}
-          <Text style={{ marginHorizontal: 4, marginTop: 2, fontSize: 12, color: tokens.color.sub }}>
-            {profile.className ?? 'No class assigned'}
-            {profile.rollNo ? ` · Roll ${profile.rollNo}` : ''}
-          </Text>
-
           <StudentHero
-            deck={
-              <HeroDeck
-                actions={[
-                  // The asks ride here now, as badges: an unsigned diary
-                  // remark, an unread message, a late bill. Fees only for a
-                  // school that runs fees on Sckools (it was drawn for all).
-                  { label: 'Ask teacher', icon: 'messages', testID: 'hero-act-ask', badge: unreadMsgs, onPress: () => router.push('/(family)/(tabs)/home/messages') },
-                  { label: 'Diary', icon: 'diary', testID: 'hero-act-diary', badge: diary?.unsignedCount ?? 0, onPress: () => router.push('/(family)/(tabs)/home/diary') },
-                  { label: 'Homework', icon: 'assignments', testID: 'hero-act-homework', onPress: () => router.push('/(family)/(tabs)/home/assignments') },
-                  hasFeature(s, 'FEES')
-                    ? { label: 'Fees', icon: 'fees', testID: 'hero-act-fees', badge: lateBills, onPress: () => router.push('/(family)/(tabs)/fees') }
-                    : { label: 'Results', icon: 'results', testID: 'hero-act-results', badge: nextExam ? 1 : 0, onPress: () => router.push('/(family)/results') },
-                ]}
-              />
-            }
             current={
               currentSlot
                 ? {
@@ -326,11 +242,18 @@ export default function Home() {
               ones first. Hero doors are not repeated. */}
           <HomeMenu
             tools={[
-              // Results is a hero action when the school has no fees module.
-              ...(hasFeature(s, 'FEES') ? [{ label: 'Results', icon: 'results', route: '/(family)/results', badge: nextExam ? 1 : 0 }] : []),
+              // The asks ride on the tiles as badges (direction C: the grid is
+              // the one place): an unread message, an unsigned diary remark, a late bill.
+              { label: 'Ask teacher', icon: 'ask', testID: 'hero-act-ask', badge: unreadMsgs, route: '/(family)/(tabs)/home/messages' },
+              { label: 'Diary', icon: 'diary', testID: 'hero-act-diary', badge: diary?.unsignedCount ?? 0, route: '/(family)/(tabs)/home/diary' },
+              { label: 'Homework', icon: 'assignments', testID: 'hero-act-homework', route: '/(family)/(tabs)/home/assignments' },
+              ...(hasFeature(s, 'FEES')
+                ? [{ label: 'Fees', icon: 'fees', testID: 'hero-act-fees', badge: lateBills, route: '/(family)/(tabs)/fees' }]
+                : []),
+              { label: 'Results', icon: 'results', route: '/(family)/results', badge: nextExam ? 1 : 0 },
               { label: 'Timetable', icon: 'timetable', route: '/(family)/(tabs)/home/timetable' },
               { label: 'Notices', icon: 'notices', route: '/(family)/(tabs)/home/notices' },
-              { label: 'Holidays', icon: 'holidays', route: '/(family)/(tabs)/home/holidays' },
+              { label: 'Holidays', icon: 'holidays', route: '/(family)/(tabs)/home/holidays', date: String(new Date().getDate()) },
               // A paid module's door is drawn only for a school that has it;
               // the Complaint Box is free, so always (nav-reachability.test).
               ...MORE_ITEMS.filter((t) => ['Syllabus', 'Sports', 'Library', 'Report cards', 'Birthdays', 'Complaint Box'].includes(t.label))

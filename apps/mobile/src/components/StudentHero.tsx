@@ -1,9 +1,9 @@
-import { useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { Text, View, type TextStyle } from 'react-native';
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
-import { useTheme, useTokens } from '@/theme/theme-context';
-import { heroStops } from '@/theme/families';
-import { brand, font } from '@/theme/tokens';
+import { useTokens } from '@/theme/theme-context';
+import { useFamilies } from '@/theme/families';
+import { font } from '@/theme/tokens';
+import { sheetStyle } from './HeroDeck';
 
 /** The class a student is in right now. */
 export interface StudentHeroCurrent {
@@ -72,44 +72,13 @@ function heroText(on: string): { eyebrow: TextStyle; title: TextStyle; meta: Tex
 /** SVG-gradient rounded card — mirrors NowCard's GradientHero (first stop is a
  *  solid fallback so there's no blank flash before onLayout, and it still reads
  *  in test renderers where onLayout never fires). */
-function Gradient({
-  id,
-  colors,
-  children,
-}: {
-  id: string;
-  colors: readonly string[];
-  children: ReactNode;
-}) {
-  const [size, setSize] = useState({ w: 0, h: 0 });
+function Gradient({ id, children }: { id: string; colors?: readonly string[]; children: ReactNode }) {
+  // Direction C (16 Oct 2026): the child's hero is a white sheet over the
+  // band, like the teacher's. `id` names the state for tests; no gradient.
+  const tokens = useTokens();
+  void id;
   return (
-    <View
-      testID="student-hero"
-      onLayout={(e) => {
-        const { width, height } = e.nativeEvent.layout;
-        setSize((s) => (s.w === width && s.h === height ? s : { w: width, h: height }));
-      }}
-      style={{
-        borderRadius: 28,
-        padding: 20,
-        overflow: 'hidden',
-        backgroundColor: colors[0],
-        shadowOpacity: 0,
-        elevation: 0,
-      }}
-    >
-      {size.w > 0 && (
-        <Svg width={size.w} height={size.h} style={{ position: 'absolute', top: 0, left: 0 }} pointerEvents="none">
-          <Defs>
-            <LinearGradient id={id} x1="0" y1="0" x2="1" y2="1">
-              {colors.map((c, i) => (
-                <Stop key={c + String(i)} offset={String(i / (colors.length - 1))} stopColor={c} />
-              ))}
-            </LinearGradient>
-          </Defs>
-          <Rect width={size.w} height={size.h} fill={`url(#${id})`} />
-        </Svg>
-      )}
+    <View testID="student-hero" style={sheetStyle(tokens.color)}>
       {children}
     </View>
   );
@@ -136,18 +105,17 @@ function Chip({ on, children, testID }: { on: string; children: ReactNode; testI
   );
 }
 
-function Cell({ on, value, label }: { on: string; value: string; label: string }) {
+/** A figure cell on its family tint: classes = learning, attendance = care, the month = good. */
+function Cell({ on, bg, value, label }: { on: string; bg: string; value: string; label: string }) {
   return (
     <View
       style={{
         flex: 1,
         minWidth: 0,
-        backgroundColor: `${on}29`,
-        borderWidth: 1,
-        borderColor: `${on}3D`,
-        borderRadius: 13,
-        paddingHorizontal: 10,
-        paddingVertical: 9,
+        backgroundColor: bg,
+        borderRadius: 16,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
       }}
     >
       {/* Figures in the sans face with tabular digits, like every figure in the app. */}
@@ -197,19 +165,17 @@ function statusShort(status: TodayStatus): string {
 export function StudentHero(props: StudentHeroProps) {
   const { current, elapsed, total, next, todayStatus, hasSchoolToday, classesToday, monthPercent } = props;
   const tokens = useTokens();
-  // The chosen accent paints the live/next/done heroes (pitch №4); the
-  // no-school hero below stays fixed green + white — semantic, not decor.
-  const { scheme } = useTheme();
-  const accentColors = heroStops(tokens.color, scheme);
-  // White on every hero: heroStops guarantees 4.5:1 in both schemes.
-  const on: string = brand.onHero;
+  const fam = useFamilies();
+  // Ink on the sheet; the accent for the progress line and the status chip.
+  const on: string = tokens.color.ink;
+  const acc: string = tokens.color.indigo;
   const t = heroText(on);
   const word = statusWord(todayStatus);
 
   if (!hasSchoolToday) {
-    const holi = heroText(brand.onHero);
+    const holi = heroText(on);
     return (
-      <Gradient id="shero-holi" colors={heroStops(tokens.color, scheme, 'quiet')}>
+      <Gradient id="shero-holi">
         <Text style={holi.eyebrow}>No school today</Text>
         <Text style={holi.title}>Enjoy the day off</Text>
         <Text style={holi.meta}>No classes are scheduled for today.</Text>
@@ -222,9 +188,9 @@ export function StudentHero(props: StudentHeroProps) {
     const pct = total > 0 ? Math.min(100, Math.max(0, Math.round((elapsed / total) * 100))) : 0;
     const remaining = Math.max(0, total - elapsed);
     return (
-      <Gradient id="shero-live" colors={accentColors}>
+      <Gradient id="shero-live">
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
-          <LiveDot on={on} />
+          <LiveDot on={acc} />
           <Text style={t.eyebrow}>In class now</Text>
         </View>
         <Text style={t.title}>{current.subjectName}</Text>
@@ -233,15 +199,15 @@ export function StudentHero(props: StudentHeroProps) {
           testID="shero-progress"
           accessibilityRole="progressbar"
           accessibilityValue={{ min: 0, max: 100, now: pct }}
-          style={{ height: 7, borderRadius: 5, backgroundColor: `${on}40`, marginTop: 13, overflow: 'hidden' }}
+          style={{ height: 7, borderRadius: 5, backgroundColor: tokens.color.indigo50, marginTop: 13, overflow: 'hidden' }}
         >
-          <View style={{ width: `${pct}%`, height: '100%', borderRadius: 5, backgroundColor: on }} />
+          <View style={{ width: `${pct}%`, height: '100%', borderRadius: 5, backgroundColor: acc }} />
         </View>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 7 }}>
           <Text style={t.meta}>{`Started ${current.startTime}`}</Text>
           <Text style={t.meta}>{`${remaining} min left`}</Text>
         </View>
-        {word && <Chip on={on} testID="shero-status">{word}</Chip>}
+        {word && <Chip on={todayStatus === 'ABSENT' ? tokens.color.red : tokens.color.green} testID="shero-status">{word}</Chip>}
         {props.deck}
       </Gradient>
     );
@@ -249,16 +215,16 @@ export function StudentHero(props: StudentHeroProps) {
 
   if (!next) {
     return (
-      <Gradient id="shero-done" colors={accentColors}>
+      <Gradient id="shero-done">
         <Text style={t.eyebrow}>That’s a wrap</Text>
         <Text style={t.title}>School’s done for today</Text>
         {/* The tiles already say the count; the line under the title says
             the thing the tiles cannot — whether today was marked. */}
         <Text style={t.meta}>{word ?? 'Attendance not marked yet'}</Text>
         <View testID="shero-summary" style={{ flexDirection: 'row', gap: 8, marginTop: 13 }}>
-          <Cell on={on} value={String(classesToday)} label="classes today" />
-          <Cell on={on} value={statusShort(todayStatus)} label="attendance" />
-          <Cell on={on} value={monthPercent != null ? `${monthPercent}%` : '—'} label="this month" />
+          <Cell on={fam.learn.ink} bg={fam.learn.soft} value={String(classesToday)} label="classes today" />
+          <Cell on={fam.care.ink} bg={fam.care.soft} value={statusShort(todayStatus)} label="attendance" />
+          <Cell on={tokens.color.green} bg={tokens.color.green50} value={monthPercent != null ? `${monthPercent}%` : 'Pending'} label="this month" />
         </View>
         {props.deck}
       </Gradient>
@@ -266,7 +232,7 @@ export function StudentHero(props: StudentHeroProps) {
   }
 
   return (
-    <Gradient id="shero-next" colors={accentColors}>
+    <Gradient id="shero-next">
       <Text style={t.eyebrow}>Up next</Text>
       <Text style={t.title}>{next.subjectName}</Text>
       <Text style={t.meta}>{`${next.teacherName} · at ${next.startTime}`}</Text>
