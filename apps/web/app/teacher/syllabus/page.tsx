@@ -23,7 +23,9 @@ export default function TeacherSyllabusPage() {
   if (q.isError) return <QueryError error={q.error} onRetry={q.refetch} className="py-10" />;
   if (q.isLoading || !q.data) return <p className="sk-state">Opening your classes…</p>;
   const { year, tracks } = q.data;
-  const behind = tracks.filter((t) => t.pace === 'bad' || t.pace === 'warn').length;
+  const measured = tracks.filter((t) => t.pace !== 'none');
+  const unmeasured = tracks.length - measured.length;
+  const behind = measured.filter((t) => t.pace === 'bad' || t.pace === 'warn').length;
 
   return (
     <div className="flex flex-col gap-6">
@@ -31,7 +33,8 @@ export default function TeacherSyllabusPage() {
         <h1>Syllabus</h1>
         <p>
           {year ? `${year.name} · ${year.expectedPct}% of working days gone` : 'No current session yet'}
-          {tracks.length ? ` · ${behind ? `${behind} of ${tracks.length} behind` : 'every class on pace'}` : ''}
+          {measured.length ? ` · ${behind ? `${behind} of ${measured.length} behind` : 'every class on pace'}` : ''}
+          {unmeasured ? ` · ${unmeasured} without chapters` : ''}
         </p>
       </header>
       {!year && <p className="sk-state" data-testid="syl-no-year">The office has not set the current session yet. Ask them, and your classes appear here.</p>}
@@ -61,7 +64,7 @@ export default function TeacherSyllabusPage() {
       {tracks.length > 0 && (
         <div className="sk-card">
           <div className="sk-card-b">
-            <RingLegend outer={{ pct: Math.round(tracks.reduce((s, t) => s + t.pct, 0) / tracks.length), color: TAUGHT_COLOR, label: 'Taught (average)' }} inner={{ pct: year?.expectedPct ?? 0, color: EXPECTED_COLOR, label: 'Expected by today' }} />
+            <RingLegend outer={{ pct: measured.length ? Math.round(measured.reduce((s, t) => s + t.pct, 0) / measured.length) : 0, color: TAUGHT_COLOR, label: 'Taught (average)' }} inner={{ pct: year?.expectedPct ?? 0, color: EXPECTED_COLOR, label: 'Expected by today' }} />
           </div>
         </div>
       )}
