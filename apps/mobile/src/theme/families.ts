@@ -101,6 +101,30 @@ export function deriveFamilies(c: ColorPalette, scheme: ColorScheme): Record<Fam
 }
 
 /**
+ * A rich shade of a colour at a given lightness: same hue, saturation lifted
+ * to at least 60% (unless the colour is a deliberate grey, under 25%, like Charcoal).
+ * Darkening a pale dark-mode accent toward black keeps its greyness; this
+ * keeps the HUE and sets the depth, so deep indigo stays indigo, not slate.
+ */
+export function richShade(hex: string, lightness: number): string {
+  const n = parseInt(hex.replace('#', ''), 16);
+  const r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+  const l0 = (max + min) / 2;
+  const s0 = d === 0 ? 0 : d / (1 - Math.abs(2 * l0 - 1));
+  let h = 0;
+  if (d !== 0) h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  h = (h * 60 + 360) % 360;
+  const sat = s0 < 0.25 ? s0 : Math.max(s0, 0.6);
+  const c = (1 - Math.abs(2 * lightness - 1)) * sat;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = lightness - c / 2;
+  const [r1, g1, b1] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  const to = (v: number) => Math.round((v + m) * 255).toString(16).padStart(2, '0');
+  return `#${to(r1)}${to(g1)}${to(b1)}`.toUpperCase();
+}
+
+/**
  * THE ONE FILLED SURFACE (user, 16 Oct 2026: "the dark of every color should
  * be proper dark like darkest shade to look classy"). In light it is the
  * accent with its on-fill ink. In dark it is the accent's DEEPEST shade with
@@ -112,7 +136,7 @@ export function accentFill(c: ColorPalette, scheme: ColorScheme): { bg: string; 
   if (scheme !== 'dark') return { bg: c.indigo, fg: c.onBrand };
   // Mix the bright dark-mode accent toward true black, not a grey night:
   // the hue stays saturated and rich instead of turning to slate.
-  return { bg: legible(mix(c.indigo, '#000000', 0.5), '#FFFFFF', '#000000'), fg: '#FFFFFF' };
+  return { bg: legible(richShade(c.indigo, 0.34), '#FFFFFF', '#000000'), fg: '#FFFFFF' };
 }
 
 /**
@@ -126,8 +150,8 @@ export function bandStops(c: ColorPalette, scheme: ColorScheme): readonly [strin
   // Toward true black in both schemes, so the hue stays saturated (a grey
   // "night" turned the dark band to slate). Dark starts from the bright dark
   // accent and goes further down, so it sits in a dark app without glowing.
-  const top = scheme === 'dark' ? mix(c.indigo, '#000000', 0.64) : mix(c.indigoDeep, '#000000', 0.12);
-  const bottom = scheme === 'dark' ? mix(c.indigo, '#000000', 0.8) : mix(c.indigoDeep, '#000000', 0.38);
+  const top = scheme === 'dark' ? richShade(c.indigo, 0.2) : mix(c.indigoDeep, '#000000', 0.12);
+  const bottom = scheme === 'dark' ? richShade(c.indigo, 0.11) : mix(c.indigoDeep, '#000000', 0.38);
   const deep = (x: string) => {
     let out = x;
     for (let i = 0; i < 24 && contrastRatio(out, '#FFFFFF') < 7; i++) out = mix(out, '#000000', 0.1);

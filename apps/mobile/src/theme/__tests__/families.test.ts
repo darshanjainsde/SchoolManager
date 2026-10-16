@@ -93,3 +93,22 @@ describe('the band is the deepest shade of the chosen colour (16 Oct 2026)', () 
     }
   });
 });
+
+describe('dark fills keep the hue rich (16 Oct 2026)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { richShade, accentFill } = require('../families') as typeof import('../families');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { palette } = require('../tokens') as typeof import('../tokens');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { contrastRatio } = require('../school-brand') as typeof import('../school-brand');
+  const sat = (hex: string) => { const n = parseInt(hex.slice(1), 16); const v = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((x) => x / 255); const mx = Math.max(...v), mn = Math.min(...v); const l = (mx + mn) / 2; return mx === mn ? 0 : (mx - mn) / (1 - Math.abs(2 * l - 1)); };
+  it('a pale accent becomes a saturated deep shade; a grey stays grey', () => {
+    expect(sat(richShade('#8B87FF', 0.2))).toBeGreaterThanOrEqual(0.59);
+    expect(sat(richShade('#AAB4C3', 0.2))).toBeLessThan(0.3);
+  });
+  it('the dark filled surface carries white at 4.5:1 and is a rich colour', () => {
+    const f = accentFill(palette.dark, 'dark');
+    expect(contrastRatio('#FFFFFF', f.bg)).toBeGreaterThanOrEqual(4.5);
+    expect(sat(f.bg)).toBeGreaterThanOrEqual(0.4);
+  });
+});
