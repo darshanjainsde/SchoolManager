@@ -70,7 +70,7 @@ describe('family route honesty', () => {
     }
   });
 
-  it('lists every off-bar tool — the six from before, the four the web portal had first, and the Complaint Box', () => {
+  it('lists every off-bar tool — the six from before, the four the web portal had first, the Complaint Box, and the syllabus', () => {
     const labels = MORE_ITEMS.map((i) => i.label);
     expect(labels).toEqual([
       'Diary',
@@ -83,6 +83,8 @@ describe('family route honesty', () => {
       'Library',
       'Report cards',
       'Birthdays',
+      // Behind COURSE_MANAGEMENT (in no tier): Home draws it only once the owner switches it on.
+      'Syllabus',
       'Complaint Box',
     ]);
     // The paid modules carry their feature key so Home can leave them off
