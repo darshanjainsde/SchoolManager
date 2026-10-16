@@ -13,6 +13,7 @@ import {
   Wallet,
   Cake,
   Trophy,
+  ListChecks,
 } from 'lucide-react';
 
 /**
@@ -47,6 +48,7 @@ export const NAV_ITEMS: {
   { href: '/portal/announcements', label: 'Announcements', icon: Megaphone },
   { href: '/portal/messages', label: 'Messages', icon: MessageSquare },
   { href: '/portal/concerns', label: 'Complaint Box', icon: MessageSquareWarning },
+  { href: '/portal/syllabus', label: 'Syllabus', icon: ListChecks, requiredFeature: 'COURSE_MANAGEMENT' },
   { href: '/portal/library', label: 'Library', icon: Library, requiredFeature: 'LIBRARY' },
   { href: '/portal/sports', label: 'Sports', icon: Trophy, requiredFeature: 'SPORTS' },
   { href: '/portal/fees', label: 'Fees', icon: Wallet, requiredFeature: 'FEES' },

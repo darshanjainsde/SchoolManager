@@ -48,8 +48,9 @@ describe('student nav honesty', () => {
   it('gates ONLY the optional tabs', () => {
     // A stray requiredFeature on Timetable would hide a core tab for every
     // school below PRO, and it would look like a data bug. Library and Fees
-    // are the only two a school can genuinely be without.
+    // are the only two a school can genuinely be without — and the syllabus
+    // tracker, which is in no tier at all until the owner switches it on.
     const gated = NAV_ITEMS.filter((i) => i.requiredFeature).map((i) => i.href);
-    expect(gated).toEqual(['/portal/library', '/portal/sports', '/portal/fees']);
+    expect(gated).toEqual(['/portal/syllabus', '/portal/library', '/portal/sports', '/portal/fees']);
   });
 });

@@ -5139,3 +5139,53 @@ html[data-theme='light'] .sk-nav[data-active="true"] { color: #fff; }
 @media (max-width: 640px) {
   .sk-cvd-row input[type="checkbox"], .sk-cvd-dayh input[type="checkbox"] { width: 24px; height: 24px; margin: 0; }
 }
+
+/* ── Syllabus tracker ─────────────────────────────────────────────────────
+   Two rings (never three), a legend beside them, and a chapter list whose
+   status buttons are the kit's .sk-seg. Numbers are ink, rings are colour. */
+.sk-syl-rings { position: relative; flex: none; }
+.sk-syl-rings svg { display: block; transform: rotate(-90deg); }
+.sk-syl-rings circle { fill: none; stroke-linecap: round; }
+.sk-syl-track { stroke: var(--sk-line); }
+.sk-syl-arc { transition: stroke-dasharray 0.4s var(--sk-ease); }
+.sk-syl-rings-centre { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--sk-mono); font-variant-numeric: tabular-nums; font-size: 15px; color: var(--sk-ink); }
+.sk-syl-rings-centre b { font-weight: 700; }
+.sk-syl-legend { display: grid; gap: 4px; margin: 0; font-size: 12.5px; color: var(--sk-ink-2); min-width: 0; }
+.sk-syl-legend > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.sk-syl-legend dt { display: flex; align-items: center; gap: 7px; margin: 0; }
+.sk-syl-legend dt i { width: 10px; height: 10px; border-radius: 99px; flex: none; }
+.sk-syl-legend dd { margin: 0; font-family: var(--sk-mono); font-variant-numeric: tabular-nums; font-weight: 700; color: var(--sk-ink); }
+.sk-syl-hero { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+.sk-syl-hero .txt { display: grid; gap: 4px; min-width: 0; flex: 1 1 200px; }
+.sk-syl-hero .txt h2 { margin: 0; font-size: 18px; font-weight: 700; color: var(--sk-ink); }
+.sk-syl-hero .txt p { margin: 0; font-size: 13px; color: var(--sk-ink-2); }
+.sk-syl-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 13px; }
+.sk-syl-card { display: flex; gap: 14px; align-items: center; text-align: left; width: 100%; padding: 14px; border: 1px solid var(--sk-line); border-radius: var(--sk-r); background: var(--sk-card); color: inherit; text-decoration: none; min-width: 0; cursor: pointer; font: inherit; }
+.sk-syl-card:hover { border-color: var(--sk-brand); }
+.sk-syl-card .body { display: grid; gap: 3px; min-width: 0; flex: 1; }
+.sk-syl-card .body .nm { font-weight: 700; font-size: 15px; color: var(--sk-ink); overflow-wrap: anywhere; }
+.sk-syl-card .body .meta { font-size: 12.5px; color: var(--sk-ink-2); }
+.sk-syl-card .body .now { font-size: 12.5px; color: var(--sk-ink); }
+.sk-syl-bars { display: grid; gap: 4px; min-width: 0; }
+.sk-syl-bar { height: 6px; border-radius: 99px; background: var(--sk-line); overflow: hidden; }
+.sk-syl-bar > i { display: block; height: 100%; border-radius: 99px; }
+.sk-syl-chapter { display: grid; gap: 10px; padding: 12px 0; border-top: 1px solid var(--sk-line); }
+.sk-syl-chapter:first-child { border-top: 0; padding-top: 0; }
+.sk-syl-chapter .head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.sk-syl-chapter .head .ttl { font-weight: 700; font-size: 14.5px; color: var(--sk-ink); overflow-wrap: anywhere; min-width: 0; }
+.sk-syl-chapter .head .ttl small { display: block; font-weight: 400; font-size: 12px; color: var(--sk-ink-3); margin-top: 2px; }
+.sk-syl-leaf { display: grid; gap: 8px; }
+.sk-syl-leaf.sub { padding-left: 14px; border-left: 2px solid var(--sk-line-2); }
+.sk-syl-leaf .ctl { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.sk-syl-leaf .ctl .sk-seg { flex: 1 1 240px; }
+.sk-syl-note { display: grid; gap: 6px; }
+.sk-syl-note textarea { width: 100%; box-sizing: border-box; min-height: 56px; border: 1px solid var(--sk-line-2); border-radius: 10px; background: var(--sk-card); color: var(--sk-ink); padding: 8px 10px; font: inherit; font-size: 13px; resize: vertical; }
+.sk-syl-note textarea:focus-visible { outline: none; border-color: var(--sk-brand); box-shadow: 0 0 0 3px var(--sk-brand-tint); }
+.sk-syl-note .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.sk-syl-note .row .sk-muted { font-size: 12px; }
+.sk-syl-quote { margin: 0; padding: 8px 10px; border-radius: 10px; background: var(--sk-bg-2); font-size: 13px; color: var(--sk-ink); }
+.sk-syl-quote b { color: var(--sk-ink-2); font-weight: 600; font-size: 12px; display: block; margin-bottom: 2px; }
+.sk-syl-add { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.sk-syl-add .sk-input { flex: 1 1 200px; min-width: 0; box-sizing: border-box; }
+.sk-syl-confirm { display: inline-flex; gap: 6px; align-items: center; font-size: 12.5px; color: var(--sk-ink-2); }
+@media (pointer: coarse) { .sk-syl-chapter .sk-btn[data-size="sm"] { min-height: 36px; } }
