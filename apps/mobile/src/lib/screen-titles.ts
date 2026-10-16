@@ -43,6 +43,7 @@ const TITLES: Record<string, string> = {
   results: 'Results',
   shelf: 'Shelf',
   sports: 'Sports',
+  syllabus: 'Syllabus',
   take: 'Attendance',
   tests: 'Tests & Results',
   timetable: 'Timetable',

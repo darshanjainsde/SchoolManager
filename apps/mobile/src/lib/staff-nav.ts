@@ -51,6 +51,8 @@ export const HIDDEN_ROUTES = [
   // stray thumb on an always-there bar mid-register would discard a class's
   // unsaved marks, so it pushes over everything from the portal root.
   '(tabs)/home/holidays',
+  '(tabs)/home/syllabus',
+  '(tabs)/home/syllabus/[classSectionId]',
   '(tabs)/home/diary',
   '(tabs)/home/requests',
   '(tabs)/home/post',
@@ -110,11 +112,12 @@ export interface MoreItem {
     | '/(staff)/(tabs)/home/post'
     | '/(staff)/(tabs)/home/library'
     | '/(staff)/(tabs)/home/salary'
-    | '/(staff)/(tabs)/home/concerns';
+    | '/(staff)/(tabs)/home/concerns'
+    | '/(staff)/(tabs)/home/syllabus';
   /** Icon-tile tint. Defaults to indigo when omitted. */
   tone?: MoreTone;
   /** The paid module this tool belongs to; Home draws it only when the school has it on. */
-  feature?: 'LIBRARY' | 'SALARY';
+  feature?: 'LIBRARY' | 'SALARY' | 'COURSE_MANAGEMENT';
 }
 
 export const MORE_ITEMS: readonly MoreItem[] = [
@@ -129,4 +132,5 @@ export const MORE_ITEMS: readonly MoreItem[] = [
   { label: 'Library', icon: 'library', route: '/(staff)/(tabs)/home/library', tone: 'indigo', feature: 'LIBRARY' },
   { label: 'My pay', icon: 'fees', route: '/(staff)/(tabs)/home/salary', tone: 'green', feature: 'SALARY' },
   { label: 'Complaint Box', icon: 'concern', route: '/(staff)/(tabs)/home/concerns', tone: 'amber' },
+  { label: 'Syllabus', icon: 'syllabus', route: '/(staff)/(tabs)/home/syllabus', tone: 'indigo', feature: 'COURSE_MANAGEMENT' },
 ];

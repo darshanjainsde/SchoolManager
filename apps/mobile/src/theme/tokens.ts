@@ -25,6 +25,8 @@ export interface ColorPalette {
   // which exists specifically so a "late" status never collapses into the
   // brand accent when the accent itself shifts colour in dark mode.
   late: string;
+  /** A blue for the one ring that is neither taught (green) nor expected (indigo): what a child has revised. Mirrors the web's `--sk-t1`. */
+  blue: string;
   ink: string;
   sub: string;
   line: string;
@@ -76,6 +78,7 @@ const light: ColorPalette = {
   amberDark: '#FBBF24',
   amber50: '#FDE9C8',
   late: '#7A4E06',
+  blue: '#0E8EA8',
   ink: '#12142B',
   // UI v2: #8A87A0 was ~3.4:1 on white — under WCAG's 4.5:1 for small text.
   sub: '#5E6480',
@@ -121,6 +124,7 @@ const dark: ColorPalette = {
   amberDark: '#FBBF24',
   amber50: '#3D2E14',
   late: '#F5CE8A',
+  blue: '#3FC0DC',
   ink: '#EDEBFA',
   sub: '#807DA0',
   line: '#2A3048',

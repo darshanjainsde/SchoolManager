@@ -18,6 +18,7 @@ import {
   MessageSquareWarning,
   Newspaper,
   NotebookPen,
+  ListChecks,
   Printer,
   School,
   Settings,
@@ -112,6 +113,7 @@ export const NAV_MODEL: NavEntry[] = [
   {
     kind: 'group', key: 'exams', label: 'Exams', icon: NotebookPen,
     items: [
+      { href: '/app/syllabus', label: 'Syllabus', icon: ListChecks, requiredFeature: 'COURSE_MANAGEMENT' },
       { href: '/app/exam-hall', label: 'Exam Hall', icon: Armchair, requiredFeature: 'MANAGEMENT' },
       { href: '/app/press', label: 'Reports & Documents', icon: Printer, requiredFeature: 'PRESS' },
     ],
