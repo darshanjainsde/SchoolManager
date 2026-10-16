@@ -14,6 +14,7 @@ import {
   Library,
   StickyNote,
   NotebookPen,
+  ListChecks,
 } from 'lucide-react';
 
 /**
@@ -49,6 +50,7 @@ export const NAV_ITEMS: {
   { href: '/teacher/results', label: 'Results', icon: GraduationCap },
   { href: '/teacher/announcements', label: 'Announcements', icon: Megaphone },
   { href: '/teacher/notes', label: 'Notes', icon: StickyNote },
+  { href: '/teacher/syllabus', label: 'Syllabus', icon: ListChecks, requiredFeature: 'COURSE_MANAGEMENT' },
   { href: '/teacher/inbox', label: 'Inbox', icon: MessageSquare },
   { href: '/teacher/concerns', label: 'Complaint Box', icon: MessageSquareWarning },
   { href: '/teacher/library', label: 'Library', icon: Library, requiredFeature: 'LIBRARY' },

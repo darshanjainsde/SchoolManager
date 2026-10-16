@@ -41,6 +41,7 @@ import { FeesModule } from './modules/fees';
 import { WhatsAppModule } from './modules/whatsapp';
 import { MailWebhooksModule } from './modules/mail-webhooks/mail-webhooks.module';
 import { PressModule } from './modules/press';
+import { SyllabusModule } from './modules/syllabus';
 import { RedisThrottlerModule } from './common/throttler/redis-throttler.module';
 import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storage';
 
@@ -111,6 +112,7 @@ import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storag
     BlogModule,
     FeesModule,
     PressModule,
+    SyllabusModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

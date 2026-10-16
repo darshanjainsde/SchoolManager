@@ -356,6 +356,9 @@ model School {
   domains                Domain[]
   emailSettings          EmailSettings?
   featureOverrides       FeatureOverride[]
+  syllabusChapters       SyllabusChapter[]
+  syllabusProgress       SyllabusProgress[]
+  syllabusStudentNotes   SyllabusStudentNote[]
   users                  User[]
   auditLogs              AuditLog[]
   profile                SchoolProfile?
@@ -471,10 +474,10 @@ model School {
   sportsSettings         SportsSettings?
   whatsAppSettings       WhatsAppSettings?
   whatsAppDeliveries     WhatsAppDelivery[]
-  onboardingImports OnboardingImport[]
-  concerns          Concern[]
-  concernComments   ConcernComment[]
-  classTeacherLog   ClassTeacherAssignment[]
+  onboardingImports      OnboardingImport[]
+  concerns               Concern[]
+  concernComments        ConcernComment[]
+  classTeacherLog        ClassTeacherAssignment[]
   emailDeliveries        EmailDelivery[]
   emailSuppressions      EmailSuppression[]
   whatsAppInbounds       WhatsAppInbound[]
@@ -551,7 +554,7 @@ model EmailSettings {
   /// addresses would only bounce). Only mail the person asked for themselves
   /// (a password reset, the console's own test) still goes. The app and
   /// WhatsApp are untouched.
-  enabled      Boolean  @default(true)
+  enabled Boolean @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -570,13 +573,13 @@ model FeatureOverride {
 }
 
 model User {
-  id                  String               @id @default(uuid()) @db.Uuid
-  schoolId            String?              @db.Uuid
+  id                  String                   @id @default(uuid()) @db.Uuid
+  schoolId            String?                  @db.Uuid
   email               String
   username            String?
   passwordHash        String
   role                UserRole
-  isActive            Boolean              @default(true)
+  isActive            Boolean                  @default(true)
   mfaSecret           String?
   /// The person's own WhatsApp number (E.164), proven by a code sent to it.
   /// Admin notices go here; a verified User.phone also wins over the
@@ -587,12 +590,12 @@ model User {
   phonePending        String?
   phoneOtpHash        String?
   phoneOtpExpiresAt   DateTime?
-  phoneOtpAttempts    Int                  @default(0)
+  phoneOtpAttempts    Int                      @default(0)
   // A display name for logins that have no person record of their own (admins), and the fallback for everyone.
   name                String?
   // What reaches this person on WhatsApp — { leave, register, fees, enquiry, summary } booleans; missing = on.
   notifyPrefs         Json?
-  failedLoginAttempts Int                  @default(0)
+  failedLoginAttempts Int                      @default(0)
   lockedUntil         DateTime?
   lastLoginAt         DateTime?
   /// MAY SEE SALARY. A school admin can see everything else in the console;
@@ -601,20 +604,20 @@ model User {
   /// admin by another admin who already holds it; the first holder is the
   /// school's earliest admin, seeded when the module is switched on. Every
   /// read of a salary screen is written to AuditLog.
-  canSeeSalary        Boolean              @default(false)
-  createdAt           DateTime             @default(now())
-  school              School?              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  canSeeSalary        Boolean                  @default(false)
+  createdAt           DateTime                 @default(now())
+  school              School?                  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   refreshTokens       RefreshToken[]
   passwordResetTokens PasswordResetToken[]
   impersonationTokens ImpersonationToken[]
+  concernsRaised      Concern[]                @relation("ConcernRaisedBy")
+  concernComments     ConcernComment[]
+  classTeacherChanges ClassTeacherAssignment[] @relation("ClassTeacherChangedBy")
 
   @@unique([schoolId, email])
   @@unique([schoolId, username])
   @@index([schoolId])
   @@index([schoolId, phone])
-  concernsRaised      Concern[]            @relation("ConcernRaisedBy")
-  concernComments     ConcernComment[]
-  classTeacherChanges ClassTeacherAssignment[] @relation("ClassTeacherChangedBy")
 }
 
 model RefreshToken {
@@ -1086,29 +1089,30 @@ model AcademicYear {
 }
 
 model Grade {
-  id            String         @id @default(uuid()) @db.Uuid
-  schoolId      String         @db.Uuid
-  name          String
-  order         Int            @default(0)
-  school        School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  classSections ClassSection[]
-  feePlanItems  FeePlanItem[]
+  id               String            @id @default(uuid()) @db.Uuid
+  schoolId         String            @db.Uuid
+  name             String
+  order            Int               @default(0)
+  school           School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  classSections    ClassSection[]
+  feePlanItems     FeePlanItem[]
+  syllabusChapters SyllabusChapter[]
 
   @@unique([schoolId, name])
   @@index([schoolId])
 }
 
 model ClassSection {
-  id                     String                  @id @default(uuid()) @db.Uuid
-  schoolId               String                  @db.Uuid
-  gradeId                String                  @db.Uuid
+  id                     String                   @id @default(uuid()) @db.Uuid
+  schoolId               String                   @db.Uuid
+  gradeId                String                   @db.Uuid
   name                   String
-  classTeacherId         String?                 @db.Uuid
-  academicYearId         String                  @db.Uuid
-  school                 School                  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  grade                  Grade                   @relation(fields: [gradeId], references: [id], onDelete: Cascade)
-  academicYear           AcademicYear            @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
-  classTeacher           Teacher?                @relation("ClassTeacher", fields: [classTeacherId], references: [id], onDelete: SetNull)
+  classTeacherId         String?                  @db.Uuid
+  academicYearId         String                   @db.Uuid
+  school                 School                   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  grade                  Grade                    @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+  academicYear           AcademicYear             @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  classTeacher           Teacher?                 @relation("ClassTeacher", fields: [classTeacherId], references: [id], onDelete: SetNull)
   students               Student[]
   timetableSlots         TimetableSlot[]
   announcements          Announcement[]
@@ -1120,6 +1124,7 @@ model ClassSection {
   messageThreads         MessageThread[]
   diaryEntries           DiaryEntry[]
   classTeacherLog        ClassTeacherAssignment[]
+  syllabusProgress       SyllabusProgress[]
 
   @@unique([schoolId, gradeId, name, academicYearId])
   @@index([schoolId])
@@ -1132,35 +1137,36 @@ model ClassSection {
 }
 
 model Subject {
-  id              String           @id @default(uuid()) @db.Uuid
-  schoolId        String           @db.Uuid
-  name            String
-  code            String
-  school          School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  teacherSubjects TeacherSubject[]
-  timetableSlots  TimetableSlot[]
-  classNotes      ClassNote[]
-  classTodos      ClassTodo[]
-  assignments     Assignment[]
-  messageThreads  MessageThread[]
-  diaryEntries    DiaryEntry[]
+  id               String            @id @default(uuid()) @db.Uuid
+  schoolId         String            @db.Uuid
+  name             String
+  code             String
+  school           School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  teacherSubjects  TeacherSubject[]
+  timetableSlots   TimetableSlot[]
+  classNotes       ClassNote[]
+  classTodos       ClassTodo[]
+  assignments      Assignment[]
+  messageThreads   MessageThread[]
+  diaryEntries     DiaryEntry[]
+  syllabusChapters SyllabusChapter[]
 
   @@unique([schoolId, code])
   @@index([schoolId])
 }
 
 model Teacher {
-  id                String           @id @default(uuid()) @db.Uuid
-  schoolId          String           @db.Uuid
-  userId            String?          @db.Uuid
-  firstName         String
-  lastName          String
-  email             String?
-  phone             String?
-  phoneE164         String?
-  photoAssetId      String?          @db.Uuid
-  primarySubjectId  String?          @db.Uuid
-  bio               String?
+  id                        String                   @id @default(uuid()) @db.Uuid
+  schoolId                  String                   @db.Uuid
+  userId                    String?                  @db.Uuid
+  firstName                 String
+  lastName                  String
+  email                     String?
+  phone                     String?
+  phoneE164                 String?
+  photoAssetId              String?                  @db.Uuid
+  primarySubjectId          String?                  @db.Uuid
+  bio                       String?
   // ── Onboarding record (2026-09). What an Indian private school keeps on
   //    file for a teacher: CBSE Affiliation Bye-laws (qualification norms per
   //    post, TET for classes I–VIII under RTE/NCTE), the safety circulars
@@ -1168,71 +1174,72 @@ model Teacher {
   //    field is optional — quick-add stays two names — and every enumerated
   //    one is TEXT validated at write time (the Student.category pattern), so
   //    a new designation is a list entry, not a migration.
-  gender                   String?
-  dob                      DateTime?  @db.Date
-  bloodGroup               String?
+  gender                    String?
+  dob                       DateTime?                @db.Date
+  bloodGroup                String?
   /// The number updates and actions go to. May differ from `phone` (the office
   /// number). Normalised twin below is the index a WhatsApp action resolves.
-  whatsappPhone            String?
-  whatsappPhoneE164        String?
-  whatsappOptIn            Boolean    @default(false)
-  employeeCode             String?
+  whatsappPhone             String?
+  whatsappPhoneE164         String?
+  whatsappOptIn             Boolean                  @default(false)
+  employeeCode              String?
   /// PRT | TGT | PGT | PRINCIPAL | VICE_PRINCIPAL | COORDINATOR | LIBRARIAN | COUNSELLOR | PET | SPECIAL_EDUCATOR | OTHER
-  designation              String?
-  department               String?
+  designation               String?
+  department                String?
   /// PERMANENT | PROBATION | CONTRACT | PART_TIME | GUEST
-  employmentType           String?
-  joinedOn                 DateTime?  @db.Date
-  highestQualification     String?
+  employmentType            String?
+  joinedOn                  DateTime?                @db.Date
+  highestQualification      String?
   /// B.Ed / D.El.Ed / B.El.Ed / M.Ed / NTT / none — the professional degree the post requires.
   professionalQualification String?
   /// NONE | CTET | STATE_TET | NOT_REQUIRED — mandatory for classes I–VIII (RTE s.23, NCTE 2010).
-  tetStatus                String?
-  tetCertificateNo         String?
-  tetValidTill             DateTime?  @db.Date
-  specialisation           String?
-  experienceYears          Int?
-  previousSchool           String?
-  addressLine1             String?
-  addressLine2             String?
-  city                     String?
-  region                   String?
-  postalCode               String?
-  emergencyContactName     String?
-  emergencyContactPhone    String?
-  emergencyContactRelation String?
+  tetStatus                 String?
+  tetCertificateNo          String?
+  tetValidTill              DateTime?                @db.Date
+  specialisation            String?
+  experienceYears           Int?
+  previousSchool            String?
+  addressLine1              String?
+  addressLine2              String?
+  city                      String?
+  region                    String?
+  postalCode                String?
+  emergencyContactName      String?
+  emergencyContactPhone     String?
+  emergencyContactRelation  String?
   /// PENDING | CLEARED | NOT_REQUIRED — the safety circulars ask for it before a teacher meets children.
-  policeVerification       String?
-  policeVerifiedOn         DateTime?  @db.Date
-  medicalFitnessOn         DateTime?  @db.Date
-  pocsoTrainedOn           DateTime?  @db.Date
-  isActive          Boolean          @default(true)
+  policeVerification        String?
+  policeVerifiedOn          DateTime?                @db.Date
+  medicalFitnessOn          DateTime?                @db.Date
+  pocsoTrainedOn            DateTime?                @db.Date
+  isActive                  Boolean                  @default(true)
   /// Lifecycle (Active Roster). `isActive` above mirrors `status === ACTIVE`.
-  status            StaffStatus      @default(ACTIVE)
-  leftOn            DateTime?        @db.Date
-  leftReason        String?
-  leftNote          String?
-  statusChangedAt   DateTime?
-  statusChangedById String?          @db.Uuid
-  school            School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  teacherSubjects   TeacherSubject[]
-  classSections     ClassSection[]   @relation("ClassTeacher")
-  timetableSlots    TimetableSlot[]
-  featuredIn        FeaturedStaff[]
-  messageThreads    MessageThread[]
-  libraryIssues     LibraryIssue[]
-  employeePay       EmployeePay[]
-  payslips          Payslip[]
-  payAdjustments    PayAdjustment[]
-  taxDeclarations   TaxDeclaration[]
+  status                    StaffStatus              @default(ACTIVE)
+  leftOn                    DateTime?                @db.Date
+  leftReason                String?
+  leftNote                  String?
+  statusChangedAt           DateTime?
+  statusChangedById         String?                  @db.Uuid
+  school                    School                   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  teacherSubjects           TeacherSubject[]
+  classSections             ClassSection[]           @relation("ClassTeacher")
+  timetableSlots            TimetableSlot[]
+  featuredIn                FeaturedStaff[]
+  messageThreads            MessageThread[]
+  libraryIssues             LibraryIssue[]
+  employeePay               EmployeePay[]
+  payslips                  Payslip[]
+  payAdjustments            PayAdjustment[]
+  taxDeclarations           TaxDeclaration[]
+  concernsAssigned          Concern[]
+  classTeacherLog           ClassTeacherAssignment[]
+  syllabusUpdates           SyllabusProgress[]
 
   @@index([schoolId])
   @@index([userId])
   @@index([schoolId, status])
   @@index([phoneE164])
   @@index([whatsappPhoneE164])
-  concernsAssigned    Concern[]
-  classTeacherLog     ClassTeacherAssignment[]
 }
 
 model TeacherSubject {
@@ -1323,9 +1330,11 @@ model Student {
   hallOfFameEntries HallOfFameEntry[]
   sessionDecisions  SessionDecision[]
   /// The house a child plays for (Sports wing). Null until the office assigns one.
-  houseId           String?           @db.Uuid
-  house             House?            @relation(fields: [houseId], references: [id], onDelete: SetNull)
+  houseId           String?               @db.Uuid
+  house             House?                @relation(fields: [houseId], references: [id], onDelete: SetNull)
   sportsEntries     SportsEntry[]
+  syllabusNotes     SyllabusStudentNote[]
+  concerns          Concern[]
 
   @@unique([schoolId, admissionNo])
   @@unique([schoolId, code])
@@ -1339,7 +1348,6 @@ model Student {
   // 20260921_010000_fk_indexes for the measurements.
   @@index([classSectionId])
   @@index([houseId])
-  concerns            Concern[]
 }
 
 model Period {
@@ -1436,39 +1444,39 @@ model Substitution {
 }
 
 model Staff {
-  id                String           @id @default(uuid()) @db.Uuid
-  schoolId          String           @db.Uuid
+  id                String             @id @default(uuid()) @db.Uuid
+  schoolId          String             @db.Uuid
   firstName         String
   lastName          String
-  role              StaffRole        @default(OTHER)
+  role              StaffRole          @default(OTHER)
   /// SPORTS only: ENTER · VERIFY · CREATE · PUBLISH · HOUSES · SETTINGS (sports-perms.ts).
-  sportsPerms       String[]         @default([])
+  sportsPerms       String[]           @default([])
   email             String?
   phone             String?
   phoneE164         String?
-  userId            String?          @db.Uuid
+  userId            String?            @db.Uuid
   /// Self-uploaded avatar (MediaAsset id, kind AVATAR) — bare scalar like
   /// Student.photoAssetId / Teacher.photoAssetId (Phase 5·0d).
-  photoAssetId      String?          @db.Uuid
-  isActive          Boolean          @default(true)
+  photoAssetId      String?            @db.Uuid
+  isActive          Boolean            @default(true)
   /// Lifecycle (Active Roster). `isActive` above mirrors `status === ACTIVE`.
-  status            StaffStatus      @default(ACTIVE)
-  leftOn            DateTime?        @db.Date
+  status            StaffStatus        @default(ACTIVE)
+  leftOn            DateTime?          @db.Date
   leftReason        String?
   leftNote          String?
   statusChangedAt   DateTime?
-  statusChangedById String?          @db.Uuid
-  createdAt         DateTime         @default(now())
-  school            School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  statusChangedById String?            @db.Uuid
+  createdAt         DateTime           @default(now())
+  school            School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   employeePay       EmployeePay[]
   payslips          Payslip[]
   payAdjustments    PayAdjustment[]
   taxDeclarations   TaxDeclaration[]
+  leaveApplications LeaveApplication[]
 
   @@index([schoolId])
   @@index([schoolId, status])
   @@index([phoneE164])
-  leaveApplications  LeaveApplication[]
 }
 
 model StaffAttendance {
@@ -1488,36 +1496,36 @@ model StaffAttendance {
 }
 
 model LeaveApplication {
-  id           String        @id @default(uuid()) @db.Uuid
-  schoolId     String        @db.Uuid
+  id            String         @id @default(uuid()) @db.Uuid
+  schoolId      String         @db.Uuid
   /// Exactly one of these two is set — the same two-ids rule the pay tables
   /// use, enforced by a CHECK. `teacherId` stays nullable-in-practice through
   /// the constraint rather than the column type, because every row that
   /// existed before staff leave has one.
-  teacherId    String?       @db.Uuid
-  staffId      String?       @db.Uuid
+  teacherId     String?        @db.Uuid
+  staffId       String?        @db.Uuid
   /// A half day is a single date worked at half strength. Only meaningful
   /// when startDate = endDate; the service refuses it otherwise, because
   /// "half of a five-day leave" is not a thing a school means.
-  halfDay      Boolean       @default(false)
+  halfDay       Boolean        @default(false)
   /// Which half of a half day: AM | PM. Null on a full day, and on a half day
   /// sent by an older client (every period of that day is then covered).
-  halfDayPart  String?
-  type         LeaveType
+  halfDayPart   String?
+  type          LeaveType
   /// The school's own leave-type row this application counts against.
   /// Null on rows from before the policy feature (and on types the school
   /// never configured) — those resolve through `type` instead.
-  typeDefId    String?       @db.Uuid
-  startDate    DateTime      @db.Date
-  endDate      DateTime      @db.Date
-  reason       String?
-  status       LeaveStatus   @default(PENDING)
-  reviewedById String?       @db.Uuid
-  reviewedAt   DateTime?
-  createdAt    DateTime      @default(now())
-  school       School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  typeDef      LeaveTypeDef? @relation(fields: [typeDefId], references: [id], onDelete: SetNull)
-  staff        Staff?        @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  typeDefId     String?        @db.Uuid
+  startDate     DateTime       @db.Date
+  endDate       DateTime       @db.Date
+  reason        String?
+  status        LeaveStatus    @default(PENDING)
+  reviewedById  String?        @db.Uuid
+  reviewedAt    DateTime?
+  createdAt     DateTime       @default(now())
+  school        School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  typeDef       LeaveTypeDef?  @relation(fields: [typeDefId], references: [id], onDelete: SetNull)
+  staff         Staff?         @relation(fields: [staffId], references: [id], onDelete: Cascade)
   substitutions Substitution[]
 
   @@index([schoolId, status])
@@ -1533,31 +1541,31 @@ model LeaveApplication {
 /// add custom types beyond them. No RLS — `schoolId` filters are load-bearing,
 /// same as LeaveApplication.
 model LeaveTypeDef {
-  id              String             @id @default(uuid()) @db.Uuid
-  schoolId        String             @db.Uuid
-  name            String
+  id                 String             @id @default(uuid()) @db.Uuid
+  schoolId           String             @db.Uuid
+  name               String
   /// The built-in enum value this row mirrors — null for a custom type.
-  builtin         LeaveType?
-  isPaid          Boolean            @default(true)
+  builtin            LeaveType?
+  isPaid             Boolean            @default(true)
   /// Days per year that "apply defaults to everyone" grants. 0 = the type
   /// exists but carries no standing quota (e.g. Unpaid).
   ///
   /// This is the TEACHER figure; `defaultAnnualStaff` is the other one. Nearly
   /// every school gives the two different numbers, and one column would have
   /// forced the larger on everybody.
-  defaultAnnual   Int                @default(0)
-  defaultAnnualStaff Int             @default(0)
+  defaultAnnual      Int                @default(0)
+  defaultAnnualStaff Int                @default(0)
   /// Never costs pay, whatever the balance says — maternity, bereavement.
   /// Distinct from `isPaid`: an unpaid type always deducts, a paid type
   /// deducts only past its quota, and this one never does either way.
-  neverDeduct     Boolean            @default(false)
+  neverDeduct        Boolean            @default(false)
   /// Max unused days that survive a year close into the next year. 0 = lapse.
-  carryForwardCap Int                @default(0)
-  isActive        Boolean            @default(true)
-  createdAt       DateTime           @default(now())
-  school          School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  allocations     LeaveAllocation[]
-  applications    LeaveApplication[]
+  carryForwardCap    Int                @default(0)
+  isActive           Boolean            @default(true)
+  createdAt          DateTime           @default(now())
+  school             School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  allocations        LeaveAllocation[]
+  applications       LeaveApplication[]
 
   @@unique([schoolId, name])
   @@unique([schoolId, builtin])
@@ -1659,20 +1667,20 @@ model Result {
 /// `ExamScheduledOutboxPayload`/`ResultPublishedOutboxPayload`
 /// (apps/api/src/common/notifications/notification.types.ts).
 model NotificationOutbox {
-  id             String        @id @default(uuid()) @db.Uuid
-  schoolId       String        @db.Uuid
+  id             String                 @id @default(uuid()) @db.Uuid
+  schoolId       String                 @db.Uuid
   kind           String
   payload        Json
   /// Null only for single-reader kinds that have no section to broadcast to
   /// (LIBRARY_NOTICE to a teacher). The drain reads it only when
   /// targetUserId is null, so a null section never reaches a resolver.
-  classSectionId String?       @db.Uuid
+  classSectionId String?                @db.Uuid
   /// When set, the drain pushes to THIS single user only (a private message —
   /// MESSAGE_RECEIVED, or any LIBRARY_NOTICE), instead of resolving the whole
   /// classSectionId's section recipients. Null for the broadcast kinds
   /// (exam/result/assignment).
-  targetUserId   String?       @db.Uuid
-  createdAt      DateTime      @default(now())
+  targetUserId   String?                @db.Uuid
+  createdAt      DateTime               @default(now())
   sentAt         DateTime?
   /// Incremented on every failed send attempt; the drain excludes rows at
   /// or above its MAX_ATTEMPTS cap rather than retrying forever.
@@ -1681,14 +1689,14 @@ model NotificationOutbox {
   /// older than CLAIM_TTL is treated as abandoned (the drain crashed mid-send)
   /// and may be reclaimed.
   claimedAt      DateTime?
-  attempts       Int           @default(0)
+  attempts       Int                    @default(0)
   lastError      String?
   /// Stamped when the drain has turned this row into NotificationDelivery
   /// rows (one per person per channel). Null = not yet expanded.
   expandedAt     DateTime?
   deliveries     NotificationDelivery[]
-  school         School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  classSection   ClassSection? @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+  school         School                 @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  classSection   ClassSection?          @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
 
   /// The drain's own query shape: unsent rows, oldest first.
   @@index([schoolId, sentAt])
@@ -2163,27 +2171,27 @@ model PasswordResetToken {
 }
 
 model Enquiry {
-  id            String        @id @default(uuid()) @db.Uuid
-  schoolId      String        @db.Uuid
-  parentName    String
-  phone         String
-  email         String?
-  gradeInterest String?
-  message       String?
-  status        EnquiryStatus @default(NEW)
+  id              String        @id @default(uuid()) @db.Uuid
+  schoolId        String        @db.Uuid
+  parentName      String
+  phone           String
+  email           String?
+  gradeInterest   String?
+  message         String?
+  status          EnquiryStatus @default(NEW)
   /// The day somebody promised to ring this family back. A DATE, not a
   /// timestamp: an admissions desk works in days, and a time would imply a
   /// precision nobody keeps. Null means no next step has been agreed — which
   /// the desk surfaces, because that is how a family gets quietly forgotten.
-  followUpAt    DateTime?     @db.Date
+  followUpAt      DateTime?     @db.Date
   /// Which staff member is chasing this, so two people do not ring the same
   /// parent. Not a relation: staff can be removed and the history should
   /// survive them.
-  ownerUserId   String?       @db.Uuid
+  ownerUserId     String?       @db.Uuid
   /// Why a LOST lead was lost. Free text — the reasons a school actually
   /// records ("chose another school", "moved city") do not fit an enum, and a
   /// wrong enum teaches people to pick the nearest lie.
-  lostReason    String?
+  lostReason      String?
   /// Who the family is asking FOR. Optional free text — a walk-in often gives
   /// the parent's name before the child's.
   childName       String?
@@ -2196,8 +2204,8 @@ model Enquiry {
   lastContactedAt DateTime?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @default(now()) @updatedAt
-  school        School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  notes         EnquiryNote[]
+  school          School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  notes           EnquiryNote[]
 
   @@index([schoolId])
   /// The desk's own query: open leads ordered by when they are due.
@@ -2329,15 +2337,15 @@ model LeadActivity {
 /// true of the whole platform rather than of one school. The name is the
 /// debt; a second singleton table for one boolean would be worse.
 model MarketingConfig {
-  id            String   @id @default("default")
-  priceBasicUsd Int      @default(19)
-  priceBasicInr Int      @default(999)
-  priceStdUsd   Int      @default(49)
-  priceStdInr   Int      @default(2499)
-  priceProUsd   Int      @default(99)
-  priceProInr   Int      @default(4999)
-  contactEmail  String   @default("admin@sckools.com")
-  contactPhone  String   @default("")
+  id            String @id @default("default")
+  priceBasicUsd Int    @default(19)
+  priceBasicInr Int    @default(999)
+  priceStdUsd   Int    @default(49)
+  priceStdInr   Int    @default(2499)
+  priceProUsd   Int    @default(99)
+  priceProInr   Int    @default(4999)
+  contactEmail  String @default("admin@sckools.com")
+  contactPhone  String @default("")
 
   /// Whether the login page offers "sign in with a code".
   ///
@@ -2351,7 +2359,7 @@ model MarketingConfig {
   /// it by trying.
   loginOtpEnabled Boolean @default(false)
 
-  updatedAt     DateTime @updatedAt
+  updatedAt DateTime @updatedAt
 }
 
 /// One-time 15-minute owner→school-admin login handoff (sha256 at rest,
@@ -5163,35 +5171,35 @@ model Payslip {
 /// An arrears line, a one-off, or days of unpaid absence, aimed at one month.
 /// A correction to a LOCKED run is one of these in the next run, never an edit.
 model PayAdjustment {
-  id          String           @id @default(uuid()) @db.Uuid
-  schoolId    String           @db.Uuid
-  personKind  PayPersonKind
-  teacherId   String?          @db.Uuid
-  staffId     String?          @db.Uuid
-  periodYear  Int
-  periodMonth Int
-  label       String
-  kind        PayComponentKind
-  amountMinor Int
-  taxable     Boolean          @default(true)
+  id                 String           @id @default(uuid()) @db.Uuid
+  schoolId           String           @db.Uuid
+  personKind         PayPersonKind
+  teacherId          String?          @db.Uuid
+  staffId            String?          @db.Uuid
+  periodYear         Int
+  periodMonth        Int
+  label              String
+  kind               PayComponentKind
+  amountMinor        Int
+  taxable            Boolean          @default(true)
   /// Unpaid days, which shrink the proratable lines instead of adding money.
-  lopDays     Int              @default(0)
+  lopDays            Int              @default(0)
   /// The extra HALF day, when leave was taken at half strength. Total unpaid
   /// is `lopDays + lopHalfDays / 2`. Kept as a second integer rather than
   /// making lopDays a Decimal: Prisma serialises Decimal as a string, which
   /// would silently change the shape every client already reads.
-  lopHalfDays Int              @default(0)
+  lopHalfDays        Int              @default(0)
   /// The leave this line came from, when the month proposed it rather than a
   /// person typing it. Null for a hand-entered adjustment.
-  leaveApplicationId String?   @db.Uuid
-  note        String?
-  payRunId    String?          @db.Uuid
-  createdById String?          @db.Uuid
-  createdAt   DateTime         @default(now())
-  school      School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  payRun      PayRun?          @relation(fields: [payRunId], references: [id], onDelete: SetNull)
-  teacher     Teacher?         @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  staff       Staff?           @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  leaveApplicationId String?          @db.Uuid
+  note               String?
+  payRunId           String?          @db.Uuid
+  createdById        String?          @db.Uuid
+  createdAt          DateTime         @default(now())
+  school             School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  payRun             PayRun?          @relation(fields: [payRunId], references: [id], onDelete: SetNull)
+  teacher            Teacher?         @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  staff              Staff?           @relation(fields: [staffId], references: [id], onDelete: Cascade)
 
   @@index([schoolId, periodYear, periodMonth])
   @@index([payRunId])
@@ -5349,7 +5357,6 @@ model ConcernComment {
   @@index([authorId])
 }
 
-
 /// SCHOOL BACKUPS — platform data, never tenant data. No `schoolId` (so the
 /// engine that backs up every table carrying schoolId never backs up backups)
 /// and no relation to School (so a school's backups outlive the school).
@@ -5489,4 +5496,85 @@ model SamplePack {
   updatedAt        DateTime  @updatedAt
 
   @@index([createdAt])
+}
+
+// ── Syllabus tracker (2026-10-16) ─────────────────────────────────────────────
+// Chapters belong to a GRADE + SUBJECT and live across years (every section of
+// Class 9 teaches the same Maths chapters, this year and next). Progress belongs
+// to a CLASS SECTION, which is year-bound, so a new session needs no import:
+// next year's sections see the same chapters with blank progress. A chapter is
+// never deleted — `retiredAt` hides it so old progress and notes keep their row.
+
+enum SyllabusStatus {
+  NOT_STARTED
+  TEACHING
+  DONE
+}
+
+model SyllabusChapter {
+  id           String                @id @default(uuid()) @db.Uuid
+  schoolId     String                @db.Uuid
+  gradeId      String                @db.Uuid
+  subjectId    String                @db.Uuid
+  /// A sub-topic points at its chapter; one level only (enforced in the service).
+  parentId     String?               @db.Uuid
+  title        String
+  order        Int                   @default(0)
+  retiredAt    DateTime?
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  school       School                @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  grade        Grade                 @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+  subject      Subject               @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  parent       SyllabusChapter?      @relation("SyllabusSubTopics", fields: [parentId], references: [id], onDelete: Cascade)
+  children     SyllabusChapter[]     @relation("SyllabusSubTopics")
+  progress     SyllabusProgress[]
+  studentNotes SyllabusStudentNote[]
+
+  @@index([schoolId, gradeId, subjectId])
+  @@index([gradeId])
+  @@index([subjectId])
+  @@index([parentId])
+}
+
+/// One row per (section, chapter) once a teacher has touched it. Absence means
+/// NOT_STARTED, so a brand-new section has no rows at all.
+model SyllabusProgress {
+  id             String          @id @default(uuid()) @db.Uuid
+  schoolId       String          @db.Uuid
+  classSectionId String          @db.Uuid
+  chapterId      String          @db.Uuid
+  status         SyllabusStatus  @default(NOT_STARTED)
+  /// The teacher's note for the class ("revise Q4 before the test"), shown to students.
+  note           String?
+  updatedById    String?         @db.Uuid
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  school         School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  classSection   ClassSection    @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+  chapter        SyllabusChapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  updatedBy      Teacher?        @relation(fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@unique([classSectionId, chapterId])
+  @@index([schoolId, classSectionId])
+  @@index([chapterId])
+  @@index([updatedById])
+}
+
+/// A child's own revision note on a chapter. Private: only that student reads it.
+model SyllabusStudentNote {
+  id        String          @id @default(uuid()) @db.Uuid
+  schoolId  String          @db.Uuid
+  studentId String          @db.Uuid
+  chapterId String          @db.Uuid
+  body      String
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  school    School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student   Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  chapter   SyllabusChapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, chapterId])
+  @@index([schoolId, studentId])
+  @@index([chapterId])
 }

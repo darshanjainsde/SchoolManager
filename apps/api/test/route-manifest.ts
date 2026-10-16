@@ -532,6 +532,25 @@ export const AUTHZ_REVIEWED: string[] = [
   "DELETE /owner/sample-packs/:id",
   "GET /internal/cron/school-backups/snapshots",
   "POST /internal/cron/school-backups/snapshots",
+  // ── Syllabus tracker ────────────────────────────────────────────────────
+  // syllabus-authz.e2e-spec.ts: every route 403s with the COURSE_MANAGEMENT
+  // feature off (it is in no tier). Teachers reach a track only through the
+  // timetable (class teacher / subject slot / today's substitute, who reads
+  // but never marks); the admin reads every track and edits chapter lists
+  // but never marks progress; a student is resolved from the login alone and
+  // reads their own section, with notes nobody else can see.
+  "GET /manage/syllabus/mine",
+  "GET /manage/syllabus/overview",
+  "GET /manage/syllabus/chapters",
+  "POST /manage/syllabus/chapters",
+  "PATCH /manage/syllabus/chapters/:id",
+  "DELETE /manage/syllabus/chapters/:id",
+  "GET /manage/syllabus/tracks/:classSectionId/:subjectId",
+  "PUT /manage/syllabus/tracks/:classSectionId/:subjectId/progress/:chapterId",
+  "POST /manage/syllabus/tracks/:classSectionId/:subjectId/reach/:chapterId",
+  "GET /me/syllabus",
+  "GET /me/syllabus/subjects/:subjectId",
+  "PUT /me/syllabus/notes/:chapterId",
 ];
 
 /**

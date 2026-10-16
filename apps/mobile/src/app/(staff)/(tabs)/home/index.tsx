@@ -326,6 +326,8 @@ export default function Today() {
               ...(hasFeature(s, 'LIBRARY') ? [{ label: 'Library', icon: 'library', route: '/(staff)/(tabs)/home/library' }] : []),
               // Pay slips, only where the school runs pay on Sckools.
               ...(hasFeature(s, 'SALARY') ? [{ label: 'My pay', icon: 'fees', route: '/(staff)/(tabs)/home/salary' }] : []),
+              // Where each class has reached — only where the owner switched the tracker on.
+              ...(hasFeature(s, 'COURSE_MANAGEMENT') ? [{ label: 'Syllabus', icon: 'syllabus', route: '/(staff)/(tabs)/home/syllabus' }] : []),
               // Concerns the class teacher's families raised. Free, so always
               // drawn — it was on no screen before 2026-10-07 (nav-reachability).
               { label: 'Complaint Box', icon: 'concern', route: '/(staff)/(tabs)/home/concerns' },

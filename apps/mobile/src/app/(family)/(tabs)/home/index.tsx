@@ -333,7 +333,7 @@ export default function Home() {
               { label: 'Holidays', icon: 'holidays', route: '/(family)/(tabs)/home/holidays' },
               // A paid module's door is drawn only for a school that has it;
               // the Complaint Box is free, so always (nav-reachability.test).
-              ...MORE_ITEMS.filter((t) => ['Sports', 'Library', 'Report cards', 'Birthdays', 'Complaint Box'].includes(t.label))
+              ...MORE_ITEMS.filter((t) => ['Syllabus', 'Sports', 'Library', 'Report cards', 'Birthdays', 'Complaint Box'].includes(t.label))
                 .filter((t) => !t.feature || hasFeature(s, t.feature))
                 .map((t) => ({ label: t.label, icon: t.icon, route: t.route })),
             ]}

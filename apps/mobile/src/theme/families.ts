@@ -32,7 +32,7 @@ export const FAMILIES: Record<Family, Record<ColorScheme, FamilyTone>> = {
 };
 
 const BY_ICON: Record<string, Family> = {
-  diary: 'learn', assignments: 'learn', timetable: 'learn', results: 'learn', notes: 'learn', report: 'learn',
+  diary: 'learn', assignments: 'learn', timetable: 'learn', results: 'learn', notes: 'learn', report: 'learn', syllabus: 'learn',
   fees: 'money',
   take: 'care', requests: 'care', concern: 'care',
   messages: 'people', person: 'people',

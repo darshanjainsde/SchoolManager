@@ -53,7 +53,9 @@ export type IconName =
   | 'check'
   // The confirm sheet: leaving (a door with an arrow out) and removing (a bin).
   | 'signout'
-  | 'trash';
+  | 'trash'
+  // The syllabus tracker: a chapter list with two ticked lines.
+  | 'syllabus';
 
 /** `body` is the filled silhouette; `lines` are the strokes drawn over it. */
 const PATHS: Record<IconName, { body: string; lines: string[] }> = {
@@ -115,6 +117,10 @@ const PATHS: Record<IconName, { body: string; lines: string[] }> = {
       'M12 8.2a3.8 3.8 0 1 1 0 7.6 3.8 3.8 0 0 1 0-7.6Z',
       'M12 3.4v2M12 18.6v2M3.4 12h2M18.6 12h2M6 6l1.4 1.4M16.6 16.6 18 18M18 6l-1.4 1.4M7.4 16.6 6 18',
     ],
+  },
+  syllabus: {
+    body: 'M5.4 4.4h13.2a1 1 0 0 1 1 1v13.2a1 1 0 0 1-1 1H5.4a1 1 0 0 1-1-1V5.4a1 1 0 0 1 1-1Z',
+    lines: ['M5.4 4.4h13.2a1 1 0 0 1 1 1v13.2a1 1 0 0 1-1 1H5.4a1 1 0 0 1-1-1V5.4a1 1 0 0 1 1-1Z', 'M7.6 9.2l1.5 1.5 2.7-2.7', 'M7.6 14.8l1.5 1.5 2.7-2.7', 'M13.8 9.4h3M13.8 15h3'],
   },
   notes: {
     body: 'M7.6 4.4h9.4a1 1 0 0 1 1 1v13.2a1 1 0 0 1-1 1H7.6Z',

@@ -48,6 +48,8 @@ export const HIDDEN_ROUTES = [
   '(tabs)/home/messages/[threadId]',
   '(tabs)/home/notices',
   '(tabs)/home/holidays',
+  '(tabs)/home/syllabus',
+  '(tabs)/home/syllabus/[subjectId]',
   '(tabs)/home/notifications',
   '(tabs)/home/shelf',
   // Second edition — the four screens the web portal had and the app did not.
@@ -85,14 +87,15 @@ export interface MoreItem {
     | '/(family)/(tabs)/home/library'
     | '/(family)/(tabs)/home/birthdays'
     | '/(family)/(tabs)/home/report-cards'
-    | '/(family)/(tabs)/home/concerns';
+    | '/(family)/(tabs)/home/concerns'
+    | '/(family)/(tabs)/home/syllabus';
   /** Icon-tile tint. Defaults to indigo when omitted. */
   tone?: MoreTone;
   /**
    * The paid module this tool belongs to. Home draws the tile only when the
    * school has it on (lib/features.ts); a tool with no key is always drawn.
    */
-  feature?: 'FEES' | 'LIBRARY' | 'SPORTS' | 'PRESS';
+  feature?: 'FEES' | 'LIBRARY' | 'SPORTS' | 'PRESS' | 'COURSE_MANAGEMENT';
 }
 
 export const MORE_ITEMS: readonly MoreItem[] = [
@@ -106,6 +109,7 @@ export const MORE_ITEMS: readonly MoreItem[] = [
   { label: 'Library', icon: 'library', route: '/(family)/(tabs)/home/library', tone: 'indigo', feature: 'LIBRARY' },
   { label: 'Report cards', icon: 'report', route: '/(family)/(tabs)/home/report-cards', tone: 'indigo', feature: 'PRESS' },
   { label: 'Birthdays', icon: 'cake', route: '/(family)/(tabs)/home/birthdays', tone: 'amber' },
+  { label: 'Syllabus', icon: 'syllabus', route: '/(family)/(tabs)/home/syllabus', tone: 'indigo', feature: 'COURSE_MANAGEMENT' },
   // Always drawn: raising a concern is not a paid module, and a family that
   // cannot find it will use WhatsApp instead, where nothing is tracked.
   { label: 'Complaint Box', icon: 'concern', route: '/(family)/(tabs)/home/concerns', tone: 'amber' },

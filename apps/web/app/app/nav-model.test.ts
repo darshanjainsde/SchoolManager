@@ -16,7 +16,7 @@ const EVERY_ROUTE = [
       '/app/sessions', '/app/onboarding', '/app/jobs',
   '/app/staff-attendance', '/app/leave', '/app/requests',
   '/app/timetable', '/app/availability',
-  '/app/exam-hall', '/app/press', '/app/press/orders',
+  '/app/syllabus', '/app/exam-hall', '/app/press', '/app/press/orders',
   '/app/fees', '/app/pay', '/app/library', '/app/sports', '/app/announcements', '/app/alumni', '/app/profile', '/app/settings',
 ].sort();
 
