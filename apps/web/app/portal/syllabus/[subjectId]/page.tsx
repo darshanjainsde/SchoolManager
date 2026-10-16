@@ -74,15 +74,14 @@ export default function PortalSubjectPage() {
       </div>
 
       <div className="sk-card">
-        <div className="sk-card-h">
-          <h3>Chapters</h3>
-          <div className="sk-seg" role="group" aria-label="Show" style={{ maxWidth: 360 }}>
+        <div className="sk-card-h"><h3>Chapters</h3></div>
+        <div className="sk-card-b">
+          {/* The filter sits under the title, full width: squeezed beside the h3 it wrapped to three lines. */}
+          <div className="sk-seg" role="group" aria-label="Show" style={{ maxWidth: 420, marginBottom: 12 }}>
             {([['ALL', 'All'], ['REVISE', `To revise${toRevise ? ` · ${toRevise}` : ''}`], ['DONE', 'Taught']] as [Filter, string][]).map(([f, label]) => (
-              <button key={f} type="button" aria-pressed={filter === f} onClick={() => setFilter(f)} data-testid={`syl-filter-${f}`}>{label}</button>
+              <button key={f} type="button" aria-pressed={filter === f} onClick={() => setFilter(f)} data-testid={`syl-filter-${f}`} style={{ whiteSpace: 'nowrap', paddingInline: 6 }}>{label}</button>
             ))}
           </div>
-        </div>
-        <div className="sk-card-b">
           {chapters.length === 0 && <p className="sk-state" style={{ margin: 0 }}>No chapters yet. Your teacher adds them, and this fills in.</p>}
           {chapters.map((ch, i) => {
             const leaves = ch.children.length ? ch.children : [ch];
