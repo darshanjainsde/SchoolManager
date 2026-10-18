@@ -2,6 +2,7 @@ import { Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { ApiError } from '@/lib/api';
 import { useQuery } from '@/lib/query';
+import { useFirstPaint } from '@/lib/use-first-paint';
 import { shiftISO, todayISO } from '@/lib/attendance';
 import { fmtDay, fmtLongDay, fmtWeekdayDay } from '@/lib/dates';
 import { leaveTypeLabel } from '@/lib/labels';
@@ -49,6 +50,10 @@ export function AccountsToday({ name }: { name: string }) {
     .filter((h) => h.startDate.slice(0, 10) >= today)
     .sort((a, b) => a.startDate.localeCompare(b.startDate))
     .slice(0, 2);
+  // ONE first frame: the waiting list is the page (the hero counts it); the
+  // cover gaps, holidays and pay state get a moment to land with it, so the
+  // hero never says "Nothing waiting" with zeros and then changes its mind.
+  const painted = useFirstPaint(pending.data !== null || pending.error !== null, [coverage.loading, holidays.loading, pay.loading]);
   const payLocked = pay.error instanceof ApiError && (pay.error.status === 403 || pay.error.status === 404);
 
   return (
@@ -60,6 +65,8 @@ export function AccountsToday({ name }: { name: string }) {
         right={<NotificationBell group="(worker)" onBand />}
       />
 
+      {!painted ? <LoadingRows label="Opening the leave desk…" rows={4} /> : (
+      <>
       {/* THE HERO (9 Oct 2026): the desk's day in one card — what waits,
           what needs cover, and the four things this desk does from Home. */}
       <RoleHero
@@ -184,6 +191,8 @@ export function AccountsToday({ name }: { name: string }) {
           })
         )}
       </Card>
+      </>
+      )}
     </Screen>
   );
 }

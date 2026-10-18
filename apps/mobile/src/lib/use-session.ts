@@ -8,8 +8,11 @@ import { session, type Session } from './session';
  * that only need data go through lib/query.ts, which reads the session itself.
  */
 export function useSession(): Session | null {
-  const [s, setS] = useState<Session | null>(null);
+  // Start from the copy already in memory: a null first frame is what made
+  // Home draw without the name and the feature tiles, then reflow.
+  const [s, setS] = useState<Session | null>(() => session.peek() ?? null);
   useEffect(() => {
+    if (session.peek() !== undefined) return;
     let alive = true;
     session.get().then((v) => {
       if (alive) setS(v);

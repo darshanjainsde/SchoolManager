@@ -57,6 +57,16 @@ let memo: Session | null | undefined;
 let hostMemo: string | null | undefined;
 
 export const session = {
+  /**
+   * The session WITHOUT waiting, when it has already been read this run
+   * (`undefined` when it has not). The sign-in gate reads it before any Home
+   * draws, so a screen that starts from this draws the right person, the
+   * right doors and the right job on its FIRST frame — not "Today" and the
+   * free tiles, then the name and the feature tiles a beat later.
+   */
+  peek(): Session | null | undefined {
+    return memo;
+  },
   async get(): Promise<Session | null> {
     if (memo !== undefined) return memo;
     const raw = await SecureStore.getItemAsync(KEY);

@@ -5,6 +5,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import { useQuery } from '@/lib/query';
 import { useSession } from '@/lib/use-session';
+import { useFirstPaint } from '@/lib/use-first-paint';
 import { jobFor } from '@/lib/worker-nav';
 import { todayISO } from '@/lib/attendance';
 import { fmtDate, fmtLongDay, fmtMonthYear, fmtWeekdayDay } from '@/lib/dates';
@@ -165,19 +166,21 @@ function StaffToday() {
     .filter((h) => h.startDate.slice(0, 10) >= today)
     .sort((a, b) => a.startDate.localeCompare(b.startDate))[0];
   const [y, m] = today.split('-').map(Number);
+  // ONE first frame: the day's standing is the page; the next holiday lands with it.
+  const painted = useFirstPaint(data !== null || error !== null, [holidays.loading]);
 
   return (
     <Screen band onRefresh={reload}>
       <BandGreeting
-        eyebrow={`${fmtLongDay(new Date())}${data ? ` · ${STAFF_ROLE_LABEL[data.person.role] ?? 'Staff'}` : ''}`}
-        title={data ? `${data.person.firstName} ${data.person.lastName}`.trim() : 'Today'}
+        eyebrow={`${fmtLongDay(new Date())}${painted && data ? ` · ${STAFF_ROLE_LABEL[data.person.role] ?? 'Staff'}` : ''}`}
+        title={painted && data ? `${data.person.firstName} ${data.person.lastName}`.trim() : 'Today'}
         right={<NotificationBell group="(worker)" onBand />}
       />
 
       {error && <ErrorState error={error} onRetry={reload} />}
-      {data === null && !error && <LoadingRows label="Loading your attendance…" rows={3} />}
+      {!painted && !error && <LoadingRows label="Loading your attendance…" rows={3} />}
 
-      {summary && !error && (
+      {painted && summary && !error && (
         <>
           {/* Today's standing: the hero (9 Oct 2026 — bigger, with the month
               in figures and the quick actions this person has). */}

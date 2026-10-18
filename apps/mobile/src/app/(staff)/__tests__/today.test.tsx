@@ -458,3 +458,48 @@ it('refetches on focus so a colleague marking the register elsewhere shows up wi
 
   expect(await screen.findByText('28/28 present')).toBeTruthy();
 });
+
+describe('one first frame (user, 18 Oct 2026: "something is rendering fast and something rendering slow")', () => {
+  it('names the teacher on the band from the very first frame — no "Today" placeholder first', () => {
+    setNow(8, 20);
+    (api.request as jest.Mock).mockReturnValue(new Promise(() => {}));
+    render(<Today />);
+    expect(screen.getByText('Priya Sharma')).toBeTruthy();
+    expect(screen.queryByText('Today')).toBeNull();
+  });
+
+  it('holds the menu until the message badge has landed, then draws it WITH the badge', async () => {
+    setNow(8, 20);
+    let answerUnread: (v: { count: number }) => void = () => {};
+    (api.request as jest.Mock).mockImplementation((path: string) => {
+      if (path.startsWith('/manage/timetable/my-day')) return Promise.resolve(DAY);
+      if (path.startsWith('/manage/class-notes?')) return Promise.resolve({ notes: [], todos: [] });
+      if (path === '/manage/messages/unread-count') return new Promise((res) => { answerUnread = res; });
+      return Promise.resolve({ count: 0 });
+    });
+    render(<Today />);
+    await act(async () => {});
+    // The day is in, the badge is not: still the skeleton, not a menu that will jump.
+    expect(screen.getByLabelText('Loading your day…')).toBeTruthy();
+    expect(screen.queryByTestId('hero-act-register')).toBeNull();
+    await act(async () => answerUnread({ count: 3 }));
+    expect(screen.getByTestId('hero-act-register')).toBeTruthy();
+    expect(screen.queryByLabelText('Loading your day…')).toBeNull();
+    expect(screen.getByText('3')).toBeTruthy();
+  });
+
+  it('a badge that never answers holds the page for a moment at most', async () => {
+    setNow(8, 20);
+    (api.request as jest.Mock).mockImplementation((path: string) => {
+      if (path.startsWith('/manage/timetable/my-day')) return Promise.resolve(DAY);
+      if (path.startsWith('/manage/class-notes?')) return Promise.resolve({ notes: [], todos: [] });
+      if (path === '/manage/messages/unread-count') return new Promise(() => {});
+      return Promise.resolve({ count: 0 });
+    });
+    render(<Today />);
+    await act(async () => {});
+    expect(screen.queryByTestId('hero-act-register')).toBeNull();
+    await act(async () => jest.advanceTimersByTime(1200));
+    expect(screen.getByTestId('hero-act-register')).toBeTruthy();
+  });
+});

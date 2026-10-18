@@ -6,7 +6,6 @@ import { HeroDeck } from '@/components/HeroDeck';
 import { BandGreeting } from '@/components/BandHeader';
 import type { ClassNoteRow, ClassTodoRow, TeacherDay } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
-import { session } from '@/lib/session';
 import { todayISO } from '@/lib/attendance';
 import { currentEntry, minutesOfDay } from '@/lib/teacher-day';
 import { useNowMinutes } from '@/lib/use-now-minutes';
@@ -21,19 +20,21 @@ import { useTokens } from '@/theme/theme-context';
 import { fmtLongDay } from '@/lib/dates';
 import { hasFeature } from '@/lib/features';
 import { useSession } from '@/lib/use-session';
+import { useFirstPaint } from '@/lib/use-first-paint';
 
 export default function Today() {
   const tokens = useTokens();
   const s = useSession();
   // Try again / pull-to-refresh for this screen's own focus effect.
   const [reloadKey, reload] = useReload();
-  const [name, setName] = useState<string | null>(null);
   const [day, setDay] = useState<TeacherDay | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   // Unread message count for the "Needs you today" badge. Best-effort like the
   // bell's own count: a badge must never surface an error, so failures leave 0.
   const [unreadMsgs, setUnreadMsgs] = useState(0);
+  // Whether the badge's first answer is in — held with the day for ONE first frame.
+  const [unreadSettled, setUnreadSettled] = useState(false);
   const date = todayISO();
 
   /**
@@ -55,9 +56,6 @@ export default function Today() {
     useCallback(() => {
       let cancelled = false;
       setError(null);
-      session.get().then((s) => {
-        if (!cancelled) setName(s?.displayName ?? null);
-      });
       api
         .request<{ count: number }>('/manage/messages/unread-count')
         .then((r) => {
@@ -65,6 +63,9 @@ export default function Today() {
         })
         .catch(() => {
           /* a badge must never surface an error */
+        })
+        .finally(() => {
+          if (!cancelled) setUnreadSettled(true);
         });
       api
         .request<TeacherDay>(`/manage/timetable/my-day?date=${encodeURIComponent(date)}`)
@@ -99,6 +100,8 @@ export default function Today() {
   // fetched thin here just to badge the tiles: notes = today's count, to-dos =
   // the REMAINING count. Best-effort like every badge — failures leave 0.
   const [periodCounts, setPeriodCounts] = useState({ notes: 0, todosLeft: 0 });
+  // The live period whose counts are in, so the first frame can wait for them.
+  const [countsFor, setCountsFor] = useState<string | null>(null);
   const [sheet, setSheet] = useState<null | 'notes' | 'todos'>(null);
   const liveClassSectionId = liveSlot?.classSectionId ?? null;
   const liveSubjectId = liveSlot?.subjectId ?? null;
@@ -114,12 +117,11 @@ export default function Today() {
       )
       .catch(() => {
         /* a badge must never surface an error */
-      });
+      })
+      .finally(() => setCountsFor(`${liveClassSectionId}:${liveSubjectId}`));
     // `date` is always "today" here — see the note on the focus effect above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveClassSectionId, liveSubjectId]);
-  // Refetch when the bell flips the live period, and on every focus (a note
-  // added from the Notes tool elsewhere must show up on the badge).
   // Refetch when the bell flips the live period, and on every focus (a note
   // added from the Notes tool elsewhere must show up on the badge).
   useEffect(() => {
@@ -146,6 +148,11 @@ export default function Today() {
   // The queue: every class whose register is still open, in the order the day
   // runs — the one that is live (or overdue) is simply the one nearest the top.
   const needsInk = classes.filter((e) => !e.register?.taken && e.slot);
+
+  // ONE first frame: the day is the page; the message badge and the live
+  // period's counts get a moment to land with it, so nothing pops in after.
+  const countsPending = !!liveClassSectionId && !!liveSubjectId && countsFor !== `${liveClassSectionId}:${liveSubjectId}`;
+  const painted = useFirstPaint(day !== null || error !== null, [!unreadSettled, countsPending]);
 
   function goToAttendance(classSectionId: string) {
     const className = entries.find((e) => e.slot?.classSectionId === classSectionId)?.slot?.className;
@@ -176,7 +183,7 @@ export default function Today() {
       {/* Direction C: the greeting sits on the band; the sheet (NowCard) overlaps it. */}
       <BandGreeting
         eyebrow={fmtLongDay(new Date())}
-        title={name ?? 'Today'}
+        title={s?.displayName ?? 'Today'}
         right={<NotificationBell group="(staff)" onBand />}
       />
 
@@ -187,9 +194,9 @@ export default function Today() {
           was missing is the shape of everything below it: the hero, then the
           day. Home is the screen a teacher opens on a corridor connection, so
           it is the one where an empty page for two seconds reads as broken. */}
-      {day === null && !error && <LoadingRows label="Loading your day…" rows={4} />}
+      {!painted && !error && <LoadingRows label="Loading your day…" rows={4} />}
 
-      {day !== null && !error && entries.length === 0 && (
+      {painted && day !== null && !error && entries.length === 0 && (
         <Card>
           <Text style={{ color: tokens.color.sub }}>
             No timetable has been set up for you yet — ask your school admin.
@@ -197,7 +204,7 @@ export default function Today() {
         </Card>
       )}
 
-      {day !== null && !error && entries.length > 0 && (
+      {painted && day !== null && !error && entries.length > 0 && (
         <>
           {/* Pitch №6: the period's notes and to-dos live ON the hero as the
               kit row, and open as a bottom sheet — not as two cards of their
@@ -263,11 +270,11 @@ export default function Today() {
                 onPress: () => (needsInk[0]?.slot ? goToAttendance(needsInk[0].slot.classSectionId) : router.push('/(staff)/(tabs)/attendance')),
               },
               { label: 'Homework', icon: 'assignments', testID: 'hero-act-homework', route: '/(staff)/(tabs)/home/assignments' },
-              { label: 'Notice', icon: 'notices', tone: 'amber' as const, testID: 'hero-act-notice', route: '/(staff)/(tabs)/home/post' },
+              { label: 'Notice', icon: 'notices', testID: 'hero-act-notice', route: '/(staff)/(tabs)/home/post' },
               { label: 'Test', icon: 'results', testID: 'hero-act-test', route: '/(staff)/(tabs)/home/tests' },
-              { label: 'Messages', icon: 'messages', tone: 'amber' as const, route: '/(staff)/(tabs)/home/messages', badge: unreadMsgs },
+              { label: 'Messages', icon: 'messages', route: '/(staff)/(tabs)/home/messages', badge: unreadMsgs },
               { label: 'Diary', icon: 'diary', route: '/(staff)/(tabs)/home/diary' },
-              { label: 'Requests', icon: 'requests', tone: 'amber' as const, route: '/(staff)/(tabs)/home/requests' },
+              { label: 'Requests', icon: 'requests', route: '/(staff)/(tabs)/home/requests' },
               { label: 'Notes', icon: 'notes', route: '/(staff)/(tabs)/home/notes' },
               { label: 'Holidays', icon: 'holidays', tone: 'green' as const, route: '/(staff)/(tabs)/home/holidays', date: String(new Date().getDate()) },
               // The teacher's own shelf — only for a school with the library on.

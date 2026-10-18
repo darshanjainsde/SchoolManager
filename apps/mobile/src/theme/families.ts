@@ -193,6 +193,18 @@ export function useFamilies(): Record<Family, FamilyTone> {
  * rejected. Each ink clears 4.5:1 on its own tint in both schemes
  * (theme/__tests__/families.test.ts).
  */
+/**
+ * THE TWO MEANING COLOURS (18 Oct 2026) — and the only colours a tile may take
+ * besides the school's own accent. Colour on a Home is a signal, so it is kept
+ * for two things; spread wider, a colour stops meaning anything:
+ *   amber — someone is WAITING ON YOU: a register to take, families' concerns,
+ *           leave to decide, a bill or a fine to settle;
+ *   green — something FOR YOU: your pay, days off.
+ * Everything else (messages, notices, diary, homework…) is the accent. Never
+ * colour alone: a waiting tile also carries its count as a badge. Guarded by
+ * components/__tests__/HomeToolGrid.tone.test.tsx, which reads every Home.
+ * The five decorative hues of 16 Oct were rejected ("way too bad").
+ */
 export type ToneName = 'amber' | 'green';
 
 export function toneFamily(tone: ToneName, c: ColorPalette, scheme: ColorScheme): FamilyTone {

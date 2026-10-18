@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import type { PortalHome, TimetableSlot } from '@skoolos/types';
 import { useQuery } from '@/lib/query';
 import { useSession } from '@/lib/use-session';
+import { useFirstPaint } from '@/lib/use-first-paint';
 import { hasFeature } from '@/lib/features';
 import { MORE_ITEMS } from '@/lib/family-nav';
 import type { StudentFees } from '@/lib/fees';
@@ -137,6 +138,10 @@ export default function Home() {
   const unreadMsgs = unread.data?.count ?? 0;
   const error = home.error && !home.data ? home.error : null;
   const refreshing = home.refreshing;
+  // ONE first frame: the child's page is the core; the badges (messages, late
+  // fees, the wall) get a moment to land with it, so no tile pops in after.
+  const painted = useFirstPaint(home.data !== null || error !== null, [unread.loading, fees.loading, wall.loading]);
+  const shown = painted ? profile : null;
 
   /** Pull to refresh. Nothing is cleared first — the old page stays until the new one lands. */
   function refresh() {
@@ -189,20 +194,20 @@ export default function Home() {
     <Screen band onRefresh={refresh} refreshing={refreshing}>
       {/* Direction C: the dateline and the greeting sit on the band; the
           child's sheet overlaps it. On the birthday the banner keeps its place above. */}
-      {myBirthday && profile ? <BirthdayBanner firstName={profile.firstName} /> : null}
+      {myBirthday && shown ? <BirthdayBanner firstName={shown.firstName} /> : null}
       <BandGreeting
         eyebrow={fmtLongDay(new Date())}
-        title={profile ? `${profile.firstName} ${profile.lastName ?? ''}`.trim() : 'Home'}
-        line={profile ? `${profile.className ?? 'No class assigned'}${profile.rollNo ? ` · Roll ${profile.rollNo}` : ''}` : undefined}
+        title={shown ? `${shown.firstName} ${shown.lastName ?? ''}`.trim() : 'Home'}
+        line={shown && profile ? `${profile.className ?? 'No class assigned'}${profile.rollNo ? ` · Roll ${profile.rollNo}` : ''}` : undefined}
         right={<NotificationBell group="(family)" onBand />}
       />
 
       {error && <ErrorState error={error} onRetry={home.reload} />}
-      {profile === null && !error && (
+      {shown === null && !error && (
         <LoadingRows label="Loading your details…" rows={3} />
       )}
 
-      {profile && (
+      {shown && profile && (
         <>
           {/* Class + roll are the student's OWN (not a parent-facing "your
               child" label) — one shared STUDENT login can't tell who's holding
@@ -244,15 +249,15 @@ export default function Home() {
             tools={[
               // The asks ride on the tiles as badges (direction C: the grid is
               // the one place): an unread message, an unsigned diary remark, a late bill.
-              { label: 'Ask teacher', icon: 'messages', tone: 'amber' as const, testID: 'hero-act-ask', badge: unreadMsgs, route: '/(family)/(tabs)/home/messages' },
-              { label: 'Diary', icon: 'diary', tone: 'amber' as const, testID: 'hero-act-diary', badge: diary?.unsignedCount ?? 0, route: '/(family)/(tabs)/home/diary' },
+              { label: 'Ask teacher', icon: 'messages', testID: 'hero-act-ask', badge: unreadMsgs, route: '/(family)/(tabs)/home/messages' },
+              { label: 'Diary', icon: 'diary', testID: 'hero-act-diary', badge: diary?.unsignedCount ?? 0, route: '/(family)/(tabs)/home/diary' },
               { label: 'Homework', icon: 'assignments', testID: 'hero-act-homework', route: '/(family)/(tabs)/home/assignments' },
               ...(hasFeature(s, 'FEES')
                 ? [{ label: 'Fees', icon: 'fees', tone: 'amber' as const, testID: 'hero-act-fees', badge: lateBills, route: '/(family)/(tabs)/fees' }]
                 : []),
               { label: 'Results', icon: 'results', route: '/(family)/results', badge: nextExam ? 1 : 0 },
               { label: 'Timetable', icon: 'timetable', route: '/(family)/(tabs)/home/timetable' },
-              { label: 'Notices', icon: 'notices', tone: 'amber' as const, route: '/(family)/(tabs)/home/notices' },
+              { label: 'Notices', icon: 'notices', route: '/(family)/(tabs)/home/notices' },
               { label: 'Holidays', icon: 'holidays', tone: 'green' as const, route: '/(family)/(tabs)/home/holidays', date: String(new Date().getDate()) },
               // A paid module's door is drawn only for a school that has it;
               // the Complaint Box is free, so always (nav-reachability.test).
