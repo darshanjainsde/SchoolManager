@@ -424,16 +424,41 @@ it('flips at the bell while the teacher is still looking at it', async () => {
   expect(screen.getByLabelText(/^Register, [1-9]\d* waiting$/)).toBeTruthy();
 });
 
-it('a live class keeps the hero short — the day\'s figures wait for the bell (audit 9 Oct 2026)', async () => {
+it('the day\'s figures ride on the band as rings — during a class too (report card, 18 Oct 2026)', async () => {
   setNow(8, 44);
   mockDay(DAY);
   render(<Today />);
   await screen.findByTestId('now-card');
-  expect(screen.queryByTestId('hero-figures')).toBeNull();
-  await act(async () => {
-    jest.advanceTimersByTime(60_000);
+  // Two classes, neither register taken yet: 0 of 2, and nobody counted present.
+  expect(within(screen.getByTestId('hero-fig-registers')).getByText('0/2')).toBeTruthy();
+  expect(within(screen.getByTestId('hero-fig-present')).getByText('Not yet')).toBeTruthy();
+  expect(screen.getByLabelText('0 of 2 registers taken today')).toBeTruthy();
+  // The registers ring is a door to the Attendance tab.
+  fireEvent.press(screen.getByTestId('hero-fig-registers'));
+  expect(mockPush).toHaveBeenCalledWith('/(staff)/(tabs)/attendance');
+});
+
+it('the present ring counts only the registers already taken', async () => {
+  setNow(10, 0);
+  mockDay({
+    ...DAY,
+    entries: [classEntry({ register: { taken: true, present: 21, total: 28, markedBy: 'Priya Sharma' } }), breakEntry, p2],
   });
-  expect(screen.getByTestId('hero-figures')).toBeTruthy();
+  render(<Today />);
+  await screen.findByTestId('now-card');
+  expect(within(screen.getByTestId('hero-fig-registers')).getByText('1/2')).toBeTruthy();
+  // 21 of the 28 in the one register taken — p2's 30 are not counted yet.
+  expect(within(screen.getByTestId('hero-fig-present')).getByText('75%')).toBeTruthy();
+});
+
+it('the menu is grouped: in class, messages and notices, for you', async () => {
+  setNow(8, 20);
+  mockDay(DAY);
+  render(<Today />);
+  await screen.findByTestId('now-card');
+  expect(within(screen.getByTestId('home-menu-group-In class')).getByTestId('hero-act-register')).toBeTruthy();
+  expect(within(screen.getByTestId('home-menu-group-Messages and notices')).getByTestId('hometool-Complaint Box')).toBeTruthy();
+  expect(within(screen.getByTestId('home-menu-group-For you')).getByTestId('hometool-Holidays')).toBeTruthy();
 });
 
 it('refetches on focus so a colleague marking the register elsewhere shows up without a manual reload', async () => {

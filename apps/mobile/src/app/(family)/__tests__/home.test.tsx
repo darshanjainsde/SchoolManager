@@ -225,11 +225,11 @@ describe('KPI row', () => {
     expect(await findByText('42/50')).toBeTruthy();
   });
 
-  it('shows neutral fallbacks when nothing has been recorded yet', async () => {
+  it('shows plain words, not dashes or zeros, when nothing has been recorded yet', async () => {
     mockEndpoints();
-    const { findByText } = render(<Home />);
-    expect(await findByText('No records')).toBeTruthy();
-    expect(await findByText('None yet')).toBeTruthy();
+    const { findByLabelText } = render(<Home />);
+    expect(await findByLabelText('No attendance marked this month')).toBeTruthy();
+    expect(await findByLabelText('No results yet')).toBeTruthy();
   });
 });
 
@@ -258,14 +258,14 @@ describe('latest announcements', () => {
 });
 
 describe('navigation', () => {
-  it('KPI tiles deep-link to Attendance and Results', async () => {
+  it('the rings on the band deep-link to Attendance and Results', async () => {
     mockEndpoints();
-    const { findByText } = render(<Home />);
+    const { findByTestId } = render(<Home />);
 
-    fireEvent.press(await findByText('This month'));
+    fireEvent.press(await findByTestId('band-fig-attendance'));
     expect(mockPush).toHaveBeenCalledWith('/(family)/attendance');
 
-    fireEvent.press(await findByText('Latest result'));
+    fireEvent.press(await findByTestId('band-fig-result'));
     expect(mockPush).toHaveBeenCalledWith('/(family)/results');
   });
 

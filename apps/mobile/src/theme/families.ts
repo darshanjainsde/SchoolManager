@@ -56,10 +56,26 @@ export function familyTone(icon: string, scheme: ColorScheme): FamilyTone {
 // app, not navy buttons beside indigo tiles. Each ink is pushed until it
 // clears 4.5:1 on its own tint in both schemes.
 
-function legible(ink: string, bg: string, toward: string): string {
+function legible(ink: string, bg: string, toward: string, target = 4.5): string {
   let out = ink;
-  for (let i = 0; i < 24 && contrastRatio(out, bg) < 4.5; i++) out = mix(out, toward, 0.12);
+  // Finer steps for the 7:1 glyph target; the 4.5 callers keep their old step (and their old colours).
+  const step = target > 4.5 ? 0.08 : 0.12;
+  for (let i = 0; i < 40 && contrastRatio(out, bg) < target; i++) out = mix(out, toward, step);
   return out;
+}
+
+/**
+ * A GLYPH ON ITS OWN TINT clears 7:1, not the 4.5 floor (user, 18 Oct 2026:
+ * in dark the glyph was the accent itself on a tile made of the same accent —
+ * 4.6:1 — and read "like a background colour"). In dark the glyph starts as a
+ * pale tint of its colour and is lifted toward white; in light it is the deep
+ * shade pushed toward black. Same depths for every hue, so no tile is louder.
+ */
+export const GLYPH_CONTRAST = 7;
+function glyphOn(ink: string, tile: string, scheme: ColorScheme): string {
+  return scheme === 'dark'
+    ? legible(mix(ink, '#FFFFFF', 0.35), tile, '#FFFFFF', GLYPH_CONTRAST)
+    : legible(ink, tile, '#000000', GLYPH_CONTRAST);
 }
 
 export function deriveFamilies(c: ColorPalette, scheme: ColorScheme): Record<Family, FamilyTone> {
@@ -69,7 +85,7 @@ export function deriveFamilies(c: ColorPalette, scheme: ColorScheme): Record<Fam
     const base = c.surface;
     const tone = (ink: string, softFrom: string, k: number): FamilyTone => {
       const soft = mix(softFrom, base, k);
-      return { ink: legible(ink, soft, '#FFFFFF'), soft };
+      return { ink: glyphOn(ink, soft, 'dark'), soft };
     };
     // ONE tint for every tile (user, 9 Oct 2026: the Fees tile read greyer
     // than its neighbours — it was mixed from the deep shade). Families now
@@ -88,7 +104,7 @@ export function deriveFamilies(c: ColorPalette, scheme: ColorScheme): Record<Fam
   const W = '#FFFFFF';
   const tone = (ink: string, softFrom: string, k: number): FamilyTone => {
     const soft = mix(softFrom, W, k);
-    return { ink: legible(ink, soft, '#000000'), soft };
+    return { ink: glyphOn(ink, soft, 'light'), soft };
   };
   return {
     learn: tone(F, F, 0.9),
@@ -212,10 +228,10 @@ export function toneFamily(tone: ToneName, c: ColorPalette, scheme: ColorScheme)
   const inkFrom = tone === 'amber' ? c.late : c.green;
   if (scheme === 'dark') {
     const soft = mix(base, c.surface, 0.82);
-    return { ink: legible(inkFrom, soft, '#FFFFFF'), soft };
+    return { ink: glyphOn(inkFrom, soft, 'dark'), soft };
   }
   const soft = mix(base, '#FFFFFF', 0.86);
-  return { ink: legible(inkFrom, soft, '#000000'), soft };
+  return { ink: glyphOn(inkFrom, soft, 'light'), soft };
 }
 
 /** The filled (live) tile for a meaning colour — vc24's amber register tile. */
@@ -232,4 +248,45 @@ export function useFamilyTone(): (icon: string) => FamilyTone {
   const { scheme, tokens } = useTheme();
   const fam = useMemo(() => deriveFamilies(tokens.color, scheme), [tokens.color, scheme]);
   return (icon: string) => fam[familyOf(icon)];
+}
+
+/**
+ * THE RINGS ON THE BAND (report-card Home, user 18 Oct 2026). Three day
+ * figures sit on the band as rings, each in its own colour so they read as
+ * three things, not one. The colours come from a fixed pool of chalk pastels
+ * (the colours a teacher writes on a board with): whichever three sit
+ * FURTHEST in hue from the band and from each other, so any school's colour —
+ * a named one or its own brand — gets a set that suits it. Every pastel clears
+ * 3:1 on every band (graphical objects, WCAG 1.4.11); the figure INSIDE a ring
+ * is white, which the band already guarantees at 7:1.
+ */
+export const RING_POOL = ['#7FE0BD', '#FFB48A', '#FFD66B', '#93CBFF', '#C9B5FF', '#FF9C8A', '#C6EC7A', '#7FDCE0'] as const;
+
+function hueOf(hex: string): number {
+  const n = parseInt(hex.replace('#', ''), 16);
+  const r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+  if (d === 0) return -1; // a grey has no hue: every pastel is equally far
+  let h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return (h * 60 + 360) % 360;
+}
+const hueGap = (a: number, b: number) => (a < 0 || b < 0 ? 180 : Math.min(Math.abs(a - b), 360 - Math.abs(a - b)));
+
+export function bandRings(c: ColorPalette, scheme: ColorScheme): readonly [string, string, string] {
+  const band = bandStops(c, scheme)[0];
+  const bh = hueOf(band);
+  const picked: string[] = [];
+  while (picked.length < 3) {
+    let best: string = RING_POOL[0];
+    let bestScore = -1;
+    for (const cand of RING_POOL) {
+      if (picked.includes(cand) || contrastRatio(cand, band) < 3) continue;
+      const h = hueOf(cand);
+      // Far from the band first (weighted), then far from the rings already chosen.
+      const score = Math.min(hueGap(h, bh) * 1.4, ...picked.map((p) => hueGap(h, hueOf(p))));
+      if (score > bestScore) { bestScore = score; best = cand; }
+    }
+    picked.push(best);
+  }
+  return [picked[0], picked[1], picked[2]] as const;
 }

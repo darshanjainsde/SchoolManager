@@ -1,8 +1,8 @@
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useTheme, type ThemePreference } from '@/theme/theme-context';
 import { GROUNDS, GROUND_NAMES } from '@/theme/grounds';
-import { ACCENTS, ACCENT_NAMES } from '@/theme/accents';
-import { deriveFamilies } from '@/theme/families';
+import { ACCENTS, ACCENT_NAMES, applyAccent } from '@/theme/accents';
+import { bandRings, bandStops, deriveFamilies, toneFamily } from '@/theme/families';
 import { Icon } from './icons';
 
 const OPTIONS: Array<{ value: ThemePreference; label: string }> = [
@@ -28,6 +28,8 @@ export function AppearanceSetting() {
   const { tokens, preference, setPreference, ground, setGround, accent, setAccent, scheme } =
     useTheme();
   const family = deriveFamilies(tokens.color, scheme);
+  const rings = bandRings(tokens.color, scheme);
+  const band = bandStops(tokens.color, scheme)[0];
 
   const label = { fontSize: 13, fontWeight: '600' as const, color: tokens.color.ink };
   const hint = { fontSize: 11, color: tokens.color.sub, marginTop: -4 };
@@ -77,8 +79,8 @@ export function AppearanceSetting() {
       </View>
 
       <View style={{ gap: 8 }}>
-        <Text style={label}>Highlight</Text>
-        <Text style={hint}>Buttons, active tabs and the card at the top.</Text>
+        <Text style={label}>Colour</Text>
+        <Text style={hint}>The band at the top of Home, its rings, buttons and tiles.</Text>
         {/* A grid, not a sideways scroll: twelve colours, all visible, each
             showing its fill over its own tint (sckools-ui-standards §7). */}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 14 }}>
@@ -88,7 +90,11 @@ export function AppearanceSetting() {
             // 'My school' wears the colour currently in force — the school's.
             const t = (scheme === 'dark' ? a.dark : a.light) ?? null;
             const swatch = t?.fill ?? tokens.color.indigo;
-            const tint = t?.tint ?? tokens.color.indigo50;
+            // Each swatch shows what the colour builds: the band's deep shade
+            // carrying the three ring colours it gets (theme/families.ts bandRings).
+            const pal = name === 'school' || !t ? tokens.color : applyAccent(tokens.color, t);
+            const deepBand = bandStops(pal, scheme)[0];
+            const dots = bandRings(pal, scheme);
             return (
               <Pressable
                 key={name}
@@ -109,8 +115,14 @@ export function AppearanceSetting() {
                     borderColor: on ? swatch : 'transparent',
                   }}
                 >
-                  <View style={{ flex: 1, borderRadius: 999, backgroundColor: tint, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
-                    <View style={{ width: '100%', height: '58%', position: 'absolute', bottom: 0, backgroundColor: swatch }} />
+                  <View style={{ flex: 1, borderRadius: 999, backgroundColor: deepBand, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
+                    {!on ? (
+                      <View style={{ flexDirection: 'row', gap: 3 }}>
+                        {dots.map((d) => (
+                          <View key={d} style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: d }} />
+                        ))}
+                      </View>
+                    ) : null}
                     {on ? (
                       <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: tokens.color.surface, alignItems: 'center', justifyContent: 'center' }}>
                         <Icon name="check" size={14} color={swatch} fillOpacity={0} />
@@ -129,16 +141,25 @@ export function AppearanceSetting() {
             );
           })}
         </View>
-        {/* The family this choice builds: the six tool shades, live. */}
-        <View testID="accent-family-preview" style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
-          {(['learn', 'money', 'care', 'people', 'sport', 'school'] as const).map((k) => {
-            const f = family[k];
-            return (
-              <View key={k} style={{ flex: 1, height: 40, borderRadius: 12, backgroundColor: f.soft, alignItems: 'center', justifyContent: 'center' }}>
-                <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: f.ink }} />
+        {/* What this choice builds, live: the band with its rings, then a
+            plain tile, a "waiting on you" tile and a "yours" tile. */}
+        <View testID="accent-family-preview" style={{ borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: tokens.color.line, marginTop: 4 }}>
+          <View style={{ backgroundColor: band, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', paddingVertical: 12 }}>
+            {rings.map((r, i) => (
+              <View key={r} style={{ width: 34, height: 34, borderRadius: 17, borderWidth: 4, borderColor: r, borderTopColor: i === 2 ? 'rgba(255,255,255,0.16)' : r }} />
+            ))}
+          </View>
+          <View style={{ backgroundColor: tokens.color.surface, flexDirection: 'row', gap: 10, padding: 10 }}>
+            {[
+              { soft: family.learn.soft, ink: family.learn.ink, icon: 'assignments' as const },
+              { ...toneFamily('amber', tokens.color, scheme), icon: 'take' as const },
+              { ...toneFamily('green', tokens.color, scheme), icon: 'holidays' as const },
+            ].map((t) => (
+              <View key={t.icon} style={{ flex: 1, height: 44, borderRadius: 14, backgroundColor: t.soft, alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name={t.icon} size={22} color={t.ink} />
               </View>
-            );
-          })}
+            ))}
+          </View>
         </View>
       </View>
 

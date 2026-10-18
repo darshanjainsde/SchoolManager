@@ -1,8 +1,7 @@
-import { fetchCached, useReload } from '@/lib/query';
+import { fetchCached, useQuery, useReload } from '@/lib/query';
 import { useCallback, useEffect, useState } from 'react';
 import { Text } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { HeroDeck } from '@/components/HeroDeck';
 import { BandGreeting } from '@/components/BandHeader';
 import type { ClassNoteRow, ClassTodoRow, TeacherDay } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
@@ -21,6 +20,7 @@ import { fmtLongDay } from '@/lib/dates';
 import { hasFeature } from '@/lib/features';
 import { useSession } from '@/lib/use-session';
 import { useFirstPaint } from '@/lib/use-first-paint';
+import type { BandMetric } from '@/components/BandRings';
 
 export default function Today() {
   const tokens = useTokens();
@@ -152,7 +152,57 @@ export default function Today() {
   // ONE first frame: the day is the page; the message badge and the live
   // period's counts get a moment to land with it, so nothing pops in after.
   const countsPending = !!liveClassSectionId && !!liveSubjectId && countsFor !== `${liveClassSectionId}:${liveSubjectId}`;
-  const painted = useFirstPaint(day !== null || error !== null, [!unreadSettled, countsPending]);
+  // How far each of my classes is through its syllabus — only where the owner switched the tracker on.
+  const syllabusOn = hasFeature(s, 'COURSE_MANAGEMENT');
+  const mine = useQuery<{ tracks: Array<{ leaves: number; done: number }> }>(syllabusOn ? '/manage/syllabus/mine' : null);
+  const painted = useFirstPaint(day !== null || error !== null, [!unreadSettled, countsPending, mine.loading]);
+
+  // THE REPORT CARD ON THE BAND (user, 18 Oct 2026): three of the day's
+  // figures as rings. Registers taken; children present across the registers
+  // taken so far; the syllabus covered across my classes (or, without the
+  // tracker, how much of the teaching day is behind us).
+  const registersPct = classes.length ? (taken / classes.length) * 100 : 0;
+  const takenClasses = classes.filter((e) => e.register?.taken);
+  const seats = takenClasses.reduce((sum, e) => sum + (e.register?.total ?? 0), 0);
+  const presentPct = seats > 0 ? Math.round((studentsMarked / seats) * 100) : null;
+  const leaves = (mine.data?.tracks ?? []).reduce((sum, t) => sum + t.leaves, 0);
+  const doneLeaves = (mine.data?.tracks ?? []).reduce((sum, t) => sum + t.done, 0);
+  const syllabusPct = leaves > 0 ? Math.round((doneLeaves / leaves) * 100) : null;
+  const classesDone = classes.filter((e) => minutesOfDay(e.endTime) <= now).length;
+  const metrics: BandMetric[] = !painted
+    ? [{ value: '', pct: 0, label: 'registers taken' }, { value: '', pct: 0, label: 'present today' }, { value: '', pct: 0, label: syllabusOn ? 'syllabus covered' : 'of the day done' }]
+    : [
+        {
+          value: `${taken}/${classes.length}`,
+          pct: registersPct,
+          label: 'registers taken',
+          testID: 'hero-fig-registers',
+          accessibilityLabel: `${taken} of ${classes.length} registers taken today`,
+          onPress: () => router.push('/(staff)/(tabs)/attendance'),
+        },
+        {
+          value: presentPct === null ? 'Not yet' : `${presentPct}%`,
+          pct: presentPct ?? 0,
+          label: 'present today',
+          testID: 'hero-fig-present',
+          accessibilityLabel: presentPct === null ? 'No register taken yet today' : `${studentsMarked} of ${seats} children present today`,
+        },
+        syllabusOn
+          ? {
+              value: syllabusPct === null ? 'None' : `${syllabusPct}%`,
+              pct: syllabusPct ?? 0,
+              label: 'syllabus covered',
+              testID: 'hero-fig-syllabus',
+              accessibilityLabel: syllabusPct === null ? 'No chapters added yet' : `${syllabusPct}% of the syllabus covered across your classes`,
+              onPress: () => router.push('/(staff)/(tabs)/home/syllabus'),
+            }
+          : {
+              value: `${classesDone}/${classes.length}`,
+              pct: classes.length ? (classesDone / classes.length) * 100 : 0,
+              label: 'classes done',
+              testID: 'hero-fig-day',
+            },
+      ];
 
   function goToAttendance(classSectionId: string) {
     const className = entries.find((e) => e.slot?.classSectionId === classSectionId)?.slot?.className;
@@ -179,12 +229,13 @@ export default function Today() {
   }
 
   return (
-    <Screen band onRefresh={refresh} refreshing={refreshing}>
+    <Screen band="rings" onRefresh={refresh} refreshing={refreshing}>
       {/* Direction C: the greeting sits on the band; the sheet (NowCard) overlaps it. */}
       <BandGreeting
         eyebrow={fmtLongDay(new Date())}
         title={s?.displayName ?? 'Today'}
         right={<NotificationBell group="(staff)" onBand />}
+        metrics={error ? undefined : metrics}
       />
 
       {error && <ErrorState error={error} onRetry={reload} />}
@@ -222,23 +273,6 @@ export default function Today() {
             onOpenNotes={liveSlot ? () => setSheet('notes') : undefined}
             onOpenTodos={liveSlot ? () => setSheet('todos') : undefined}
             dayLine={`${classes.length} class${classes.length === 1 ? '' : 'es'} today · ${taken} taken · ${pending} pending`}
-            deck={
-              <HeroDeck
-                // While a class is live the hero already carries the period,
-                // its tools and its button; the day's figures made it three
-                // rows of controls tall and pushed the menu off the screen
-                // (audit 9 Oct 2026). They return the moment the bell goes.
-                figures={
-                  liveSlot
-                    ? []
-                    : [
-                        { value: `${taken}/${classes.length}`, label: 'registers', testID: 'hero-fig-registers', family: 'care' },
-                        { value: String(studentsMarked), label: 'marked', testID: 'hero-fig-marked', tone: 'good' },
-                        { value: String(unreadMsgs), label: unreadMsgs === 1 ? 'message' : 'messages', testID: 'hero-fig-messages', family: 'people' },
-                      ]
-                }
-              />
-            }
           />
 
           {liveSlot && (
@@ -263,29 +297,43 @@ export default function Today() {
               rides there as a badge), so they are not drawn twice; every
               other door is here, badged ones first. */}
           <HomeMenu
-            tools={[
-              // The four verbs that used to ride on the hero (direction C: the grid is the one place).
+            groups={[
               {
-                label: 'Register', icon: 'take', tone: 'amber' as const, testID: 'hero-act-register', badge: needsInk.length, live: needsInk.length > 0,
-                onPress: () => (needsInk[0]?.slot ? goToAttendance(needsInk[0].slot.classSectionId) : router.push('/(staff)/(tabs)/attendance')),
+                title: 'In class',
+                tools: [
+                  {
+                    label: 'Register', icon: 'take', tone: 'amber' as const, testID: 'hero-act-register', badge: needsInk.length, live: needsInk.length > 0,
+                    onPress: () => (needsInk[0]?.slot ? goToAttendance(needsInk[0].slot.classSectionId) : router.push('/(staff)/(tabs)/attendance')),
+                  },
+                  { label: 'Homework', icon: 'assignments', testID: 'hero-act-homework', route: '/(staff)/(tabs)/home/assignments' },
+                  { label: 'Test', icon: 'results', testID: 'hero-act-test', route: '/(staff)/(tabs)/home/tests' },
+                  // Where each class has reached — only where the owner switched the tracker on.
+                  ...(syllabusOn ? [{ label: 'Syllabus', icon: 'syllabus', route: '/(staff)/(tabs)/home/syllabus', ...(syllabusPct !== null ? { arc: syllabusPct } : {}) }] : []),
+                  { label: 'Diary', icon: 'diary', route: '/(staff)/(tabs)/home/diary' },
+                  { label: 'Notes', icon: 'notes', route: '/(staff)/(tabs)/home/notes' },
+                ],
               },
-              { label: 'Homework', icon: 'assignments', testID: 'hero-act-homework', route: '/(staff)/(tabs)/home/assignments' },
-              { label: 'Notice', icon: 'notices', testID: 'hero-act-notice', route: '/(staff)/(tabs)/home/post' },
-              { label: 'Test', icon: 'results', testID: 'hero-act-test', route: '/(staff)/(tabs)/home/tests' },
-              { label: 'Messages', icon: 'messages', route: '/(staff)/(tabs)/home/messages', badge: unreadMsgs },
-              { label: 'Diary', icon: 'diary', route: '/(staff)/(tabs)/home/diary' },
-              { label: 'Requests', icon: 'requests', route: '/(staff)/(tabs)/home/requests' },
-              { label: 'Notes', icon: 'notes', route: '/(staff)/(tabs)/home/notes' },
-              { label: 'Holidays', icon: 'holidays', tone: 'green' as const, route: '/(staff)/(tabs)/home/holidays', date: String(new Date().getDate()) },
-              // The teacher's own shelf — only for a school with the library on.
-              ...(hasFeature(s, 'LIBRARY') ? [{ label: 'Library', icon: 'library', route: '/(staff)/(tabs)/home/library' }] : []),
-              // Pay slips, only where the school runs pay on Sckools.
-              ...(hasFeature(s, 'SALARY') ? [{ label: 'My pay', icon: 'fees', tone: 'green' as const, route: '/(staff)/(tabs)/home/salary' }] : []),
-              // Where each class has reached — only where the owner switched the tracker on.
-              ...(hasFeature(s, 'COURSE_MANAGEMENT') ? [{ label: 'Syllabus', icon: 'syllabus', route: '/(staff)/(tabs)/home/syllabus' }] : []),
-              // Concerns the class teacher's families raised. Free, so always
-              // drawn — it was on no screen before 2026-10-07 (nav-reachability).
-              { label: 'Complaint Box', icon: 'concern', tone: 'amber' as const, route: '/(staff)/(tabs)/home/concerns' },
+              {
+                title: 'Messages and notices',
+                tools: [
+                  { label: 'Messages', icon: 'messages', route: '/(staff)/(tabs)/home/messages', badge: unreadMsgs },
+                  { label: 'Notice', icon: 'notices', testID: 'hero-act-notice', route: '/(staff)/(tabs)/home/post' },
+                  // Concerns the class teacher's families raised. Free, so always
+                  // drawn — it was on no screen before 2026-10-07 (nav-reachability).
+                  { label: 'Complaint Box', icon: 'concern', tone: 'amber' as const, route: '/(staff)/(tabs)/home/concerns' },
+                ],
+              },
+              {
+                title: 'For you',
+                tools: [
+                  { label: 'Requests', icon: 'requests', route: '/(staff)/(tabs)/home/requests' },
+                  { label: 'Holidays', icon: 'holidays', tone: 'green' as const, route: '/(staff)/(tabs)/home/holidays', date: String(new Date().getDate()) },
+                  // Pay slips, only where the school runs pay on Sckools.
+                  ...(hasFeature(s, 'SALARY') ? [{ label: 'My pay', icon: 'fees', tone: 'green' as const, route: '/(staff)/(tabs)/home/salary' }] : []),
+                  // The teacher's own shelf — only for a school with the library on.
+                  ...(hasFeature(s, 'LIBRARY') ? [{ label: 'Library', icon: 'library', route: '/(staff)/(tabs)/home/library' }] : []),
+                ],
+              },
             ]}
           />
 

@@ -16,7 +16,8 @@ import type { ColorPalette } from './tokens';
  */
 export type AccentName =
   | 'school' | 'navy' | 'green' | 'teal' | 'oxblood' | 'indigo'
-  | 'plum' | 'ocean' | 'leaf' | 'saffron' | 'rose' | 'charcoal';
+  | 'plum' | 'ocean' | 'leaf' | 'saffron' | 'rose' | 'charcoal'
+  | 'terracotta' | 'mehndi';
 
 export interface AccentTone {
   /** The fill itself — buttons, active tabs, the Now card. */
@@ -111,6 +112,21 @@ export const ACCENTS: Record<AccentName, Accent> = {
     hint: 'Quiet grey',
     light: { fill: '#374151', deep: '#1F2937', tint: '#E6E8EC', onFill: '#FFFFFF' },
     dark: { fill: '#AAB4C3', deep: '#8A95A6', tint: '#22262D', onFill: '#0E1114' },
+  },
+  // Two warm earth colours (user, 18 Oct 2026: "choose proper colour options
+  // in appearance"): the clay of a matka and the olive of mehndi. Both sit
+  // apart from every colour above, and both carry the band's rings well.
+  terracotta: {
+    label: 'Terracotta',
+    hint: 'Clay red',
+    light: { fill: '#9C3D24', deep: '#742C19', tint: '#F6E4DD', onFill: '#FFFFFF' },
+    dark: { fill: '#F0A08A', deep: '#D9806A', tint: '#3A221B', onFill: '#0E1114' },
+  },
+  mehndi: {
+    label: 'Mehndi green',
+    hint: 'Olive green',
+    light: { fill: '#4F5F1A', deep: '#384412', tint: '#E9EDD9', onFill: '#FFFFFF' },
+    dark: { fill: '#BACB78', deep: '#9DAF5A', tint: '#262B17', onFill: '#0E1114' },
   },
 };
 

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Text, View } from 'react-native';
 import { brand, font } from '@/theme/tokens';
+import { BandRings, type BandMetric } from './BandRings';
 
 /** How tall the band behind a Home's greeting is, before the sheet overlaps it (sckools-ui-standards §3c). */
 export const BAND_HEIGHT = 236;
@@ -19,6 +20,7 @@ export function BandGreeting({
   right,
   titleTestID,
   testID = 'band-greeting',
+  metrics,
 }: {
   eyebrow?: string;
   title: string;
@@ -26,9 +28,11 @@ export function BandGreeting({
   right?: ReactNode;
   titleTestID?: string;
   testID?: string;
+  /** The day's figures as rings under the name (pair with `<Screen band="rings">`). */
+  metrics?: BandMetric[];
 }) {
   const on = brand.onHero;
-  return (
+  const greeting = (
     <View testID={testID} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginHorizontal: 2 }}>
       <View style={{ flex: 1, minWidth: 0 }}>
         {eyebrow ? (
@@ -51,6 +55,13 @@ export function BandGreeting({
         ) : null}
       </View>
       {right}
+    </View>
+  );
+  if (!metrics || metrics.length === 0) return greeting;
+  return (
+    <View>
+      {greeting}
+      <BandRings metrics={metrics} />
     </View>
   );
 }

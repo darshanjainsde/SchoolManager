@@ -174,21 +174,46 @@ export function HomeToolGrid({ tools, testID }: { tools: HomeTool[]; testID?: st
   );
 }
 
+/** One labelled group of doors inside the Home menu. */
+export interface HomeToolGroup {
+  /** Sentence case, a few plain words: "In class", "For you". */
+  title: string;
+  tools: HomeTool[];
+}
+
 /**
- * THE HOME MENU — one card, one grid, badged tiles first. With the hero's
- * quick actions gone (direction C) this is the one place every door lives.
+ * THE HOME MENU — one card, every door on the Home (direction C: the grid is
+ * the one place a door lives). Given `groups` (user, 18 Oct 2026: "put the
+ * menu items in different categories to manage better") the card is split
+ * into labelled groups — still ONE card, so the Home still has one menu
+ * (ui-mistake-ledger home-split-into-two-menus). Inside each group, badged
+ * tiles come first; an empty group is not drawn.
  */
-export function HomeMenu({ tools, testID = 'home-menu' }: { tools: HomeTool[]; testID?: string }): React.JSX.Element {
+export function HomeMenu({ tools, groups, testID = 'home-menu' }: { tools?: HomeTool[]; groups?: HomeToolGroup[]; testID?: string }): React.JSX.Element {
   const tokens = useTokens();
   const c = tokens.color;
   const has = (t: HomeTool) => (t.badge ?? 0) > 0;
-  const ordered = [...tools.filter(has), ...tools.filter((t) => !has(t))];
+  const order = (list: HomeTool[]) => [...list.filter(has), ...list.filter((t) => !has(t))];
+  const sections = (groups ?? [{ title: '', tools: tools ?? [] }]).filter((g) => g.tools.length > 0);
   return (
     <View
       testID={testID}
-      style={{ backgroundColor: c.surface, borderRadius: 24, borderWidth: 1, borderColor: c.line, paddingTop: 20, paddingBottom: 16, paddingHorizontal: 4 }}
+      style={{ backgroundColor: c.surface, borderRadius: 24, borderWidth: 1, borderColor: c.line, paddingTop: groups ? 16 : 20, paddingBottom: 16, paddingHorizontal: 4, gap: 20 }}
     >
-      <HomeToolGrid testID={`${testID}-grid`} tools={ordered} />
+      {sections.map((g, i) => (
+        <View key={g.title || i} testID={g.title ? `${testID}-group-${g.title}` : undefined} style={{ gap: 12 }}>
+          {g.title ? (
+            <Text
+              accessibilityRole="header"
+              maxFontSizeMultiplier={1.3}
+              style={{ marginHorizontal: 16, fontSize: 13, fontWeight: '700', color: c.sub, letterSpacing: 0.2 }}
+            >
+              {g.title}
+            </Text>
+          ) : null}
+          <HomeToolGrid testID={i === 0 ? `${testID}-grid` : `${testID}-grid-${i}`} tools={order(g.tools)} />
+        </View>
+      ))}
     </View>
   );
 }

@@ -8,6 +8,7 @@ import { ApiError } from '@/lib/api';
 import { useTheme, useTokens } from '@/theme/theme-context';
 import { bandStops } from '@/theme/families';
 import { BAND_HEIGHT } from './BandHeader';
+import { RINGS_HEIGHT } from './BandRings';
 import { CONTENT_MAX, brand, font, type ColorPalette } from '@/theme/tokens';
 import { DASH, DUR, inkWidth, strokeDashoffset, useGesture } from '@/theme/motion';
 import { isPushedRoute, titleForSegments } from '@/lib/screen-titles';
@@ -158,13 +159,13 @@ function useBandStatusBar() {
   }
 }
 
-function Band() {
+function Band({ height = BAND_HEIGHT }: { height?: number }) {
   const tokens = useTokens();
   const { scheme } = useTheme();
   const stops = bandStops(tokens.color, scheme);
   useBandStatusBar();
   return (
-    <View pointerEvents="none" style={{ position: 'absolute', top: -10, left: -16, right: -16, height: BAND_HEIGHT + 10, backgroundColor: stops[0] }}>
+    <View pointerEvents="none" style={{ position: 'absolute', top: -10, left: -16, right: -16, height: height + 10, backgroundColor: stops[0] }}>
       <Svg width="100%" height="100%" preserveAspectRatio="none" viewBox="0 0 100 100">
         <Defs>
           <LinearGradient id="band-g" x1="0" y1="0" x2="1" y2="1">
@@ -199,8 +200,11 @@ export function Screen({
    */
   onRefresh?: () => void;
   refreshing?: boolean;
-  /** A role Home: the school's colour behind the greeting, a sheet over it. */
-  band?: boolean;
+  /**
+   * A role Home: the school's colour behind the greeting, a sheet over it.
+   * 'rings' grows the band to hold the day's figures (BandRings) under the name.
+   */
+  band?: boolean | 'rings';
 }>) {
   const tokens = useTokens();
   const { scheme } = useTheme();
@@ -261,7 +265,7 @@ export function Screen({
         paddingBottom: Math.max(insets.bottom, 28),
       }}
     >
-      {band && <Band />}
+      {band && <Band height={band === 'rings' ? BAND_HEIGHT + RINGS_HEIGHT : BAND_HEIGHT} />}
       {children}
     </ScrollView>
   );

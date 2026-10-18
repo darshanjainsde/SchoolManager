@@ -5,6 +5,7 @@ import type { PortalHome, TimetableSlot } from '@skoolos/types';
 import { useQuery } from '@/lib/query';
 import { useSession } from '@/lib/use-session';
 import { useFirstPaint } from '@/lib/use-first-paint';
+import type { BandMetric } from '@/components/BandRings';
 import { hasFeature } from '@/lib/features';
 import { MORE_ITEMS } from '@/lib/family-nav';
 import type { StudentFees } from '@/lib/fees';
@@ -13,7 +14,7 @@ import { todayISO } from '@/lib/attendance';
 import { minutesOfDay } from '@/lib/teacher-day';
 import { useNowMinutes } from '@/lib/use-now-minutes';
 import { relativeTime } from '@/lib/portal';
-import { Card, ErrorState, Figure, Page, PageHeader, RailRow, RailStatus, Screen, SectionTitle } from '@/components/ui';
+import { Card, ErrorState, Page, PageHeader, RailRow, RailStatus, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { NotificationBell } from '@/components/NotificationBell';
 import { HomeMenu } from '@/components/HomeToolGrid';
@@ -185,13 +186,50 @@ export default function Home() {
   // the current row. Only the live row gets one.
   const livePercent = total > 0 ? Math.min(100, Math.max(0, Math.round((elapsed / total) * 100))) : 0;
 
+  // THE REPORT CARD ON THE BAND (user, 18 Oct 2026): the month's attendance,
+  // how far through today's classes, and the latest mark — each opens its screen.
+  /** Doors from the shared list, in the order asked, each only where the school has its module. */
+  const more = (labels: string[]) =>
+    labels
+      .map((l) => MORE_ITEMS.find((t) => t.label === l))
+      .filter((t): t is (typeof MORE_ITEMS)[number] => !!t && (!t.feature || hasFeature(s, t.feature)))
+      .map((t) => ({ label: t.label, icon: t.icon, route: t.route }));
+  const classesDone = todaySlots.filter((sl) => minutesOfDay(sl.period.endTime) <= now).length;
+  const metrics: BandMetric[] = !shown
+    ? [{ value: '', pct: 0, label: 'present this month' }, { value: '', pct: 0, label: 'classes today' }, { value: '', pct: 0, label: 'latest result' }]
+    : [
+        {
+          value: attendanceMarked > 0 ? `${attendance?.percent}%` : 'None',
+          pct: attendanceMarked > 0 ? (attendance?.percent ?? 0) : 0,
+          label: 'present this month',
+          testID: 'band-fig-attendance',
+          accessibilityLabel: attendanceMarked > 0 ? `Present ${attendance?.present} of ${attendanceMarked} days this month` : 'No attendance marked this month',
+          onPress: () => router.push('/(family)/attendance'),
+        },
+        {
+          value: todaySlots.length ? `${classesDone}/${todaySlots.length}` : 'Off',
+          pct: todaySlots.length ? (classesDone / todaySlots.length) * 100 : 0,
+          label: todaySlots.length ? 'classes today' : 'no classes today',
+          testID: 'band-fig-today',
+          onPress: () => router.push('/(family)/(tabs)/home/timetable'),
+        },
+        {
+          value: latestResult ? `${latestResult.marks}/${latestResult.maxMarks}` : 'None',
+          pct: latestResult && latestResult.maxMarks > 0 ? (latestResult.marks / latestResult.maxMarks) * 100 : 0,
+          label: latestResult ? latestResult.subjectName : 'latest result',
+          testID: 'band-fig-result',
+          accessibilityLabel: latestResult ? `Latest result: ${latestResult.subjectName}, ${latestResult.marks} out of ${latestResult.maxMarks}` : 'No results yet',
+          onPress: () => router.push('/(family)/results'),
+        },
+      ];
+
   function railState(s: TimetableSlot): 'past' | 'now' | 'upcoming' {
     if (currentSlot?.id === s.id) return 'now';
     return minutesOfDay(s.period.endTime) <= now ? 'past' : 'upcoming';
   }
 
   return (
-    <Screen band onRefresh={refresh} refreshing={refreshing}>
+    <Screen band="rings" onRefresh={refresh} refreshing={refreshing}>
       {/* Direction C: the dateline and the greeting sit on the band; the
           child's sheet overlaps it. On the birthday the banner keeps its place above. */}
       {myBirthday && shown ? <BirthdayBanner firstName={shown.firstName} /> : null}
@@ -200,6 +238,7 @@ export default function Home() {
         title={shown ? `${shown.firstName} ${shown.lastName ?? ''}`.trim() : 'Home'}
         line={shown && profile ? `${profile.className ?? 'No class assigned'}${profile.rollNo ? ` · Roll ${profile.rollNo}` : ''}` : undefined}
         right={<NotificationBell group="(family)" onBand />}
+        metrics={error ? undefined : metrics}
       />
 
       {error && <ErrorState error={error} onRetry={home.reload} />}
@@ -246,46 +285,41 @@ export default function Home() {
               hero's quick actions as badges; every other door is here, badged
               ones first. Hero doors are not repeated. */}
           <HomeMenu
-            tools={[
-              // The asks ride on the tiles as badges (direction C: the grid is
-              // the one place): an unread message, an unsigned diary remark, a late bill.
-              { label: 'Ask teacher', icon: 'messages', testID: 'hero-act-ask', badge: unreadMsgs, route: '/(family)/(tabs)/home/messages' },
-              { label: 'Diary', icon: 'diary', testID: 'hero-act-diary', badge: diary?.unsignedCount ?? 0, route: '/(family)/(tabs)/home/diary' },
-              { label: 'Homework', icon: 'assignments', testID: 'hero-act-homework', route: '/(family)/(tabs)/home/assignments' },
-              ...(hasFeature(s, 'FEES')
-                ? [{ label: 'Fees', icon: 'fees', tone: 'amber' as const, testID: 'hero-act-fees', badge: lateBills, route: '/(family)/(tabs)/fees' }]
-                : []),
-              { label: 'Results', icon: 'results', route: '/(family)/results', badge: nextExam ? 1 : 0 },
-              { label: 'Timetable', icon: 'timetable', route: '/(family)/(tabs)/home/timetable' },
-              { label: 'Notices', icon: 'notices', route: '/(family)/(tabs)/home/notices' },
-              { label: 'Holidays', icon: 'holidays', tone: 'green' as const, route: '/(family)/(tabs)/home/holidays', date: String(new Date().getDate()) },
-              // A paid module's door is drawn only for a school that has it;
-              // the Complaint Box is free, so always (nav-reachability.test).
-              ...MORE_ITEMS.filter((t) => ['Syllabus', 'Sports', 'Library', 'Report cards', 'Birthdays', 'Complaint Box'].includes(t.label))
-                .filter((t) => !t.feature || hasFeature(s, t.feature))
-                .map((t) => ({ label: t.label, icon: t.icon, route: t.route })),
+            groups={[
+              {
+                title: 'Learning',
+                tools: [
+                  { label: 'Homework', icon: 'assignments', testID: 'hero-act-homework', route: '/(family)/(tabs)/home/assignments' },
+                  // The asks ride on the tiles as badges: an unsigned diary remark, an exam coming up.
+                  { label: 'Diary', icon: 'diary', testID: 'hero-act-diary', badge: diary?.unsignedCount ?? 0, route: '/(family)/(tabs)/home/diary' },
+                  { label: 'Results', icon: 'results', route: '/(family)/results', badge: nextExam ? 1 : 0 },
+                  { label: 'Timetable', icon: 'timetable', route: '/(family)/(tabs)/home/timetable' },
+                  ...more(['Syllabus', 'Report cards']),
+                ],
+              },
+              {
+                title: 'Talk to school',
+                tools: [
+                  { label: 'Ask teacher', icon: 'messages', testID: 'hero-act-ask', badge: unreadMsgs, route: '/(family)/(tabs)/home/messages' },
+                  { label: 'Notices', icon: 'notices', route: '/(family)/(tabs)/home/notices' },
+                  // Free, so always drawn (nav-reachability.test).
+                  ...more(['Complaint Box']),
+                ],
+              },
+              {
+                title: 'School life',
+                tools: [
+                  ...(hasFeature(s, 'FEES')
+                    ? [{ label: 'Fees', icon: 'fees', tone: 'amber' as const, testID: 'hero-act-fees', badge: lateBills, route: '/(family)/(tabs)/fees' }]
+                    : []),
+                  { label: 'Holidays', icon: 'holidays', tone: 'green' as const, route: '/(family)/(tabs)/home/holidays', date: String(new Date().getDate()) },
+                  // A paid module's door is drawn only for a school that has it.
+                  ...more(['Library', 'Sports', 'Birthdays']),
+                ],
+              },
             ]}
           />
 
-          {/* At-a-glance KPIs. Only two — "today" is already the hero's status
-              chip and "next test" is the notice above, so repeating them would
-              be noise. Both tiles deep-link to their full screen. */}
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Figure
-              label="This month"
-              value={attendanceMarked > 0 ? `${attendance?.percent}%` : 'No records'}
-              hint={attendanceMarked > 0 ? `${attendance?.present} of ${attendanceMarked} ${attendanceMarked === 1 ? 'day' : 'days'} present` : undefined}
-              tone={attendance && attendanceMarked > 0 && attendance.percent < 75 ? 'warn' : undefined}
-              onPress={() => router.push('/(family)/attendance')}
-            />
-            <Figure
-              label="Latest result"
-              value={latestResult ? `${latestResult.marks}/${latestResult.maxMarks}` : 'None yet'}
-              hint={latestResult ? `${latestResult.subjectName} · class avg ${latestResult.classAverage}` : undefined}
-              tone={latestResult ? (latestResult.marks < latestResult.classAverage ? 'bad' : 'good') : undefined}
-              onPress={() => router.push('/(family)/results')}
-            />
-          </View>
 
           {todaySlots.length > 0 && (
             <>
