@@ -113,3 +113,34 @@ describe('dark fills keep the hue rich (16 Oct 2026)', () => {
     expect(sat(f.bg)).toBeGreaterThanOrEqual(0.4);
   });
 });
+
+describe('meaning colours on the tool grid, as in vc24 (18 Oct 2026)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { toneFamily, toneFill } = require('../families') as typeof import('../families');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { ACCENTS, ACCENT_NAMES, applyAccent } = require('../accents') as typeof import('../accents');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { palette } = require('../tokens') as typeof import('../tokens');
+
+  for (const name of ACCENT_NAMES) {
+    for (const scheme of ['light', 'dark'] as const) {
+      const c = applyAccent(palette[scheme], ACCENTS[name][scheme]);
+      for (const tone of ['amber', 'green'] as const) {
+        it(`${name} · ${scheme} · ${tone}: the glyph reads on its tile, and the live tile's text reads too`, () => {
+          const t = toneFamily(tone, c, scheme);
+          expect(contrastRatio(t.ink, t.soft)).toBeGreaterThanOrEqual(4.5);
+          const f = toneFill(tone, c);
+          expect(contrastRatio(f.fg, f.bg)).toBeGreaterThanOrEqual(4.5);
+        });
+      }
+    }
+  }
+
+  it('amber and green stay the theme’s own semantic colours, not new hues', () => {
+    const c = palette.light;
+    // The tile tint is the theme's amber/green washed toward white; amber's
+    // fill IS the token, green's is the token deepened only until white reads.
+    expect(toneFill('amber', c).bg).toBe(c.amber);
+    expect(contrastRatio(toneFill('green', c).bg, c.green)).toBeLessThan(1.3);
+  });
+});

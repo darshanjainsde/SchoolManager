@@ -244,16 +244,16 @@ export default function Home() {
             tools={[
               // The asks ride on the tiles as badges (direction C: the grid is
               // the one place): an unread message, an unsigned diary remark, a late bill.
-              { label: 'Ask teacher', icon: 'messages', testID: 'hero-act-ask', badge: unreadMsgs, route: '/(family)/(tabs)/home/messages' },
-              { label: 'Diary', icon: 'diary', testID: 'hero-act-diary', badge: diary?.unsignedCount ?? 0, route: '/(family)/(tabs)/home/diary' },
+              { label: 'Ask teacher', icon: 'messages', tone: 'amber' as const, testID: 'hero-act-ask', badge: unreadMsgs, route: '/(family)/(tabs)/home/messages' },
+              { label: 'Diary', icon: 'diary', tone: 'amber' as const, testID: 'hero-act-diary', badge: diary?.unsignedCount ?? 0, route: '/(family)/(tabs)/home/diary' },
               { label: 'Homework', icon: 'assignments', testID: 'hero-act-homework', route: '/(family)/(tabs)/home/assignments' },
               ...(hasFeature(s, 'FEES')
-                ? [{ label: 'Fees', icon: 'fees', testID: 'hero-act-fees', badge: lateBills, route: '/(family)/(tabs)/fees' }]
+                ? [{ label: 'Fees', icon: 'fees', tone: 'amber' as const, testID: 'hero-act-fees', badge: lateBills, route: '/(family)/(tabs)/fees' }]
                 : []),
               { label: 'Results', icon: 'results', route: '/(family)/results', badge: nextExam ? 1 : 0 },
               { label: 'Timetable', icon: 'timetable', route: '/(family)/(tabs)/home/timetable' },
-              { label: 'Notices', icon: 'notices', route: '/(family)/(tabs)/home/notices' },
-              { label: 'Holidays', icon: 'holidays', route: '/(family)/(tabs)/home/holidays', date: String(new Date().getDate()) },
+              { label: 'Notices', icon: 'notices', tone: 'amber' as const, route: '/(family)/(tabs)/home/notices' },
+              { label: 'Holidays', icon: 'holidays', tone: 'green' as const, route: '/(family)/(tabs)/home/holidays', date: String(new Date().getDate()) },
               // A paid module's door is drawn only for a school that has it;
               // the Complaint Box is free, so always (nav-reachability.test).
               ...MORE_ITEMS.filter((t) => ['Syllabus', 'Sports', 'Library', 'Report cards', 'Birthdays', 'Complaint Box'].includes(t.label))

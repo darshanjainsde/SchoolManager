@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { Touchable } from './Touchable';
 import { Icon, isIconName } from './icons';
 import { useTheme, useTokens } from '@/theme/theme-context';
-import { accentFill, useFamilyTone } from '@/theme/families';
+import { accentFill, toneFamily, toneFill, useFamilyTone } from '@/theme/families';
 import type { MoreTone } from '@/lib/staff-nav';
 
 export interface HomeTool {
@@ -15,6 +15,11 @@ export interface HomeTool {
   route?: string;
   /** For a tile that does something other than push a route. */
   onPress?: () => void;
+  /**
+   * What the tool asks of you, as vc24 coloured it: 'amber' (waits on you /
+   * someone is talking) or 'green' (good news). Omitted or 'indigo' = the
+   * school's accent.
+   */
   tone?: MoreTone;
   /** A count worth interrupting for. Zero and undefined both render nothing. */
   badge?: number;
@@ -59,9 +64,11 @@ export function HomeToolGrid({ tools, testID }: { tools: HomeTool[]; testID?: st
     <View testID={testID} style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 14, columnGap: 0 }}>
       {tools.map((tool) => {
         const badge = tool.badge && tool.badge > 0 ? tool.badge : undefined;
-        const t = familyTone(tool.icon);
-        const bg = tool.live ? fill.bg : t.soft;
-        const ink = tool.live ? fill.fg : t.ink;
+        const meaning = tool.tone === 'amber' || tool.tone === 'green' ? tool.tone : null;
+        const t = meaning ? toneFamily(meaning, tokens.color, scheme) : familyTone(tool.icon);
+        const live = meaning ? toneFill(meaning, tokens.color) : fill;
+        const bg = tool.live ? live.bg : t.soft;
+        const ink = tool.live ? live.fg : t.ink;
         const go = () => {
           if (tool.onPress) tool.onPress();
           else if (tool.route) router.push(tool.route as never);

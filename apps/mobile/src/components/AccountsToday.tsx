@@ -79,10 +79,10 @@ export function AccountsToday({ name }: { name: string }) {
       {/* The desk's doors, once, on the grid (direction C). */}
       <HomeMenu
         tools={[
-          { label: 'Decide', icon: 'requests', badge: waiting.length, testID: 'hero-act-decide', route: '/(worker)/(tabs)/leavedesk' },
+          { label: 'Decide', icon: 'requests', tone: 'amber' as const, badge: waiting.length, testID: 'hero-act-decide', route: '/(worker)/(tabs)/leavedesk' },
           { label: 'Cover', icon: 'timetable', badge: gapsTomorrow.length, testID: 'hero-act-cover', route: '/(worker)/(tabs)/leavedesk' },
           { label: 'Pay', icon: 'fees', testID: 'hero-act-pay', route: '/(worker)/(tabs)/paydesk' },
-          { label: 'My pay', icon: 'report', testID: 'hero-act-mypay', route: '/(worker)/(tabs)/profile/salary' },
+          { label: 'My pay', icon: 'report', tone: 'green' as const, testID: 'hero-act-mypay', route: '/(worker)/(tabs)/profile/salary' },
         ]}
       />
 

@@ -182,6 +182,40 @@ export function useFamilies(): Record<Family, FamilyTone> {
 }
 
 /** The tone for a tool's glyph, from the ACTIVE accent. Use this, not the static FAMILIES. */
+/**
+ * MEANING COLOURS ON THE TOOL GRID (user, 18 Oct 2026: "re-include a few
+ * different relevant colors in icons, as in vc24"). vc24 coloured a tool's
+ * glyph by what it ASKS of you, using the theme's own semantic colours:
+ * amber = something waits on you or someone is talking (Register, Messages,
+ * Requests, Notices, Complaint Box, Diary, Fees, Decide, Fines); green = good
+ * news (Holidays, My pay). Every other tool stays on the school's accent.
+ * Only these two hues are added — the five-hue families of 16 Oct stay
+ * rejected. Each ink clears 4.5:1 on its own tint in both schemes
+ * (theme/__tests__/families.test.ts).
+ */
+export type ToneName = 'amber' | 'green';
+
+export function toneFamily(tone: ToneName, c: ColorPalette, scheme: ColorScheme): FamilyTone {
+  const base = tone === 'amber' ? c.amber : c.green;
+  const inkFrom = tone === 'amber' ? c.late : c.green;
+  if (scheme === 'dark') {
+    const soft = mix(base, c.surface, 0.82);
+    return { ink: legible(inkFrom, soft, '#FFFFFF'), soft };
+  }
+  const soft = mix(base, '#FFFFFF', 0.86);
+  return { ink: legible(inkFrom, soft, '#000000'), soft };
+}
+
+/** The filled (live) tile for a meaning colour — vc24's amber register tile. */
+export function toneFill(tone: ToneName, c: ColorPalette): { bg: string; fg: string } {
+  const base = tone === 'amber' ? c.amber : c.green;
+  const dark = '#111827';
+  // Dark ink when it reads (amber); otherwise white on the colour, deepened
+  // just enough to clear 4.5:1 (the theme's green gives white only 4.35).
+  if (contrastRatio(dark, base) >= 4.5) return { bg: base, fg: dark };
+  return { bg: legible(base, '#FFFFFF', '#000000'), fg: '#FFFFFF' };
+}
+
 export function useFamilyTone(): (icon: string) => FamilyTone {
   const { scheme, tokens } = useTheme();
   const fam = useMemo(() => deriveFamilies(tokens.color, scheme), [tokens.color, scheme]);

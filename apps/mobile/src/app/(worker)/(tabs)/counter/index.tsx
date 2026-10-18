@@ -84,8 +84,8 @@ export default function Counter() {
                 tools={[
                   { label: 'Books', icon: 'library', testID: 'hero-act-books', route: '/(worker)/(tabs)/books' },
                   { label: 'Hall', icon: 'take', testID: 'hero-act-hall', route: '/(worker)/(tabs)/hall' },
-                  { label: 'Fines', icon: 'fees', testID: 'hero-act-fines', route: '/(worker)/(tabs)/fines' },
-                  { label: 'My pay', icon: 'report', testID: 'hero-act-mypay', route: '/(worker)/(tabs)/profile/salary' },
+                  { label: 'Fines', icon: 'fees', tone: 'amber' as const, testID: 'hero-act-fines', route: '/(worker)/(tabs)/fines' },
+                  { label: 'My pay', icon: 'report', tone: 'green' as const, testID: 'hero-act-mypay', route: '/(worker)/(tabs)/profile/salary' },
                 ]}
               />
               <Page testID="counter-soon">

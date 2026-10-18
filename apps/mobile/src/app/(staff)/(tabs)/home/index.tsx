@@ -259,26 +259,26 @@ export default function Today() {
             tools={[
               // The four verbs that used to ride on the hero (direction C: the grid is the one place).
               {
-                label: 'Register', icon: 'take', testID: 'hero-act-register', badge: needsInk.length, live: needsInk.length > 0,
+                label: 'Register', icon: 'take', tone: 'amber' as const, testID: 'hero-act-register', badge: needsInk.length, live: needsInk.length > 0,
                 onPress: () => (needsInk[0]?.slot ? goToAttendance(needsInk[0].slot.classSectionId) : router.push('/(staff)/(tabs)/attendance')),
               },
               { label: 'Homework', icon: 'assignments', testID: 'hero-act-homework', route: '/(staff)/(tabs)/home/assignments' },
-              { label: 'Notice', icon: 'notices', testID: 'hero-act-notice', route: '/(staff)/(tabs)/home/post' },
+              { label: 'Notice', icon: 'notices', tone: 'amber' as const, testID: 'hero-act-notice', route: '/(staff)/(tabs)/home/post' },
               { label: 'Test', icon: 'results', testID: 'hero-act-test', route: '/(staff)/(tabs)/home/tests' },
-              { label: 'Messages', icon: 'messages', route: '/(staff)/(tabs)/home/messages', badge: unreadMsgs },
+              { label: 'Messages', icon: 'messages', tone: 'amber' as const, route: '/(staff)/(tabs)/home/messages', badge: unreadMsgs },
               { label: 'Diary', icon: 'diary', route: '/(staff)/(tabs)/home/diary' },
-              { label: 'Requests', icon: 'requests', route: '/(staff)/(tabs)/home/requests' },
+              { label: 'Requests', icon: 'requests', tone: 'amber' as const, route: '/(staff)/(tabs)/home/requests' },
               { label: 'Notes', icon: 'notes', route: '/(staff)/(tabs)/home/notes' },
-              { label: 'Holidays', icon: 'holidays', route: '/(staff)/(tabs)/home/holidays', date: String(new Date().getDate()) },
+              { label: 'Holidays', icon: 'holidays', tone: 'green' as const, route: '/(staff)/(tabs)/home/holidays', date: String(new Date().getDate()) },
               // The teacher's own shelf — only for a school with the library on.
               ...(hasFeature(s, 'LIBRARY') ? [{ label: 'Library', icon: 'library', route: '/(staff)/(tabs)/home/library' }] : []),
               // Pay slips, only where the school runs pay on Sckools.
-              ...(hasFeature(s, 'SALARY') ? [{ label: 'My pay', icon: 'fees', route: '/(staff)/(tabs)/home/salary' }] : []),
+              ...(hasFeature(s, 'SALARY') ? [{ label: 'My pay', icon: 'fees', tone: 'green' as const, route: '/(staff)/(tabs)/home/salary' }] : []),
               // Where each class has reached — only where the owner switched the tracker on.
               ...(hasFeature(s, 'COURSE_MANAGEMENT') ? [{ label: 'Syllabus', icon: 'syllabus', route: '/(staff)/(tabs)/home/syllabus' }] : []),
               // Concerns the class teacher's families raised. Free, so always
               // drawn — it was on no screen before 2026-10-07 (nav-reachability).
-              { label: 'Complaint Box', icon: 'concern', route: '/(staff)/(tabs)/home/concerns' },
+              { label: 'Complaint Box', icon: 'concern', tone: 'amber' as const, route: '/(staff)/(tabs)/home/concerns' },
             ]}
           />
 
