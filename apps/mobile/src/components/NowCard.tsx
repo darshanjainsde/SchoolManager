@@ -62,6 +62,12 @@ export interface NowCardProps {
   deck?: ReactNode;
   onOpenNotes?: () => void;
   onOpenTodos?: () => void;
+  /**
+   * The day's figures already sit on the band as rings (report-card Home), so
+   * the wrap-up says them in one line instead of repeating them as tiles, and
+   * a day without classes says so instead of "Day complete · 0 taught".
+   */
+  figuresOnBand?: boolean;
 }
 
 /** "8-A · Mathematics" for a class, or the period's own label ("Break") otherwise. */
@@ -121,8 +127,8 @@ function GradientHero({
   id,
   colors,
   testID,
-  /** 16 on the live-class hero, which carries the most and is tapped as a whole. */
-  padding = 14,
+  /** 20 everywhere (sckools-ui-standards §3c); kept as a prop for odd callers. */
+  padding = 20,
   children,
 }: {
   id: string;
@@ -408,6 +414,7 @@ export function NowCard({
   onOpenTodos,
   deck,
   dayLine,
+  figuresOnBand = false,
 }: NowCardProps) {
   const tokens = useTokens();
   // Pitch №3: the wrap and live heroes paint with the CHOSEN accent — the
@@ -448,6 +455,21 @@ export function NowCard({
             >
               <Text style={{ color: fill.fg, fontWeight: '700', fontSize: 15 }}>Take register</Text>
             </Pressable>
+          </GradientHero>
+        );
+      }
+      if (figuresOnBand) {
+        const none = s.classesTaught === 0;
+        return (
+          <GradientHero id="hero-done" colors={accentColors} testID="now-card">
+            <Text style={hero.eyebrow}>{none ? 'Today' : "That's a wrap"}</Text>
+            <Text style={hero.title}>{none ? 'No classes for you today' : 'Day complete'}</Text>
+            <Text style={hero.meta}>
+              {none
+                ? 'Nothing to take or mark. Your tools are below.'
+                : `${s.classesTaught} ${s.classesTaught === 1 ? 'class' : 'classes'} taught · ${s.studentsMarked} ${s.studentsMarked === 1 ? 'child' : 'children'} marked`}
+            </Text>
+            {deck}
           </GradientHero>
         );
       }
@@ -523,7 +545,7 @@ export function NowCard({
   const openable = onOpenClass && slot ? () => onOpenClass(slot.classSectionId) : null;
 
   const card = (
-    <GradientHero id="hero-indigo" colors={accentColors} testID="now-card" padding={16}>
+    <GradientHero id="hero-indigo" colors={accentColors} testID="now-card">
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
         <LiveDot on={acc} />
         <Text style={hero.eyebrow}>{`${entry.label} · Live now`}</Text>

@@ -33,7 +33,7 @@ export function BandGreeting({
 }) {
   const on = brand.onHero;
   const greeting = (
-    <View testID={testID} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginHorizontal: 2 }}>
+    <View testID={testID} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
       <View style={{ flex: 1, minWidth: 0 }}>
         {eyebrow ? (
           <Text maxFontSizeMultiplier={1.4} style={{ fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase', color: on, opacity: 0.82, marginBottom: 1 }}>

@@ -173,7 +173,7 @@ export default function Today() {
     ? [{ value: '', pct: 0, label: 'registers taken' }, { value: '', pct: 0, label: 'present today' }, { value: '', pct: 0, label: syllabusOn ? 'syllabus covered' : 'of the day done' }]
     : [
         {
-          value: `${taken}/${classes.length}`,
+          value: classes.length === 0 ? 'None' : `${taken}/${classes.length}`,
           pct: registersPct,
           label: 'registers taken',
           testID: 'hero-fig-registers',
@@ -181,7 +181,7 @@ export default function Today() {
           onPress: () => router.push('/(staff)/(tabs)/attendance'),
         },
         {
-          value: presentPct === null ? 'Not yet' : `${presentPct}%`,
+          value: presentPct !== null ? `${presentPct}%` : classes.length === 0 ? 'None' : 'Not yet',
           pct: presentPct ?? 0,
           label: 'present today',
           testID: 'hero-fig-present',
@@ -197,7 +197,7 @@ export default function Today() {
               onPress: () => router.push('/(staff)/(tabs)/home/syllabus'),
             }
           : {
-              value: `${classesDone}/${classes.length}`,
+              value: classes.length === 0 ? 'None' : `${classesDone}/${classes.length}`,
               pct: classes.length ? (classesDone / classes.length) * 100 : 0,
               label: 'classes done',
               testID: 'hero-fig-day',
@@ -272,7 +272,7 @@ export default function Today() {
             todosLeft={periodCounts.todosLeft}
             onOpenNotes={liveSlot ? () => setSheet('notes') : undefined}
             onOpenTodos={liveSlot ? () => setSheet('todos') : undefined}
-            dayLine={`${classes.length} class${classes.length === 1 ? '' : 'es'} today · ${taken} taken · ${pending} pending`}
+            figuresOnBand={!error}
           />
 
           {liveSlot && (

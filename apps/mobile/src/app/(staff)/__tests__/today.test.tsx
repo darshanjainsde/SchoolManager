@@ -165,7 +165,9 @@ it('greets the teacher by name and shows the classes/taken/pending summary', asy
   expect(await screen.findByText('Priya Sharma')).toBeTruthy();
   // The salutation is gone (16 Oct 2026): the band carries the date and the name only.
   expect(screen.queryByText('Good morning')).toBeNull();
-  expect(await screen.findByText('2 classes today · 0 taken · 2 pending')).toBeTruthy();
+  // The count lives on the registers ring now, not in a sentence under the sheet.
+  expect((await screen.findByTestId('hero-fig-registers')).props.accessibilityLabel).toBe('0 of 2 registers taken today');
+  expect(screen.queryByText('2 classes today · 0 taken · 2 pending')).toBeNull();
 });
 
 it('never greets the teacher with the email address they signed in with', async () => {
@@ -301,7 +303,7 @@ it('excludes FREE periods from the classes/taken/pending glance count', async ()
   mockDay({ date: '2026-07-30', dayOfWeek: 4, entries: [classEntry(), freeEntry] });
   render(<Today />);
 
-  expect(await screen.findByText('1 class today · 0 taken · 1 pending')).toBeTruthy();
+  expect((await screen.findByTestId('hero-fig-registers')).props.accessibilityLabel).toBe('0 of 1 registers taken today');
 });
 
 it('before school starts, says so and names the first class', async () => {
@@ -333,10 +335,23 @@ it('after school ends, renders the day-complete wrap-up with a summary of the da
 
   expect(await screen.findByText('Day complete')).toBeTruthy();
   // 2 CLASS entries taught, 27 + 25 = 52 students marked (the BREAK is excluded).
-  expect(screen.getByText('2 classes taught')).toBeTruthy();
-  const summary = within(screen.getByTestId('now-summary'));
-  expect(summary.getByText('52')).toBeTruthy();
-  expect(summary.getByText('students marked')).toBeTruthy();
+  // The rings on the band carry the figures, so the sheet says them once, in
+  // a line, and draws no second set of tiles (audit 18 Oct 2026).
+  expect(screen.getByText('2 classes taught · 52 children marked')).toBeTruthy();
+  expect(screen.queryByTestId('now-summary')).toBeNull();
+  expect(screen.queryByText(/today · \d+ taken/)).toBeNull();
+});
+
+it('on a day with no classes, says so on the sheet and in the rings instead of 0/0', async () => {
+  setNow(15, 0);
+  mockDay({ date: '2026-07-30', dayOfWeek: 4, entries: [breakEntry] });
+  render(<Today />);
+
+  expect(await screen.findByText('No classes for you today')).toBeTruthy();
+  expect(screen.queryByText('Day complete')).toBeNull();
+  expect(screen.queryByText('0/0')).toBeNull();
+  expect(screen.getByTestId('hero-fig-registers')).toBeTruthy();
+  expect(within(screen.getByTestId('hero-fig-registers')).getByText('None')).toBeTruthy();
 });
 
 it('in a gap between periods, says nothing is on and names the next class', async () => {

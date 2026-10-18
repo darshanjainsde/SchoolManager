@@ -52,9 +52,9 @@ export function toolColumns(n: number): number {
   return 4;
 }
 
-export function HomeToolGrid({ tools, testID }: { tools: HomeTool[]; testID?: string }): React.JSX.Element {
+export function HomeToolGrid({ tools, testID, columns }: { tools: HomeTool[]; testID?: string; /** Fixed column count (HomeMenu groups share 4 so tiles line up between groups). */ columns?: number }): React.JSX.Element {
   const tokens = useTokens();
-  const cols = toolColumns(tools.length);
+  const cols = columns ?? toolColumns(tools.length);
   const familyTone = useFamilyTone();
   const { scheme } = useTheme();
   // The live tile is THE filled surface: same deep fill as the one button (accentFill).
@@ -198,7 +198,7 @@ export function HomeMenu({ tools, groups, testID = 'home-menu' }: { tools?: Home
   return (
     <View
       testID={testID}
-      style={{ backgroundColor: c.surface, borderRadius: 24, borderWidth: 1, borderColor: c.line, paddingTop: groups ? 16 : 20, paddingBottom: 16, paddingHorizontal: 4, gap: 20 }}
+      style={{ backgroundColor: c.surface, borderRadius: 24, borderWidth: 1, borderColor: c.line, paddingTop: groups ? 16 : 20, paddingBottom: 16, paddingHorizontal: 2, gap: 24 }}
     >
       {sections.map((g, i) => (
         <View key={g.title || i} testID={g.title ? `${testID}-group-${g.title}` : undefined} style={{ gap: 12 }}>
@@ -206,12 +206,12 @@ export function HomeMenu({ tools, groups, testID = 'home-menu' }: { tools?: Home
             <Text
               accessibilityRole="header"
               maxFontSizeMultiplier={1.3}
-              style={{ marginHorizontal: 16, fontSize: 13, fontWeight: '700', color: c.sub, letterSpacing: 0.2 }}
+              style={{ marginHorizontal: 18, fontSize: 13, fontWeight: '700', color: c.sub, letterSpacing: 0.2 }}
             >
               {g.title}
             </Text>
           ) : null}
-          <HomeToolGrid testID={i === 0 ? `${testID}-grid` : `${testID}-grid-${i}`} tools={order(g.tools)} />
+          <HomeToolGrid testID={i === 0 ? `${testID}-grid` : `${testID}-grid-${i}`} tools={order(g.tools)} columns={groups ? 4 : undefined} />
         </View>
       ))}
     </View>

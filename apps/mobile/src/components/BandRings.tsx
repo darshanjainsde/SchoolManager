@@ -63,7 +63,7 @@ export function BandRings({ metrics, testID = 'band-rings' }: { metrics: BandMet
                 maxFontSizeMultiplier={1.2}
                 numberOfLines={1}
                 adjustsFontSizeToFit
-                style={{ fontSize: 17, fontWeight: '700', color: brand.onHero, fontVariant: ['tabular-nums'], maxWidth: SIZE - STROKE * 2 - 4 }}
+                style={{ fontSize: 17, fontWeight: '700', color: brand.onHero, fontVariant: ['tabular-nums'], maxWidth: SIZE - STROKE * 2 - 10 }}
               >
                 {m.value}
               </Text>
@@ -78,13 +78,21 @@ export function BandRings({ metrics, testID = 'band-rings' }: { metrics: BandMet
           </View>
         );
         const a11y = m.accessibilityLabel ?? `${m.label}: ${m.value}`;
-        return m.onPress ? (
-          <Touchable key={m.label} testID={m.testID} onPress={m.onPress} accessibilityRole="button" accessibilityLabel={a11y} style={{ flex: 1, minHeight: 48 }}>
-            {body}
-          </Touchable>
-        ) : (
-          <View key={m.label} testID={m.testID} accessible accessibilityLabel={a11y} style={{ flex: 1 }}>
-            {body}
+        // Each ring owns an exact third of the row, centred in it: the column is a
+        // plain View, because Touchable puts its style on an inner view and its
+        // outer box shrank to its label (audit 18 Oct 2026: ring centres 115 dp
+        // then 149 dp apart).
+        return (
+          <View key={m.label} style={{ flex: 1, alignItems: 'center' }}>
+            {m.onPress ? (
+              <Touchable testID={m.testID} onPress={m.onPress} accessibilityRole="button" accessibilityLabel={a11y} style={{ minHeight: 48, minWidth: 96 }}>
+                {body}
+              </Touchable>
+            ) : (
+              <View testID={m.testID} accessible accessibilityLabel={a11y} style={{ minWidth: 96 }}>
+                {body}
+              </View>
+            )}
           </View>
         );
       })}

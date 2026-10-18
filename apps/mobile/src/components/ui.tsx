@@ -609,6 +609,10 @@ export function RailRow({
         flexDirection: 'row',
         alignItems: 'center',
         minHeight: 56,
+        // Inset from the card edge so the time column lines up under the
+        // page title and the right status ends where the title row does
+        // (audit 18 Oct 2026: the times touched the card border).
+        paddingLeft: 8,
         borderTopWidth: first ? 0 : 1,
         borderTopColor: tokens.color.line,
         ...style,
@@ -671,14 +675,14 @@ export function RailRow({
         ) : null}
       </View>
 
-      {right != null && <View style={{ paddingRight: 10 }}>{right}</View>}
+      {right != null && <View style={{ paddingRight: 16 }}>{right}</View>}
 
       {inkPercent != null && (
         <Animated.View
           testID="rail-live-ink"
           style={{
             position: 'absolute',
-            left: 53.5,
+            left: 61.5,
             bottom: -1,
             height: 2,
             borderRadius: 2,
