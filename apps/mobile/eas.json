@@ -49,6 +49,19 @@
         "SENTRY_DISABLE_AUTO_UPLOAD": "true",
         "NPM_CONFIG_NODE_LINKER": "hoisted"
       }
+    },
+    "internal-alt": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.test.sckools.com",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
+        "NPM_CONFIG_NODE_LINKER": "hoisted",
+        "SCKOOLS_EAS_PROJECT_ID": "f40e8500-2e64-42ed-9709-f0c6a593234a",
+        "SCKOOLS_EAS_OWNER": "darshanjainsde"
+      }
     }
   },
   "submit": {
