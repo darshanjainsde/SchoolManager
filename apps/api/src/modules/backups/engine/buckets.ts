@@ -188,6 +188,7 @@ export const BUCKET_OF: Readonly<Record<string, Bucket>> = {
   NotificationDelivery: 'day',
   MessageThread: 'day',
   Message: 'day',
+  MessageReport: 'day',
   Announcement: 'day',
   WhatsAppDelivery: 'day',
   WhatsAppInbound: 'day',

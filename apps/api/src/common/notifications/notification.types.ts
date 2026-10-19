@@ -212,6 +212,20 @@ export interface SessionStartedOutboxPayload {
   body: string;
 }
 
+/**
+ * Outbox payload for MESSAGE_REPORTED — a teacher or family reported a message
+ * thread; one row per school admin (targetUserId). Composed at write time by
+ * MessagesService and rendered through the ANNOUNCEMENT shape (no template of
+ * its own). The ids are for a future admin desk; the words never include them.
+ */
+export interface MessageReportedOutboxPayload {
+  schoolName: string;
+  title: string;
+  body: string;
+  threadId: string;
+  reportId: string;
+}
+
 export interface MessageReceivedOutboxPayload {
   schoolName: string;
   /** Display name of whoever sent the message (the OTHER party to the recipient). */

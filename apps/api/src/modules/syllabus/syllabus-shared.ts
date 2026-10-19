@@ -2,8 +2,8 @@ import type { TenantTx } from '@skoolos/db';
 import type { SyllabusChapterRow, SyllabusLeaf, SyllabusStatus, SyllabusYear } from '@skoolos/types';
 import { LIST_CEILING } from '../../common/lists/list-ceiling';
 import { istTodayISO } from '../../common/dates/timetable-date';
-import { workingDates } from '../management/internal/school-calendar';
-import { todayIstDateStr } from '../management/internal/leave-dates';
+// Through management's public index: module boundaries forbid reaching into internal/.
+import { todayIstDateStr, workingDates } from '../management';
 import { chapterStatus, expectedPctOf, type ChapterNode, type LeafState } from './syllabus-stats';
 
 /**

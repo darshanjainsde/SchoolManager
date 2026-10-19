@@ -6,6 +6,7 @@ import { api, ApiError } from '@/lib/api';
 import type { StudentProfile } from '@/lib/portal';
 import { signOut } from '@/lib/sign-out';
 import { ProfileMenu } from '@/components/ProfileMenu';
+import { PrivacyGroup } from '@/components/AccountSafety';
 import { InfoRow, ProfileGroup, ProfileHead, SignOutRow, useInfoValueStyle } from '@/components/ProfileKit';
 import { Button } from '@/components/Button';
 import { ErrorState, Screen, SectionTitle } from '@/components/ui';
@@ -127,6 +128,7 @@ export default function Profile() {
       />
 
       {/* Sign out: last, red, alone — and it still asks first. */}
+      <PrivacyGroup />
       <SignOutRow testID="profile-signout" onPress={() => confirmSignOut(profile ? { initials: initials(profile.firstName, profile.lastName), name: `${profile.firstName} ${profile.lastName}`, line: profile.className ?? undefined } : undefined)} />
     </Screen>
   );

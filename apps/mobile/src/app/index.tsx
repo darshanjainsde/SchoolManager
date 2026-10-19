@@ -12,9 +12,10 @@ export default function Index() {
   useEffect(() => {
     (async () => {
       // A pre-5·2 single STUDENT session becomes a one-child shelf, so
-      // switch-diary and add-a-child work right after the update.
-      await family.migrateLegacy();
-      const s = await session.get();
+      // switch-diary and add-a-child work right after the update. The
+      // migration only READS the session (it never rewrites it), so the two
+      // store reads run side by side instead of one after the other.
+      const [, s] = await Promise.all([family.migrateLegacy(), session.get()]);
       // A persisted session whose role can't be routed on mobile (OWNER —
       // web-only) must not brick the bootstrap forever. resolveStartRoute
       // never throws; if the role was unroutable, clear the bad session as a

@@ -1,3 +1,4 @@
+import { useTermsGate } from '@/components/AccountSafety';
 import { Tabs } from 'expo-router';
 import { FamilyTabBar, type FamilyTabBarProps } from '@/components/FamilyTabBar';
 import { ALL_TABS, visibleTabs } from '@/lib/family-nav';
@@ -14,6 +15,8 @@ import { useSession } from '@/lib/use-session';
  * tabs, which no stack is involved in.
  */
 export default function FamilyTabsLayout() {
+  // Terms + what messages are for, once per person (Play UGC policy, 19 Oct 2026).
+  useTermsGate();
   const s = useSession();
   const tabs = visibleTabs(s?.features);
   return (

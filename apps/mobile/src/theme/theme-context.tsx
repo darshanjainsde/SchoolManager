@@ -3,11 +3,12 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type PropsWithChildren,
 } from 'react';
 import { useColorScheme } from 'react-native';
-import { brandedLight } from './school-brand';
+import { applyInkLit } from './inklit';
 import { readCachedBrand, refreshSchoolBrand } from '@/lib/school-brand-client';
 import * as SecureStore from 'expo-secure-store';
 import { GAP, RADIUS, palette, type ColorPalette, type ColorScheme } from './tokens';
@@ -17,7 +18,7 @@ import {
   isGroundName,
   type GroundName,
 } from './grounds';
-import { ACCENTS, applyAccent, isAccentName, type AccentName } from './accents';
+import { readAccent, rolesFor, type AccentName } from './accents';
 
 export type ThemePreference = 'system' | ColorScheme;
 
@@ -27,6 +28,13 @@ export type ThemePreference = 'system' | ColorScheme;
 const PREF_KEY = 'sckools.themePreference';
 const GROUND_KEY = 'sckools.ground';
 const ACCENT_KEY = 'sckools.accent';
+
+/** One stored choice; a failed read is "nothing stored", never a crash at boot. */
+function readStored(key: string): Promise<string | null> {
+  return Promise.resolve()
+    .then(() => SecureStore.getItemAsync(key))
+    .catch(() => null);
+}
 
 function isThemePreference(v: string | null): v is ThemePreference {
   return v === 'system' || v === 'light' || v === 'dark';
@@ -69,19 +77,40 @@ const defaultThemeContext: ThemeContextValue = {
 
 const ThemeContext = createContext<ThemeContextValue>(defaultThemeContext);
 
+interface StoredLook {
+  preference: ThemePreference;
+  ground: GroundName;
+  accent: AccentName;
+  /** True once the three stored choices have been read (or found missing). */
+  loaded: boolean;
+}
+
 export function ThemeProvider({ children }: PropsWithChildren) {
   const systemScheme = useColorScheme(); // 'light' | 'dark' | null | undefined
-  const [preference, setPreferenceState] = useState<ThemePreference>('system');
+  // ONE state object for the three stored choices, so reading them at boot is
+  // one re-render of the whole app rather than three (each setter used to
+  // land on its own tick).
+  //
   // THE DEFAULTS A REAL PERSON GETS. `classic` shipped first so that adding
   // grounds could not restyle anyone before the shade had been seen on an
   // actual phone; that has now been decided, so the app opens on warm cream
   // with feint ruling. Anyone who had already chosen something keeps it — the
-  // stored value wins over these on the next tick.
+  // stored value wins over these once it has been read.
   // UI v2: Fresh is the default; a stored choice still wins (below).
-  const [ground, setGroundState] = useState<GroundName>('fresh');
   // 'school' is the default so an app still looks like the place a person goes;
   // choosing a named accent is an opt-out, not the starting point.
-  const [accent, setAccentState] = useState<AccentName>('school');
+  // Green is the colour the user picked in the Colour Studio (19 Oct 2026);
+  // 'My school' builds the same system from the school's brand.
+  const [look, setLook] = useState<StoredLook>({
+    preference: 'system',
+    ground: 'fresh',
+    accent: 'green',
+    loaded: false,
+  });
+  const { preference, ground, accent } = look;
+  // A choice made on this launch before the store answered must not be
+  // overwritten by the stored one when it lands.
+  const touched = useRef<{ preference?: true; ground?: true; accent?: true }>({});
   // The school's own colour, for the LIGHT scheme only. Cache first so the
   // theme is right on the frame the app opens rather than one round-trip
   // later; the network refresh then updates it for the next launch.
@@ -89,50 +118,76 @@ export function ThemeProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     let cancelled = false;
+    void Promise.all([
+      readStored(PREF_KEY),
+      readStored(GROUND_KEY),
+      readStored(ACCENT_KEY),
+    ]).then(([storedPref, storedGround, storedAccent]) => {
+      if (cancelled) return;
+      const a = readAccent(storedAccent);
+      setLook((cur) => ({
+        preference: !touched.current.preference && isThemePreference(storedPref) ? storedPref : cur.preference,
+        ground: !touched.current.ground && isGroundName(storedGround) ? storedGround : cur.ground,
+        accent: !touched.current.accent && a ? a : cur.accent,
+        loaded: true,
+      }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // The cached brand is one local read, so it is always taken (it is what
+  // makes 'My school' right on its first frame).
+  useEffect(() => {
+    let cancelled = false;
     void readCachedBrand().then((b) => {
       if (!cancelled && b) setBrand(b.primary);
     });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // The NETWORK refresh is the whole public site (GET /public/site) fetched to
+  // read one colour, and only 'My school' paints with it — so it waits until
+  // the stored accent has been read, and runs only when that accent is
+  // 'school'. Choosing 'My school' later fetches it then.
+  const wantsBrand = look.loaded && accent === 'school';
+  useEffect(() => {
+    if (!wantsBrand) return;
+    let cancelled = false;
     void refreshSchoolBrand().then((b) => {
       if (!cancelled && b) setBrand(b.primary);
     });
     return () => {
       cancelled = true;
     };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    SecureStore.getItemAsync(PREF_KEY).then((stored) => {
-      if (!cancelled && isThemePreference(stored)) setPreferenceState(stored);
-    });
-    SecureStore.getItemAsync(GROUND_KEY).then((stored) => {
-      if (!cancelled && isGroundName(stored)) setGroundState(stored);
-    });
-    SecureStore.getItemAsync(ACCENT_KEY).then((stored) => {
-      if (!cancelled && isAccentName(stored)) setAccentState(stored);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  }, [wantsBrand]);
 
   function setPreference(next: ThemePreference) {
-    setPreferenceState(next);
+    touched.current.preference = true;
+    setLook((cur) => ({ ...cur, preference: next }));
     // Best-effort persistence — a failed write still applies the choice for
     // the rest of this session, it just won't survive an app restart.
     SecureStore.setItemAsync(PREF_KEY, next).catch(() => undefined);
   }
 
   function setGround(next: GroundName) {
-    setGroundState(next);
+    touched.current.ground = true;
+    setLook((cur) => ({ ...cur, ground: next }));
     SecureStore.setItemAsync(GROUND_KEY, next).catch(() => undefined);
   }
 
-
   function setAccent(next: AccentName) {
-    setAccentState(next);
+    touched.current.accent = true;
+    setLook((cur) => ({ ...cur, accent: next }));
     SecureStore.setItemAsync(ACCENT_KEY, next).catch(() => undefined);
   }
+
+  // The brand only reaches the tokens under 'My school'; for a named accent a
+  // brand landing late must not rebuild the palette (and re-render the app).
+  const brandInUse = accent === 'school' ? brand : null;
 
   const scheme: ColorScheme =
     preference === 'system' ? (systemScheme === 'dark' ? 'dark' : 'light') : preference;
@@ -160,19 +215,15 @@ export function ThemeProvider({ children }: PropsWithChildren) {
       // can reach the neutrals. A chosen accent holds in dark too: it was
       // picked deliberately, unlike a brand chosen against a white website.
       tokens: {
-        color: applyGround(
-          applyAccent(
-            scheme === 'light' ? brandedLight(palette.light, brand) : palette.dark,
-            ACCENTS[accent][scheme],
-          ),
-          GROUNDS[ground][scheme],
-        ),
+        // INK & LIT (19 Oct 2026): the chosen palette paints every role; the
+        // ground keeps the paper only when the person chose one.
+        color: applyInkLit(applyGround(palette[scheme], GROUNDS[ground][scheme]), rolesFor(accent, scheme, brandInUse), ground === 'fresh'),
         gap: GAP,
         radius: RADIUS,
       },
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [scheme, preference, brand, ground, accent],
+    [scheme, preference, brandInUse, ground, accent],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

@@ -127,6 +127,10 @@ export type ErrorCode =
   | 'NOT_YOUR_TEACHER'
   /** A TEACHER tried to open/reply to a message thread that is not theirs — pair with 404. */
   | 'NOT_YOUR_THREAD'
+  /** A post to a message thread that either side has blocked — pair with 403. */
+  | 'THREAD_BLOCKED'
+  /** A report named a message that is not in that thread — pair with 404. */
+  | 'MESSAGE_NOT_FOUND'
   /** A STUDENT with no class section tried to start a thread — pair with 409. */
   | 'NO_CLASS_SECTION'
   /** A TEACHER tried to edit/delete an Announcement authored by someone else — pair with 403. */

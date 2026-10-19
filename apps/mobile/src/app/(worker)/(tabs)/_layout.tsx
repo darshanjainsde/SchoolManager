@@ -1,3 +1,4 @@
+import { useTermsGate } from '@/components/AccountSafety';
 import { Tabs } from 'expo-router';
 import { WorkerTabBar, type WorkerTabBarProps } from '@/components/WorkerTabBar';
 import { ALL_TABS, homeTabFor, jobFor, tabsFor } from '@/lib/worker-nav';
@@ -11,6 +12,8 @@ import { useSession } from '@/lib/use-session';
  * pair, which is also what an older session (no `staffRole`) gets.
  */
 export default function WorkerTabsLayout() {
+  // Terms + what messages are for, once per person (Play UGC policy, 19 Oct 2026).
+  useTermsGate();
   const session = useSession();
   const job = jobFor(session);
   // Session, not job: an accounts officer's Pay tab depends on the SALARY

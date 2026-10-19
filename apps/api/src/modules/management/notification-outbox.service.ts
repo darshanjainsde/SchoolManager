@@ -14,6 +14,7 @@ import { resolveRecipientUsers } from '../../common/notifications/recipients';
 import { isDeliverySchemaMissing } from '../../common/errors/prisma-errors';
 import type {
   MessageReceivedOutboxPayload,
+  MessageReportedOutboxPayload,
   AssignmentPostedOutboxPayload,
   CoverCancelledPayload,
   CoverUnfilledPayload,
@@ -130,6 +131,7 @@ export const OUTBOX_EMAIL: Record<NotificationOutboxKind, boolean> = {
   COVER_CANCELLED: true,
   COVER_UNFILLED: true,
   COVER_BATCH: true,
+  MESSAGE_REPORTED: true,
 };
 
 /**
@@ -333,6 +335,17 @@ export function toNotificationMessage(kind: NotificationOutboxKind, payload: unk
       return {
         kind: 'ANNOUNCEMENT',
         payload: { schoolName: p.schoolName, title: p.title, body: p.body, className: 'Complaint Box', postedOn },
+      };
+    }
+    case 'MESSAGE_REPORTED': {
+      // A teacher or family reported a message thread, to one admin
+      // (targetUserId). Composed at write time by MessagesService; renders
+      // through the generic single-reader ANNOUNCEMENT shape like the
+      // Complaint Box, so WhatsApp/push/email need no new template.
+      const p = payload as MessageReportedOutboxPayload;
+      return {
+        kind: 'ANNOUNCEMENT',
+        payload: { schoolName: p.schoolName, title: p.title, body: p.body, className: 'Messages', postedOn },
       };
     }
     case 'MESSAGE_RECEIVED': {

@@ -3,7 +3,7 @@ import { Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import type { MessageThreadRow } from '@skoolos/types';
 import { api, ApiError } from '@/lib/api';
-import { Card, Empty, Screen, SectionTitle } from '@/components/ui';
+import { Card, Empty, ListScreen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { useTokens } from '@/theme/theme-context';
 import { fmtDayTime } from '@/lib/dates';
@@ -56,26 +56,30 @@ export default function StaffMessages() {
     .slice()
     .sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()), [threads]);
 
+  // A FlatList (android-ui-ledger E1): a teacher's threads grow all year.
   return (
-    <Screen>
-      <SectionTitle title="Messages" />
-
-      {error && (
-        <Card>
-          <Text testID="threads-error" style={{ color: tokens.color.red }}>
-            {error}
-          </Text>
-        </Card>
-      )}
-      {threads === null && !error && (
-        <LoadingRows label="Loading messages…" rows={5} />
-      )}
-      {threads?.length === 0 && !error && (
-        <Card style={{ padding: 0 }}>
-          <Empty kind="first" icon="messages" title="No questions yet">When a family in your classes writes to you, it lands here and rings the bell. Only the classes you teach can reach you.</Empty>
-        </Card>
-      )}
-      {sorted.map((t) => (
+    <ListScreen
+      data={sorted}
+      keyExtractor={(t) => t.id}
+      header={
+        <View style={{ gap: tokens.gap, marginBottom: sorted.length ? tokens.gap : 0 }}>
+          <SectionTitle title="Messages" />
+          {error && (
+            <Card>
+              <Text testID="threads-error" style={{ color: tokens.color.red }}>
+                {error}
+              </Text>
+            </Card>
+          )}
+          {threads === null && !error && <LoadingRows label="Loading messages…" rows={5} />}
+          {threads?.length === 0 && !error && (
+            <Card style={{ padding: 0 }}>
+              <Empty kind="first" icon="messages" title="No questions yet">When a family in your classes writes to you, it lands here and rings the bell. Only the classes you teach can reach you.</Empty>
+            </Card>
+          )}
+        </View>
+      }
+      renderItem={(t) => (
         <Pressable
           key={t.id}
           testID={`thread-${t.id}`}
@@ -134,7 +138,7 @@ export default function StaffMessages() {
             )}
           </Card>
         </Pressable>
-      ))}
-    </Screen>
+      )}
+    />
   );
 }
