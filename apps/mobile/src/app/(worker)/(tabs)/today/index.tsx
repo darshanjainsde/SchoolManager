@@ -172,8 +172,9 @@ function StaffToday() {
   return (
     <Screen band onRefresh={reload}>
       <BandGreeting
-        eyebrow={`${fmtLongDay(new Date())}${painted && data ? ` · ${STAFF_ROLE_LABEL[data.person.role] ?? 'Staff'}` : ''}`}
+        eyebrow={fmtLongDay(new Date())}
         title={painted && data ? `${data.person.firstName} ${data.person.lastName}`.trim() : 'Today'}
+        line={painted && data ? STAFF_ROLE_LABEL[data.person.role] ?? 'Staff' : undefined}
         right={<NotificationBell group="(worker)" onBand />}
       />
 

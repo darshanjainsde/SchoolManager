@@ -1,3 +1,4 @@
+import { fmtLongDay } from '@/lib/dates';
 import { useEffect, useMemo, useState } from 'react';
 import { router } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
@@ -47,7 +48,7 @@ export default function Counter() {
 
   return (
     <Screen band onRefresh={dash.refresh} refreshing={dash.refreshing}>
-      <BandGreeting eyebrow="Library counter" title={session?.displayName ?? 'Counter'} right={<NotificationBell group="(worker)" onBand />} />
+      <BandGreeting eyebrow={fmtLongDay(new Date())} line="Library counter" title={session?.displayName ?? 'Counter'} right={<NotificationBell group="(worker)" onBand />} />
 
       <SearchBox testID="counter-search" value={q} onChangeText={setQ} placeholder="Child's name or code, or a teacher" />
       {searchErr && <ErrorState error={searchErr} onRetry={() => setQ(`${q} `.trimEnd())} />}

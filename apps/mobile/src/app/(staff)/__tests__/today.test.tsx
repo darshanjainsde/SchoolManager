@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, within, act } from '@testing-library/react-native';
 import type { TeacherDay, TeacherDayEntry } from '@skoolos/types';
-import Today from '../(tabs)/home/index';
+import Today, { teacherLine } from '../(tabs)/home/index';
 import { api, ApiError } from '@/lib/api';
 import { session } from '@/lib/session';
 import { clearCache } from '@/lib/query';
@@ -110,6 +110,9 @@ function mockDay(day: TeacherDay | Error, notesGet?: unknown) {
     if (path === '/teacher/concerns/counts') {
       return Promise.resolve(mockConcerns);
     }
+    if (path === '/manage/teachers/me') {
+      return Promise.resolve({ firstName: 'Priya', lastName: 'Sharma', subjects: ['Mathematics'], classTeacherOf: ['8-A'] });
+    }
     if (path === '/manage/messages/unread-count') {
       // The "Needs you today" Messages dome badge (pitch №3); keep it quiet.
       return Promise.resolve({ count: 0 });
@@ -175,8 +178,9 @@ it('greets the teacher by name and shows the classes/taken/pending summary', asy
   expect(await screen.findByText('Priya Sharma')).toBeTruthy();
   // The salutation is gone (16 Oct 2026): the band carries the date and the name only.
   expect(screen.queryByText('Good morning')).toBeNull();
-  // The band says the day in one sentence (19 Oct 2026: the rings went).
-  expect(await screen.findByText('1 register open · next class 09:05')).toBeTruthy();
+  // The band says who the teacher is (19 Oct 2026); the sheet carries the day.
+  expect(await screen.findByText('Class teacher · 8-A · Mathematics')).toBeTruthy();
+  expect(screen.queryByText(/register open/)).toBeNull();
 });
 
 it('never greets the teacher with the email address they signed in with', async () => {
@@ -312,7 +316,7 @@ it('excludes FREE periods from the classes/taken/pending glance count', async ()
   mockDay({ date: '2026-07-30', dayOfWeek: 4, entries: [classEntry(), freeEntry] });
   render(<Today />);
 
-  expect(await screen.findByText('1 class today · next class 08:00')).toBeTruthy();
+  expect((await screen.findAllByText('Class teacher · 8-A · Mathematics')).length).toBe(1);
 });
 
 it('before school starts, says so and names the first class', async () => {
@@ -622,5 +626,16 @@ describe('Do now — direct actions on Home (user, 19 Oct 2026)', () => {
     expect(screen.getByTestId('hometool-badge-Complaint Box')).toBeTruthy();
     fireEvent.press(row);
     expect(mockPush).toHaveBeenCalledWith('/(staff)/(tabs)/home/concerns');
+  });
+});
+
+describe('the band line says who the teacher is (user, 19 Oct 2026)', () => {
+  it('class teacher first, then up to two subjects; a subject teacher reads as such', () => {
+    expect(teacherLine({ subjects: ['English', 'Hindi', 'Art'], classTeacherOf: ['VI-A'] })).toBe('Class teacher · VI-A · English, Hindi');
+    expect(teacherLine({ subjects: ['Science'], classTeacherOf: [] })).toBe('Science teacher');
+    expect(teacherLine({ subjects: [], classTeacherOf: [] })).toBe('Teacher');
+    expect(teacherLine(null)).toBeUndefined();
+    // A record missing its lists still reads as a teacher, never crashes Home.
+    expect(teacherLine({} as never)).toBe('Teacher');
   });
 });

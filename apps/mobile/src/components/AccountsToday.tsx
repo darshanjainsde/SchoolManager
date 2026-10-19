@@ -59,8 +59,9 @@ export function AccountsToday({ name }: { name: string }) {
   return (
     <Screen band onRefresh={() => { pending.refresh(); coverage.refresh(); holidays.refresh(); }} refreshing={pending.refreshing}>
       <BandGreeting
-        eyebrow={`${fmtLongDay(new Date())} · Accounts`}
+        eyebrow={fmtLongDay(new Date())}
         title={name}
+        line="Accounts office"
         titleTestID="accounts-greeting"
         right={<NotificationBell group="(worker)" onBand />}
       />

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Text } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { BandGreeting } from '@/components/BandHeader';
-import type { ClassNoteRow, ClassTodoRow, TeacherDay } from '@skoolos/types';
+import type { ClassNoteRow, ClassTodoRow, TeacherDay, TeacherProfile } from '@skoolos/types';
 import { ApiError } from '@/lib/api';
 import { todayISO } from '@/lib/attendance';
 import { currentEntry, minutesOfDay } from '@/lib/teacher-day';
@@ -23,6 +23,15 @@ import { useSession } from '@/lib/use-session';
 import { useFirstPaint } from '@/lib/use-first-paint';
 import { QuickActions } from '@/components/QuickActions';
 import { DoNow, type DoNowItem } from '@/components/DoNow';
+
+/** "Class teacher · V-C · English", or "English, Hindi teacher" — never a count the sheet already shows. */
+export function teacherLine(p: Pick<TeacherProfile, 'subjects' | 'classTeacherOf'> | null | undefined): string | undefined {
+  if (!p) return undefined;
+  const subjects = (p.subjects ?? []).slice(0, 2).join(', ');
+  const classes = p.classTeacherOf ?? [];
+  if (classes.length) return ['Class teacher', classes.join(', '), subjects].filter(Boolean).join(' · ');
+  return subjects ? `${subjects} teacher` : 'Teacher';
+}
 
 export default function Today() {
   const tokens = useTokens();
@@ -200,29 +209,18 @@ export default function Today() {
   // The live period's counts are NOT held for: they need the day first (to know
   // which period is live), so waiting for them chained a second round-trip
   // onto the first frame. The kit badges arrive a beat after the page.
-  const painted = useFirstPaint(day !== null || error !== null, [!unreadSettled, mine.loading, concerns.loading]);
+  // Who I am, for the band line: the same record the Profile shows, cached.
+  const me = useQuery<TeacherProfile>('/manage/teachers/me');
+  const painted = useFirstPaint(day !== null || error !== null, [!unreadSettled, mine.loading, concerns.loading, me.loading]);
 
   const syllabusPct = (() => {
     const leaves = (mine.data?.tracks ?? []).reduce((sum, t) => sum + t.leaves, 0);
     const done = (mine.data?.tracks ?? []).reduce((sum, t) => sum + t.done, 0);
     return leaves > 0 ? Math.round((done / leaves) * 100) : null;
   })();
-  // The band says the day in one plain sentence (user, 19 Oct 2026: the rings
-  // and their figures went; "remove this rings completely").
-  const nextClass = classes.find((e) => minutesOfDay(e.startTime) > now);
-  const openNow = needsInk.filter((e) => minutesOfDay(e.startTime) <= now).length;
-  const started = classes.some((e) => minutesOfDay(e.startTime) <= now);
-  // No classes: the sheet already says so, so the band adds nothing.
-  const bandLine = !painted || classes.length === 0
-    ? undefined
-    : [
-        openNow > 0
-          ? `${openNow} ${openNow === 1 ? 'register' : 'registers'} open`
-          : started
-            ? 'Registers up to date'
-            : `${classes.length} ${classes.length === 1 ? 'class' : 'classes'} today`,
-        nextClass ? `next class ${nextClass.startTime}` : 'all classes done',
-      ].join(' · ');
+  // The band says WHO the teacher is (user, 19 Oct 2026: "1 register open"
+  // repeated the sheet right under it — "give class teacher VI A").
+  const bandLine = teacherLine(me.data);
 
   function goToAttendance(classSectionId: string) {
     const className = entries.find((e) => e.slot?.classSectionId === classSectionId)?.slot?.className;

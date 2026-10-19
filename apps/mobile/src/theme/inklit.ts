@@ -202,6 +202,8 @@ export function applyInkLit<T extends object>(c: T, r: InkLitRoles, ownNeutrals:
     barIndicator: r.barOn,
     barActive: r.barOnFg,
     barInactive: r.barOff,
-    ...(ownNeutrals ? { appBg: r.page, surface: r.card, line: r.line, ink: r.ink, sub: r.sub } : {}),
+    // surfaceMuted (segmented controls, a sheet's quiet button) takes the brand wash, so
+    // no navy from the default paper shows inside a green or black palette (19 Oct 2026).
+    ...(ownNeutrals ? { appBg: r.page, surface: r.card, surfaceMuted: r.wash, line: r.line, ink: r.ink, sub: r.sub } : {}),
   };
 }

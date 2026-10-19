@@ -1,3 +1,4 @@
+import { fmtLongDay } from '@/lib/dates';
 import { useMemo } from 'react';
 import { Text, View } from 'react-native';
 import { router } from 'expo-router';
@@ -40,7 +41,7 @@ export default function SportsToday() {
 
   return (
     <Screen band onRefresh={refresh} refreshing={meets.refreshing}>
-      <BandGreeting eyebrow="Sports desk" title={session?.displayName ?? 'Sports desk'} right={<NotificationBell group="(worker)" onBand />} />
+      <BandGreeting eyebrow={fmtLongDay(new Date())} line="Sports desk" title={session?.displayName ?? 'Sports desk'} right={<NotificationBell group="(worker)" onBand />} />
 
       {error && <ErrorState error={error} onRetry={meets.reload} />}
       {loading && !error && <LoadingRows label="Opening the desk…" rows={3} />}
