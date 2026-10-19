@@ -79,6 +79,9 @@ const config: ExpoConfig = {
       'android.permission.USE_BIOMETRIC',
       'android.permission.USE_FINGERPRINT',
       'android.permission.READ_APP_BADGE',
+      // Advertising ID: no ads, and children use this app (Google Play
+      // Families policy) — Firebase/Play libraries merge it in otherwise.
+      'com.google.android.gms.permission.AD_ID',
       // Launcher badge counts on OEM launchers (ShortcutBadger via
       // expo-notifications). Fourteen vendor permissions for a number on an
       // icon we never set — off.

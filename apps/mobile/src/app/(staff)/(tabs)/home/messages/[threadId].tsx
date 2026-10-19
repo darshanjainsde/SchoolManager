@@ -1,4 +1,5 @@
 import { Composer } from '@/components/Composer';
+import { ThreadSafety } from '@/components/ThreadSafety';
 import { useCallback, useRef, useState, type ReactNode } from 'react';
 import { Animated, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -68,6 +69,9 @@ export default function StaffThread() {
   };
 
   const [detail, setDetail] = useState<MessageThreadDetail | null>(null);
+  // Report / block (Play UGC policy, 19 Oct 2026): the thread says who blocked it.
+  const flags = (detail?.thread ?? {}) as { blockedByMe?: boolean; blockedByOther?: boolean };
+  const blocked = !!flags.blockedByMe || !!flags.blockedByOther;
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const pinToEnd = usePinToEnd(scrollRef);
@@ -142,6 +146,16 @@ export default function StaffThread() {
             </Text>
           </Card>
         )}
+        {detail && threadId && (
+          <ThreadSafety
+            base="/manage/messages"
+            threadId={threadId}
+            blockedByMe={!!flags.blockedByMe}
+            blockedByOther={!!flags.blockedByOther}
+            otherName={detail.thread.studentName}
+            onBlockedChange={(b) => setDetail((d) => (d ? { ...d, thread: { ...d.thread, blockedByMe: b } } : d))}
+          />
+        )}
 
         {error && detail === null && <ErrorState testID="thread-error" error={error} onRetry={() => void load()} />}
         {error && detail !== null && (
@@ -203,7 +217,7 @@ export default function StaffThread() {
 
       {/* `.composer` — one pill floating over the page, not a docked toolbar:
           replying is a small act, and the control should look like one. */}
-      {detail && (
+      {detail && !blocked && (
         <Composer
           value={body}
           onChangeText={setBody}

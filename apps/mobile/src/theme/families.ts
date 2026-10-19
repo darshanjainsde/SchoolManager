@@ -1,5 +1,5 @@
 import type { ColorPalette, ColorScheme } from './tokens';
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { contrastRatio, mix } from './school-brand';
 import { useTheme } from './theme-context';
 
@@ -270,5 +270,7 @@ export function toneFill(tone: ToneName, c: ColorPalette): { bg: string; fg: str
 export function useFamilyTone(): (icon: string) => FamilyTone {
   const { scheme, tokens } = useTheme();
   const fam = useMemo(() => deriveFamilies(tokens.color, scheme), [tokens.color, scheme]);
-  return (icon: string) => fam[familyOf(icon)];
+  // Stable between renders, so a memoised tile handed this function does not
+  // redraw just because its parent did.
+  return useCallback((icon: string) => fam[familyOf(icon)], [fam]);
 }

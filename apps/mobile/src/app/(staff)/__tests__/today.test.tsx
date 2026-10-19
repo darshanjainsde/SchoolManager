@@ -4,6 +4,7 @@ import Today from '../(tabs)/home/index';
 import { api, ApiError } from '@/lib/api';
 import { session } from '@/lib/session';
 import { clearCache } from '@/lib/query';
+import { FIRST_PAINT_CAP_MS } from '@/lib/use-first-paint';
 
 jest.mock('expo-secure-store', () => {
   const store: Record<string, string> = {};
@@ -543,8 +544,41 @@ describe('one first frame (user, 18 Oct 2026: "something is rendering fast and s
     render(<Today />);
     await act(async () => {});
     expect(screen.queryByTestId('hero-act-register')).toBeNull();
-    await act(async () => jest.advanceTimersByTime(1200));
+    await act(async () => jest.advanceTimersByTime(FIRST_PAINT_CAP_MS));
     expect(screen.getByTestId('hero-act-register')).toBeTruthy();
+  });
+
+  it('does not hold the page for the live period\'s note counts — they badge the kit a beat later', async () => {
+    // The counts need the day first (to know which period is live), so
+    // waiting for them chained a second round-trip onto the first frame.
+    setNow(8, 20);
+    let answerNotes: (v: unknown) => void = () => {};
+    (api.request as jest.Mock).mockImplementation((path: string) => {
+      if (path.startsWith('/manage/timetable/my-day')) return Promise.resolve(DAY);
+      if (path.startsWith('/manage/class-notes?')) return new Promise((res) => { answerNotes = res; });
+      return Promise.resolve({ count: 0, unread: 0 });
+    });
+    render(<Today />);
+    await act(async () => {});
+    expect(screen.getByTestId('now-card')).toBeTruthy();
+    expect(screen.queryByTestId('now-kit-notes-badge')).toBeNull();
+    await act(async () => answerNotes({ notes: [{ id: 'n-1', body: 'x', createdAt: '2026-07-30T08:10:00.000Z' }], todos: [] }));
+    expect(within(screen.getByTestId('now-kit-notes-badge')).getByText('1')).toBeTruthy();
+  });
+
+  it('a second visit paints the day from the cache at once — no skeleton — and still asks again', async () => {
+    setNow(8, 20);
+    mockDay(DAY);
+    const first = render(<Today />);
+    await screen.findByTestId('now-card');
+    first.unmount();
+
+    // The network now hangs: whatever the second visit shows came from the cache.
+    (api.request as jest.Mock).mockReset().mockReturnValue(new Promise(() => {}));
+    render(<Today />);
+    expect(screen.queryByLabelText('Loading your day…')).toBeNull();
+    expect(screen.getByTestId('now-card')).toBeTruthy();
+    expect((api.request as jest.Mock).mock.calls.some(([p]) => String(p).startsWith('/manage/timetable/my-day'))).toBe(true);
   });
 });
 

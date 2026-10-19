@@ -3,6 +3,8 @@ import { Prisma, withTenant, type TenantTx } from '@skoolos/db';
 import {
   assertNotificationOutboxKind,
   type MessageableTeacher,
+  type MessageBlockResult,
+  type MessageReportResult,
   type MessageRow,
   type MessageThreadDetail,
   type MessageThreadRow,
@@ -11,7 +13,11 @@ import {
   type UnreadCountResult,
 } from '@skoolos/types';
 import { ApiError } from '../../common/errors/api-error';
-import type { MessageReceivedOutboxPayload } from '../../common/notifications/notification.types';
+import type {
+  MessageReceivedOutboxPayload,
+  MessageReportedOutboxPayload,
+} from '../../common/notifications/notification.types';
+import { resolveAdminRecipients } from '../../common/notifications/recipients';
 import { emitNotifications } from '../../common/notifications/notification-inbox';
 import { TenantContextService } from '../tenancy';
 import { TimetableService } from './timetable.service';
@@ -22,6 +28,32 @@ import { requestOutboxDrain } from '../../common/notifications/outbox-signal';
 const FALLBACK_SCHOOL_NAME = 'Your school';
 const FALLBACK_SUBJECT_NAME = 'General';
 const PREVIEW_LEN = 140;
+const BLOCKED_MESSAGE = 'This conversation is blocked.';
+
+/** Which side of a thread the caller is on. */
+type Side = 'STUDENT' | 'TEACHER';
+
+/** The two block columns on MessageThread (see the schema docstring). */
+interface BlockColumns {
+  blockedByStudentAt?: Date | null;
+  blockedByTeacherAt?: Date | null;
+}
+
+/** `blockedByMe` / `blockedByOther` for the caller's side. */
+function blockFlags(t: BlockColumns, side: Side): { blockedByMe: boolean; blockedByOther: boolean } {
+  const student = t.blockedByStudentAt != null;
+  const teacher = t.blockedByTeacherAt != null;
+  return side === 'STUDENT'
+    ? { blockedByMe: student, blockedByOther: teacher }
+    : { blockedByMe: teacher, blockedByOther: student };
+}
+
+/** Nobody posts to a thread either side has blocked; the blocker can unblock. */
+function assertNotBlocked(t: BlockColumns): void {
+  if (t.blockedByStudentAt != null || t.blockedByTeacherAt != null) {
+    throw new ApiError('THREAD_BLOCKED', BLOCKED_MESSAGE, 403, 'threadId');
+  }
+}
 
 /**
  * Raw thread row shape with the includes both `toThreadRow` reads.
@@ -131,7 +163,7 @@ export class MessagesService {
   /** Maps a thread + its includes to the list row. `messages` is expected to
    * hold only the ONE newest message (for the preview); `_count.messages` is a
    * FILTERED count of the other party's unread messages (the include's where). */
-  private static toThreadRow(t: ThreadWithRelations): MessageThreadRow {
+  private static toThreadRow(t: ThreadWithRelations, side: Side): MessageThreadRow {
     return {
       id: t.id,
       studentId: t.studentId,
@@ -143,6 +175,7 @@ export class MessagesService {
       lastMessageAt: t.lastMessageAt.toISOString(),
       lastMessagePreview: t.messages[0] ? t.messages[0].body.slice(0, PREVIEW_LEN) : null,
       unreadCount: t._count.messages,
+      ...blockFlags(t, side),
     };
   }
 
@@ -200,7 +233,7 @@ export class MessagesService {
       });
       const unread = await unreadCountsByThread(tx, schoolId, 'TEACHER');
       return rows.map((t) =>
-        MessagesService.toThreadRow({ ...t, _count: { messages: unread.get(t.id) ?? 0 } }),
+        MessagesService.toThreadRow({ ...t, _count: { messages: unread.get(t.id) ?? 0 } }, 'STUDENT'),
       );
     });
   }
@@ -219,7 +252,7 @@ export class MessagesService {
         where: { schoolId, threadId, senderRole: 'TEACHER', readAt: null },
         data: { readAt: new Date() },
       });
-      return MessagesService.detail(tx, thread);
+      return MessagesService.detail(tx, thread, 'STUDENT');
     });
   }
 
@@ -265,6 +298,9 @@ export class MessagesService {
         },
         update: {},
       });
+      // Blocked by either side → nobody posts. Throwing here rolls the
+      // transaction back (a thread that was just created cannot be blocked).
+      assertNotBlocked(thread);
 
       await MessagesService.appendAndNotify(tx, {
         schoolId,
@@ -277,7 +313,7 @@ export class MessagesService {
       });
 
       const fresh = await MessagesService.loadThreadForList(tx, schoolId, thread.id, 'TEACHER');
-      return MessagesService.detail(tx, fresh!);
+      return MessagesService.detail(tx, fresh!, 'STUDENT');
     });
 
     // Ask for a drain now rather than waiting for the daily cron — a message
@@ -299,7 +335,7 @@ export class MessagesService {
       });
       const unread = await unreadCountsByThread(tx, schoolId, 'STUDENT');
       return rows.map((t) =>
-        MessagesService.toThreadRow({ ...t, _count: { messages: unread.get(t.id) ?? 0 } }),
+        MessagesService.toThreadRow({ ...t, _count: { messages: unread.get(t.id) ?? 0 } }, 'TEACHER'),
       );
     });
   }
@@ -316,7 +352,7 @@ export class MessagesService {
         where: { schoolId, threadId, senderRole: 'STUDENT', readAt: null },
         data: { readAt: new Date() },
       });
-      return MessagesService.detail(tx, thread);
+      return MessagesService.detail(tx, thread, 'TEACHER');
     });
   }
 
@@ -334,6 +370,7 @@ export class MessagesService {
       if (!thread || thread.teacherId !== t.id) {
         throw new ApiError('NOT_YOUR_THREAD', 'Thread not found', 404, 'threadId');
       }
+      assertNotBlocked(thread);
 
       await MessagesService.appendAndNotify(tx, {
         schoolId,
@@ -346,10 +383,155 @@ export class MessagesService {
       });
 
       const fresh = await MessagesService.loadThreadForList(tx, schoolId, thread.id, 'STUDENT');
-      return MessagesService.detail(tx, fresh!);
+      return MessagesService.detail(tx, fresh!, 'TEACHER');
     });
     requestOutboxDrain();
     return out;
+  }
+
+  // ── report & block (Google Play UGC policy) ─────────────────────────────────
+  //
+  // Only a participant may report or block: the teacher whose stored
+  // `teacherId` is theirs, the student whose stored `studentId` is theirs.
+  // Anyone else gets the SAME 404 the get-thread endpoints give, so a report
+  // or block is never an oracle for whether a thread id exists.
+
+  /** The thread, if the caller is on the given side of it; 404 otherwise. */
+  private async participantThread(tx: TenantTx, schoolId: string, userId: string, threadId: string, side: Side) {
+    const me = side === 'STUDENT' ? await this.myStudent(tx, userId) : await this.myTeacher(tx, userId);
+    const thread = await tx.messageThread.findFirst({
+      where: { schoolId, id: threadId },
+      include: {
+        student: { select: { firstName: true, lastName: true } },
+        teacher: { select: { firstName: true, lastName: true } },
+        subject: { select: { name: true } },
+      },
+    });
+    const mine = thread && (side === 'STUDENT' ? thread.studentId === me.id : thread.teacherId === me.id);
+    if (!thread || !mine) throw new ApiError('NOT_FOUND', 'thread not found', 404, 'threadId');
+    return thread;
+  }
+
+  async teacherReport(userId: string, threadId: string, dto: { reason: string; messageId?: string }): Promise<MessageReportResult> {
+    return this.report(userId, threadId, dto, 'TEACHER');
+  }
+
+  async studentReport(userId: string, threadId: string, dto: { reason: string; messageId?: string }): Promise<MessageReportResult> {
+    return this.report(userId, threadId, dto, 'STUDENT');
+  }
+
+  async teacherBlock(userId: string, threadId: string, blocked: boolean): Promise<MessageBlockResult> {
+    return this.block(userId, threadId, blocked, 'TEACHER');
+  }
+
+  async studentBlock(userId: string, threadId: string, blocked: boolean): Promise<MessageBlockResult> {
+    return this.block(userId, threadId, blocked, 'STUDENT');
+  }
+
+  /**
+   * Persists a MessageReport, then tells every active school admin (in-app
+   * bell + one outbox row each, kind MESSAGE_REPORTED). The report is written
+   * first in its own transaction; the notification runs after it and never
+   * undoes it — the Complaint Box's rule: a notice that fails must not lose
+   * the thing it describes.
+   */
+  private async report(
+    userId: string,
+    threadId: string,
+    dto: { reason: string; messageId?: string },
+    side: Side,
+  ): Promise<MessageReportResult> {
+    const { schoolId } = this.tenant.requireTenant();
+    const reason = dto.reason.trim();
+    if (!reason) throw new ApiError('REASON_REQUIRED', 'Say what is wrong with this conversation.', 400, 'reason');
+
+    const saved = await withTenant(schoolId, async (tx) => {
+      const thread = await this.participantThread(tx, schoolId, userId, threadId, side);
+      if (dto.messageId) {
+        const msg = await tx.message.findFirst({
+          where: { schoolId, id: dto.messageId, threadId: thread.id },
+          select: { id: true },
+        });
+        if (!msg) throw new ApiError('MESSAGE_NOT_FOUND', 'message not found', 404, 'messageId');
+      }
+      const row = await tx.messageReport.create({
+        data: {
+          schoolId,
+          threadId: thread.id,
+          messageId: dto.messageId ?? null,
+          reporterUserId: userId,
+          reporterRole: side,
+          reason,
+        },
+        select: { id: true },
+      });
+      const reporter = side === 'STUDENT' ? fullName(thread.student) : fullName(thread.teacher);
+      const other = side === 'STUDENT' ? fullName(thread.teacher) : fullName(thread.student);
+      const subject = thread.subject?.name ?? FALLBACK_SUBJECT_NAME;
+      return { reportId: row.id, reporter, other, subject };
+    });
+
+    await this.notifyReport(schoolId, threadId, reason, saved);
+    return { ok: true };
+  }
+
+  private async notifyReport(
+    schoolId: string,
+    threadId: string,
+    reason: string,
+    r: { reportId: string; reporter: string; other: string; subject: string },
+  ): Promise<void> {
+    try {
+      await withTenant(schoolId, async (tx) => {
+        const [admins, school] = await Promise.all([
+          resolveAdminRecipients(tx, schoolId),
+          tx.school.findFirst({ where: { id: schoolId }, select: { name: true } }),
+        ]);
+        if (admins.length === 0) return;
+        const title = 'A message was reported';
+        const body = `${r.reporter} reported a conversation with ${r.other} (${r.subject}): ${reason}`.slice(0, PREVIEW_LEN);
+        await emitNotifications(tx, {
+          schoolId,
+          userIds: admins.map((a) => a.userId),
+          kind: 'MESSAGE_REPORTED',
+          title,
+          body,
+          linkType: 'message_report',
+          linkId: r.reportId,
+        });
+        const kind: NotificationOutboxKind = 'MESSAGE_REPORTED';
+        assertNotificationOutboxKind(kind);
+        const payload: MessageReportedOutboxPayload = {
+          schoolName: school?.name ?? FALLBACK_SCHOOL_NAME,
+          title,
+          body,
+          threadId,
+          reportId: r.reportId,
+        };
+        for (const a of admins) {
+          await tx.notificationOutbox.create({
+            data: { schoolId, kind, targetUserId: a.userId, payload: payload as unknown as Prisma.InputJsonValue },
+            select: { id: true },
+          });
+        }
+      });
+      requestOutboxDrain();
+    } catch {
+      /* a notification must never undo the report it describes */
+    }
+  }
+
+  /** Sets (or clears) the CALLER's side's block column. Idempotent: blocking
+   * an already-blocked thread keeps the first timestamp. */
+  private async block(userId: string, threadId: string, blocked: boolean, side: Side): Promise<MessageBlockResult> {
+    const { schoolId } = this.tenant.requireTenant();
+    return withTenant(schoolId, async (tx) => {
+      const thread = await this.participantThread(tx, schoolId, userId, threadId, side);
+      const column = side === 'STUDENT' ? 'blockedByStudentAt' : 'blockedByTeacherAt';
+      const value = blocked ? (thread[column] ?? new Date()) : null;
+      await tx.messageThread.update({ where: { id: thread.id }, data: { [column]: value } });
+      return { blocked };
+    });
   }
 
   // ── shared write path ────────────────────────────────────────────────────────
@@ -453,13 +635,14 @@ export class MessagesService {
   private static async detail(
     tx: TenantTx,
     thread: ThreadWithRelations,
+    side: Side,
   ): Promise<MessageThreadDetail> {
     const messages = await tx.message.findMany({ take: LIST_CEILING.ACTIVITY,
       where: { threadId: thread.id },
       orderBy: { createdAt: 'asc' },
     });
     return {
-      thread: MessagesService.toThreadRow(thread),
+      thread: MessagesService.toThreadRow(thread, side),
       messages: messages.map(MessagesService.toMessageRow),
     };
   }

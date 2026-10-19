@@ -76,8 +76,27 @@ export function readAccent(v: string | null | undefined): AccentName | null {
   return typeof v === 'string' && v in LEGACY ? LEGACY[v] : null;
 }
 
+/**
+ * Built palettes, remembered. `inkLit` does colour-space maths for every role,
+ * and Appearance → Colour asks for every palette in both schemes on every
+ * render (28 builds a tap). A named palette never changes, so it is keyed by
+ * name + scheme; `school` is keyed by the brand colour too, so a school that
+ * changes its colour gets a fresh build. Treat the result as read-only: it is
+ * shared by every caller.
+ */
+const ROLES_CACHE = new Map<string, InkLitRoles>();
+
 /** What a palette paints in one scheme. `brand` feeds `school`. */
 export function rolesFor(name: AccentName, scheme: 'light' | 'dark', brand?: string | null): InkLitRoles {
+  const key = name === 'school' ? `school|${scheme}|${brand ?? ''}` : `${name}|${scheme}`;
+  const hit = ROLES_CACHE.get(key);
+  if (hit) return hit;
+  const roles = buildRoles(name, scheme, brand);
+  ROLES_CACHE.set(key, roles);
+  return roles;
+}
+
+function buildRoles(name: AccentName, scheme: 'light' | 'dark', brand?: string | null): InkLitRoles {
   const a = ACCENTS[name];
   const opts = a.opts ?? (brand ? { h: toOklch(brand).H, inkC: Math.min(0.14, Math.max(0.05, toOklch(brand).C)) } : ACCENTS.indigo.opts!);
   const built = inkLit(opts)[scheme];

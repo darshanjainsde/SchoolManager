@@ -1,6 +1,6 @@
 import { useReload } from '@/lib/query';
 import { formatDate } from '@/lib/portal';
-import { useCallback, useState, useMemo } from 'react';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { Animated, Text, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { type AttendanceStatusValue, type SaveAttendanceResponse } from '@skoolos/types';
@@ -147,6 +147,83 @@ export function cellSize(width: number, min = 48, gap = CELL_GAP): number {
   return Math.floor((width - gap * (cols - 1)) / cols);
 }
 
+/**
+ * One student's square on the register. Memoised with flat, stable props, so a
+ * tap redraws the ONE cell that changed rather than all forty: the screen used
+ * to hand every cell a fresh closure on every tap, and a class of forty redrew
+ * forty Touchables per mark.
+ */
+const RegisterCell = memo(function RegisterCell({
+  studentId,
+  name,
+  rollNo,
+  status,
+  size,
+  radius,
+  bg,
+  ink,
+  onCycle,
+}: {
+  studentId: string;
+  name: string;
+  rollNo: string | null;
+  status: AttendanceStatusValue;
+  size: number;
+  radius: number;
+  bg: string;
+  ink: string;
+  onCycle: (studentId: string) => void;
+}) {
+  return (
+    <Touchable
+      testID={`cell-${studentId}`}
+      accessibilityLabel={`${name}, roll ${rollNo ?? 'none'}, ${STATUS_LABEL[status].toLowerCase()}`}
+      // The firmer tick lands exactly when the tap MARKS someone
+      // absent — the one mark that matters and the one a teacher
+      // makes without looking down, walking a row.
+      haptic={CYCLE[status] === 'ABSENT' ? 'medium' : 'light'}
+      onPress={() => onCycle(studentId)}
+    >
+      {/* The cell's own size and its ABSENT emphasis live on this
+          inner View, not on the Touchable: Touchable owns the
+          outer transform (the press scale), and the two compose
+          instead of the later one silently winning. */}
+      <View
+        // The tinted square itself. Named separately from the
+        // Touchable so a test can assert the STATE (its tint, its
+        // ABSENT emphasis) on the node that actually carries it,
+        // instead of on whatever happens to be outermost today.
+        testID={`cell-body-${studentId}`}
+        style={{
+          width: size,
+          height: size,
+          borderRadius: radius,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: bg,
+          // `.rcell[data-status="ABSENT"]{transform:scale(1.06)}` —
+          // an absence is the mark that costs a deliberate tap, so
+          // it is the one that moves.
+          transform: status === 'ABSENT' ? [{ scale: 1.06 }] : [],
+        }}
+      >
+        {/* Mono, like every figure in this product that has to line
+            up with its neighbours down a column. */}
+        <Text
+          style={{
+            fontFamily: font.mono,
+            fontSize: 13,
+            fontWeight: '700',
+            color: ink,
+          }}
+        >
+          {STATUS_GLYPH[status] ?? rollNo ?? '·'}
+        </Text>
+      </View>
+    </Touchable>
+  );
+});
+
 export default function TakeAttendance() {
   const tokens = useTokens();
   const CELL = cellTones(tokens);
@@ -282,11 +359,20 @@ export default function TakeAttendance() {
   // this screen sets a status now — there is no direct-select control, which
   // is what lets the roster be a block of roll numbers instead of a list of
   // rows carrying three buttons each.
-  const cycle = (row: RosterRow) => {
+  //
+  // Stable for the life of the screen (it reads the roster through a ref), so
+  // the memoised cells do not all redraw when one of them is tapped.
+  const rosterRef = useRef(roster);
+  rosterRef.current = roster;
+  const cycle = useCallback((studentId: string) => {
+    const row = rosterRef.current?.find((x) => x.studentId === studentId);
+    if (!row) return;
     const to = CYCLE[row.status];
-    setStatus(row.studentId, to);
-    setLastMark({ studentId: row.studentId, name: row.name, from: row.status, to });
-  };
+    setConfirmation(null);
+    setPendingOffline(false);
+    setRoster((rs) => (rs ?? []).map((x) => (x.studentId === studentId ? { ...x, status: to } : x)));
+    setLastMark({ studentId, name: row.name, from: row.status, to });
+  }, []);
 
   const undoLastMark = () => {
     if (!lastMark) return;
@@ -475,60 +561,20 @@ export default function TakeAttendance() {
             onLayout={(e) => setGridW(e.nativeEvent.layout.width)}
             style={{ flexDirection: 'row', flexWrap: 'wrap', gap: CELL_GAP }}
           >
-            {rows.map((r) => {
-              const tone = CELL[r.status];
-              return (
-                <Touchable
-                  key={r.studentId}
-                  testID={`cell-${r.studentId}`}
-                  accessibilityLabel={`${r.name}, roll ${r.rollNo ?? 'none'}, ${STATUS_LABEL[
-                    r.status
-                  ].toLowerCase()}`}
-                  // The firmer tick lands exactly when the tap MARKS someone
-                  // absent — the one mark that matters and the one a teacher
-                  // makes without looking down, walking a row.
-                  haptic={CYCLE[r.status] === 'ABSENT' ? 'medium' : 'light'}
-                  onPress={() => cycle(r)}
-                >
-                  {/* The cell's own size and its ABSENT emphasis live on this
-                      inner View, not on the Touchable: Touchable owns the
-                      outer transform (the press scale), and the two compose
-                      instead of the later one silently winning. */}
-                  <View
-                    // The tinted square itself. Named separately from the
-                    // Touchable so a test can assert the STATE (its tint, its
-                    // ABSENT emphasis) on the node that actually carries it,
-                    // instead of on whatever happens to be outermost today.
-                    testID={`cell-body-${r.studentId}`}
-                    style={{
-                      width: cell,
-                      height: cell,
-                      borderRadius: tokens.radius.chip,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: tone.bg,
-                      // `.rcell[data-status="ABSENT"]{transform:scale(1.06)}` —
-                      // an absence is the mark that costs a deliberate tap, so
-                      // it is the one that moves.
-                      transform: r.status === 'ABSENT' ? [{ scale: 1.06 }] : [],
-                    }}
-                  >
-                    {/* Mono, like every figure in this product that has to line
-                        up with its neighbours down a column. */}
-                    <Text
-                      style={{
-                        fontFamily: font.mono,
-                        fontSize: 13,
-                        fontWeight: '700',
-                        color: tone.ink,
-                      }}
-                    >
-                      {STATUS_GLYPH[r.status] ?? r.rollNo ?? '·'}
-                    </Text>
-                  </View>
-                </Touchable>
-              );
-            })}
+            {rows.map((r) => (
+              <RegisterCell
+                key={r.studentId}
+                studentId={r.studentId}
+                name={r.name}
+                rollNo={r.rollNo}
+                status={r.status}
+                size={cell}
+                radius={tokens.radius.chip}
+                bg={CELL[r.status].bg}
+                ink={CELL[r.status].ink}
+                onCycle={cycle}
+              />
+            ))}
           </View>
         </Card>
       )}

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 /** How long a Home waits for its small extras (badges, counts) before drawing without them. */
-export const FIRST_PAINT_CAP_MS = 1200;
+export const FIRST_PAINT_CAP_MS = 400;
 
 /**
  * ONE FIRST FRAME FOR A WHOLE SCREEN (user, 18 Oct 2026: "something is

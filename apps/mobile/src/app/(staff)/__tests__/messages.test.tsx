@@ -51,14 +51,15 @@ it('renders the teacher’s threads newest-first with the unread badge', async (
     if (path === '/manage/messages') return Promise.resolve([THREAD_OLD, THREAD_NEW]);
     throw new Error(`unexpected path: ${path}`);
   });
-  const { findByTestId, getByText, toJSON } = render(<StaffMessages />);
+  const { findByTestId, getByText, getAllByTestId } = render(<StaffMessages />);
 
   await findByTestId('thread-th-new');
   expect(getByText('Diya')).toBeTruthy();
   expect(getByText('Aarav')).toBeTruthy();
 
-  const tree = JSON.stringify(toJSON());
-  expect(tree.indexOf('thread-th-new')).toBeLessThan(tree.indexOf('thread-th-old'));
+  // Row order, read from the list itself (it is a FlatList now: android-ui-ledger E1).
+  const ids = getAllByTestId(/^thread-th-/).map((n) => n.props.testID);
+  expect(ids.indexOf('thread-th-new')).toBeLessThan(ids.indexOf('thread-th-old'));
 
   const badge = await findByTestId('thread-unread-th-new');
   expect(within(badge).getByText('3')).toBeTruthy();
