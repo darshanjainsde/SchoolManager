@@ -1,5 +1,5 @@
 'use client';
-import { Bell, BookOpen, CalendarCheck, FileText, GraduationCap, Library, Megaphone, MessageSquare, NotebookPen, Receipt, Sparkles, TrendingDown, Trophy, CalendarClock, UserRoundCheck, type LucideIcon } from 'lucide-react';
+import { Bell, BookOpen, CalendarCheck, FileText, GraduationCap, Library, Megaphone, MessageSquare, NotebookPen, Receipt, Sparkles, TrendingDown, Trophy, CalendarClock, UserRoundCheck, Flag, type LucideIcon } from 'lucide-react';
 import type { NotificationKind } from '@skoolos/types';
 
 /** Which portal the bell/view is mounted in — decides route targets by role. */
@@ -28,6 +28,8 @@ export const KIND_ICON: Record<NotificationKind, LucideIcon> = {
   LEAVE_APPLIED: CalendarClock,
   LEAVE_DECIDED: CalendarCheck,
   COVER_ASSIGNED: UserRoundCheck,
+  // A teacher or family reported a message thread — an admin's notice.
+  MESSAGE_REPORTED: Flag,
 };
 
 /** Fallback for a kind the client doesn't know yet (server added one later). */

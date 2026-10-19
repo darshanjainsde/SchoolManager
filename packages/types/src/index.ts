@@ -561,6 +561,10 @@ export interface MessageThreadRow {
   lastMessageAt: string;
   lastMessagePreview: string | null;
   unreadCount: number;
+  /** The CALLER's side blocked this conversation (they can unblock it). */
+  blockedByMe: boolean;
+  /** The OTHER side blocked this conversation (only they can unblock it). */
+  blockedByOther: boolean;
 }
 
 /** A thread opened for reading, with its messages in chronological (ascending) order. */
@@ -581,6 +585,32 @@ export interface TeacherReplyInput {
   body: string;
 }
 
+/** Longest reason a message report may carry. */
+export const MESSAGE_REPORT_REASON_MAX = 500;
+
+/** Report a thread (or one message in it) to the school —
+ * `POST /manage/messages/:threadId/report` and `POST /me/messages/:threadId/report`. */
+export interface MessageReportInput {
+  reason: string;
+  messageId?: string;
+}
+
+/** `201` from either report endpoint. */
+export interface MessageReportResult {
+  ok: true;
+}
+
+/** Block or unblock a thread for the caller's side —
+ * `POST /manage/messages/:threadId/block` and `POST /me/messages/:threadId/block`. */
+export interface MessageBlockInput {
+  blocked: boolean;
+}
+
+/** `200` from either block endpoint: the caller's side's state after the call. */
+export interface MessageBlockResult {
+  blocked: boolean;
+}
+
 // ── Notification outbox (S6/S7 wiring — push-on-publish) ─────────────────────
 // `NotificationOutbox` (packages/db) is a transactional outbox: ExamsService
 // writes one row per event INSIDE the same `withTenant` transaction as the
@@ -591,7 +621,7 @@ export interface TeacherReplyInput {
 // HolidayTypeValue above, both also String columns).
 
 /** The events that write a `NotificationOutbox` row today. */
-export const NOTIFICATION_OUTBOX_KINDS = ['RESULT_PUBLISHED', 'EXAM_SCHEDULED', 'ASSIGNMENT_POSTED', 'MESSAGE_RECEIVED', 'LIBRARY_NOTICE', 'SESSION_STARTED', 'SPORTS_NOTICE', 'FEE_VERIFIED', 'FEE_REJECTED', 'FEE_DUE', 'LEAVE_APPLIED', 'LEAVE_DECIDED', 'COVER_ASSIGNED', 'CONCERN_RAISED', 'CONCERN_REPLIED', 'CONCERN_RESOLVED', 'LEAVE_CANCELLED', 'COVER_CANCELLED', 'COVER_UNFILLED', 'COVER_BATCH'] as const;
+export const NOTIFICATION_OUTBOX_KINDS = ['RESULT_PUBLISHED', 'EXAM_SCHEDULED', 'ASSIGNMENT_POSTED', 'MESSAGE_RECEIVED', 'LIBRARY_NOTICE', 'SESSION_STARTED', 'SPORTS_NOTICE', 'FEE_VERIFIED', 'FEE_REJECTED', 'FEE_DUE', 'LEAVE_APPLIED', 'LEAVE_DECIDED', 'COVER_ASSIGNED', 'CONCERN_RAISED', 'CONCERN_REPLIED', 'CONCERN_RESOLVED', 'LEAVE_CANCELLED', 'COVER_CANCELLED', 'COVER_UNFILLED', 'COVER_BATCH', 'MESSAGE_REPORTED'] as const;
 export type NotificationOutboxKind = (typeof NOTIFICATION_OUTBOX_KINDS)[number];
 
 /**
@@ -659,6 +689,8 @@ export const NOTIFICATION_KINDS = [
   'LEAVE_APPLIED',
   'LEAVE_DECIDED',
   'COVER_ASSIGNED',
+  // A teacher or family reported a message thread — to every school admin.
+  'MESSAGE_REPORTED',
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 

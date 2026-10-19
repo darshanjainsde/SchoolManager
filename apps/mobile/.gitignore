@@ -2,3 +2,8 @@
 android/
 ios/
 dist/
+
+# Signing material never enters git (production-alt reads a local keystore).
+credentials.json
+*.jks
+*.keystore

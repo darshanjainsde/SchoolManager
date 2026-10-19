@@ -18,6 +18,12 @@
  * this becomes a list of good intentions.
  */
 export const AUTHZ_REVIEWED: string[] = [
+  // Report and block (Play UGC policy, 19 Oct 2026): message-report-block.e2e-spec.ts
+  // asserts 401 anon, 403 wrong role, 404 non-participant, and the behaviour.
+  "POST /manage/messages/:threadId/report",
+  "POST /manage/messages/:threadId/block",
+  "POST /me/messages/:threadId/report",
+  "POST /me/messages/:threadId/block",
   // Role-to-door, asserted against the booted app in role-contract.e2e-spec.ts.
   "GET /me/account",
   "PATCH /me/account",

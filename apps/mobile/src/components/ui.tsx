@@ -1,11 +1,14 @@
-import { createContext, useContext, useRef, type PropsWithChildren, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useRef, type PropsWithChildren, type ReactNode } from 'react';
 import { Animated, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, type ViewStyle, FlatList } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
-import { useSegments } from 'expo-router';
+import { useFocusEffect, useSegments } from 'expo-router';
+import { setStatusBarStyle } from 'expo-status-bar';
 import { ApiError } from '@/lib/api';
-import { useTokens } from '@/theme/theme-context';
-import { CONTENT_MAX, font, type ColorPalette } from '@/theme/tokens';
+import { useTheme, useTokens } from '@/theme/theme-context';
+import { bandIsInk, bandStops } from '@/theme/families';
+import { BAND_HEIGHT } from './BandHeader';
+import { CONTENT_MAX, brand, font, type ColorPalette } from '@/theme/tokens';
 import { DASH, DUR, inkWidth, strokeDashoffset, useGesture } from '@/theme/motion';
 import { isPushedRoute, titleForSegments } from '@/lib/screen-titles';
 import { BackChipHeader } from './BackChipHeader';
@@ -132,10 +135,63 @@ export function ListScreen<T>({
   );
 }
 
+/**
+ * THE BAND (direction C, 16 Oct 2026). A Home opens with the school's colour
+ * behind the greeting only — a 236 dp gradient that scrolls away with the
+ * page — and a white sheet overlapping it. The band lives INSIDE the scroll
+ * content (so it moves with the page) and the frame above it takes the deep
+ * stop, so the status-bar strip is the same colour until the page scrolls.
+ * The status bar goes light while a band screen is focused and back to auto
+ * when it blurs, so the other tabs keep their dark icons.
+ */
+function useBandStatusBar() {
+  // Light status icons on an ink band, dark ones on a lit band.
+  const style = bandIsInk(useTokens().color) ? 'light' : 'dark';
+  // Back to the APP's scheme on leaving, never 'auto' (which follows the phone).
+  const after = useTheme().scheme === 'dark' ? 'light' : 'dark';
+  const cb = useCallback(() => {
+    try { setStatusBarStyle(style); } catch { /* not on a device */ }
+    return () => { try { setStatusBarStyle(after); } catch { /* not on a device */ } };
+  }, [style, after]);
+  try {
+    // Throws (before registering any hook) when there is no navigator —
+    // component tests render Screen bare — so the bar simply keeps its style.
+    useFocusEffect(cb);
+  } catch {
+    /* no navigator */
+  }
+}
+
+function Band({ height = BAND_HEIGHT }: { height?: number }) {
+  const tokens = useTokens();
+  const { scheme } = useTheme();
+  const stops = bandStops(tokens.color, scheme);
+  useBandStatusBar();
+  return (
+    <View pointerEvents="none" style={{ position: 'absolute', top: -10, left: -16, right: -16, height: height + 10, backgroundColor: stops[0] }}>
+      <Svg width="100%" height="100%" preserveAspectRatio="none" viewBox="0 0 100 100">
+        <Defs>
+          <LinearGradient id="band-g" x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0" stopColor={stops[0]} />
+            <Stop offset="1" stopColor={stops[1]} />
+          </LinearGradient>
+          <LinearGradient id="band-s" x1="1" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor={brand.onHero} stopOpacity="0.05" />
+            <Stop offset="0.55" stopColor={brand.onHero} stopOpacity="0" />
+          </LinearGradient>
+        </Defs>
+        <Rect width="100" height="100" fill="url(#band-g)" />
+        <Rect width="100" height="100" fill="url(#band-s)" />
+      </Svg>
+    </View>
+  );
+}
+
 export function Screen({
   children,
   onRefresh,
   refreshing = false,
+  band = false,
 }: PropsWithChildren<{
   /**
    * Pull-to-refresh. The gesture everyone tries first, which until now did
@@ -147,8 +203,15 @@ export function Screen({
    */
   onRefresh?: () => void;
   refreshing?: boolean;
+  /**
+   * A role Home: the school's colour behind the greeting, a sheet over it.
+   */
+  band?: boolean;
 }>) {
   const tokens = useTokens();
+  const { scheme } = useTheme();
+  // The strip above the band is the band's top stop, so the colour runs unbroken into the status bar.
+  const bandDeep = bandStops(tokens.color, scheme)[0];
   // Top safe-area inset (Phase 5·0b): with headerShown:false the tab
   // navigator renders from the very top of the display, so without this the
   // first line of every screen ("Hi, {name}") sits under the status bar on
@@ -204,12 +267,14 @@ export function Screen({
         paddingBottom: Math.max(insets.bottom, 28),
       }}
     >
+      {band && <Band height={BAND_HEIGHT} />}
       {children}
     </ScrollView>
   );
   // See ListScreen: the status-bar inset is on the frame so nothing scrolls
-  // through the clock.
-  if (!pushed) return <View style={{ flex: 1, paddingTop: insets.top, backgroundColor: tokens.color.appBg }}>{scroll}</View>;
+  // through the clock. A band screen paints the strip above in the band's
+  // deep stop, so the colour runs edge to edge until the page scrolls.
+  if (!pushed) return <View testID={band ? 'screen-band-frame' : undefined} style={{ flex: 1, paddingTop: insets.top, backgroundColor: band ? bandDeep : tokens.color.appBg }}>{scroll}</View>;
   return (
     <View style={{ flex: 1, backgroundColor: tokens.color.appBg }}>
       <BackChipHeader title={titleForSegments(segments)} />
@@ -428,7 +493,8 @@ export function PageHeader({
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingTop: 12,
-        paddingHorizontal: 16,
+        // 19 + the Page's 1 dp border = every card's 20 dp content line.
+        paddingHorizontal: 19,
         paddingBottom: 6,
         minHeight: 44,
       }}
@@ -546,6 +612,10 @@ export function RailRow({
         flexDirection: 'row',
         alignItems: 'center',
         minHeight: 56,
+        // Inset from the card edge so the time column lines up under the
+        // page title and the right status ends where the title row does
+        // (audit 18 Oct 2026: the times touched the card border).
+        paddingLeft: 10,
         borderTopWidth: first ? 0 : 1,
         borderTopColor: tokens.color.line,
         ...style,
@@ -608,14 +678,14 @@ export function RailRow({
         ) : null}
       </View>
 
-      {right != null && <View style={{ paddingRight: 10 }}>{right}</View>}
+      {right != null && <View style={{ paddingRight: 19 }}>{right}</View>}
 
       {inkPercent != null && (
         <Animated.View
           testID="rail-live-ink"
           style={{
             position: 'absolute',
-            left: 53.5,
+            left: 63.5,
             bottom: -1,
             height: 2,
             borderRadius: 2,

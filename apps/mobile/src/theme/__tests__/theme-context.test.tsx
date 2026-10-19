@@ -3,7 +3,7 @@ import * as ReactNative from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { ThemeProvider, useTheme } from '../theme-context';
 import { GROUNDS } from '../grounds';
-import { ACCENTS } from '../accents';
+import { rolesFor } from '../accents';
 
 // Spy on the hook via the module jest-expo's preset already provides
 // (the same one every other test file imports with no special setup)
@@ -164,7 +164,7 @@ function PaperProbe() {
 }
 
 describe('the paper a person opens the app on', () => {
-  it('defaults to Fresh — white cards on a cool page (UI v2, 2026-10-08)', () => {
+  it('defaults to Fresh, where the palette paints the page (Ink & Lit, 19 Oct 2026)', () => {
     // The decision, pinned. `classic` shipped first only so that ADDING grounds
     // could not restyle anyone before a shade had been judged on a real phone.
     mockUseColorScheme.mockReturnValue('light');
@@ -174,7 +174,8 @@ describe('the paper a person opens the app on', () => {
       </ThemeProvider>,
     );
     expect(getByTestId('ground').props.children).toBe('fresh');
-    expect(getByTestId('appBg').props.children).toBe(GROUNDS.fresh.light.appBg);
+    // Fresh is "no paper chosen": the palette's own tinted page shows.
+    expect(getByTestId('appBg').props.children).toBe(rolesFor('green', 'light').page);
   });
 
   it('reaches the tokens, so every screen inherits the choice at once', async () => {
@@ -226,14 +227,14 @@ function AccentProbe() {
 }
 
 describe('the highlight colour', () => {
-  it('defaults to the school, which applies no override of its own', () => {
+  it('defaults to Green, the palette the user picked in the Colour Studio (19 Oct 2026)', () => {
     mockUseColorScheme.mockReturnValue('light');
     const { getByTestId } = render(
       <ThemeProvider>
         <AccentProbe />
       </ThemeProvider>,
     );
-    expect(getByTestId('accent').props.children).toBe('school');
+    expect(getByTestId('accent').props.children).toBe('green');
   });
 
   it('a chosen accent beats the school brand — it was asked for', async () => {
@@ -244,7 +245,7 @@ describe('the highlight colour', () => {
       </ThemeProvider>,
     );
     fireEvent.press(getByTestId('set-navy'));
-    await waitFor(() => expect(getByTestId('fill').props.children).toBe(ACCENTS.navy.light!.fill));
+    await waitFor(() => expect(getByTestId('fill').props.children).toBe(rolesFor('navy', 'light').fill));
   });
 
   it('holds in dark mode, where a school brand deliberately does not apply', async () => {
@@ -257,7 +258,7 @@ describe('the highlight colour', () => {
       </ThemeProvider>,
     );
     fireEvent.press(getByTestId('set-navy'));
-    await waitFor(() => expect(getByTestId('fill').props.children).toBe(ACCENTS.navy.dark!.fill));
+    await waitFor(() => expect(getByTestId('fill').props.children).toBe(rolesFor('navy', 'dark').fill));
   });
 
   it('survives a restart', async () => {

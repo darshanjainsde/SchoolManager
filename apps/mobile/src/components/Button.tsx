@@ -1,6 +1,7 @@
 import { ActivityIndicator, Pressable, Text, View, type ViewStyle } from 'react-native';
 import { Icon, type IconName } from './icons';
-import { useTokens } from '@/theme/theme-context';
+import { useTheme, useTokens } from '@/theme/theme-context';
+import { accentFill } from '@/theme/families';
 
 /**
  * THE ONE BUTTON (UI v2, 2026-10-08).
@@ -47,10 +48,12 @@ export function Button({
   style?: ViewStyle;
 }) {
   const tokens = useTokens();
+  const { scheme } = useTheme();
   const c = tokens.color;
+  const fill = accentFill(c, scheme);
   const off = !!disabled || !!busy;
   const palette = {
-    filled: { bg: c.indigo, fg: c.onBrand, border: c.indigo },
+    filled: { bg: fill.bg, fg: fill.fg, border: fill.bg },
     tonal: { bg: c.indigo50, fg: c.indigo, border: c.indigo50 },
     outlined: { bg: 'transparent', fg: c.indigo, border: c.line2 },
     text: { bg: 'transparent', fg: c.indigo, border: 'transparent' },

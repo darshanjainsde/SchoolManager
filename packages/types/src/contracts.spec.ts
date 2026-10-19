@@ -198,6 +198,8 @@ describe('shared portal contracts', () => {
       'LEAVE_DECIDED',
       'LIBRARY_NOTICE',
       'MESSAGE_RECEIVED',
+      // A teacher or family reported a message thread — to every school admin.
+      'MESSAGE_REPORTED',
       'RESULT_PUBLISHED',
       // The year end (Sessions): 'Aarav is in 6 A for 2026-27', one row per family.
       'SESSION_STARTED',

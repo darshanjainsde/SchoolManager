@@ -160,6 +160,7 @@ describe('Android edge-to-edge — nothing scrolls through the status bar', () =
     for (const c of containers) expect(c).not.toMatch(/insets\.top/);
   });
   it('both put the status-bar inset on the frame instead', () => {
-    expect(ui.match(/paddingTop: insets\.top, backgroundColor: tokens\.color\.appBg/g)?.length).toBe(2);
+    // A Home with a band paints the strip in the band's deep stop; the inset still sits on the frame.
+    expect(ui.match(/paddingTop: insets\.top, backgroundColor: (band \? bandDeep : )?tokens\.color\.appBg/g)?.length).toBe(2);
   });
 });

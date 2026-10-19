@@ -1,6 +1,7 @@
 import { LayoutAnimation, Pressable, Text, View } from 'react-native';
 import { Icon, type IconName } from './icons';
 import { useTheme, useTokens } from '@/theme/theme-context';
+import { accentFill } from '@/theme/families';
 import { useKeyboardVisible } from '@/lib/keyboard';
 import { CONTENT_MAX } from '@/theme/tokens';
 
@@ -80,8 +81,11 @@ function TabButton({
   // On the dark bar the open tab must stand out whatever the accent: its pale
   // tint with deep ink in light, the bright accent with dark ink in dark (a
   // navy pill on a near-navy bar vanished — 9 Oct 2026).
-  const activeBg = scheme === 'dark' ? tokens.color.indigo : tokens.color.indigo50;
-  const activeInk = scheme === 'dark' ? tokens.color.onBrand : tokens.color.indigoDeep;
+  // Light: the accent tint with deep ink. Dark: the accent's deepest shade
+  // with white ink (the one rule for "filled" in dark, theme/families.ts).
+  const fill = accentFill(tokens.color, scheme);
+  const activeBg = scheme === 'dark' ? fill.bg : tokens.color.indigo50;
+  const activeInk = scheme === 'dark' ? fill.fg : tokens.color.indigoDeep;
   // sckools-ui-standards §4 — the FLOATING PILL. The open tab is a 48 dp
   // brand pill holding its icon AND its word; the others are icons only, so
   // the bar is calm but a parent who reads little English still sees where

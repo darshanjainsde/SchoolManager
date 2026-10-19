@@ -1,11 +1,11 @@
-import { fetchCached, useReload } from '@/lib/query';
-import { useCallback, useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { fetchCached, readCache, useQuery, useReload } from '@/lib/query';
+import { onAskAgain } from '@/lib/cache-store';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Text } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { HeroDeck } from '@/components/HeroDeck';
-import type { ClassNoteRow, ClassTodoRow, TeacherDay } from '@skoolos/types';
-import { api, ApiError } from '@/lib/api';
-import { session } from '@/lib/session';
+import { BandGreeting } from '@/components/BandHeader';
+import type { ClassNoteRow, ClassTodoRow, TeacherDay, TeacherProfile } from '@skoolos/types';
+import { ApiError } from '@/lib/api';
 import { todayISO } from '@/lib/attendance';
 import { currentEntry, minutesOfDay } from '@/lib/teacher-day';
 import { useNowMinutes } from '@/lib/use-now-minutes';
@@ -17,24 +17,81 @@ import { LoadingRows } from '@/components/Loading';
 import { NotificationBell } from '@/components/NotificationBell';
 import { HomeMenu } from '@/components/HomeToolGrid';
 import { useTokens } from '@/theme/theme-context';
-import { font } from '@/theme/tokens';
-import { salutation } from '@/lib/greeting';
+import { fmtLongDay } from '@/lib/dates';
 import { hasFeature } from '@/lib/features';
 import { useSession } from '@/lib/use-session';
+import { useFirstPaint } from '@/lib/use-first-paint';
+import { QuickActions } from '@/components/QuickActions';
+import { DoNow, type DoNowItem } from '@/components/DoNow';
+
+/** "Class teacher · V-C · English", or "English, Hindi teacher" — never a count the sheet already shows. */
+export function teacherLine(p: Pick<TeacherProfile, 'subjects' | 'classTeacherOf'> | null | undefined): string | undefined {
+  if (!p) return undefined;
+  const subjects = (p.subjects ?? []).slice(0, 2).join(', ');
+  const classes = p.classTeacherOf ?? [];
+  if (classes.length) return ['Class teacher', classes.join(', '), subjects].filter(Boolean).join(' · ');
+  return subjects ? `${subjects} teacher` : 'Teacher';
+}
 
 export default function Today() {
   const tokens = useTokens();
   const s = useSession();
   // Try again / pull-to-refresh for this screen's own focus effect.
   const [reloadKey, reload] = useReload();
-  const [name, setName] = useState<string | null>(null);
-  const [day, setDay] = useState<TeacherDay | null>(null);
+  const date = todayISO();
+  const dayPath = `/manage/timetable/my-day?date=${encodeURIComponent(date)}`;
+  const unreadPath = '/manage/messages/unread-count';
+  // CACHE FIRST (perf, 19 Oct 2026). The day and the message badge used to be
+  // plain requests on every focus, so every visit to Home opened on the
+  // skeleton. Both now go through the app's one cache (lib/query.ts): a
+  // revisit paints the last answer at once and asks again behind it.
+  //
+  // Unlike useQuery's FRESH_MS window, the DAY is asked again on EVERY focus:
+  // a colleague marking a register elsewhere must show up the next time this
+  // screen is looked at, and the cached answer is what keeps that free of a
+  // skeleton. The shared inflight map still folds duplicate asks into one.
+  const [day, setDay] = useState<TeacherDay | null>(() => readCache<TeacherDay>(dayPath) ?? null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   // Unread message count for the "Needs you today" badge. Best-effort like the
   // bell's own count: a badge must never surface an error, so failures leave 0.
-  const [unreadMsgs, setUnreadMsgs] = useState(0);
-  const date = todayISO();
+  const [unreadMsgs, setUnreadMsgs] = useState(() => readCache<{ count: number }>(unreadPath)?.count ?? 0);
+  // Whether the badge's first answer is in — held with the day for ONE first frame.
+  const [unreadSettled, setUnreadSettled] = useState(() => readCache(unreadPath) !== undefined);
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+
+  const askDay = useCallback(() => {
+    const had = readCache<TeacherDay>(dayPath);
+    if (had !== undefined) setDay(had);
+    return fetchCached<TeacherDay>(dayPath)
+      .then((data) => {
+        if (!alive.current) return;
+        setDay(data);
+        setError(null);
+      })
+      .catch((e: unknown) => {
+        if (alive.current) setError(e instanceof ApiError ? e.message : 'Something went wrong.');
+      });
+  }, [dayPath]);
+
+  const askUnread = useCallback(() => {
+    fetchCached<{ count: number }>(unreadPath)
+      .then((r) => {
+        if (alive.current) setUnreadMsgs(r.count);
+      })
+      .catch(() => {
+        /* a badge must never surface an error */
+      })
+      .finally(() => {
+        if (alive.current) setUnreadSettled(true);
+      });
+  }, []);
 
   /**
    * The pull gesture reloads the day. Deliberately does NOT clear `day` first:
@@ -44,39 +101,18 @@ export default function Today() {
   function refresh() {
     setRefreshing(true);
     setError(null);
-    api
-      .request<TeacherDay>(`/manage/timetable/my-day?date=${encodeURIComponent(date)}`)
-      .then(setDay)
-      .catch((e: unknown) => setError(e instanceof ApiError ? e.message : 'Something went wrong.'))
-      .finally(() => setRefreshing(false));
+    askUnread();
+    void askDay().finally(() => {
+      if (alive.current) setRefreshing(false);
+    });
   }
 
   useFocusEffect(
     useCallback(() => {
-      let cancelled = false;
+      alive.current = true;
       setError(null);
-      session.get().then((s) => {
-        if (!cancelled) setName(s?.displayName ?? null);
-      });
-      api
-        .request<{ count: number }>('/manage/messages/unread-count')
-        .then((r) => {
-          if (!cancelled) setUnreadMsgs(r.count);
-        })
-        .catch(() => {
-          /* a badge must never surface an error */
-        });
-      api
-        .request<TeacherDay>(`/manage/timetable/my-day?date=${encodeURIComponent(date)}`)
-        .then((data) => {
-          if (!cancelled) setDay(data);
-        })
-        .catch((e: unknown) => {
-          if (!cancelled) setError(e instanceof ApiError ? e.message : 'Something went wrong.');
-        });
-      return () => {
-        cancelled = true;
-      };
+      askUnread();
+      void askDay();
       // date is always "today" for this screen (no date picker here — see
       // apps/mobile/src/app/(staff)/attendance.tsx for that), so it is
       // deliberately not a dependency: the effect still reruns on every
@@ -84,6 +120,18 @@ export default function Today() {
       // manual reload.
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [reloadKey]),
+  );
+
+  // Back from the background, or a push said something changed: ask again,
+  // the same signal every useQuery on this screen already listens to.
+  useEffect(
+    () =>
+      onAskAgain(() => {
+        if (!alive.current) return;
+        askUnread();
+        void askDay();
+      }),
+    [askDay, askUnread],
   );
 
   const entries = day?.entries ?? [];
@@ -106,20 +154,22 @@ export default function Today() {
     if (!liveClassSectionId || !liveSubjectId) return;
     // Through the inflight map: the mount effect and the focus effect both
     // ask on mount, and used to issue two real requests (perf audit #12).
-    fetchCached<{ notes: ClassNoteRow[]; todos: ClassTodoRow[] }>(
-        `/manage/class-notes?classSectionId=${encodeURIComponent(liveClassSectionId)}&date=${encodeURIComponent(date)}&subjectId=${encodeURIComponent(liveSubjectId)}`,
-      )
-      .then((d) =>
-        setPeriodCounts({ notes: d.notes.length, todosLeft: d.todos.filter((t) => !t.done).length }),
-      )
+    const path = `/manage/class-notes?classSectionId=${encodeURIComponent(liveClassSectionId)}&date=${encodeURIComponent(date)}&subjectId=${encodeURIComponent(liveSubjectId)}`;
+    const toCounts = (d: { notes: ClassNoteRow[]; todos: ClassTodoRow[] }) => ({
+      notes: d.notes.length,
+      todosLeft: d.todos.filter((t) => !t.done).length,
+    });
+    // The last answer first, so a revisit badges the kit at once.
+    const had = readCache<{ notes: ClassNoteRow[]; todos: ClassTodoRow[] }>(path);
+    if (had) setPeriodCounts(toCounts(had));
+    fetchCached<{ notes: ClassNoteRow[]; todos: ClassTodoRow[] }>(path)
+      .then((d) => setPeriodCounts(toCounts(d)))
       .catch(() => {
         /* a badge must never surface an error */
       });
     // `date` is always "today" here — see the note on the focus effect above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveClassSectionId, liveSubjectId]);
-  // Refetch when the bell flips the live period, and on every focus (a note
-  // added from the Notes tool elsewhere must show up on the badge).
   // Refetch when the bell flips the live period, and on every focus (a note
   // added from the Notes tool elsewhere must show up on the badge).
   useEffect(() => {
@@ -147,6 +197,31 @@ export default function Today() {
   // runs — the one that is live (or overdue) is simply the one nearest the top.
   const needsInk = classes.filter((e) => !e.register?.taken && e.slot);
 
+  // ONE first frame: the day is the page; the message badge gets a moment to
+  // land with it, so nothing pops in after.
+  // How far each of my classes is through its syllabus — only where the owner switched the tracker on.
+  const syllabusOn = hasFeature(s, 'COURSE_MANAGEMENT');
+  const mine = useQuery<{ tracks: Array<{ leaves: number; done: number }> }>(syllabusOn ? '/manage/syllabus/mine' : null);
+  // New concerns from the class teacher's families — best-effort like every
+  // badge: a teacher who is not a class teacher simply gets nothing.
+  const concerns = useQuery<{ unread: number }>('/teacher/concerns/counts');
+  const newConcerns = concerns.data?.unread ?? 0;
+  // The live period's counts are NOT held for: they need the day first (to know
+  // which period is live), so waiting for them chained a second round-trip
+  // onto the first frame. The kit badges arrive a beat after the page.
+  // Who I am, for the band line: the same record the Profile shows, cached.
+  const me = useQuery<TeacherProfile>('/manage/teachers/me');
+  const painted = useFirstPaint(day !== null || error !== null, [!unreadSettled, mine.loading, concerns.loading, me.loading]);
+
+  const syllabusPct = (() => {
+    const leaves = (mine.data?.tracks ?? []).reduce((sum, t) => sum + t.leaves, 0);
+    const done = (mine.data?.tracks ?? []).reduce((sum, t) => sum + t.done, 0);
+    return leaves > 0 ? Math.round((done / leaves) * 100) : null;
+  })();
+  // The band says WHO the teacher is (user, 19 Oct 2026: "1 register open"
+  // repeated the sheet right under it — "give class teacher VI A").
+  const bandLine = teacherLine(me.data);
+
   function goToAttendance(classSectionId: string) {
     const className = entries.find((e) => e.slot?.classSectionId === classSectionId)?.slot?.className;
     const nameParam = className ? `?name=${encodeURIComponent(className)}` : '';
@@ -171,61 +246,63 @@ export default function Today() {
     router.push(`/(staff)/(tabs)/home/class/${classSectionId}?${params.toString()}`);
   }
 
+  // DO NOW (user, 19 Oct 2026: "more direct actions in homepage itself"):
+  // what is waiting on the teacher today, each finished in one tap. The class
+  // the sheet's own button already takes is not repeated here.
+  const sheetClassId =
+    entry?.kind === 'CLASS' && !entry.register?.taken
+      ? entry.slot?.classSectionId
+      : !entry && !nextEntry
+        ? needsInk[0]?.slot?.classSectionId
+        : undefined;
+  const lastTaught = [...classes].reverse().find((e) => e.slot && minutesOfDay(e.endTime) <= now);
+  const doNow: DoNowItem[] = [
+    ...needsInk
+      .filter((e) => e.slot && e.slot.classSectionId !== sheetClassId && minutesOfDay(e.startTime) <= now)
+      .map((e) => ({
+        key: `register-${e.slot!.classSectionId}-${e.periodId}`,
+        icon: 'take',
+        tone: 'amber' as const,
+        title: `Take ${e.slot!.className} register`,
+        line: `${e.slot!.subjectName} · ${e.startTime}–${e.endTime}${minutesOfDay(e.endTime) <= now ? ' · over' : ''}`,
+        verb: 'Take',
+        onPress: () => goToAttendance(e.slot!.classSectionId),
+      })),
+    ...(newConcerns > 0
+      ? [{
+          key: 'concerns', icon: 'concern', tone: 'amber' as const,
+          title: `${newConcerns} new ${newConcerns === 1 ? 'concern' : 'concerns'} from families`,
+          line: 'Complaint Box', verb: 'Open',
+          onPress: () => router.push('/(staff)/(tabs)/home/concerns'),
+        }]
+      : []),
+    ...(unreadMsgs > 0
+      ? [{
+          key: 'messages', icon: 'messages',
+          title: `${unreadMsgs} unread ${unreadMsgs === 1 ? 'message' : 'messages'}`,
+          line: 'Families and staff', verb: 'Reply',
+          onPress: () => router.push('/(staff)/(tabs)/home/messages'),
+        }]
+      : []),
+    ...(syllabusOn && lastTaught?.slot
+      ? [{
+          key: 'syllabus', icon: 'syllabus',
+          title: `Mark where ${lastTaught.slot.className} reached`,
+          line: `${lastTaught.slot.subjectName} · taught today`, verb: 'Update',
+          onPress: () => router.push(`/(staff)/(tabs)/home/syllabus/${encodeURIComponent(lastTaught.slot!.classSectionId)}?subjectId=${encodeURIComponent(lastTaught.slot!.subjectId)}`),
+        }]
+      : []),
+  ];
+
   return (
-    <Screen onRefresh={refresh} refreshing={refreshing}>
-      {/* `.greet` + `.kidchip` — the teacher's name in the diary serif, the
-          bell out in the right margin.
-
-          Two lines, not one: the greeting is the same every morning, the NAME
-          is the part that is theirs. Setting the salutation as a small
-          letter-spaced eyebrow lets the name take the full serif line at a size
-          that reads as a title, instead of both sharing one 20px run where the
-          name is just the tail of a sentence. */}
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginHorizontal: 2 }}>
-        <View style={{ flex: 1 }}>
-          <Text
-            maxFontSizeMultiplier={1.4}
-            style={{
-              fontSize: 11,
-              letterSpacing: 1.2,
-              textTransform: 'uppercase',
-              color: tokens.color.sub,
-              marginBottom: 1,
-            }}
-          >
-            {salutation()}
-          </Text>
-          <Text
-            maxFontSizeMultiplier={1.4}
-            numberOfLines={1}
-            // Bold serif with a touch of negative tracking: the NAME is the
-            // one personal thing on this screen, so it is set like a book
-            // title, not a form value.
-            style={{
-              fontFamily: font.serif,
-              fontSize: 26,
-              lineHeight: 31,
-              fontWeight: '700',
-              letterSpacing: -0.4,
-              color: tokens.color.ink,
-            }}
-          >
-            {name ?? 'Today'}
-          </Text>
-        </View>
-        {/* One bell, no gear (pitch №3): appearance lives in Profile, and the
-            gear pointed at a settings screen that held nothing else. The bell
-            centres itself on this two-line block via its own alignSelf. */}
-        <NotificationBell group="(staff)" />
-      </View>
-
-      {/* The day in one line, in the pitch's `.gatesub` voice — a note under
-          the greeting rather than a card competing with the hero below it. */}
-      <Text style={{ marginHorizontal: 4, marginTop: -2, fontSize: 12, color: tokens.color.sub }}>
-        {day === null && !error
-          ? 'Loading your day…'
-          : `${classes.length} class${classes.length === 1 ? '' : 'es'} today · ${taken} taken · ${pending} pending`}
-      </Text>
+    <Screen band onRefresh={refresh} refreshing={refreshing}>
+      {/* Direction C: the greeting sits on the band; the sheet (NowCard) overlaps it. */}
+      <BandGreeting
+        eyebrow={fmtLongDay(new Date())}
+        title={s?.displayName ?? 'Today'}
+        right={<NotificationBell group="(staff)" onBand />}
+        line={error ? undefined : bandLine}
+      />
 
       {error && <ErrorState error={error} onRetry={reload} />}
 
@@ -234,9 +311,9 @@ export default function Today() {
           was missing is the shape of everything below it: the hero, then the
           day. Home is the screen a teacher opens on a corridor connection, so
           it is the one where an empty page for two seconds reads as broken. */}
-      {day === null && !error && <LoadingRows label="Loading your day…" rows={4} />}
+      {!painted && !error && <LoadingRows label="Loading your day…" rows={4} />}
 
-      {day !== null && !error && entries.length === 0 && (
+      {painted && day !== null && !error && entries.length === 0 && (
         <Card>
           <Text style={{ color: tokens.color.sub }}>
             No timetable has been set up for you yet — ask your school admin.
@@ -244,7 +321,7 @@ export default function Today() {
         </Card>
       )}
 
-      {day !== null && !error && entries.length > 0 && (
+      {painted && day !== null && !error && entries.length > 0 && (
         <>
           {/* Pitch №6: the period's notes and to-dos live ON the hero as the
               kit row, and open as a bottom sheet — not as two cards of their
@@ -261,37 +338,7 @@ export default function Today() {
             todosLeft={periodCounts.todosLeft}
             onOpenNotes={liveSlot ? () => setSheet('notes') : undefined}
             onOpenTodos={liveSlot ? () => setSheet('todos') : undefined}
-            deck={
-              <HeroDeck
-                // While a class is live the hero already carries the period,
-                // its tools and its button; the day's figures made it three
-                // rows of controls tall and pushed the menu off the screen
-                // (audit 9 Oct 2026). They return the moment the bell goes.
-                figures={
-                  liveSlot
-                    ? []
-                    : [
-                        { value: `${taken}/${classes.length}`, label: 'registers', testID: 'hero-fig-registers' },
-                        { value: String(studentsMarked), label: 'marked', testID: 'hero-fig-marked' },
-                        { value: String(unreadMsgs), label: unreadMsgs === 1 ? 'message' : 'messages', testID: 'hero-fig-messages' },
-                      ]
-                }
-                // The hero DOES (quick verbs); the tiles below GO (places).
-                actions={[
-                  {
-                    label: 'Register',
-                    icon: 'take',
-                    testID: 'hero-act-register',
-                    badge: needsInk.length,
-                    onPress: () =>
-                      needsInk[0]?.slot ? goToAttendance(needsInk[0].slot.classSectionId) : router.push('/(staff)/(tabs)/attendance'),
-                  },
-                  { label: 'Homework', icon: 'assignments', testID: 'hero-act-homework', onPress: () => router.push('/(staff)/(tabs)/home/assignments') },
-                  { label: 'Notice', icon: 'notices', testID: 'hero-act-notice', onPress: () => router.push('/(staff)/(tabs)/home/post') },
-                  { label: 'Test', icon: 'results', testID: 'hero-act-test', onPress: () => router.push('/(staff)/(tabs)/home/tests') },
-                ]}
-              />
-            }
+            figuresOnBand={!error}
           />
 
           {liveSlot && (
@@ -310,27 +357,61 @@ export default function Today() {
             />
           )}
 
+          {/* QUICK ACTIONS (user, 19 Oct 2026): the day's four jobs, under the sheet. */}
+          <QuickActions
+            actions={[
+              {
+                label: 'Take register', icon: 'take', tone: 'amber', testID: 'hero-act-register', badge: needsInk.length,
+                onPress: () => {
+                  const open = needsInk.find((e) => minutesOfDay(e.startTime) <= now) ?? needsInk[0];
+                  if (open?.slot) goToAttendance(open.slot.classSectionId);
+                  else router.push('/(staff)/(tabs)/attendance');
+                },
+              },
+              { label: 'Set homework', icon: 'assignments', testID: 'hero-act-homework', onPress: () => router.push('/(staff)/(tabs)/home/assignments') },
+              { label: 'Post notice', icon: 'notices', testID: 'hero-act-notice', onPress: () => router.push('/(staff)/(tabs)/home/post') },
+              { label: 'Write diary', icon: 'diary', testID: 'hero-act-diary', onPress: () => router.push('/(staff)/(tabs)/home/diary') },
+            ]}
+          />
+
+          <DoNow items={doNow} />
+
           {/* THE MENU — one card instead of "Needs you today" + "Go to" (user,
               9 Oct 2026: "make that menu together"). Register, Homework,
               Notice and Test are the hero's quick actions (the register count
               rides there as a badge), so they are not drawn twice; every
               other door is here, badged ones first. */}
           <HomeMenu
-            tools={[
-              { label: 'Messages', icon: 'messages', route: '/(staff)/(tabs)/home/messages', badge: unreadMsgs },
-              { label: 'Diary', icon: 'diary', route: '/(staff)/(tabs)/home/diary' },
-              { label: 'Requests', icon: 'requests', route: '/(staff)/(tabs)/home/requests' },
-              { label: 'Notes', icon: 'notes', route: '/(staff)/(tabs)/home/notes' },
-              { label: 'Holidays', icon: 'holidays', route: '/(staff)/(tabs)/home/holidays' },
-              // The teacher's own shelf — only for a school with the library on.
-              ...(hasFeature(s, 'LIBRARY') ? [{ label: 'Library', icon: 'library', route: '/(staff)/(tabs)/home/library' }] : []),
-              // Pay slips, only where the school runs pay on Sckools.
-              ...(hasFeature(s, 'SALARY') ? [{ label: 'My pay', icon: 'fees', route: '/(staff)/(tabs)/home/salary' }] : []),
-              // Where each class has reached — only where the owner switched the tracker on.
-              ...(hasFeature(s, 'COURSE_MANAGEMENT') ? [{ label: 'Syllabus', icon: 'syllabus', route: '/(staff)/(tabs)/home/syllabus' }] : []),
-              // Concerns the class teacher's families raised. Free, so always
-              // drawn — it was on no screen before 2026-10-07 (nav-reachability).
-              { label: 'Complaint Box', icon: 'concern', route: '/(staff)/(tabs)/home/concerns' },
+            groups={[
+              {
+                title: 'In class',
+                tools: [
+                  { label: 'Test', icon: 'results', testID: 'hero-act-test', route: '/(staff)/(tabs)/home/tests' },
+                  // Where each class has reached — only where the owner switched the tracker on.
+                  ...(syllabusOn ? [{ label: 'Syllabus', icon: 'syllabus', route: '/(staff)/(tabs)/home/syllabus', ...(syllabusPct !== null ? { arc: syllabusPct } : {}) }] : []),
+                  { label: 'Notes', icon: 'notes', route: '/(staff)/(tabs)/home/notes' },
+                ],
+              },
+              {
+                title: 'Messages',
+                tools: [
+                  { label: 'Messages', icon: 'messages', route: '/(staff)/(tabs)/home/messages', badge: unreadMsgs },
+                  // Concerns the class teacher's families raised. Free, so always
+                  // drawn — it was on no screen before 2026-10-07 (nav-reachability).
+                  { label: 'Complaint Box', icon: 'concern', tone: 'amber' as const, route: '/(staff)/(tabs)/home/concerns', badge: newConcerns },
+                ],
+              },
+              {
+                title: 'For you',
+                tools: [
+                  { label: 'Requests', icon: 'requests', route: '/(staff)/(tabs)/home/requests' },
+                  { label: 'Holidays', icon: 'holidays', tone: 'green' as const, route: '/(staff)/(tabs)/home/holidays', date: String(new Date().getDate()) },
+                  // Pay slips, only where the school runs pay on Sckools.
+                  ...(hasFeature(s, 'SALARY') ? [{ label: 'My pay', icon: 'fees', tone: 'green' as const, route: '/(staff)/(tabs)/home/salary' }] : []),
+                  // The teacher's own shelf — only for a school with the library on.
+                  ...(hasFeature(s, 'LIBRARY') ? [{ label: 'Library', icon: 'library', route: '/(staff)/(tabs)/home/library' }] : []),
+                ],
+              },
             ]}
           />
 

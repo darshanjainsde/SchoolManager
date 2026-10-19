@@ -413,6 +413,7 @@ model School {
   assignments            Assignment[]
   messageThreads         MessageThread[]
   messages               Message[]
+  messageReports         MessageReport[]
   diaryEntries           DiaryEntry[]
   attendanceNotices      AttendanceNotice[]
   jobPosts               JobPost[]
@@ -1831,21 +1832,28 @@ model AssignmentSeen {
 // Teacher.id (matching TimetableSlot.teacherId), `studentId` a Student.id — the
 // authorization join is against the timetable, never client-supplied ids.
 model MessageThread {
-  id             String   @id @default(uuid()) @db.Uuid
-  schoolId       String   @db.Uuid
-  studentId      String   @db.Uuid
-  teacherId      String   @db.Uuid
-  subjectId      String   @db.Uuid
-  classSectionId String   @db.Uuid
-  lastMessageAt  DateTime @default(now())
-  createdAt      DateTime @default(now())
+  id                 String    @id @default(uuid()) @db.Uuid
+  schoolId           String    @db.Uuid
+  studentId          String    @db.Uuid
+  teacherId          String    @db.Uuid
+  subjectId          String    @db.Uuid
+  classSectionId     String    @db.Uuid
+  lastMessageAt      DateTime  @default(now())
+  createdAt          DateTime  @default(now())
+  /// Report & block (Google Play UGC policy). Each side blocks only for
+  /// itself: the student side sets `blockedByStudentAt`, the teacher side
+  /// `blockedByTeacherAt`. While EITHER is set nobody can post to the thread
+  /// (403 THREAD_BLOCKED); only the side that blocked can unblock its column.
+  blockedByStudentAt DateTime?
+  blockedByTeacherAt DateTime?
 
-  school       School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  student      Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  teacher      Teacher      @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  subject      Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  classSection ClassSection @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
+  school       School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  student      Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacher      Teacher         @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  subject      Subject         @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  classSection ClassSection    @relation(fields: [classSectionId], references: [id], onDelete: Cascade)
   messages     Message[]
+  reports      MessageReport[]
 
   @@unique([studentId, teacherId, subjectId], name: "one_thread_per_student_teacher_subject")
   @@index([schoolId, teacherId, lastMessageAt])
@@ -1869,14 +1877,48 @@ model Message {
   readAt     DateTime?
   createdAt  DateTime  @default(now())
 
-  school School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  thread MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  school  School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  thread  MessageThread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  reports MessageReport[]
 
   @@index([threadId, createdAt])
   /// Serves the unread-per-thread aggregate behind every inbox. Without it
   /// that count seq-scanned every message on the platform (2,432ms -> 1.77ms
   /// on the 200-school bench, 2026-08-29).
   @@index([schoolId, senderRole, readAt])
+}
+
+/// A participant reporting a message thread (or one message in it) to the
+/// school — the "report" half of Google Play's user-generated-content rule.
+/// Written by `POST /manage/messages/:threadId/report` (teacher) and
+/// `POST /me/messages/:threadId/report` (student/family); every active school
+/// admin is told (in-app bell + outbox kind MESSAGE_REPORTED).
+///
+/// `reporterUserId` is the reporter's `User.id`, a bare scalar with no FK —
+/// the same choice as `Notification.userId`: a deleted login must not delete
+/// the record of what it reported. `reporterRole` is 'TEACHER' | 'STUDENT'.
+/// `status` is a plain String ('OPEN' today) so the office can later close
+/// one without a migration.
+model MessageReport {
+  id             String   @id @default(uuid()) @db.Uuid
+  schoolId       String   @db.Uuid
+  threadId       String   @db.Uuid
+  messageId      String?  @db.Uuid
+  reporterUserId String   @db.Uuid
+  reporterRole   String
+  reason         String
+  status         String   @default("OPEN")
+  createdAt      DateTime @default(now())
+
+  school  School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  thread  MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  message Message?      @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  @@index([schoolId, status, createdAt])
+  // Indexed for the referential-integrity check Postgres runs when the
+  // parent row is deleted (see migration 20260921_010000_fk_indexes).
+  @@index([threadId])
+  @@index([messageId])
 }
 
 /// In-app notification inbox — the per-user, per-event rows behind the bell in

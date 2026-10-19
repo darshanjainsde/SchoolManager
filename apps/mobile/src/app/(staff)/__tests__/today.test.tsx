@@ -1,8 +1,10 @@
 import { render, screen, fireEvent, within, act } from '@testing-library/react-native';
 import type { TeacherDay, TeacherDayEntry } from '@skoolos/types';
-import Today from '../(tabs)/home/index';
+import Today, { teacherLine } from '../(tabs)/home/index';
 import { api, ApiError } from '@/lib/api';
 import { session } from '@/lib/session';
+import { clearCache } from '@/lib/query';
+import { FIRST_PAINT_CAP_MS } from '@/lib/use-first-paint';
 
 jest.mock('expo-secure-store', () => {
   const store: Record<string, string> = {};
@@ -92,6 +94,7 @@ function setNow(hour: number, minute: number) {
   jest.setSystemTime(new Date(2026, 6, 30, hour, minute, 0));
 }
 
+let mockConcerns = { unread: 0, open: 0, resolvedThisMonth: 0 };
 function mockDay(day: TeacherDay | Error, notesGet?: unknown) {
   (api.request as jest.Mock).mockImplementation((path: string, opts?: { method?: string; body?: unknown }) => {
     if (path.startsWith('/manage/timetable/my-day')) {
@@ -103,6 +106,12 @@ function mockDay(day: TeacherDay | Error, notesGet?: unknown) {
     if (path === '/me/notifications/unread-count') {
       // The header NotificationBell fetches this on focus; keep it quiet.
       return Promise.resolve({ count: 0 });
+    }
+    if (path === '/teacher/concerns/counts') {
+      return Promise.resolve(mockConcerns);
+    }
+    if (path === '/manage/teachers/me') {
+      return Promise.resolve({ firstName: 'Priya', lastName: 'Sharma', subjects: ['Mathematics'], classTeacherOf: ['8-A'] });
     }
     if (path === '/manage/messages/unread-count') {
       // The "Needs you today" Messages dome badge (pitch №3); keep it quiet.
@@ -116,6 +125,10 @@ beforeEach(async () => {
   jest.useFakeTimers();
   mockPush.mockReset();
   (api.request as jest.Mock).mockReset();
+  // Home's queries (concerns, syllabus) share a cache; one test's unanswered
+  // request must not hold the next test's first frame.
+  clearCache();
+  mockConcerns = { unread: 0, open: 0, resolvedThisMonth: 0 };
   mockFocusEffects.length = 0;
   await session.set({
     accessToken: 'at',
@@ -163,8 +176,11 @@ it('greets the teacher by name and shows the classes/taken/pending summary', asy
   // eyebrow above it, so the name is a title rather than the tail of a
   // sentence. Asserted as its own text node for exactly that reason.
   expect(await screen.findByText('Priya Sharma')).toBeTruthy();
-  expect(await screen.findByText('Good morning')).toBeTruthy();
-  expect(await screen.findByText('2 classes today · 0 taken · 2 pending')).toBeTruthy();
+  // The salutation is gone (16 Oct 2026): the band carries the date and the name only.
+  expect(screen.queryByText('Good morning')).toBeNull();
+  // The band says who the teacher is (19 Oct 2026); the sheet carries the day.
+  expect(await screen.findByText('Class teacher · 8-A · Mathematics')).toBeTruthy();
+  expect(screen.queryByText(/register open/)).toBeNull();
 });
 
 it('never greets the teacher with the email address they signed in with', async () => {
@@ -300,7 +316,7 @@ it('excludes FREE periods from the classes/taken/pending glance count', async ()
   mockDay({ date: '2026-07-30', dayOfWeek: 4, entries: [classEntry(), freeEntry] });
   render(<Today />);
 
-  expect(await screen.findByText('1 class today · 0 taken · 1 pending')).toBeTruthy();
+  expect((await screen.findAllByText('Class teacher · 8-A · Mathematics')).length).toBe(1);
 });
 
 it('before school starts, says so and names the first class', async () => {
@@ -332,10 +348,23 @@ it('after school ends, renders the day-complete wrap-up with a summary of the da
 
   expect(await screen.findByText('Day complete')).toBeTruthy();
   // 2 CLASS entries taught, 27 + 25 = 52 students marked (the BREAK is excluded).
-  expect(screen.getByText('2 classes taught')).toBeTruthy();
-  const summary = within(screen.getByTestId('now-summary'));
-  expect(summary.getByText('52')).toBeTruthy();
-  expect(summary.getByText('students marked')).toBeTruthy();
+  // The rings on the band carry the figures, so the sheet says them once, in
+  // a line, and draws no second set of tiles (audit 18 Oct 2026).
+  expect(screen.getByText('2 classes taught · 52 children marked')).toBeTruthy();
+  expect(screen.queryByTestId('now-summary')).toBeNull();
+  expect(screen.queryByText(/today · \d+ taken/)).toBeNull();
+});
+
+it('on a day with no classes, says so on the band and the sheet instead of 0/0', async () => {
+  setNow(15, 0);
+  mockDay({ date: '2026-07-30', dayOfWeek: 4, entries: [breakEntry] });
+  render(<Today />);
+
+  expect(await screen.findByText('No classes for you today')).toBeTruthy();
+  expect(screen.queryByText('Day complete')).toBeNull();
+  expect(screen.queryByText('0/0')).toBeNull();
+  // Said once, on the sheet — the band does not repeat it.
+  expect(screen.getAllByText('No classes for you today')).toHaveLength(1);
 });
 
 it('in a gap between periods, says nothing is on and names the next class', async () => {
@@ -408,7 +437,7 @@ it('flips at the bell while the teacher is still looking at it', async () => {
   expect(within(before).getByText('8-A · Mathematics')).toBeTruthy();
   // The hero's Register action carries the open-register count (9 Oct 2026:
   // the Registers dome moved into the hero when the two grids became one menu).
-  expect(screen.getByLabelText(/^Register, [1-9]\d* waiting$/)).toBeTruthy();
+  expect(screen.getByLabelText(/^Take register, [1-9]\d* waiting$/)).toBeTruthy();
 
   await act(async () => {
     jest.advanceTimersByTime(60_000);
@@ -420,19 +449,40 @@ it('flips at the bell while the teacher is still looking at it', async () => {
   expect(within(after).getByText('Break')).toBeTruthy();
   expect(within(after).queryByText('8-A · Mathematics')).toBeNull();
   // 8-A's register is still open, so the hero's Register keeps its count.
-  expect(screen.getByLabelText(/^Register, [1-9]\d* waiting$/)).toBeTruthy();
+  expect(screen.getByLabelText(/^Take register, [1-9]\d* waiting$/)).toBeTruthy();
 });
 
-it('a live class keeps the hero short — the day\'s figures wait for the bell (audit 9 Oct 2026)', async () => {
-  setNow(8, 44);
+it('quick actions sit under the sheet: Take register opens the open class straight away (19 Oct 2026)', async () => {
+  setNow(8, 20);
   mockDay(DAY);
   render(<Today />);
   await screen.findByTestId('now-card');
-  expect(screen.queryByTestId('hero-figures')).toBeNull();
-  await act(async () => {
-    jest.advanceTimersByTime(60_000);
-  });
-  expect(screen.getByTestId('hero-figures')).toBeTruthy();
+  const quick = within(screen.getByTestId('quick-actions'));
+  for (const label of ['Take register', 'Set homework', 'Post notice', 'Write diary']) expect(quick.getByText(label)).toBeTruthy();
+  fireEvent.press(screen.getByTestId('hero-act-register'));
+  expect(mockPush).toHaveBeenCalledWith('/(staff)/take/sec-8a?name=8-A');
+  fireEvent.press(screen.getByTestId('hero-act-notice'));
+  expect(mockPush).toHaveBeenCalledWith('/(staff)/(tabs)/home/post');
+});
+
+it('a quick action is never drawn again in the menu, and no rings are drawn', async () => {
+  setNow(8, 20);
+  mockDay(DAY);
+  render(<Today />);
+  await screen.findByTestId('now-card');
+  const menu = within(screen.getByTestId('home-menu'));
+  for (const t of ['Register', 'Homework', 'Notice', 'Diary']) expect(menu.queryByTestId(`hometool-${t}`)).toBeNull();
+  expect(screen.queryByTestId('band-rings')).toBeNull();
+});
+
+it('the menu is grouped: in class, messages, for you', async () => {
+  setNow(8, 20);
+  mockDay(DAY);
+  render(<Today />);
+  await screen.findByTestId('now-card');
+  expect(within(screen.getByTestId('home-menu-group-In class')).getByTestId('hero-act-test')).toBeTruthy();
+  expect(within(screen.getByTestId('home-menu-group-Messages')).getByTestId('hometool-Complaint Box')).toBeTruthy();
+  expect(within(screen.getByTestId('home-menu-group-For you')).getByTestId('hometool-Holidays')).toBeTruthy();
 });
 
 it('refetches on focus so a colleague marking the register elsewhere shows up without a manual reload', async () => {
@@ -456,4 +506,136 @@ it('refetches on focus so a colleague marking the register elsewhere shows up wi
   });
 
   expect(await screen.findByText('28/28 present')).toBeTruthy();
+});
+
+describe('one first frame (user, 18 Oct 2026: "something is rendering fast and something rendering slow")', () => {
+  it('names the teacher on the band from the very first frame — no "Today" placeholder first', () => {
+    setNow(8, 20);
+    (api.request as jest.Mock).mockReturnValue(new Promise(() => {}));
+    render(<Today />);
+    expect(screen.getByText('Priya Sharma')).toBeTruthy();
+    expect(screen.queryByText('Today')).toBeNull();
+  });
+
+  it('holds the menu until the message badge has landed, then draws it WITH the badge', async () => {
+    setNow(8, 20);
+    let answerUnread: (v: { count: number }) => void = () => {};
+    (api.request as jest.Mock).mockImplementation((path: string) => {
+      if (path.startsWith('/manage/timetable/my-day')) return Promise.resolve(DAY);
+      if (path.startsWith('/manage/class-notes?')) return Promise.resolve({ notes: [], todos: [] });
+      if (path === '/manage/messages/unread-count') return new Promise((res) => { answerUnread = res; });
+      return Promise.resolve({ count: 0 });
+    });
+    render(<Today />);
+    await act(async () => {});
+    // The day is in, the badge is not: still the skeleton, not a menu that will jump.
+    expect(screen.getByLabelText('Loading your day…')).toBeTruthy();
+    expect(screen.queryByTestId('hero-act-register')).toBeNull();
+    await act(async () => answerUnread({ count: 3 }));
+    expect(screen.getByTestId('hero-act-register')).toBeTruthy();
+    expect(screen.queryByLabelText('Loading your day…')).toBeNull();
+    expect(screen.getByText('3')).toBeTruthy();
+  });
+
+  it('a badge that never answers holds the page for a moment at most', async () => {
+    setNow(8, 20);
+    (api.request as jest.Mock).mockImplementation((path: string) => {
+      if (path.startsWith('/manage/timetable/my-day')) return Promise.resolve(DAY);
+      if (path.startsWith('/manage/class-notes?')) return Promise.resolve({ notes: [], todos: [] });
+      if (path === '/manage/messages/unread-count') return new Promise(() => {});
+      return Promise.resolve({ count: 0 });
+    });
+    render(<Today />);
+    await act(async () => {});
+    expect(screen.queryByTestId('hero-act-register')).toBeNull();
+    await act(async () => jest.advanceTimersByTime(FIRST_PAINT_CAP_MS));
+    expect(screen.getByTestId('hero-act-register')).toBeTruthy();
+  });
+
+  it('does not hold the page for the live period\'s note counts — they badge the kit a beat later', async () => {
+    // The counts need the day first (to know which period is live), so
+    // waiting for them chained a second round-trip onto the first frame.
+    setNow(8, 20);
+    let answerNotes: (v: unknown) => void = () => {};
+    (api.request as jest.Mock).mockImplementation((path: string) => {
+      if (path.startsWith('/manage/timetable/my-day')) return Promise.resolve(DAY);
+      if (path.startsWith('/manage/class-notes?')) return new Promise((res) => { answerNotes = res; });
+      return Promise.resolve({ count: 0, unread: 0 });
+    });
+    render(<Today />);
+    await act(async () => {});
+    expect(screen.getByTestId('now-card')).toBeTruthy();
+    expect(screen.queryByTestId('now-kit-notes-badge')).toBeNull();
+    await act(async () => answerNotes({ notes: [{ id: 'n-1', body: 'x', createdAt: '2026-07-30T08:10:00.000Z' }], todos: [] }));
+    expect(within(screen.getByTestId('now-kit-notes-badge')).getByText('1')).toBeTruthy();
+  });
+
+  it('a second visit paints the day from the cache at once — no skeleton — and still asks again', async () => {
+    setNow(8, 20);
+    mockDay(DAY);
+    const first = render(<Today />);
+    await screen.findByTestId('now-card');
+    first.unmount();
+
+    // The network now hangs: whatever the second visit shows came from the cache.
+    (api.request as jest.Mock).mockReset().mockReturnValue(new Promise(() => {}));
+    render(<Today />);
+    expect(screen.queryByLabelText('Loading your day…')).toBeNull();
+    expect(screen.getByTestId('now-card')).toBeTruthy();
+    expect((api.request as jest.Mock).mock.calls.some(([p]) => String(p).startsWith('/manage/timetable/my-day'))).toBe(true);
+  });
+});
+
+describe('Do now — direct actions on Home (user, 19 Oct 2026)', () => {
+  const secondClass = classEntry({
+    periodId: 'p-2',
+    startTime: '09:05',
+    endTime: '09:50',
+    slot: { classSectionId: 'sec-7b', className: '7-B', subjectId: 'subj-sci', subjectName: 'Science', covering: false, coveringFor: null },
+  });
+
+  it('offers the register a teacher missed earlier, in one tap — but not the one the sheet already takes', async () => {
+    setNow(9, 20); // 8-A (08:00–08:45) is over and open; 7-B is live and open.
+    mockDay({ date: '2026-07-30', dayOfWeek: 4, entries: [classEntry(), breakEntry, secondClass] });
+    render(<Today />);
+
+    const row = await screen.findByTestId('donow-register-sec-8a-p-1');
+    expect(within(row).getByText('Take 8-A register')).toBeTruthy();
+    expect(within(row).getByText('Mathematics · 08:00–08:45 · over')).toBeTruthy();
+    // 7-B is the live class: its Take button is on the sheet, so it is not listed twice.
+    expect(screen.queryByTestId('donow-register-sec-7b-p-2')).toBeNull();
+    fireEvent.press(row);
+    expect(mockPush).toHaveBeenCalledWith('/(staff)/take/sec-8a?name=8-A');
+  });
+
+  it('never lists a class that has not started yet', async () => {
+    setNow(7, 30);
+    mockDay({ date: '2026-07-30', dayOfWeek: 4, entries: [classEntry(), breakEntry, secondClass] });
+    render(<Today />);
+    await screen.findByText('Nothing on right now');
+    expect(screen.queryByTestId('donow')).toBeNull();
+  });
+
+  it('puts new family concerns on Home with an Open, and badges the Complaint Box tile', async () => {
+    setNow(7, 30);
+    mockConcerns = { unread: 2, open: 3, resolvedThisMonth: 0 };
+    mockDay({ date: '2026-07-30', dayOfWeek: 4, entries: [classEntry()] });
+    render(<Today />);
+    const row = await screen.findByTestId('donow-concerns');
+    expect(within(row).getByText('2 new concerns from families')).toBeTruthy();
+    expect(screen.getByTestId('hometool-badge-Complaint Box')).toBeTruthy();
+    fireEvent.press(row);
+    expect(mockPush).toHaveBeenCalledWith('/(staff)/(tabs)/home/concerns');
+  });
+});
+
+describe('the band line says who the teacher is (user, 19 Oct 2026)', () => {
+  it('class teacher first, then up to two subjects; a subject teacher reads as such', () => {
+    expect(teacherLine({ subjects: ['English', 'Hindi', 'Art'], classTeacherOf: ['VI-A'] })).toBe('Class teacher · VI-A · English, Hindi');
+    expect(teacherLine({ subjects: ['Science'], classTeacherOf: [] })).toBe('Science teacher');
+    expect(teacherLine({ subjects: [], classTeacherOf: [] })).toBe('Teacher');
+    expect(teacherLine(null)).toBeUndefined();
+    // A record missing its lists still reads as a teacher, never crashes Home.
+    expect(teacherLine({} as never)).toBe('Teacher');
+  });
 });

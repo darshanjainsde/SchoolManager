@@ -3,6 +3,7 @@ import { Alert } from 'react-native';
 import { ask, ConfirmHost } from '../ConfirmSheet';
 import { ThemeProvider } from '@/theme/theme-context';
 import { tokens } from '@/theme/tokens';
+import { rolesFor } from '@/theme/accents';
 
 const mountHost = () => render(<ThemeProvider><ConfirmHost /></ThemeProvider>);
 
@@ -51,7 +52,8 @@ describe('ConfirmSheet — every "are you sure?" in the app (9 Oct 2026)', () =>
     expect(flat('confirm-action-0').backgroundColor).toBe(tokens.color.red);
     fireEvent.press(screen.getByTestId('confirm-cancel'));
     act(() => ask('Publish this meet?', undefined, [{ text: 'Not yet', style: 'cancel' }, { text: 'Publish' }]));
-    expect(flat('confirm-action-0').backgroundColor).toBe(tokens.color.indigo);
+    // The accent is the palette's fill (Ink & Lit: Green by default).
+    expect(flat('confirm-action-0').backgroundColor).toBe(rolesFor('green', 'light').fill);
   });
 
   it('every button clears the 48 dp touch floor', () => {

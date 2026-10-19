@@ -1,139 +1,104 @@
-import type { ColorPalette } from './tokens';
+import { inkLit, toOklch, type InkLitOptions, type InkLitRoles } from './inklit';
 
 /**
- * THE HIGHLIGHT COLOUR, AS A CHOICE.
- *
- * By default this follows the school — `school` applies no override at all and
- * leaves `brandedLight` to do its work, so an app still looks like the place a
- * person actually goes. Someone who would rather read something else can pick
- * one of the named accents, and their choice then holds in BOTH schemes: an
- * explicit choice is deliberate, unlike a school brand, which is chosen against
- * a white website and can fail badly on a near-black screen.
- *
- * The four tokens below are exactly the four `brandedLight` replaces
- * (see school-brand.ts). Touching a different set here would let a named accent
- * and a school brand paint different parts of the same screen.
+ * THE COLOUR CHOICE (Appearance → Colour), on the INK & LIT system
+ * (theme/inklit.ts; user, 19 Oct 2026). Each named colour is a hue plus a few
+ * choices; the generator builds both schemes from it, and the user's own four
+ * saved palettes (Black, Blue, Green, Pink) keep the exact colours they picked
+ * where those passed the checks. `school` builds the same system from the
+ * school's own brand colour.
  */
 export type AccentName =
-  | 'school' | 'navy' | 'green' | 'teal' | 'oxblood' | 'indigo'
-  | 'plum' | 'ocean' | 'leaf' | 'saffron' | 'rose' | 'charcoal';
-
-export interface AccentTone {
-  /** The fill itself — buttons, active tabs, the Now card. */
-  fill: string;
-  /** Pressed and emphasis states. */
-  deep: string;
-  /** The pale wash that sits behind text on paper. */
-  tint: string;
-  /** Text and glyphs ON the fill. */
-  onFill: string;
-}
+  | 'school' | 'green' | 'blue' | 'black' | 'pink' | 'navy' | 'peacock'
+  | 'teal' | 'aubergine' | 'oxblood' | 'espresso' | 'mehndi' | 'graphite' | 'indigo';
 
 export interface Accent {
   label: string;
   hint: string;
-  /** `null` means "do not override" — the school's own colour stands. */
-  light: AccentTone | null;
-  dark: AccentTone | null;
+  /** `null` = build from the school's own colour. */
+  opts: InkLitOptions | null;
+  /** Exact colours the user chose in the studio, laid over the generated ones. */
+  light?: Partial<InkLitRoles>;
+  dark?: Partial<InkLitRoles>;
 }
 
 export const ACCENTS: Record<AccentName, Accent> = {
-  school: {
-    label: 'My school',
-    hint: 'Follows your school’s own colour',
-    light: null,
-    dark: null,
-  },
-  navy: {
-    label: 'Ink navy',
-    hint: 'Blazer navy',
-    light: { fill: '#1C3B5A', deep: '#132B42', tint: '#E2E9F1', onFill: '#FFFFFF' },
-    dark: { fill: '#7FA8D4', deep: '#5E8AB8', tint: '#1C2836', onFill: '#0E1114' },
-  },
+  school: { label: 'My school', hint: 'Built from your school’s own colour', opts: null },
+  // The user's four (19 Oct 2026), refined only where a pair failed.
   green: {
-    label: 'Bottle green',
-    hint: 'Board green',
-    light: { fill: '#14483E', deep: '#0D332C', tint: '#DFEAE6', onFill: '#FFFFFF' },
-    dark: { fill: '#6FBBA6', deep: '#4E9A85', tint: '#17302A', onFill: '#0E1114' },
+    label: 'Green', hint: 'Forest ink, mid-green in dark', opts: { h: 149, inkC: 0.065, dark: 'mid' },
+    // Mint tiles became solid forest ink: the mint was ΔE 0.9 from the green "yours" tile (audit, 19 Oct 2026).
+    light: { band: '#042A0F', band2: '#042A0F', fill: '#042A0F', accentText: '#042A0F', bar: '#042A0F', tile: '#042A0F' },
+    dark: { band: '#24703B', band2: '#24703B', fill: '#24703B', fillfg: '#FFFFFF', onBand: '#FFFFFF', barOn: '#24703B', barOnFg: '#FFFFFF', tile: '#185A2B', glyph: '#FFFFFF' },
   },
-  teal: {
-    label: 'Deep teal',
-    hint: 'Between navy and green',
-    light: { fill: '#155E63', deep: '#0E4448', tint: '#DFECED', onFill: '#FFFFFF' },
-    dark: { fill: '#5FB6BC', deep: '#3E969C', tint: '#16302F', onFill: '#0E1114' },
+  blue: {
+    label: 'Blue', hint: 'Royal ink, lit periwinkle in dark', opts: { h: 277, inkC: 0.14 },
+    light: { band: '#030057', band2: '#030057', fill: '#1A1961', accentText: '#1A1961', tile: '#D8DEFE', glyph: '#36339F', bar: '#030057', barOn: '#D8DEFE', barOnFg: '#36339F' },
   },
-  oxblood: {
-    label: 'Oxblood',
-    hint: 'Crest maroon',
-    light: { fill: '#6B2233', deep: '#4E1725', tint: '#F0E1E4', onFill: '#FFFFFF' },
-    dark: { fill: '#D98B9B', deep: '#B96A7B', tint: '#332026', onFill: '#0E1114' },
+  black: {
+    label: 'Black', hint: 'Monochrome ink, AMOLED black in dark', opts: { h: 256, inkC: 0.02, tile: 'neutral', dark: 'black' },
+    light: { band: '#070E18', band2: '#070E18', fill: '#0D141C', accentText: '#0D141C', glyph: '#05070B', bar: '#070E18' },
+    // The grey dark "waiting" tile read as a plain tool; amber never goes neutral (audit, 19 Oct 2026).
   },
-  indigo: {
-    label: 'Indigo',
-    hint: 'What the app shipped with',
-    light: { fill: '#4F46E5', deep: '#3730A3', tint: '#E7E5FB', onFill: '#FFFFFF' },
-    dark: { fill: '#8B87FF', deep: '#6A64D6', tint: '#232052', onFill: '#0E1114' },
+  pink: {
+    label: 'Pink', hint: 'Wine ink, solid tiles, lit pink in dark', opts: { h: 349, inkC: 0.105, tile: 'solid' },
+    light: { band: '#48052E', band2: '#48052E', fill: '#48052E', accentText: '#48052E', tile: '#48052E', bar: '#48052E', amberInk: '#131210' },
+    // #EE8DBD lifted to #F7B2D3: wine ink on it was APCA Lc 58 (audit, 19 Oct 2026).
+    dark: { band: '#F7B2D3', band2: '#F7B2D3', fill: '#F7B2D3', tile: '#F7B2D3', barOn: '#F7B2D3' },
   },
-  // Six more (user, 9 Oct 2026: "can we add more colors to appearance").
-  // Each is one hue the whole app is then built from (theme/families.ts).
-  plum: {
-    label: 'Plum',
-    hint: 'House purple',
-    light: { fill: '#5B2A86', deep: '#431E63', tint: '#EDE4F5', onFill: '#FFFFFF' },
-    dark: { fill: '#C3A2E6', deep: '#A47FCC', tint: '#2A1F38', onFill: '#0E1114' },
-  },
-  ocean: {
-    label: 'Ocean blue',
-    hint: 'Clear sky blue',
-    light: { fill: '#0B5C8C', deep: '#08456A', tint: '#E0EEF6', onFill: '#FFFFFF' },
-    dark: { fill: '#79BDE6', deep: '#559FCB', tint: '#14283A', onFill: '#0E1114' },
-  },
-  leaf: {
-    label: 'Leaf green',
-    hint: 'Playground green',
-    light: { fill: '#2F6B2F', deep: '#214D21', tint: '#E3EFE1', onFill: '#FFFFFF' },
-    dark: { fill: '#8FCB8A', deep: '#6DAE68', tint: '#18301A', onFill: '#0E1114' },
-  },
-  saffron: {
-    label: 'Saffron',
-    hint: 'Warm marigold',
-    light: { fill: '#9A4A07', deep: '#733705', tint: '#F7E9DC', onFill: '#FFFFFF' },
-    dark: { fill: '#F0A867', deep: '#D88B45', tint: '#36261A', onFill: '#0E1114' },
-  },
-  rose: {
-    label: 'Rose',
-    hint: 'Deep pink',
-    light: { fill: '#A3194B', deep: '#7A1238', tint: '#F7E1EA', onFill: '#FFFFFF' },
-    dark: { fill: '#F08FB1', deep: '#D66F94', tint: '#3A1C28', onFill: '#0E1114' },
-  },
-  charcoal: {
-    label: 'Charcoal',
-    hint: 'Quiet grey',
-    light: { fill: '#374151', deep: '#1F2937', tint: '#E6E8EC', onFill: '#FFFFFF' },
-    dark: { fill: '#AAB4C3', deep: '#8A95A6', tint: '#22262D', onFill: '#0E1114' },
-  },
+  // New, in the same style.
+  navy: { label: 'Midnight navy', hint: 'Uniform navy, sky tiles', opts: { h: 255, inkC: 0.1 } },
+  peacock: { label: 'Peacock', hint: 'Indian peacock blue-green', opts: { h: 218, inkC: 0.11, tileH: 230 } },
+  teal: { label: 'Deep teal', hint: 'Calm ink teal, solid tiles', opts: { h: 196, inkC: 0.08, tile: 'solid' } },
+  aubergine: { label: 'Aubergine', hint: 'Deep purple, lilac tiles', opts: { h: 312, inkC: 0.12 } },
+  oxblood: { label: 'Oxblood', hint: 'Heritage red-brown, solid tiles', opts: { h: 22, inkC: 0.11, tile: 'solid' } },
+  espresso: { label: 'Espresso', hint: 'Warm brown ink, cream tiles', opts: { h: 52, inkC: 0.06, tileC: 0.06 } },
+  mehndi: { label: 'Mehndi', hint: 'Olive ink, leaf tiles', opts: { h: 118, inkC: 0.07 } },
+  graphite: { label: 'Graphite & sky', hint: 'Neutral ink, sky tiles, AMOLED dark', opts: { h: 260, inkC: 0.02, tileH: 235, tileC: 0.09, darkBase: 'black' } },
+  indigo: { label: 'Sckools indigo', hint: 'The app’s own colour', opts: { h: 277, inkC: 0.15 } },
 };
 
 export const ACCENT_NAMES = Object.keys(ACCENTS) as AccentName[];
+
+/** Colours people may have chosen before 19 Oct 2026, mapped to their nearest palette. */
+const LEGACY: Record<string, AccentName> = {
+  ocean: 'peacock', leaf: 'green', plum: 'aubergine', saffron: 'espresso', rose: 'pink',
+  charcoal: 'graphite', terracotta: 'oxblood',
+};
 
 export function isAccentName(v: string | null | undefined): v is AccentName {
   return typeof v === 'string' && v in ACCENTS;
 }
 
+/** A stored choice (old or new) → today's palette name; null when unknown. */
+export function readAccent(v: string | null | undefined): AccentName | null {
+  if (isAccentName(v)) return v;
+  return typeof v === 'string' && v in LEGACY ? LEGACY[v] : null;
+}
+
 /**
- * Lays a chosen accent over a palette. `null` returns the palette untouched,
- * which is how `school` stays out of the way of `brandedLight`.
- *
- * Only the four accent tokens move — the ink, the neutrals, and the green and
- * red that mean present and absent are never an accent's business.
+ * Built palettes, remembered. `inkLit` does colour-space maths for every role,
+ * and Appearance → Colour asks for every palette in both schemes on every
+ * render (28 builds a tap). A named palette never changes, so it is keyed by
+ * name + scheme; `school` is keyed by the brand colour too, so a school that
+ * changes its colour gets a fresh build. Treat the result as read-only: it is
+ * shared by every caller.
  */
-export function applyAccent(base: ColorPalette, tone: AccentTone | null): ColorPalette {
-  if (!tone) return base;
-  return {
-    ...base,
-    indigo: tone.fill,
-    indigoDeep: tone.deep,
-    indigo50: tone.tint,
-    onBrand: tone.onFill,
-  };
+const ROLES_CACHE = new Map<string, InkLitRoles>();
+
+/** What a palette paints in one scheme. `brand` feeds `school`. */
+export function rolesFor(name: AccentName, scheme: 'light' | 'dark', brand?: string | null): InkLitRoles {
+  const key = name === 'school' ? `school|${scheme}|${brand ?? ''}` : `${name}|${scheme}`;
+  const hit = ROLES_CACHE.get(key);
+  if (hit) return hit;
+  const roles = buildRoles(name, scheme, brand);
+  ROLES_CACHE.set(key, roles);
+  return roles;
+}
+
+function buildRoles(name: AccentName, scheme: 'light' | 'dark', brand?: string | null): InkLitRoles {
+  const a = ACCENTS[name];
+  const opts = a.opts ?? (brand ? { h: toOklch(brand).H, inkC: Math.min(0.14, Math.max(0.05, toOklch(brand).C)) } : ACCENTS.indigo.opts!);
+  const built = inkLit(opts)[scheme];
+  return { ...built, ...(scheme === 'light' ? a.light : a.dark) };
 }

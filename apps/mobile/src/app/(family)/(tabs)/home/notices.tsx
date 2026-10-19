@@ -4,7 +4,7 @@ import { Animated, Pressable, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import { relativeTime, type Announcement } from '@/lib/portal';
-import { Card, Empty, ErrorState, Screen, SectionTitle } from '@/components/ui';
+import { Card, Empty, ErrorState, ListScreen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { DUR, pinStyle, useGesture } from '@/theme/motion';
 import { Icon } from '@/components/icons';
@@ -123,24 +123,33 @@ export default function Notices() {
     }, [reloadKey]),
   );
 
+  const list = items ?? [];
+  // A FlatList, not a ScrollView of .map: a board of a hundred circulars used
+  // to mount (and animate) every slip at once. The header carries exactly
+  // what the ScrollView drew above the slips, with the same gap between.
   return (
-    <Screen onRefresh={reload}>
-      <SectionTitle title="Notices" />
-      <Text style={{ fontSize: 13, color: tokens.color.sub, marginHorizontal: 4, marginTop: -6 }}>
-        School circulars — the diary holds the personal ones.
-      </Text>
-      {error && <ErrorState error={error} onRetry={reload} />}
-      {items === null && !error && (
-        <LoadingRows label="Loading notices…" rows={3} />
-      )}
-      {items?.length === 0 && !error && (
-        <Card style={{ padding: 0 }}>
-          <Empty icon="notices">No notices yet — school updates will appear here.</Empty>
-        </Card>
-      )}
-      {items?.map((a, i) => (
-        <NoticeRow key={a.id} a={a} index={i} />
-      ))}
-    </Screen>
+    <ListScreen
+      data={list}
+      keyExtractor={(a) => a.id}
+      onRefresh={reload}
+      header={
+        <View style={{ gap: tokens.gap, marginBottom: list.length ? tokens.gap : 0 }}>
+          <SectionTitle title="Notices" />
+          <Text style={{ fontSize: 13, color: tokens.color.sub, marginHorizontal: 4, marginTop: -6 }}>
+            School circulars — the diary holds the personal ones.
+          </Text>
+          {error && <ErrorState error={error} onRetry={reload} />}
+          {items === null && !error && (
+            <LoadingRows label="Loading notices…" rows={3} />
+          )}
+          {items?.length === 0 && !error && (
+            <Card style={{ padding: 0 }}>
+              <Empty icon="notices">No notices yet — school updates will appear here.</Empty>
+            </Card>
+          )}
+        </View>
+      }
+      renderItem={(a, i) => <NoticeRow a={a} index={i} />}
+    />
   );
 }

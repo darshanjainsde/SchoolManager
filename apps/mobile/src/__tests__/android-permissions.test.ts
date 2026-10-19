@@ -46,3 +46,8 @@ describe('Android permissions declared by app.config.ts', () => {
     expect(picker?.[1]).toMatchObject({ cameraPermission: false, microphonePermission: false });
   });
 });
+
+it('blocks the advertising ID: no ads, and children use the app (Play Families policy)', () => {
+  expect(config.android!.blockedPermissions).toContain('com.google.android.gms.permission.AD_ID');
+});
+

@@ -126,3 +126,22 @@ it('shows a loading state before the fetch resolves', () => {
   const { getByLabelText } = render(<Notices />);
   expect(getByLabelText('Loading notices…')).toBeTruthy();
 });
+
+it('draws the board as a virtualised list, so a long term of circulars does not mount every slip at once', async () => {
+  (api.request as jest.Mock).mockResolvedValue(
+    Array.from({ length: 40 }, (_, i) => ({
+      id: `n${i}`,
+      classSectionId: null,
+      title: `Circular ${i}`,
+      body: 'Body.',
+      createdAt: new Date().toISOString(),
+    })),
+  );
+  const { findByText, getByTestId, queryByText } = render(<Notices />);
+  expect(await findByText('Circular 0')).toBeTruthy();
+  expect(getByTestId('screen-list')).toBeTruthy();
+  // The header still leads the list.
+  expect(await findByText('School circulars — the diary holds the personal ones.')).toBeTruthy();
+  // Windowed: the far end of the board is not mounted on the first frame.
+  expect(queryByText('Circular 39')).toBeNull();
+});

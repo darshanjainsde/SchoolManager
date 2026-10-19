@@ -33,6 +33,7 @@ export const MESSAGE_WORDS: Record<string, string> = {
   CONCERN_RAISED: 'Concern raised',
   CONCERN_REPLIED: 'Concern answered',
   CONCERN_RESOLVED: 'Concern resolved',
+  MESSAGE_REPORTED: 'Message reported',
 };
 
 export function messageWords(kind: string): string {

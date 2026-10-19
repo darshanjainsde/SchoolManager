@@ -19,7 +19,9 @@ describe('families follow the chosen accent (9 Oct 2026)', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { deriveFamilies, heroStops } = require('../families') as typeof import('../families');
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { ACCENTS, ACCENT_NAMES, applyAccent } = require('../accents') as typeof import('../accents');
+  const { ACCENT_NAMES, rolesFor } = require('../accents') as typeof import('../accents');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { applyInkLit } = require('../inklit') as typeof import('../inklit');
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { palette } = require('../tokens') as typeof import('../tokens');
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -27,7 +29,7 @@ describe('families follow the chosen accent (9 Oct 2026)', () => {
 
   for (const name of ACCENT_NAMES) {
     for (const scheme of ['light', 'dark'] as const) {
-      const c = applyAccent(palette[scheme], ACCENTS[name][scheme]);
+      const c = applyInkLit(palette[scheme], rolesFor(name, scheme), true);
       it(`${name}/${scheme}: every tile ink clears 4.5:1 on its own tint`, () => {
         const fam = deriveFamilies(c, scheme);
         for (const [k, t] of Object.entries(fam)) {
@@ -42,29 +44,110 @@ describe('families follow the chosen accent (9 Oct 2026)', () => {
     }
   }
 
-  it('a navy accent gives navy tiles, not indigo ones', () => {
-    const c = applyAccent(palette.light, ACCENTS.navy.light);
-    expect(deriveFamilies(c, 'light').learn.ink).toBe('#1C3B5A');
+  it('a navy palette gives navy tiles, not indigo ones', () => {
+    const c = applyInkLit(palette.light, rolesFor('navy', 'light'), true);
+    expect(deriveFamilies(c, 'light').learn.ink).toBe(rolesFor('navy', 'light').glyph);
   });
 });
 
 describe('the open tab on the dark floating bar stays readable on every accent', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { ACCENTS, ACCENT_NAMES, applyAccent } = require('../accents') as typeof import('../accents');
+  const { ACCENT_NAMES, rolesFor } = require('../accents') as typeof import('../accents');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { applyInkLit } = require('../inklit') as typeof import('../inklit');
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { palette } = require('../tokens') as typeof import('../tokens');
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { contrastRatio } = require('../school-brand') as typeof import('../school-brand');
   for (const name of ACCENT_NAMES) {
     it(`${name}: light tint pill with deep ink, and the pill stands off the bar`, () => {
-      const c = applyAccent(palette.light, ACCENTS[name].light);
+      const c = applyInkLit(palette.light, rolesFor(name, 'light'), true);
       expect(contrastRatio(c.indigo50, c.indigoDeep)).toBeGreaterThanOrEqual(4.5);
       expect(contrastRatio(c.indigo50, c.barBg)).toBeGreaterThanOrEqual(3);
     });
     it(`${name}: dark bright pill with dark ink`, () => {
-      const c = applyAccent(palette.dark, ACCENTS[name].dark);
+      const c = applyInkLit(palette.dark, rolesFor(name, 'dark'), true);
       expect(contrastRatio(c.indigo, c.onBrand)).toBeGreaterThanOrEqual(4.5);
       expect(contrastRatio(c.indigo, c.barBg)).toBeGreaterThanOrEqual(3);
     });
   }
+});
+
+describe('the band is the deepest shade of the chosen colour (16 Oct 2026)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { bandStops } = require('../families') as typeof import('../families');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { ACCENT_NAMES, rolesFor } = require('../accents') as typeof import('../accents');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { applyInkLit } = require('../inklit') as typeof import('../inklit');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { palette } = require('../tokens') as typeof import('../tokens');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { contrastRatio, luminance } = require('../school-brand') as typeof import('../school-brand');
+
+  it('the band text reads on both stops: white on ink in light, the band ink (or white) in dark', () => {
+    for (const name of ACCENT_NAMES) {
+      for (const scheme of ['light', 'dark'] as const) {
+        const c = applyInkLit(palette[scheme], rolesFor(name, scheme), true);
+        const [top, bottom] = bandStops(c, scheme);
+        const on = c.roles.onBand;
+        expect(contrastRatio(on, top)).toBeGreaterThanOrEqual(scheme === 'light' ? 7 : 4.5);
+        expect(contrastRatio(on, bottom)).toBeGreaterThanOrEqual(scheme === 'light' ? 7 : 4.5);
+        if (scheme === 'light') expect(luminance(top)).toBeLessThan(luminance('#555555'));
+      }
+    }
+  });
+});
+
+describe('dark fills keep the hue rich (16 Oct 2026)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { richShade, accentFill } = require('../families') as typeof import('../families');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { palette } = require('../tokens') as typeof import('../tokens');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { contrastRatio } = require('../school-brand') as typeof import('../school-brand');
+  const sat = (hex: string) => { const n = parseInt(hex.slice(1), 16); const v = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((x) => x / 255); const mx = Math.max(...v), mn = Math.min(...v); const l = (mx + mn) / 2; return mx === mn ? 0 : (mx - mn) / (1 - Math.abs(2 * l - 1)); };
+  it('a pale accent becomes a saturated deep shade; a grey stays grey', () => {
+    expect(sat(richShade("#8B87FF", 0.2))).toBeGreaterThanOrEqual(0.49);
+    expect(sat(richShade("#8B87FF", 0.2))).toBeLessThanOrEqual(0.61);
+    expect(sat(richShade('#AAB4C3', 0.2))).toBeLessThan(0.3);
+  });
+  it('the dark filled surface carries white at 4.5:1 and is a rich colour', () => {
+    const f = accentFill(palette.dark, 'dark');
+    expect(contrastRatio('#FFFFFF', f.bg)).toBeGreaterThanOrEqual(4.5);
+    expect(sat(f.bg)).toBeGreaterThanOrEqual(0.4);
+  });
+});
+
+describe('meaning colours on the tool grid, as in vc24 (18 Oct 2026)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { toneFamily, toneFill } = require('../families') as typeof import('../families');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { ACCENT_NAMES, rolesFor } = require('../accents') as typeof import('../accents');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { applyInkLit } = require('../inklit') as typeof import('../inklit');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { palette } = require('../tokens') as typeof import('../tokens');
+
+  for (const name of ACCENT_NAMES) {
+    for (const scheme of ['light', 'dark'] as const) {
+      const c = applyInkLit(palette[scheme], rolesFor(name, scheme), true);
+      for (const tone of ['amber', 'green'] as const) {
+        it(`${name} · ${scheme} · ${tone}: the glyph reads on its tile, and the live tile's text reads too`, () => {
+          const t = toneFamily(tone, c, scheme);
+          expect(contrastRatio(t.ink, t.soft)).toBeGreaterThanOrEqual(4.5);
+          const f = toneFill(tone, c);
+          expect(contrastRatio(f.fg, f.bg)).toBeGreaterThanOrEqual(4.5);
+        });
+      }
+    }
+  }
+
+  it('amber and green stay the theme’s own semantic colours, not new hues', () => {
+    const c = palette.light;
+    // The tile tint is the theme's amber/green washed toward white; amber's
+    // fill IS the token, green's is the token deepened only until white reads.
+    expect(toneFill('amber', c).bg).toBe(c.amber);
+    expect(contrastRatio(toneFill('green', c).bg, c.green)).toBeLessThan(1.3);
+  });
 });
