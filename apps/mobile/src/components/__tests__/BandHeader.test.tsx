@@ -24,6 +24,6 @@ describe('the band and the greeting on it (direction C, 16 Oct 2026)', () => {
   });
 
   it('the band is 236 dp, the number the sheet overlaps (sckools-ui-standards §3c)', () => {
-    expect(BAND_HEIGHT).toBe(236);
+    expect(BAND_HEIGHT).toBe(168);
   });
 });

@@ -3,7 +3,10 @@ import { Text, View } from 'react-native';
 import { brand, font } from '@/theme/tokens';
 
 /** How tall the band behind a Home's greeting is, before the sheet overlaps it (sckools-ui-standards §3c). */
-export const BAND_HEIGHT = 236;
+// 168 (19 Oct 2026): the sheets lost their figure rows, so at 236 the band ran
+// out BELOW a short sheet and cut through the quick actions. 168 ends about
+// 70 dp into the sheet, so the band always stops behind it.
+export const BAND_HEIGHT = 168;
 
 /**
  * THE GREETING ON THE BAND (direction C, 16 Oct 2026). Every role Home opens
