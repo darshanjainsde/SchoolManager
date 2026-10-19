@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Text, View } from 'react-native';
-import { api, ApiError } from '@/lib/api';
+import { ApiError } from '@/lib/api';
 import { useTokens } from '@/theme/theme-context';
 import { Button } from './Button';
 import { ask } from './ConfirmSheet';
@@ -14,18 +14,22 @@ import { ask } from './ConfirmSheet';
  * header. Report asks why (three plain reasons) and goes to the school's
  * admins. Block stops new messages in this conversation for both people
  * until the blocker unblocks it; the composer is hidden while it is blocked.
- * API: POST {base}/:threadId/report {reason} and {base}/:threadId/block {blocked}.
+ * The calls themselves live in each role's thread screen (literal routes, so
+ * the route-contract check sees the teacher screen call /manage/messages/… and
+ * the family screen /me/messages/…); this component owns the interface only.
  */
 export function ThreadSafety({
-  base,
-  threadId,
+  report: sendReport,
+  block: sendBlock,
   blockedByMe,
   blockedByOther,
   otherName,
   onBlockedChange,
 }: {
-  base: '/manage/messages' | '/me/messages';
-  threadId: string;
+  /** POST …/:threadId/report {reason}. */
+  report: (reason: string) => Promise<unknown>;
+  /** POST …/:threadId/block {blocked} → {blocked}. */
+  block: (blocked: boolean) => Promise<{ blocked: boolean }>;
   blockedByMe: boolean;
   blockedByOther: boolean;
   /** Who is on the other side, for the confirm copy ("Block Rekha Sinha?"). */
@@ -40,7 +44,7 @@ export function ThreadSafety({
     setBusy('report');
     setNote(null);
     try {
-      await api.request(`${base}/${threadId}/report`, { method: 'POST', body: { reason } });
+      await sendReport(reason);
       setNote('Reported. Your school’s admins have been told.');
     } catch (e) {
       setNote(e instanceof ApiError ? e.message : 'Could not send the report. Try again.');
@@ -67,7 +71,7 @@ export function ThreadSafety({
     setBusy('block');
     setNote(null);
     try {
-      const r = await api.request<{ blocked: boolean }>(`${base}/${threadId}/block`, { method: 'POST', body: { blocked: next } });
+      const r = await sendBlock(next);
       onBlockedChange(r.blocked);
     } catch (e) {
       setNote(e instanceof ApiError ? e.message : 'Could not change this. Try again.');

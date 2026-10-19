@@ -148,8 +148,8 @@ export default function StaffThread() {
         )}
         {detail && threadId && (
           <ThreadSafety
-            base="/manage/messages"
-            threadId={threadId}
+            report={(reason) => api.request(`/manage/messages/${threadId}/report`, { method: 'POST', body: { reason } })}
+            block={(blocked) => api.request<{ blocked: boolean }>(`/manage/messages/${threadId}/block`, { method: 'POST', body: { blocked } })}
             blockedByMe={!!flags.blockedByMe}
             blockedByOther={!!flags.blockedByOther}
             otherName={detail.thread.studentName}

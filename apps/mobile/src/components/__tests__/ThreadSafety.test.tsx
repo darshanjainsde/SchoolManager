@@ -22,7 +22,7 @@ describe('report and block a conversation (Play UGC policy, 19 Oct 2026)', () =>
 
   it('report asks why, then sends the reason to the school', async () => {
     (api.request as jest.Mock).mockResolvedValue({ ok: true });
-    mount(<ThreadSafety base="/me/messages" threadId="t1" blockedByMe={false} blockedByOther={false} otherName="Rekha Sinha" onBlockedChange={jest.fn()} />);
+    mount(<ThreadSafety report={(reason) => api.request(`/me/messages/t1/report`, { method: 'POST', body: { reason } })} block={(blocked) => api.request(`/me/messages/t1/block`, { method: 'POST', body: { blocked } }) as Promise<{ blocked: boolean }>} blockedByMe={false} blockedByOther={false} otherName="Rekha Sinha" onBlockedChange={jest.fn()} />);
     fireEvent.press(screen.getByTestId('thread-report'));
     fireEvent.press(screen.getByText('Rude or abusive'));
     await flush();
@@ -33,7 +33,7 @@ describe('report and block a conversation (Play UGC policy, 19 Oct 2026)', () =>
   it('block asks first, then blocks; unblock needs no question', async () => {
     const changed = jest.fn();
     (api.request as jest.Mock).mockResolvedValue({ blocked: true });
-    const view = mount(<ThreadSafety base="/manage/messages" threadId="t2" blockedByMe={false} blockedByOther={false} otherName="Aarav" onBlockedChange={changed} />);
+    const view = mount(<ThreadSafety report={(reason) => api.request(`/manage/messages/t2/report`, { method: 'POST', body: { reason } })} block={(blocked) => api.request(`/manage/messages/t2/block`, { method: 'POST', body: { blocked } }) as Promise<{ blocked: boolean }>} blockedByMe={false} blockedByOther={false} otherName="Aarav" onBlockedChange={changed} />);
     fireEvent.press(screen.getByTestId('thread-block'));
     expect(screen.getByText('Block Aarav?')).toBeTruthy();
     fireEvent.press(screen.getByTestId('confirm-block-action-0'));
@@ -42,7 +42,7 @@ describe('report and block a conversation (Play UGC policy, 19 Oct 2026)', () =>
     expect(changed).toHaveBeenCalledWith(true);
 
     (api.request as jest.Mock).mockResolvedValue({ blocked: false });
-    view.rerender(<ThemeProvider><ThreadSafety base="/manage/messages" threadId="t2" blockedByMe blockedByOther={false} otherName="Aarav" onBlockedChange={changed} /><ConfirmHost /></ThemeProvider>);
+    view.rerender(<ThemeProvider><ThreadSafety report={(reason) => api.request(`/manage/messages/t2/report`, { method: 'POST', body: { reason } })} block={(blocked) => api.request(`/manage/messages/t2/block`, { method: 'POST', body: { blocked } }) as Promise<{ blocked: boolean }>} blockedByMe blockedByOther={false} otherName="Aarav" onBlockedChange={changed} /><ConfirmHost /></ThemeProvider>);
     expect(screen.getByTestId('thread-blocked')).toBeTruthy();
     fireEvent.press(screen.getByTestId('thread-block'));
     await flush();
@@ -52,7 +52,7 @@ describe('report and block a conversation (Play UGC policy, 19 Oct 2026)', () =>
 
   it('a failed report says so in plain words', async () => {
     (api.request as jest.Mock).mockRejectedValue(new ApiError(500, 'Server is busy'));
-    mount(<ThreadSafety base="/me/messages" threadId="t1" blockedByMe={false} blockedByOther={false} otherName="R" onBlockedChange={jest.fn()} />);
+    mount(<ThreadSafety report={(reason) => api.request(`/me/messages/t1/report`, { method: 'POST', body: { reason } })} block={(blocked) => api.request(`/me/messages/t1/block`, { method: 'POST', body: { blocked } }) as Promise<{ blocked: boolean }>} blockedByMe={false} blockedByOther={false} otherName="R" onBlockedChange={jest.fn()} />);
     fireEvent.press(screen.getByTestId('thread-report'));
     fireEvent.press(screen.getByText('Something else'));
     await flush();
@@ -60,7 +60,7 @@ describe('report and block a conversation (Play UGC policy, 19 Oct 2026)', () =>
   });
 
   it('the other side blocking shows why nothing can be sent', () => {
-    mount(<ThreadSafety base="/me/messages" threadId="t1" blockedByMe={false} blockedByOther otherName="R" onBlockedChange={jest.fn()} />);
+    mount(<ThreadSafety report={(reason) => api.request(`/me/messages/t1/report`, { method: 'POST', body: { reason } })} block={(blocked) => api.request(`/me/messages/t1/block`, { method: 'POST', body: { blocked } }) as Promise<{ blocked: boolean }>} blockedByMe={false} blockedByOther otherName="R" onBlockedChange={jest.fn()} />);
     expect(screen.getByTestId('thread-blocked').props.children).toMatch(/is blocked/);
     expect(screen.getByText('Block')).toBeTruthy();
   });

@@ -204,8 +204,8 @@ export default function StudentThread() {
         )}
         {detail && threadId && (
           <ThreadSafety
-            base="/me/messages"
-            threadId={threadId}
+            report={(reason) => api.request(`/me/messages/${threadId}/report`, { method: 'POST', body: { reason } })}
+            block={(blocked) => api.request<{ blocked: boolean }>(`/me/messages/${threadId}/block`, { method: 'POST', body: { blocked } })}
             blockedByMe={!!flags.blockedByMe}
             blockedByOther={!!flags.blockedByOther}
             otherName={detail.thread.teacherName}
