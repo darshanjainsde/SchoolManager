@@ -30,6 +30,8 @@ const SIZE = 128;
 const STROKE = 15;
 const GAP = 3;
 const TOP = 20;
+/** The figure column of the legend: wide enough for "Not yet" or "100%" at 21/700. */
+const VALUE_W = 78;
 /** How much taller a band grows to hold the rings row. */
 export const RINGS_HEIGHT = TOP + SIZE + 8;
 
@@ -42,13 +44,13 @@ const AnimatedCircle = Animated.createAnimatedComponent(Circle);
  *
  * Left: three concentric rings, each in its own chalk colour picked against
  * the school's band (theme/families.ts bandRings), drawn on a track of the
- * same colour at 22 %, with a round cap and a quiet sheen along the stroke.
+ * same colour at 28 %, with a round cap and a quiet sheen along the stroke.
  * They draw themselves on once, when the day's figures arrive (Reduce Motion
  * → final state). A ring at 0 still shows its cap as a dot, so every ring is
  * findable even on an empty day.
  *
- * Right: the legend IS the figures — label over value, the value written in
- * its ring's own colour, so the eye pairs them without a key. A figure with
+ * Right: the legend IS the figures — one line per ring, the value written in
+ * its ring's own colour beside its name, so the eye pairs them without a key. A figure with
  * somewhere to go is a 48 dp row with a chevron that opens it.
  */
 export function BandRings({ metrics, testID = 'band-rings' }: { metrics: BandMetric[]; testID?: string }) {
@@ -81,7 +83,7 @@ export function BandRings({ metrics, testID = 'band-rings' }: { metrics: BandMet
             const len = (pct / 100) * circ;
             return (
               <G key={m.label}>
-                <Circle cx={SIZE / 2} cy={SIZE / 2} r={r} stroke={colours[i]} strokeOpacity={0.22} strokeWidth={STROKE} fill="none" />
+                <Circle cx={SIZE / 2} cy={SIZE / 2} r={r} stroke={colours[i]} strokeOpacity={0.28} strokeWidth={STROKE} fill="none" />
                 {/* The cap at the start of the lap: a dot even at 0 %. */}
                 <Circle cx={SIZE / 2 + r} cy={SIZE / 2} r={STROKE / 2} fill={colours[i]} />
                 {len > 0 && (
@@ -103,24 +105,33 @@ export function BandRings({ metrics, testID = 'band-rings' }: { metrics: BandMet
         </Svg>
       </View>
 
-      <View style={{ flex: 1, minWidth: 0, justifyContent: 'center' }}>
+      {/* The legend is a small TABLE: one line per ring, outer ring first,
+          figures in one column (their ring's colour), names in the next — so
+          the three names start on one edge and nothing stacks six lines high. */}
+      <View style={{ flex: 1, minWidth: 0, height: SIZE, justifyContent: 'space-between', paddingVertical: 2 }}>
         {shown.map((m, i) => {
           const a11y = m.accessibilityLabel ?? `${m.label}: ${m.value}`;
           const body = (
-            <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 42 }}>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text maxFontSizeMultiplier={1.2} numberOfLines={1} style={{ fontSize: 12, lineHeight: 15, fontWeight: '600', color: brand.onHero, opacity: 0.86 }}>
-                  {m.label}
-                </Text>
-                <Text
-                  maxFontSizeMultiplier={1.2}
-                  numberOfLines={1}
-                  style={{ fontSize: 20, lineHeight: 25, fontWeight: '700', color: colours[i], fontVariant: ['tabular-nums'], letterSpacing: -0.2 }}
-                >
-                  {m.value}
-                </Text>
-              </View>
-              {m.onPress ? <Icon name="chevron" size={16} color={brand.onHero} /> : null}
+            <View style={{ flexDirection: 'row', alignItems: 'center', height: 40, gap: 10 }}>
+              <Text
+                maxFontSizeMultiplier={1.15}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                style={{ width: VALUE_W, fontSize: 21, lineHeight: 26, fontWeight: '700', color: colours[i], fontVariant: ['tabular-nums'], letterSpacing: -0.3 }}
+              >
+                {m.value}
+              </Text>
+              <Text maxFontSizeMultiplier={1.2} numberOfLines={2} style={{ flex: 1, minWidth: 0, fontSize: 13, lineHeight: 16, fontWeight: '500', color: brand.onHero, opacity: 0.9 }}>
+                {m.label}
+              </Text>
+              {m.onPress ? (
+                // `chevron` is drawn pointing back; a door forward is the same glyph turned round.
+                <View style={{ transform: [{ rotate: '180deg' }], opacity: 0.7 }}>
+                  <Icon name="chevron" size={16} color={brand.onHero} />
+                </View>
+              ) : (
+                <View style={{ width: 16 }} />
+              )}
             </View>
           );
           return m.onPress ? (

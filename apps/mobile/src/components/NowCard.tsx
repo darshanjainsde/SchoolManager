@@ -526,9 +526,8 @@ export function NowCard({
             ? `${entry.startTime}–${entry.endTime} · Next: ${entryLabel(nextEntry)} at ${nextEntry.startTime}`
             : `${entry.startTime}–${entry.endTime}`}
         </Text>
-        <View style={{ marginTop: 12 }}>
-          <HeroChip on={tokens.color.green}>Use it to prep or catch up</HeroChip>
-        </View>
+        {/* No "Use it to prep" pill: on the sheet it read as a button that did
+            nothing (audit 19 Oct 2026). What to catch up on is the Do now list. */}
         {day}
         {deck}
           </GradientHero>
