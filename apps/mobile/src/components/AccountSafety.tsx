@@ -66,7 +66,7 @@ export function useTermsGate(): void {
         if (cancelled || done) return;
         ask(
           'Before you start',
-          'Messages here are for school matters only. Be respectful: you can report or block any conversation, and your school can see reports. By continuing you agree to the Terms of use and the Privacy policy.',
+          'Messages here are for school matters only. Be respectful: you can report or block any conversation, and reports go to your school’s admins. By continuing you agree to the Terms of use and the Privacy policy.',
           [
             { text: 'Read the terms', style: 'cancel', onPress: () => open(LEGAL.terms) },
             { text: 'Agree and continue', onPress: () => void SecureStore.setItemAsync(key, new Date().toISOString()).catch(() => undefined) },

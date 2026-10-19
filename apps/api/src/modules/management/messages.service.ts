@@ -56,6 +56,18 @@ function assertNotBlocked(t: BlockColumns): void {
 }
 
 /**
+ * Locks the thread row for the rest of the send's transaction and re-reads
+ * the block columns under the lock (review, 19 Oct 2026). Without the lock,
+ * a block committing between the read and the insert let one message through
+ * under READ COMMITTED; with it, the block waits for the send or the send
+ * sees the block.
+ */
+async function lockAndAssertNotBlocked(tx: TenantTx, threadId: string): Promise<void> {
+  const rows = await tx.$queryRaw<BlockColumns[]>`SELECT "blockedByStudentAt", "blockedByTeacherAt" FROM "MessageThread" WHERE "id" = ${threadId}::uuid FOR UPDATE`;
+  if (rows[0]) assertNotBlocked(rows[0]);
+}
+
+/**
  * Raw thread row shape with the includes both `toThreadRow` reads.
  *
  * `_count` is attached by us, not by Prisma. Asking Prisma for it aggregated
@@ -301,6 +313,7 @@ export class MessagesService {
       // Blocked by either side → nobody posts. Throwing here rolls the
       // transaction back (a thread that was just created cannot be blocked).
       assertNotBlocked(thread);
+      await lockAndAssertNotBlocked(tx, thread.id);
 
       await MessagesService.appendAndNotify(tx, {
         schoolId,
@@ -371,6 +384,7 @@ export class MessagesService {
         throw new ApiError('NOT_YOUR_THREAD', 'Thread not found', 404, 'threadId');
       }
       assertNotBlocked(thread);
+      await lockAndAssertNotBlocked(tx, thread.id);
 
       await MessagesService.appendAndNotify(tx, {
         schoolId,
@@ -489,7 +503,8 @@ export class MessagesService {
         ]);
         if (admins.length === 0) return;
         const title = 'A message was reported';
-        const body = `${r.reporter} reported a conversation with ${r.other} (${r.subject}): ${reason}`.slice(0, PREVIEW_LEN);
+        // Reason FIRST: the preview is cut at PREVIEW_LEN and the reason is what an admin acts on.
+        const body = `"${reason}" — ${r.reporter} reported a conversation with ${r.other} (${r.subject})`.slice(0, PREVIEW_LEN);
         await emitNotifications(tx, {
           schoolId,
           userIds: admins.map((a) => a.userId),

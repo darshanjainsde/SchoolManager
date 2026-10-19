@@ -1,4 +1,5 @@
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { SchoolJwtGuard } from '../../common/auth/school-jwt.guard';
 import { RolesGuard } from '../../common/auth/roles.guard';
 import { Roles } from '../../common/auth/roles.decorator';
@@ -44,6 +45,8 @@ export class TeacherMessagesController {
   }
 
   /** Report this thread (or one message in it) to the school's admins. 201 {ok: true}. */
+  // Throttled like the family side, so a report can't flood the office from either end.
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post(':threadId/report')
   report(
     @Param('threadId', ParseUUIDPipe) threadId: string,

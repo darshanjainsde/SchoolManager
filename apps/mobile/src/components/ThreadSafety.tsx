@@ -41,7 +41,7 @@ export function ThreadSafety({
     setNote(null);
     try {
       await api.request(`${base}/${threadId}/report`, { method: 'POST', body: { reason } });
-      setNote('Reported. Your school will look at this conversation.');
+      setNote('Reported. Your school’s admins have been told.');
     } catch (e) {
       setNote(e instanceof ApiError ? e.message : 'Could not send the report. Try again.');
     } finally {
@@ -52,7 +52,7 @@ export function ThreadSafety({
   function askReport() {
     ask(
       'Report this conversation?',
-      'Your school’s admins will see this conversation and your reason. The other person is not told who reported it.',
+      'Your school’s admins are told about this conversation, with your reason. The other person is not told who reported it.',
       [
         { text: 'Rude or abusive', onPress: () => void report('Rude or abusive') },
         { text: 'Spam or not about school', onPress: () => void report('Spam or not about school') },

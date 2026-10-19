@@ -9,6 +9,8 @@ const txMock = {
   user: { findMany: jest.fn() },
   notificationOutbox: { create: jest.fn() },
   notification: { createMany: jest.fn() },
+  // The send path locks the thread row and re-reads the block columns (FOR UPDATE).
+  $queryRaw: jest.fn(),
 };
 
 const withTenantMock = jest.fn((_schoolId: string, fn: (tx: unknown) => unknown) => fn(txMock));
@@ -86,6 +88,7 @@ describe('MessagesService', () => {
     jest.clearAllMocks();
     withTenantMock.mockImplementation((_s: string, fn: (tx: unknown) => unknown) => fn(txMock));
     tenant.requireTenant.mockReturnValue({ schoolId: SCHOOL });
+    txMock.$queryRaw.mockResolvedValue([{ blockedByStudentAt: null, blockedByTeacherAt: null }]);
     timetable.listForClass.mockResolvedValue([slot()]);
     txMock.student.findFirst.mockResolvedValue({
       id: STUDENT,
@@ -276,7 +279,8 @@ describe('MessagesService', () => {
       const bell = txMock.notification.createMany.mock.calls[0][0].data;
       expect(bell.map((n: { userId: string }) => n.userId)).toEqual([ADMIN_A, ADMIN_B]);
       expect(bell[0]).toMatchObject({ kind: 'MESSAGE_REPORTED', title: 'A message was reported', linkType: 'message_report', linkId: REPORT });
-      expect(bell[0].body).toContain('Ravi Kumar reported a conversation with Asha Rao (Mathematics): rude words');
+      // The reason leads, so the 140-character preview never cuts it off.
+      expect(bell[0].body).toBe('"rude words" — Ravi Kumar reported a conversation with Asha Rao (Mathematics)');
       const outbox = txMock.notificationOutbox.create.mock.calls.map((c) => c[0].data);
       expect(outbox.map((o) => [o.kind, o.targetUserId])).toEqual([['MESSAGE_REPORTED', ADMIN_A], ['MESSAGE_REPORTED', ADMIN_B]]);
       expect(outbox[0].payload).toMatchObject({ schoolName: 'Green Valley', threadId: THREAD, reportId: REPORT });
@@ -371,6 +375,14 @@ describe('MessagesService', () => {
       await expect(svc.studentSend(STUDENT_USER, { teacherId: TEACHER, subjectId: SUBJECT, body: 'hi' })).rejects.toMatchObject({ status: 403, response: blocked });
       expect(txMock.message.create).not.toHaveBeenCalled();
       expect(txMock.notificationOutbox.create).not.toHaveBeenCalled();
+    });
+
+    it('a block that lands between the read and the insert is caught under the row lock', async () => {
+      // The first read saw an open thread; the locked re-read sees the block that just committed.
+      txMock.messageThread.findFirst.mockResolvedValue({ id: THREAD, teacherId: TEACHER, studentId: STUDENT, classSectionId: SECTION, subjectId: SUBJECT, blockedByStudentAt: null, blockedByTeacherAt: null });
+      txMock.$queryRaw.mockResolvedValue([{ blockedByStudentAt: BLOCKED_AT, blockedByTeacherAt: null }]);
+      await expect(svc.teacherReply(TEACHER_USER, THREAD, { body: 'hi' })).rejects.toMatchObject({ status: 403, response: blocked });
+      expect(txMock.message.create).not.toHaveBeenCalled();
     });
 
     it('after unblocking (both columns null) the reply goes through', async () => {
