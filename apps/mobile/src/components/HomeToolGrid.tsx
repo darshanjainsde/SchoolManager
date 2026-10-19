@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { Touchable } from './Touchable';
 import { Icon, isIconName } from './icons';
 import { useTheme, useTokens } from '@/theme/theme-context';
-import { accentFill, toneFamily, toneFill, useFamilyTone } from '@/theme/families';
+import { accentFill, badgeColours, toneFamily, toneFill, useFamilyTone } from '@/theme/families';
 import type { MoreTone } from '@/lib/staff-nav';
 
 export interface HomeTool {
@@ -102,14 +102,14 @@ export function HomeToolGrid({ tools, testID, columns }: { tools: HomeTool[]; te
                       height: 18,
                       borderRadius: 9,
                       paddingHorizontal: 5,
-                      backgroundColor: tokens.color.red,
+                      backgroundColor: badgeColours(tokens.color).bg,
                       borderWidth: 2,
                       borderColor: tokens.color.surface,
                       alignItems: 'center',
                       justifyContent: 'center',
                     }}
                   >
-                    <Text maxFontSizeMultiplier={1.2} style={{ color: tokens.color.onBrand, fontSize: 10, fontWeight: '800' }}>
+                    <Text maxFontSizeMultiplier={1.2} style={{ color: badgeColours(tokens.color).fg, fontSize: 10, fontWeight: '800' }}>
                       {badge > 9 ? '9+' : badge}
                     </Text>
                   </View>

@@ -79,6 +79,11 @@ function glyphOn(ink: string, tile: string, scheme: ColorScheme): string {
 }
 
 export function deriveFamilies(c: ColorPalette, scheme: ColorScheme): Record<Family, FamilyTone> {
+  // INK & LIT (19 Oct 2026): one tile and one icon colour for every tool, from the palette.
+  if (c.roles) {
+    const t = { ink: c.roles.glyph, soft: c.roles.tile };
+    return { learn: t, money: t, care: t, people: t, sport: t, school: t };
+  }
   const F = c.indigo;
   const D = c.indigoDeep;
   if (scheme === 'dark') {
@@ -149,6 +154,7 @@ export function richShade(hex: string, lightness: number): string {
  * app has one idea of "filled" per scheme.
  */
 export function accentFill(c: ColorPalette, scheme: ColorScheme): { bg: string; fg: string } {
+  if (c.roles) return { bg: c.roles.fill, fg: c.roles.fillfg };
   if (scheme !== 'dark') return { bg: c.indigo, fg: c.onBrand };
   // Mix the bright dark-mode accent toward true black, not a grey night:
   // the hue stays saturated and rich instead of turning to slate.
@@ -163,6 +169,7 @@ export function accentFill(c: ColorPalette, scheme: ColorScheme): { bg: string; 
  * it sits in a dark app without glowing. White text clears 7:1 on both stops.
  */
 export function bandStops(c: ColorPalette, scheme: ColorScheme): readonly [string, string] {
+  if (c.roles) return [c.roles.band, c.roles.band2] as const;
   // Toward true black in both schemes, so the hue stays saturated (a grey
   // "night" turned the dark band to slate). Dark starts from the bright dark
   // accent and goes further down, so it sits in a dark app without glowing.
@@ -224,6 +231,7 @@ export function useFamilies(): Record<Family, FamilyTone> {
 export type ToneName = 'amber' | 'green';
 
 export function toneFamily(tone: ToneName, c: ColorPalette, scheme: ColorScheme): FamilyTone {
+  if (c.roles) return tone === 'amber' ? { ink: c.roles.amberInk, soft: c.roles.amber } : { ink: c.roles.greenInk, soft: c.roles.green };
   const base = tone === 'amber' ? c.amber : c.green;
   const inkFrom = tone === 'amber' ? c.late : c.green;
   if (scheme === 'dark') {
@@ -232,6 +240,21 @@ export function toneFamily(tone: ToneName, c: ColorPalette, scheme: ColorScheme)
   }
   const soft = mix(base, '#FFFFFF', 0.86);
   return { ink: glyphOn(inkFrom, soft, 'light'), soft };
+}
+
+/** Text and icons on the band: white on ink, dark ink on a lit band (Ink & Lit). */
+export function onBand(c: ColorPalette): string {
+  return c.roles?.onBand ?? '#FFFFFF';
+}
+
+/** True when the band is ink (white text on it), false when it is lit (dark text). */
+export function bandIsInk(c: ColorPalette): boolean {
+  return contrastRatio(onBand(c), '#000000') > contrastRatio(onBand(c), '#FFFFFF');
+}
+
+/** A count badge: a red white text reads on, in both schemes. */
+export function badgeColours(c: ColorPalette): { bg: string; fg: string } {
+  return c.roles ? { bg: c.roles.badge, fg: c.roles.badgeFg } : { bg: c.red, fg: '#FFFFFF' };
 }
 
 /** The filled (live) tile for a meaning colour — vc24's amber register tile. */

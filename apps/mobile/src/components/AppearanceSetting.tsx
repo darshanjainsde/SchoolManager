@@ -1,10 +1,9 @@
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useTheme, type ThemePreference } from '@/theme/theme-context';
 import { GROUNDS, GROUND_NAMES } from '@/theme/grounds';
-import { ACCENTS, ACCENT_NAMES, applyAccent } from '@/theme/accents';
-import { bandStops, deriveFamilies, toneFamily } from '@/theme/families';
+import { ACCENTS, ACCENT_NAMES, rolesFor } from '@/theme/accents';
+import { bandStops, deriveFamilies, onBand, toneFamily } from '@/theme/families';
 import { Icon } from './icons';
-import { brand } from '@/theme/tokens';
 
 const OPTIONS: Array<{ value: ThemePreference; label: string }> = [
   { value: 'system', label: 'System' },
@@ -80,20 +79,18 @@ export function AppearanceSetting() {
 
       <View style={{ gap: 8 }}>
         <Text style={label}>Colour</Text>
-        <Text style={hint}>The band at the top of Home, its rings, buttons and tiles.</Text>
+        <Text style={hint}>Deep ink in light, lit up in dark: the band, buttons and tiles.</Text>
         {/* A grid, not a sideways scroll: twelve colours, all visible, each
             showing its fill over its own tint (sckools-ui-standards §7). */}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 14 }}>
           {ACCENT_NAMES.map((name) => {
             const a = ACCENTS[name];
             const on = accent === name;
-            // 'My school' wears the colour currently in force — the school's.
-            const t = (scheme === 'dark' ? a.dark : a.light) ?? null;
-            const swatch = t?.fill ?? tokens.color.indigo;
-            // Each swatch shows what the colour builds: the band's deep shade
-            // around the colour's own fill (buttons, the live tile).
-            const pal = name === 'school' || !t ? tokens.color : applyAccent(tokens.color, t);
-            const deepBand = bandStops(pal, scheme)[0];
+            // Each swatch is the palette itself: its light band holding its
+            // tile, beside its dark band (Ink & Lit, 19 Oct 2026).
+            const L = rolesFor(name, 'light');
+            const D = rolesFor(name, 'dark');
+            const swatch = L.band;
             return (
               <Pressable
                 key={name}
@@ -114,13 +111,16 @@ export function AppearanceSetting() {
                     borderColor: on ? swatch : 'transparent',
                   }}
                 >
-                  <View style={{ flex: 1, borderRadius: 999, backgroundColor: deepBand, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
-                    {!on ? (
-                      <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: pal.indigo, borderWidth: 2, borderColor: 'rgba(255,255,255,0.5)' }} />
-                    ) : null}
+                  <View style={{ flex: 1, borderRadius: 999, overflow: 'hidden', flexDirection: 'row' }}>
+                    <View style={{ flex: 1, backgroundColor: L.band, alignItems: 'center', justifyContent: 'center' }}>
+                      {!on ? <View style={{ width: 10, height: 10, borderRadius: 3, backgroundColor: L.tile === L.band ? L.glyph : L.tile }} /> : null}
+                    </View>
+                    <View style={{ flex: 1, backgroundColor: D.band }} />
                     {on ? (
-                      <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: tokens.color.surface, alignItems: 'center', justifyContent: 'center' }}>
-                        <Icon name="check" size={14} color={swatch} fillOpacity={0} />
+                      <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, alignItems: 'center', justifyContent: 'center' }}>
+                        <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: tokens.color.surface, alignItems: 'center', justifyContent: 'center' }}>
+                          <Icon name="check" size={14} color={tokens.color.ink} fillOpacity={0} />
+                        </View>
                       </View>
                     ) : null}
                   </View>
@@ -140,8 +140,8 @@ export function AppearanceSetting() {
             then a plain tile, a "waiting on you" tile and a "yours" tile. */}
         <View testID="accent-family-preview" style={{ borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: tokens.color.line, marginTop: 4 }}>
           <View style={{ backgroundColor: band, paddingVertical: 12, paddingHorizontal: 14 }}>
-            <Text style={{ color: brand.onHero, fontSize: 16, fontWeight: '700' }}>Your Home</Text>
-            <Text style={{ color: brand.onHero, opacity: 0.85, fontSize: 12, marginTop: 2 }}>The band at the top</Text>
+            <Text style={{ color: onBand(tokens.color), fontSize: 16, fontWeight: '700' }}>Your Home</Text>
+            <Text style={{ color: onBand(tokens.color), opacity: 0.85, fontSize: 12, marginTop: 2 }}>The band at the top</Text>
           </View>
           <View style={{ backgroundColor: tokens.color.surface, flexDirection: 'row', gap: 10, padding: 10 }}>
             {[

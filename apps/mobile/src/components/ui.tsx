@@ -6,7 +6,7 @@ import { useFocusEffect, useSegments } from 'expo-router';
 import { setStatusBarStyle } from 'expo-status-bar';
 import { ApiError } from '@/lib/api';
 import { useTheme, useTokens } from '@/theme/theme-context';
-import { bandStops } from '@/theme/families';
+import { bandIsInk, bandStops } from '@/theme/families';
 import { BAND_HEIGHT } from './BandHeader';
 import { CONTENT_MAX, brand, font, type ColorPalette } from '@/theme/tokens';
 import { DASH, DUR, inkWidth, strokeDashoffset, useGesture } from '@/theme/motion';
@@ -145,10 +145,12 @@ export function ListScreen<T>({
  * when it blurs, so the other tabs keep their dark icons.
  */
 function useBandStatusBar() {
+  // Light status icons on an ink band, dark ones on a lit band.
+  const style = bandIsInk(useTokens().color) ? 'light' : 'dark';
   const cb = useCallback(() => {
-    try { setStatusBarStyle('light'); } catch { /* not on a device */ }
+    try { setStatusBarStyle(style); } catch { /* not on a device */ }
     return () => { try { setStatusBarStyle('auto'); } catch { /* not on a device */ } };
-  }, []);
+  }, [style]);
   try {
     // Throws (before registering any hook) when there is no navigator —
     // component tests render Screen bare — so the bar simply keeps its style.

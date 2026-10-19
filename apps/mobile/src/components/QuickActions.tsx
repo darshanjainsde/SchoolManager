@@ -2,7 +2,7 @@ import { Text, View } from 'react-native';
 import { Touchable } from './Touchable';
 import { Icon, isIconName } from './icons';
 import { useTheme, useTokens } from '@/theme/theme-context';
-import { toneFamily, useFamilyTone } from '@/theme/families';
+import { badgeColours, toneFamily, useFamilyTone } from '@/theme/families';
 
 /** One job a person starts from Home in a tap. */
 export interface QuickAction {
@@ -102,7 +102,7 @@ export function QuickActions({
                       height: 18,
                       borderRadius: 9,
                       paddingHorizontal: 5,
-                      backgroundColor: c.red,
+                      backgroundColor: badgeColours(c).bg,
                       borderWidth: 2,
                       borderColor: c.surface,
                       alignItems: 'center',
@@ -111,7 +111,7 @@ export function QuickActions({
                   >
                     <Text
                       maxFontSizeMultiplier={1.2}
-                      style={{ color: c.onBrand, fontSize: 10, fontWeight: '800' }}
+                      style={{ color: badgeColours(c).fg, fontSize: 10, fontWeight: '800' }}
                     >
                       {badge > 9 ? '9+' : badge}
                     </Text>

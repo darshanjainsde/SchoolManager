@@ -1,3 +1,4 @@
+import type { InkLitRoles } from './inklit';
 import { Platform } from 'react-native';
 // The paper-and-ink diary palette from the approved Phase 5 pitches
 // (both artifacts share one `:root` block — warm paper, indigo-black ink,
@@ -68,6 +69,8 @@ export interface ColorPalette {
   // The red of a margin rule / unread dot / notice pin (--margin-red). Warmer
   // and lighter than `red`, which is reserved for remark ink itself.
   marginRed: string;
+  /** Every colour the Ink & Lit system paints (theme/inklit.ts); set by ThemeProvider. */
+  roles?: InkLitRoles;
 }
 
 const light: ColorPalette = {

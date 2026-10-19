@@ -5,7 +5,7 @@ import { Icon, type IconName } from './icons';
 import { Touchable } from './Touchable';
 import { CountUp } from './CountUp';
 import { useTheme, useTokens } from '@/theme/theme-context';
-import { accentFill } from '@/theme/families';
+import { accentFill, badgeColours } from '@/theme/families';
 import { sheetStyle } from './HeroDeck';
 import { brand, font } from '@/theme/tokens';
 import { DUR, inkWidth, useGesture, useReduceMotion } from '@/theme/motion';
@@ -229,7 +229,7 @@ function KitTile({
             height: 18,
             borderRadius: 99,
             paddingHorizontal: 4,
-            backgroundColor: tokens.color.marginRed,
+            backgroundColor: badgeColours(tokens.color).bg,
             borderWidth: 2,
             borderColor: deep,
             alignItems: 'center',
@@ -237,7 +237,7 @@ function KitTile({
           }}
         >
           {/* A number in an 18px circle — capped, like the bell's. */}
-          <Text maxFontSizeMultiplier={1.2} style={{ color: brand.onHero, fontSize: 10, fontWeight: '800' }}>
+          <Text maxFontSizeMultiplier={1.2} style={{ color: badgeColours(tokens.color).fg, fontSize: 10, fontWeight: '800' }}>
             {badge > 99 ? '99+' : badge}
           </Text>
         </View>

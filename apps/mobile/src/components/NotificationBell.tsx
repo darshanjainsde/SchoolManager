@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { useQuery } from '@/lib/query';
 import type { NotificationGroup } from '@/lib/notification-links';
 import { useTokens } from '@/theme/theme-context';
-import { brand } from '@/theme/tokens';
+import { badgeColours, bandIsInk, onBand as onBandColour } from '@/theme/families';
 
 /**
  * The notification bell for a screen header (both portals). Self-contained: it
@@ -24,6 +24,8 @@ import { brand } from '@/theme/tokens';
  */
 export function NotificationBell({ group, onBand = false }: { group: NotificationGroup; onBand?: boolean }) {
   const tokens = useTokens();
+  const bandInk = onBandColour(tokens.color);
+  const onLight = bandIsInk(tokens.color);
   // Through the shared cache: the same answer as the notifications screen,
   // deduped with it, and fresh-for-30-s on a plain focus. A badge must never
   // surface an error, so the query's error is simply not rendered.
@@ -43,8 +45,9 @@ export function NotificationBell({ group, onBand = false }: { group: Notificatio
         height: 44,
         borderRadius: 22,
         // On a Home's band the bell is a glass circle in the band's own white (direction C).
-        backgroundColor: onBand ? 'rgba(255,255,255,0.16)' : tokens.color.surface,
-        borderColor: onBand ? 'rgba(255,255,255,0.22)' : tokens.color.line,
+        // White glass on an ink band; a dark film on a lit band (Ink & Lit, 19 Oct 2026).
+        backgroundColor: onBand ? (onLight ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.08)') : tokens.color.surface,
+        borderColor: onBand ? (onLight ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.14)') : tokens.color.line,
         borderWidth: 1,
         alignItems: 'center',
         justifyContent: 'center',
@@ -52,7 +55,7 @@ export function NotificationBell({ group, onBand = false }: { group: Notificatio
         opacity: pressed ? 0.6 : 1,
       })}
     >
-      <Icon name="bell" size={20} color={onBand ? brand.onHero : tokens.color.ink} />
+      <Icon name="bell" size={20} color={onBand ? bandInk : tokens.color.ink} />
       {count > 0 && (
         <View
           testID="notification-bell-badge"
@@ -67,7 +70,7 @@ export function NotificationBell({ group, onBand = false }: { group: Notificatio
             // `--margin-red`, the red of a margin rule / an unread mark —
             // lighter and warmer than `red`, which this product reserves for
             // remark ink itself.
-            backgroundColor: tokens.color.marginRed,
+            backgroundColor: badgeColours(tokens.color).bg,
             // The 2px cut-out is the PAGE colour, not the bell's, so the
             // badge reads as sitting on top of the page rather than inside
             // the bell's own outline.
@@ -79,7 +82,7 @@ export function NotificationBell({ group, onBand = false }: { group: Notificatio
         >
           {/* A number inside an 18px circle — it cannot grow with the OS
               setting without becoming a clipped glyph. */}
-          <Text maxFontSizeMultiplier={1.2} style={{ color: brand.onHero, fontSize: 10, fontWeight: '800' }}>
+          <Text maxFontSizeMultiplier={1.2} style={{ color: badgeColours(tokens.color).fg, fontSize: 10, fontWeight: '800' }}>
             {count > 99 ? '99+' : count}
           </Text>
         </View>

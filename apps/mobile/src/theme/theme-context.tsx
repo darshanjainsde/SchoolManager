@@ -7,7 +7,7 @@ import {
   type PropsWithChildren,
 } from 'react';
 import { useColorScheme } from 'react-native';
-import { brandedLight } from './school-brand';
+import { applyInkLit } from './inklit';
 import { readCachedBrand, refreshSchoolBrand } from '@/lib/school-brand-client';
 import * as SecureStore from 'expo-secure-store';
 import { GAP, RADIUS, palette, type ColorPalette, type ColorScheme } from './tokens';
@@ -17,7 +17,7 @@ import {
   isGroundName,
   type GroundName,
 } from './grounds';
-import { ACCENTS, applyAccent, isAccentName, type AccentName } from './accents';
+import { readAccent, rolesFor, type AccentName } from './accents';
 
 export type ThemePreference = 'system' | ColorScheme;
 
@@ -81,7 +81,9 @@ export function ThemeProvider({ children }: PropsWithChildren) {
   const [ground, setGroundState] = useState<GroundName>('fresh');
   // 'school' is the default so an app still looks like the place a person goes;
   // choosing a named accent is an opt-out, not the starting point.
-  const [accent, setAccentState] = useState<AccentName>('school');
+  // Green is the colour the user picked in the Colour Studio (19 Oct 2026);
+  // 'My school' builds the same system from the school's brand.
+  const [accent, setAccentState] = useState<AccentName>('green');
   // The school's own colour, for the LIGHT scheme only. Cache first so the
   // theme is right on the frame the app opens rather than one round-trip
   // later; the network refresh then updates it for the next launch.
@@ -109,7 +111,8 @@ export function ThemeProvider({ children }: PropsWithChildren) {
       if (!cancelled && isGroundName(stored)) setGroundState(stored);
     });
     SecureStore.getItemAsync(ACCENT_KEY).then((stored) => {
-      if (!cancelled && isAccentName(stored)) setAccentState(stored);
+      const a = readAccent(stored);
+      if (!cancelled && a) setAccentState(a);
     });
     return () => {
       cancelled = true;
@@ -160,13 +163,9 @@ export function ThemeProvider({ children }: PropsWithChildren) {
       // can reach the neutrals. A chosen accent holds in dark too: it was
       // picked deliberately, unlike a brand chosen against a white website.
       tokens: {
-        color: applyGround(
-          applyAccent(
-            scheme === 'light' ? brandedLight(palette.light, brand) : palette.dark,
-            ACCENTS[accent][scheme],
-          ),
-          GROUNDS[ground][scheme],
-        ),
+        // INK & LIT (19 Oct 2026): the chosen palette paints every role; the
+        // ground keeps the paper only when the person chose one.
+        color: applyInkLit(applyGround(palette[scheme], GROUNDS[ground][scheme]), rolesFor(accent, scheme, brand), ground === 'fresh'),
         gap: GAP,
         radius: RADIUS,
       },
