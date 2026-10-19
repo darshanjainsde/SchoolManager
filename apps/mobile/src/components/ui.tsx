@@ -8,7 +8,6 @@ import { ApiError } from '@/lib/api';
 import { useTheme, useTokens } from '@/theme/theme-context';
 import { bandStops } from '@/theme/families';
 import { BAND_HEIGHT } from './BandHeader';
-import { RINGS_HEIGHT } from './BandRings';
 import { CONTENT_MAX, brand, font, type ColorPalette } from '@/theme/tokens';
 import { DASH, DUR, inkWidth, strokeDashoffset, useGesture } from '@/theme/motion';
 import { isPushedRoute, titleForSegments } from '@/lib/screen-titles';
@@ -202,9 +201,8 @@ export function Screen({
   refreshing?: boolean;
   /**
    * A role Home: the school's colour behind the greeting, a sheet over it.
-   * 'rings' grows the band to hold the day's figures (BandRings) under the name.
    */
-  band?: boolean | 'rings';
+  band?: boolean;
 }>) {
   const tokens = useTokens();
   const { scheme } = useTheme();
@@ -265,7 +263,7 @@ export function Screen({
         paddingBottom: Math.max(insets.bottom, 28),
       }}
     >
-      {band && <Band height={band === 'rings' ? BAND_HEIGHT + RINGS_HEIGHT : BAND_HEIGHT} />}
+      {band && <Band height={BAND_HEIGHT} />}
       {children}
     </ScrollView>
   );

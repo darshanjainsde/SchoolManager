@@ -174,9 +174,8 @@ it('greets the teacher by name and shows the classes/taken/pending summary', asy
   expect(await screen.findByText('Priya Sharma')).toBeTruthy();
   // The salutation is gone (16 Oct 2026): the band carries the date and the name only.
   expect(screen.queryByText('Good morning')).toBeNull();
-  // The count lives on the registers ring now, not in a sentence under the sheet.
-  expect((await screen.findByTestId('hero-fig-registers')).props.accessibilityLabel).toBe('0 of 2 registers taken today');
-  expect(screen.queryByText('2 classes today · 0 taken · 2 pending')).toBeNull();
+  // The band says the day in one sentence (19 Oct 2026: the rings went).
+  expect(await screen.findByText('1 register open · next class 09:05')).toBeTruthy();
 });
 
 it('never greets the teacher with the email address they signed in with', async () => {
@@ -312,7 +311,7 @@ it('excludes FREE periods from the classes/taken/pending glance count', async ()
   mockDay({ date: '2026-07-30', dayOfWeek: 4, entries: [classEntry(), freeEntry] });
   render(<Today />);
 
-  expect((await screen.findByTestId('hero-fig-registers')).props.accessibilityLabel).toBe('0 of 1 registers taken today');
+  expect(await screen.findByText('1 class today · next class 08:00')).toBeTruthy();
 });
 
 it('before school starts, says so and names the first class', async () => {
@@ -351,7 +350,7 @@ it('after school ends, renders the day-complete wrap-up with a summary of the da
   expect(screen.queryByText(/today · \d+ taken/)).toBeNull();
 });
 
-it('on a day with no classes, says so on the sheet and in the rings instead of 0/0', async () => {
+it('on a day with no classes, says so on the band and the sheet instead of 0/0', async () => {
   setNow(15, 0);
   mockDay({ date: '2026-07-30', dayOfWeek: 4, entries: [breakEntry] });
   render(<Today />);
@@ -359,8 +358,8 @@ it('on a day with no classes, says so on the sheet and in the rings instead of 0
   expect(await screen.findByText('No classes for you today')).toBeTruthy();
   expect(screen.queryByText('Day complete')).toBeNull();
   expect(screen.queryByText('0/0')).toBeNull();
-  expect(screen.getByTestId('hero-fig-registers')).toBeTruthy();
-  expect(within(screen.getByTestId('hero-fig-registers')).getByText('None')).toBeTruthy();
+  // Said once, on the sheet — the band does not repeat it.
+  expect(screen.getAllByText('No classes for you today')).toHaveLength(1);
 });
 
 it('in a gap between periods, says nothing is on and names the next class', async () => {
@@ -433,7 +432,7 @@ it('flips at the bell while the teacher is still looking at it', async () => {
   expect(within(before).getByText('8-A · Mathematics')).toBeTruthy();
   // The hero's Register action carries the open-register count (9 Oct 2026:
   // the Registers dome moved into the hero when the two grids became one menu).
-  expect(screen.getByLabelText(/^Register, [1-9]\d* waiting$/)).toBeTruthy();
+  expect(screen.getByLabelText(/^Take register, [1-9]\d* waiting$/)).toBeTruthy();
 
   await act(async () => {
     jest.advanceTimersByTime(60_000);
@@ -445,43 +444,39 @@ it('flips at the bell while the teacher is still looking at it', async () => {
   expect(within(after).getByText('Break')).toBeTruthy();
   expect(within(after).queryByText('8-A · Mathematics')).toBeNull();
   // 8-A's register is still open, so the hero's Register keeps its count.
-  expect(screen.getByLabelText(/^Register, [1-9]\d* waiting$/)).toBeTruthy();
+  expect(screen.getByLabelText(/^Take register, [1-9]\d* waiting$/)).toBeTruthy();
 });
 
-it('the day\'s figures ride on the band as rings — during a class too (report card, 18 Oct 2026)', async () => {
-  setNow(8, 44);
-  mockDay(DAY);
-  render(<Today />);
-  await screen.findByTestId('now-card');
-  // Two classes, neither register taken yet: 0 of 2, and nobody counted present.
-  expect(within(screen.getByTestId('hero-fig-registers')).getByText('0/2')).toBeTruthy();
-  expect(within(screen.getByTestId('hero-fig-present')).getByText('Not yet')).toBeTruthy();
-  expect(screen.getByLabelText('0 of 2 registers taken today')).toBeTruthy();
-  // The registers ring is a door to the Attendance tab.
-  fireEvent.press(screen.getByTestId('hero-fig-registers'));
-  expect(mockPush).toHaveBeenCalledWith('/(staff)/(tabs)/attendance');
-});
-
-it('the present ring counts only the registers already taken', async () => {
-  setNow(10, 0);
-  mockDay({
-    ...DAY,
-    entries: [classEntry({ register: { taken: true, present: 21, total: 28, markedBy: 'Priya Sharma' } }), breakEntry, p2],
-  });
-  render(<Today />);
-  await screen.findByTestId('now-card');
-  expect(within(screen.getByTestId('hero-fig-registers')).getByText('1/2')).toBeTruthy();
-  // 21 of the 28 in the one register taken — p2's 30 are not counted yet.
-  expect(within(screen.getByTestId('hero-fig-present')).getByText('75%')).toBeTruthy();
-});
-
-it('the menu is grouped: in class, messages and notices, for you', async () => {
+it('quick actions sit under the sheet: Take register opens the open class straight away (19 Oct 2026)', async () => {
   setNow(8, 20);
   mockDay(DAY);
   render(<Today />);
   await screen.findByTestId('now-card');
-  expect(within(screen.getByTestId('home-menu-group-In class')).getByTestId('hero-act-register')).toBeTruthy();
-  expect(within(screen.getByTestId('home-menu-group-Messages and notices')).getByTestId('hometool-Complaint Box')).toBeTruthy();
+  const quick = within(screen.getByTestId('quick-actions'));
+  for (const label of ['Take register', 'Set homework', 'Post notice', 'Write diary']) expect(quick.getByText(label)).toBeTruthy();
+  fireEvent.press(screen.getByTestId('hero-act-register'));
+  expect(mockPush).toHaveBeenCalledWith('/(staff)/take/sec-8a?name=8-A');
+  fireEvent.press(screen.getByTestId('hero-act-notice'));
+  expect(mockPush).toHaveBeenCalledWith('/(staff)/(tabs)/home/post');
+});
+
+it('a quick action is never drawn again in the menu, and no rings are drawn', async () => {
+  setNow(8, 20);
+  mockDay(DAY);
+  render(<Today />);
+  await screen.findByTestId('now-card');
+  const menu = within(screen.getByTestId('home-menu'));
+  for (const t of ['Register', 'Homework', 'Notice', 'Diary']) expect(menu.queryByTestId(`hometool-${t}`)).toBeNull();
+  expect(screen.queryByTestId('band-rings')).toBeNull();
+});
+
+it('the menu is grouped: in class, messages, for you', async () => {
+  setNow(8, 20);
+  mockDay(DAY);
+  render(<Today />);
+  await screen.findByTestId('now-card');
+  expect(within(screen.getByTestId('home-menu-group-In class')).getByTestId('hero-act-test')).toBeTruthy();
+  expect(within(screen.getByTestId('home-menu-group-Messages')).getByTestId('hometool-Complaint Box')).toBeTruthy();
   expect(within(screen.getByTestId('home-menu-group-For you')).getByTestId('hometool-Holidays')).toBeTruthy();
 });
 

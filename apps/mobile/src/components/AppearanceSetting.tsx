@@ -2,8 +2,9 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useTheme, type ThemePreference } from '@/theme/theme-context';
 import { GROUNDS, GROUND_NAMES } from '@/theme/grounds';
 import { ACCENTS, ACCENT_NAMES, applyAccent } from '@/theme/accents';
-import { bandRings, bandStops, deriveFamilies, toneFamily } from '@/theme/families';
+import { bandStops, deriveFamilies, toneFamily } from '@/theme/families';
 import { Icon } from './icons';
+import { brand } from '@/theme/tokens';
 
 const OPTIONS: Array<{ value: ThemePreference; label: string }> = [
   { value: 'system', label: 'System' },
@@ -28,7 +29,6 @@ export function AppearanceSetting() {
   const { tokens, preference, setPreference, ground, setGround, accent, setAccent, scheme } =
     useTheme();
   const family = deriveFamilies(tokens.color, scheme);
-  const rings = bandRings(tokens.color, scheme);
   const band = bandStops(tokens.color, scheme)[0];
 
   const label = { fontSize: 13, fontWeight: '600' as const, color: tokens.color.ink };
@@ -91,10 +91,9 @@ export function AppearanceSetting() {
             const t = (scheme === 'dark' ? a.dark : a.light) ?? null;
             const swatch = t?.fill ?? tokens.color.indigo;
             // Each swatch shows what the colour builds: the band's deep shade
-            // carrying the three ring colours it gets (theme/families.ts bandRings).
+            // around the colour's own fill (buttons, the live tile).
             const pal = name === 'school' || !t ? tokens.color : applyAccent(tokens.color, t);
             const deepBand = bandStops(pal, scheme)[0];
-            const dots = bandRings(pal, scheme);
             return (
               <Pressable
                 key={name}
@@ -117,11 +116,7 @@ export function AppearanceSetting() {
                 >
                   <View style={{ flex: 1, borderRadius: 999, backgroundColor: deepBand, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
                     {!on ? (
-                      <View style={{ flexDirection: 'row', gap: 3 }}>
-                        {dots.map((d) => (
-                          <View key={d} style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: d }} />
-                        ))}
-                      </View>
+                      <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: pal.indigo, borderWidth: 2, borderColor: 'rgba(255,255,255,0.5)' }} />
                     ) : null}
                     {on ? (
                       <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: tokens.color.surface, alignItems: 'center', justifyContent: 'center' }}>
@@ -141,13 +136,12 @@ export function AppearanceSetting() {
             );
           })}
         </View>
-        {/* What this choice builds, live: the band with its rings, then a
-            plain tile, a "waiting on you" tile and a "yours" tile. */}
+        {/* What this choice builds, live: the band with its white greeting,
+            then a plain tile, a "waiting on you" tile and a "yours" tile. */}
         <View testID="accent-family-preview" style={{ borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: tokens.color.line, marginTop: 4 }}>
-          <View style={{ backgroundColor: band, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', paddingVertical: 12 }}>
-            {rings.map((r, i) => (
-              <View key={r} style={{ width: 34, height: 34, borderRadius: 17, borderWidth: 4, borderColor: r, borderTopColor: i === 2 ? 'rgba(255,255,255,0.16)' : r }} />
-            ))}
+          <View style={{ backgroundColor: band, paddingVertical: 12, paddingHorizontal: 14 }}>
+            <Text style={{ color: brand.onHero, fontSize: 16, fontWeight: '700' }}>Your Home</Text>
+            <Text style={{ color: brand.onHero, opacity: 0.85, fontSize: 12, marginTop: 2 }}>The band at the top</Text>
           </View>
           <View style={{ backgroundColor: tokens.color.surface, flexDirection: 'row', gap: 10, padding: 10 }}>
             {[

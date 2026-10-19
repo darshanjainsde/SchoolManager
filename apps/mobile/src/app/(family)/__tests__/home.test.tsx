@@ -205,31 +205,20 @@ describe('next test', () => {
 });
 
 describe('KPI row', () => {
-  it("shows this month's attendance percent and the latest published result", async () => {
-    mockEndpoints({
-      '/me/attendance': { month: '2026-07', percent: 86, present: 25, absent: 3, late: 1, days: [] },
-      '/me/results': [
-        {
-          examId: 'ex0',
-          title: 'Unit Test 1',
-          subjectName: 'Science',
-          scheduledAt: '2026-07-01T00:00:00.000Z',
-          marks: 42,
-          maxMarks: 50,
-          classAverage: 38,
-        },
-      ],
-    });
-    const { findByText } = render(<Home />);
-    expect(await findByText('86%')).toBeTruthy();
-    expect(await findByText('42/50')).toBeTruthy();
+  it('the band carries no figures any more (19 Oct 2026: the rings went), and Results stays one tap away', async () => {
+    mockEndpoints({ '/me/attendance': { month: '2026-07', percent: 86, present: 25, absent: 3, late: 1, days: [] } });
+    const { findByTestId, queryByTestId, queryByText, getByTestId } = render(<Home />);
+    await findByTestId('quick-actions');
+    expect(queryByTestId('band-rings')).toBeNull();
+    expect(queryByText('42/50')).toBeNull();
+    expect(queryByTestId('hero-act-results') ?? getByTestId('hometool-Results')).toBeTruthy();
   });
 
-  it('shows plain words, not dashes or zeros, when nothing has been recorded yet', async () => {
+  it('quick actions under the sheet are verbs: ask, homework, the diary, and fees or results', async () => {
     mockEndpoints();
-    const { findByLabelText } = render(<Home />);
-    expect(await findByLabelText('No attendance marked this month')).toBeTruthy();
-    expect(await findByLabelText('No results yet')).toBeTruthy();
+    const { findByTestId } = render(<Home />);
+    const quick = within(await findByTestId('quick-actions'));
+    for (const label of ['Ask teacher', 'Homework', 'Read diary']) expect(quick.getByText(label)).toBeTruthy();
   });
 });
 
@@ -258,15 +247,13 @@ describe('latest announcements', () => {
 });
 
 describe('navigation', () => {
-  it('the rings on the band deep-link to Attendance and Results', async () => {
+  it('a quick action goes straight to its screen', async () => {
     mockEndpoints();
     const { findByTestId } = render(<Home />);
-
-    fireEvent.press(await findByTestId('band-fig-attendance'));
-    expect(mockPush).toHaveBeenCalledWith('/(family)/attendance');
-
-    fireEvent.press(await findByTestId('band-fig-result'));
-    expect(mockPush).toHaveBeenCalledWith('/(family)/results');
+    fireEvent.press(await findByTestId('hero-act-ask'));
+    expect(mockPush).toHaveBeenCalledWith('/(family)/(tabs)/home/messages');
+    fireEvent.press(await findByTestId('hero-act-homework'));
+    expect(mockPush).toHaveBeenCalledWith('/(family)/(tabs)/home/assignments');
   });
 
   it("the \"Today's classes\" rail links out to the full week", async () => {
@@ -340,15 +327,15 @@ describe('diary remarks', () => {
   it('unsigned remarks badge the hero\'s Diary action with the count', async () => {
     mockEndpoints({ '/me/diary': { entries: [], unsignedCount: 2 } });
     const { findByLabelText } = render(<Home />);
-    expect(await findByLabelText('Diary, 2 waiting')).toBeTruthy();
+    expect(await findByLabelText('Sign diary, 2 waiting')).toBeTruthy();
   });
 
   it('the Diary action is quiet when nothing is waiting to be signed', async () => {
     mockEndpoints();
     const { findByTestId, queryByLabelText, getByLabelText } = render(<Home />);
     await findByTestId('screen-scroll');
-    expect(getByLabelText('Diary')).toBeTruthy();
-    expect(queryByLabelText(/^Diary, \d+ waiting$/)).toBeNull();
+    expect(getByLabelText('Read diary')).toBeTruthy();
+    expect(queryByLabelText(/diary, \d+ waiting$/)).toBeNull();
   });
 
   it('tapping the Diary action opens the diary', async () => {
@@ -407,7 +394,7 @@ describe('second edition — the doors the web portal had first', () => {
       },
     });
     const { findByLabelText } = render(<Home />);
-    expect(await findByLabelText('Fees, 1 waiting')).toBeTruthy();
+    expect(await findByLabelText('Pay fees, 1 waiting')).toBeTruthy();
   });
 
   it('the four new tools sit in the menu for a school that has the modules', async () => {

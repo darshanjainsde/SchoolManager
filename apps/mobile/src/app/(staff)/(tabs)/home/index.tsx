@@ -20,7 +20,7 @@ import { fmtLongDay } from '@/lib/dates';
 import { hasFeature } from '@/lib/features';
 import { useSession } from '@/lib/use-session';
 import { useFirstPaint } from '@/lib/use-first-paint';
-import type { BandMetric } from '@/components/BandRings';
+import { QuickActions } from '@/components/QuickActions';
 import { DoNow, type DoNowItem } from '@/components/DoNow';
 
 export default function Today() {
@@ -162,52 +162,27 @@ export default function Today() {
   const newConcerns = concerns.data?.unread ?? 0;
   const painted = useFirstPaint(day !== null || error !== null, [!unreadSettled, countsPending, mine.loading, concerns.loading]);
 
-  // THE REPORT CARD ON THE BAND (user, 18 Oct 2026): three of the day's
-  // figures as rings. Registers taken; children present across the registers
-  // taken so far; the syllabus covered across my classes (or, without the
-  // tracker, how much of the teaching day is behind us).
-  const registersPct = classes.length ? (taken / classes.length) * 100 : 0;
-  const takenClasses = classes.filter((e) => e.register?.taken);
-  const seats = takenClasses.reduce((sum, e) => sum + (e.register?.total ?? 0), 0);
-  const presentPct = seats > 0 ? Math.round((studentsMarked / seats) * 100) : null;
-  const leaves = (mine.data?.tracks ?? []).reduce((sum, t) => sum + t.leaves, 0);
-  const doneLeaves = (mine.data?.tracks ?? []).reduce((sum, t) => sum + t.done, 0);
-  const syllabusPct = leaves > 0 ? Math.round((doneLeaves / leaves) * 100) : null;
-  const classesDone = classes.filter((e) => minutesOfDay(e.endTime) <= now).length;
-  const metrics: BandMetric[] = !painted
-    ? [{ value: '', pct: 0, label: 'registers taken' }, { value: '', pct: 0, label: 'present today' }, { value: '', pct: 0, label: syllabusOn ? 'syllabus covered' : 'of the day done' }]
+  const syllabusPct = (() => {
+    const leaves = (mine.data?.tracks ?? []).reduce((sum, t) => sum + t.leaves, 0);
+    const done = (mine.data?.tracks ?? []).reduce((sum, t) => sum + t.done, 0);
+    return leaves > 0 ? Math.round((done / leaves) * 100) : null;
+  })();
+  // The band says the day in one plain sentence (user, 19 Oct 2026: the rings
+  // and their figures went; "remove this rings completely").
+  const nextClass = classes.find((e) => minutesOfDay(e.startTime) > now);
+  const openNow = needsInk.filter((e) => minutesOfDay(e.startTime) <= now).length;
+  const started = classes.some((e) => minutesOfDay(e.startTime) <= now);
+  // No classes: the sheet already says so, so the band adds nothing.
+  const bandLine = !painted || classes.length === 0
+    ? undefined
     : [
-        {
-          value: classes.length === 0 ? 'None' : `${taken}/${classes.length}`,
-          pct: registersPct,
-          label: 'registers taken',
-          testID: 'hero-fig-registers',
-          accessibilityLabel: `${taken} of ${classes.length} registers taken today`,
-          onPress: () => router.push('/(staff)/(tabs)/attendance'),
-        },
-        {
-          value: presentPct !== null ? `${presentPct}%` : classes.length === 0 ? 'None' : 'Not yet',
-          pct: presentPct ?? 0,
-          label: 'present today',
-          testID: 'hero-fig-present',
-          accessibilityLabel: presentPct === null ? 'No register taken yet today' : `${studentsMarked} of ${seats} children present today`,
-        },
-        syllabusOn
-          ? {
-              value: syllabusPct === null ? 'None' : `${syllabusPct}%`,
-              pct: syllabusPct ?? 0,
-              label: 'syllabus covered',
-              testID: 'hero-fig-syllabus',
-              accessibilityLabel: syllabusPct === null ? 'No chapters added yet' : `${syllabusPct}% of the syllabus covered across your classes`,
-              onPress: () => router.push('/(staff)/(tabs)/home/syllabus'),
-            }
-          : {
-              value: classes.length === 0 ? 'None' : `${classesDone}/${classes.length}`,
-              pct: classes.length ? (classesDone / classes.length) * 100 : 0,
-              label: 'classes done',
-              testID: 'hero-fig-day',
-            },
-      ];
+        openNow > 0
+          ? `${openNow} ${openNow === 1 ? 'register' : 'registers'} open`
+          : started
+            ? 'Registers up to date'
+            : `${classes.length} ${classes.length === 1 ? 'class' : 'classes'} today`,
+        nextClass ? `next class ${nextClass.startTime}` : 'all classes done',
+      ].join(' · ');
 
   function goToAttendance(classSectionId: string) {
     const className = entries.find((e) => e.slot?.classSectionId === classSectionId)?.slot?.className;
@@ -282,13 +257,13 @@ export default function Today() {
   ];
 
   return (
-    <Screen band="rings" onRefresh={refresh} refreshing={refreshing}>
+    <Screen band onRefresh={refresh} refreshing={refreshing}>
       {/* Direction C: the greeting sits on the band; the sheet (NowCard) overlaps it. */}
       <BandGreeting
         eyebrow={fmtLongDay(new Date())}
         title={s?.displayName ?? 'Today'}
         right={<NotificationBell group="(staff)" onBand />}
-        metrics={error ? undefined : metrics}
+        line={error ? undefined : bandLine}
       />
 
       {error && <ErrorState error={error} onRetry={reload} />}
@@ -344,6 +319,23 @@ export default function Today() {
             />
           )}
 
+          {/* QUICK ACTIONS (user, 19 Oct 2026): the day's four jobs, under the sheet. */}
+          <QuickActions
+            actions={[
+              {
+                label: 'Take register', icon: 'take', tone: 'amber', testID: 'hero-act-register', badge: needsInk.length,
+                onPress: () => {
+                  const open = needsInk.find((e) => minutesOfDay(e.startTime) <= now) ?? needsInk[0];
+                  if (open?.slot) goToAttendance(open.slot.classSectionId);
+                  else router.push('/(staff)/(tabs)/attendance');
+                },
+              },
+              { label: 'Set homework', icon: 'assignments', testID: 'hero-act-homework', onPress: () => router.push('/(staff)/(tabs)/home/assignments') },
+              { label: 'Post notice', icon: 'notices', testID: 'hero-act-notice', onPress: () => router.push('/(staff)/(tabs)/home/post') },
+              { label: 'Write diary', icon: 'diary', testID: 'hero-act-diary', onPress: () => router.push('/(staff)/(tabs)/home/diary') },
+            ]}
+          />
+
           <DoNow items={doNow} />
 
           {/* THE MENU — one card instead of "Needs you today" + "Go to" (user,
@@ -356,23 +348,16 @@ export default function Today() {
               {
                 title: 'In class',
                 tools: [
-                  {
-                    label: 'Register', icon: 'take', tone: 'amber' as const, testID: 'hero-act-register', badge: needsInk.length, live: needsInk.length > 0,
-                    onPress: () => (needsInk[0]?.slot ? goToAttendance(needsInk[0].slot.classSectionId) : router.push('/(staff)/(tabs)/attendance')),
-                  },
-                  { label: 'Homework', icon: 'assignments', testID: 'hero-act-homework', route: '/(staff)/(tabs)/home/assignments' },
                   { label: 'Test', icon: 'results', testID: 'hero-act-test', route: '/(staff)/(tabs)/home/tests' },
                   // Where each class has reached — only where the owner switched the tracker on.
                   ...(syllabusOn ? [{ label: 'Syllabus', icon: 'syllabus', route: '/(staff)/(tabs)/home/syllabus', ...(syllabusPct !== null ? { arc: syllabusPct } : {}) }] : []),
-                  { label: 'Diary', icon: 'diary', route: '/(staff)/(tabs)/home/diary' },
                   { label: 'Notes', icon: 'notes', route: '/(staff)/(tabs)/home/notes' },
                 ],
               },
               {
-                title: 'Messages and notices',
+                title: 'Messages',
                 tools: [
                   { label: 'Messages', icon: 'messages', route: '/(staff)/(tabs)/home/messages', badge: unreadMsgs },
-                  { label: 'Notice', icon: 'notices', testID: 'hero-act-notice', route: '/(staff)/(tabs)/home/post' },
                   // Concerns the class teacher's families raised. Free, so always
                   // drawn — it was on no screen before 2026-10-07 (nav-reachability).
                   { label: 'Complaint Box', icon: 'concern', tone: 'amber' as const, route: '/(staff)/(tabs)/home/concerns', badge: newConcerns },

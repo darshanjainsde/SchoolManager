@@ -59,7 +59,7 @@ describe('meaning colours stay on the tiles that mean something', () => {
   const found: Record<'amber' | 'green', string[]> = { amber: [], green: [] };
   // Only screens that draw a Home menu: status chips elsewhere ("Pending",
   // "Approved") also say tone, and are a different thing.
-  const homes = [...files(path.join(root, 'app')), ...files(path.join(root, 'components'))].filter((f) => /<HomeMenu|<HomeToolGrid/.test(fs.readFileSync(f, 'utf8')));
+  const homes = [...files(path.join(root, 'app')), ...files(path.join(root, 'components'))].filter((f) => /<HomeMenu|<HomeToolGrid|<QuickActions/.test(fs.readFileSync(f, 'utf8')));
   it('reads the Homes it guards', () => expect(homes.length).toBeGreaterThanOrEqual(5));
   for (const f of homes) {
     for (const m of fs.readFileSync(f, 'utf8').matchAll(/label: '([^']+)'[^}\n]*?tone: '(amber|green)'/g)) {
@@ -68,7 +68,7 @@ describe('meaning colours stay on the tiles that mean something', () => {
   }
 
   it('amber is only "someone is waiting on you"', () => {
-    expect(found.amber.map((x) => x.split(': ')[1]).sort()).toEqual(['Complaint Box', 'Decide', 'Fees', 'Fines', 'Register']);
+    expect(found.amber.map((x) => x.split(': ')[1]).sort()).toEqual(['Complaint Box', 'Decide', 'Fines', 'Pay fees', 'Take register']);
   });
 
   it('green is only "yours": pay and days off', () => {
