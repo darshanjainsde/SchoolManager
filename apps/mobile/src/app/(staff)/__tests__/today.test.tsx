@@ -3,6 +3,7 @@ import type { TeacherDay, TeacherDayEntry } from '@skoolos/types';
 import Today from '../(tabs)/home/index';
 import { api, ApiError } from '@/lib/api';
 import { session } from '@/lib/session';
+import { clearCache } from '@/lib/query';
 
 jest.mock('expo-secure-store', () => {
   const store: Record<string, string> = {};
@@ -92,6 +93,7 @@ function setNow(hour: number, minute: number) {
   jest.setSystemTime(new Date(2026, 6, 30, hour, minute, 0));
 }
 
+let mockConcerns = { unread: 0, open: 0, resolvedThisMonth: 0 };
 function mockDay(day: TeacherDay | Error, notesGet?: unknown) {
   (api.request as jest.Mock).mockImplementation((path: string, opts?: { method?: string; body?: unknown }) => {
     if (path.startsWith('/manage/timetable/my-day')) {
@@ -103,6 +105,9 @@ function mockDay(day: TeacherDay | Error, notesGet?: unknown) {
     if (path === '/me/notifications/unread-count') {
       // The header NotificationBell fetches this on focus; keep it quiet.
       return Promise.resolve({ count: 0 });
+    }
+    if (path === '/teacher/concerns/counts') {
+      return Promise.resolve(mockConcerns);
     }
     if (path === '/manage/messages/unread-count') {
       // The "Needs you today" Messages dome badge (pitch №3); keep it quiet.
@@ -116,6 +121,10 @@ beforeEach(async () => {
   jest.useFakeTimers();
   mockPush.mockReset();
   (api.request as jest.Mock).mockReset();
+  // Home's queries (concerns, syllabus) share a cache; one test's unanswered
+  // request must not hold the next test's first frame.
+  clearCache();
+  mockConcerns = { unread: 0, open: 0, resolvedThisMonth: 0 };
   mockFocusEffects.length = 0;
   await session.set({
     accessToken: 'at',
@@ -541,5 +550,48 @@ describe('one first frame (user, 18 Oct 2026: "something is rendering fast and s
     expect(screen.queryByTestId('hero-act-register')).toBeNull();
     await act(async () => jest.advanceTimersByTime(1200));
     expect(screen.getByTestId('hero-act-register')).toBeTruthy();
+  });
+});
+
+describe('Do now — direct actions on Home (user, 19 Oct 2026)', () => {
+  const secondClass = classEntry({
+    periodId: 'p-2',
+    startTime: '09:05',
+    endTime: '09:50',
+    slot: { classSectionId: 'sec-7b', className: '7-B', subjectId: 'subj-sci', subjectName: 'Science', covering: false, coveringFor: null },
+  });
+
+  it('offers the register a teacher missed earlier, in one tap — but not the one the sheet already takes', async () => {
+    setNow(9, 20); // 8-A (08:00–08:45) is over and open; 7-B is live and open.
+    mockDay({ date: '2026-07-30', dayOfWeek: 4, entries: [classEntry(), breakEntry, secondClass] });
+    render(<Today />);
+
+    const row = await screen.findByTestId('donow-register-sec-8a-p-1');
+    expect(within(row).getByText('Take 8-A register')).toBeTruthy();
+    expect(within(row).getByText('Mathematics · 08:00–08:45 · over')).toBeTruthy();
+    // 7-B is the live class: its Take button is on the sheet, so it is not listed twice.
+    expect(screen.queryByTestId('donow-register-sec-7b-p-2')).toBeNull();
+    fireEvent.press(row);
+    expect(mockPush).toHaveBeenCalledWith('/(staff)/take/sec-8a?name=8-A');
+  });
+
+  it('never lists a class that has not started yet', async () => {
+    setNow(7, 30);
+    mockDay({ date: '2026-07-30', dayOfWeek: 4, entries: [classEntry(), breakEntry, secondClass] });
+    render(<Today />);
+    await screen.findByText('Nothing on right now');
+    expect(screen.queryByTestId('donow')).toBeNull();
+  });
+
+  it('puts new family concerns on Home with an Open, and badges the Complaint Box tile', async () => {
+    setNow(7, 30);
+    mockConcerns = { unread: 2, open: 3, resolvedThisMonth: 0 };
+    mockDay({ date: '2026-07-30', dayOfWeek: 4, entries: [classEntry()] });
+    render(<Today />);
+    const row = await screen.findByTestId('donow-concerns');
+    expect(within(row).getByText('2 new concerns from families')).toBeTruthy();
+    expect(screen.getByTestId('hometool-badge-Complaint Box')).toBeTruthy();
+    fireEvent.press(row);
+    expect(mockPush).toHaveBeenCalledWith('/(staff)/(tabs)/home/concerns');
   });
 });

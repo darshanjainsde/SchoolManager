@@ -290,3 +290,8 @@ export function bandRings(c: ColorPalette, scheme: ColorScheme): readonly [strin
   }
   return [picked[0], picked[1], picked[2]] as const;
 }
+
+/** The deeper end of a ring's sheen (components/BandRings): its colour pulled 18 % toward black. */
+export function ringSheen(colour: string): string {
+  return mix(colour, '#000000', 0.18);
+}

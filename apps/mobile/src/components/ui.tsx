@@ -491,7 +491,8 @@ export function PageHeader({
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingTop: 12,
-        paddingHorizontal: 16,
+        // 19 + the Page's 1 dp border = every card's 20 dp content line.
+        paddingHorizontal: 19,
         paddingBottom: 6,
         minHeight: 44,
       }}
@@ -612,7 +613,7 @@ export function RailRow({
         // Inset from the card edge so the time column lines up under the
         // page title and the right status ends where the title row does
         // (audit 18 Oct 2026: the times touched the card border).
-        paddingLeft: 8,
+        paddingLeft: 10,
         borderTopWidth: first ? 0 : 1,
         borderTopColor: tokens.color.line,
         ...style,
@@ -675,14 +676,14 @@ export function RailRow({
         ) : null}
       </View>
 
-      {right != null && <View style={{ paddingRight: 16 }}>{right}</View>}
+      {right != null && <View style={{ paddingRight: 19 }}>{right}</View>}
 
       {inkPercent != null && (
         <Animated.View
           testID="rail-live-ink"
           style={{
             position: 'absolute',
-            left: 61.5,
+            left: 63.5,
             bottom: -1,
             height: 2,
             borderRadius: 2,

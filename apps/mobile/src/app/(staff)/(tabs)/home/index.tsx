@@ -21,6 +21,7 @@ import { hasFeature } from '@/lib/features';
 import { useSession } from '@/lib/use-session';
 import { useFirstPaint } from '@/lib/use-first-paint';
 import type { BandMetric } from '@/components/BandRings';
+import { DoNow, type DoNowItem } from '@/components/DoNow';
 
 export default function Today() {
   const tokens = useTokens();
@@ -155,7 +156,11 @@ export default function Today() {
   // How far each of my classes is through its syllabus — only where the owner switched the tracker on.
   const syllabusOn = hasFeature(s, 'COURSE_MANAGEMENT');
   const mine = useQuery<{ tracks: Array<{ leaves: number; done: number }> }>(syllabusOn ? '/manage/syllabus/mine' : null);
-  const painted = useFirstPaint(day !== null || error !== null, [!unreadSettled, countsPending, mine.loading]);
+  // New concerns from the class teacher's families — best-effort like every
+  // badge: a teacher who is not a class teacher simply gets nothing.
+  const concerns = useQuery<{ unread: number }>('/teacher/concerns/counts');
+  const newConcerns = concerns.data?.unread ?? 0;
+  const painted = useFirstPaint(day !== null || error !== null, [!unreadSettled, countsPending, mine.loading, concerns.loading]);
 
   // THE REPORT CARD ON THE BAND (user, 18 Oct 2026): three of the day's
   // figures as rings. Registers taken; children present across the registers
@@ -228,6 +233,54 @@ export default function Today() {
     router.push(`/(staff)/(tabs)/home/class/${classSectionId}?${params.toString()}`);
   }
 
+  // DO NOW (user, 19 Oct 2026: "more direct actions in homepage itself"):
+  // what is waiting on the teacher today, each finished in one tap. The class
+  // the sheet's own button already takes is not repeated here.
+  const sheetClassId =
+    entry?.kind === 'CLASS' && !entry.register?.taken
+      ? entry.slot?.classSectionId
+      : !entry && !nextEntry
+        ? needsInk[0]?.slot?.classSectionId
+        : undefined;
+  const lastTaught = [...classes].reverse().find((e) => e.slot && minutesOfDay(e.endTime) <= now);
+  const doNow: DoNowItem[] = [
+    ...needsInk
+      .filter((e) => e.slot && e.slot.classSectionId !== sheetClassId && minutesOfDay(e.startTime) <= now)
+      .map((e) => ({
+        key: `register-${e.slot!.classSectionId}-${e.periodId}`,
+        icon: 'take',
+        tone: 'amber' as const,
+        title: `Take ${e.slot!.className} register`,
+        line: `${e.slot!.subjectName} · ${e.startTime}–${e.endTime}${minutesOfDay(e.endTime) <= now ? ' · over' : ''}`,
+        verb: 'Take',
+        onPress: () => goToAttendance(e.slot!.classSectionId),
+      })),
+    ...(newConcerns > 0
+      ? [{
+          key: 'concerns', icon: 'concern', tone: 'amber' as const,
+          title: `${newConcerns} new ${newConcerns === 1 ? 'concern' : 'concerns'} from families`,
+          line: 'Complaint Box', verb: 'Open',
+          onPress: () => router.push('/(staff)/(tabs)/home/concerns'),
+        }]
+      : []),
+    ...(unreadMsgs > 0
+      ? [{
+          key: 'messages', icon: 'messages',
+          title: `${unreadMsgs} unread ${unreadMsgs === 1 ? 'message' : 'messages'}`,
+          line: 'Families and staff', verb: 'Reply',
+          onPress: () => router.push('/(staff)/(tabs)/home/messages'),
+        }]
+      : []),
+    ...(syllabusOn && lastTaught?.slot
+      ? [{
+          key: 'syllabus', icon: 'syllabus',
+          title: `Mark where ${lastTaught.slot.className} reached`,
+          line: `${lastTaught.slot.subjectName} · taught today`, verb: 'Update',
+          onPress: () => router.push(`/(staff)/(tabs)/home/syllabus/${encodeURIComponent(lastTaught.slot!.classSectionId)}?subjectId=${encodeURIComponent(lastTaught.slot!.subjectId)}`),
+        }]
+      : []),
+  ];
+
   return (
     <Screen band="rings" onRefresh={refresh} refreshing={refreshing}>
       {/* Direction C: the greeting sits on the band; the sheet (NowCard) overlaps it. */}
@@ -291,6 +344,8 @@ export default function Today() {
             />
           )}
 
+          <DoNow items={doNow} />
+
           {/* THE MENU — one card instead of "Needs you today" + "Go to" (user,
               9 Oct 2026: "make that menu together"). Register, Homework,
               Notice and Test are the hero's quick actions (the register count
@@ -320,7 +375,7 @@ export default function Today() {
                   { label: 'Notice', icon: 'notices', testID: 'hero-act-notice', route: '/(staff)/(tabs)/home/post' },
                   // Concerns the class teacher's families raised. Free, so always
                   // drawn — it was on no screen before 2026-10-07 (nav-reachability).
-                  { label: 'Complaint Box', icon: 'concern', tone: 'amber' as const, route: '/(staff)/(tabs)/home/concerns' },
+                  { label: 'Complaint Box', icon: 'concern', tone: 'amber' as const, route: '/(staff)/(tabs)/home/concerns', badge: newConcerns },
                 ],
               },
               {

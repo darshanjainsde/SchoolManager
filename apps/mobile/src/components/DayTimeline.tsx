@@ -144,7 +144,7 @@ export function DayTimeline({ entries, currentIndex, onTakeAttendance }: DayTime
               textTransform: 'uppercase',
               color: tokens.color.sub,
               paddingTop: 4,
-              paddingHorizontal: 16,
+              paddingHorizontal: 19,
               paddingBottom: 2,
             }}
           >

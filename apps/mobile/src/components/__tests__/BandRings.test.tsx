@@ -1,5 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 import { BandRings } from '../BandRings';
+import { bandRings } from '@/theme/families';
+import { palette } from '@/theme/tokens';
 
 describe('the rings on the band', () => {
   it('draws at most three, each with its figure and label, read out as one phrase', () => {
@@ -30,5 +33,20 @@ describe('the rings on the band', () => {
     render(<BandRings metrics={[{ value: 'x', pct: Number.NaN, label: 'a' }, { value: 'y', pct: 250, label: 'b' }, { value: 'z', pct: -5, label: 'c' }]} />);
     expect(screen.getByText('x')).toBeTruthy();
     expect(screen.getByText('y')).toBeTruthy();
+  });
+
+  it('writes each figure beside the rings in its own ring colour, so no key is needed', () => {
+    render(
+      <BandRings
+        metrics={[
+          { value: '3/4', pct: 75, label: 'registers taken' },
+          { value: '92%', pct: 92, label: 'present today' },
+          { value: '33%', pct: 33, label: 'syllabus covered' },
+        ]}
+      />,
+    );
+    const ring = bandRings(palette.light, 'light');
+    expect(StyleSheet.flatten(screen.getByText('3/4').props.style).color).toBe(ring[0]);
+    expect(StyleSheet.flatten(screen.getByText('33%').props.style).color).toBe(ring[2]);
   });
 });
