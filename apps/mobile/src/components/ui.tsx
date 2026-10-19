@@ -147,10 +147,12 @@ export function ListScreen<T>({
 function useBandStatusBar() {
   // Light status icons on an ink band, dark ones on a lit band.
   const style = bandIsInk(useTokens().color) ? 'light' : 'dark';
+  // Back to the APP's scheme on leaving, never 'auto' (which follows the phone).
+  const after = useTheme().scheme === 'dark' ? 'light' : 'dark';
   const cb = useCallback(() => {
     try { setStatusBarStyle(style); } catch { /* not on a device */ }
-    return () => { try { setStatusBarStyle('auto'); } catch { /* not on a device */ } };
-  }, [style]);
+    return () => { try { setStatusBarStyle(after); } catch { /* not on a device */ } };
+  }, [style, after]);
   try {
     // Throws (before registering any hook) when there is no navigator —
     // component tests render Screen bare — so the bar simply keeps its style.

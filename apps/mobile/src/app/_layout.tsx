@@ -4,7 +4,7 @@ import { ScrollView, Text, View, Pressable } from 'react-native';
 import type { ErrorBoundaryProps } from 'expo-router';
 import Constants from 'expo-constants';
 import * as Sentry from '@sentry/react-native';
-import { ThemeProvider } from '@/theme/theme-context';
+import { ThemeProvider, useTheme } from '@/theme/theme-context';
 import { ConfirmHost } from '@/components/ConfirmSheet';
 import { emergency } from '@/theme/tokens';
 
@@ -61,6 +61,16 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   );
 }
 
+/**
+ * Status-bar icons follow the APP's light/dark choice, not the phone's: with
+ * the app on Light and the phone on Dark, "auto" drew white icons on a light
+ * page (19 Oct 2026). Band screens override this while focused (components/ui.tsx).
+ */
+function ThemedStatusBar() {
+  const { scheme } = useTheme();
+  return <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />;
+}
+
 function RootLayout() {
   // No font to load: every glyph in the app is a drawn SVG path
   // (components/icons.tsx). The Ionicons font this once waited on was the
@@ -70,7 +80,7 @@ function RootLayout() {
     <ThemeProvider>
       {/* Light icons on a light ground made the clock invisible on many
           Android skins; "auto" follows the app's own scheme (UI audit #8). */}
-      <StatusBar style="auto" />
+      <ThemedStatusBar />
       {/* The pitch moves between screens the way a diary turns a page: the
           incoming screen slides in from the right as the outgoing one leaves
           (`.scr` → `translateX(26px)` + fade). expo-router's native stack
