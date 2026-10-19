@@ -60,6 +60,13 @@ describe('message report and block: doors, reports, blocking', () => {
     const u2 = await p.user.create({ data: { schoolId: sid, email: `other-student@${school.host}`, role: 'STUDENT', passwordHash: 'x' } });
     otherStudentUserId = u2.id;
     await p.student.create({ data: { schoolId: sid, admissionNo: 'M-2', firstName: 'Diya', lastName: 'Rao', classSectionId: section.id, userId: u2.id } });
+    // A family may only write to a teacher who teaches their class on the
+    // timetable (NOT_YOUR_TEACHER otherwise), so give Rekha an English period
+    // with V-C on every weekday — the send path then reaches the block check.
+    const period = await p.period.create({ data: { schoolId: sid, order: 1, label: 'P1', startTime: '08:00', endTime: '08:40' } });
+    for (const dayOfWeek of [1, 2, 3, 4, 5, 6]) {
+      await p.timetableSlot.create({ data: { schoolId: sid, classSectionId: section.id, subjectId: subject.id, teacherId: t1.id, periodId: period.id, dayOfWeek, academicYearId: year.id, effectiveFrom: new Date('2026-04-01') } });
+    }
     const thread = await p.messageThread.create({ data: { schoolId: sid, studentId: s1.id, teacherId: t1.id, subjectId: subject.id, classSectionId: section.id } });
     threadId = thread.id;
     messageId = (await p.message.create({ data: { schoolId: sid, threadId, senderRole: 'STUDENT', body: 'Hello ma’am' } })).id;
