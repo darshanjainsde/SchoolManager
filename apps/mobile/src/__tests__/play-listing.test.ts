@@ -73,6 +73,8 @@ describe('the description claims only what the app does', () => {
     [/Post notices/, '(staff)/(tabs)/home/post.tsx'],
     [/messages from parents/, '(staff)/(tabs)/home/messages.tsx'],
     [/Apply for leave/, '(staff)/(tabs)/home/requests.tsx'],
+    [/Report or block/, '(family)/(tabs)/home/messages/[threadId].tsx'],
+    [/Delete your account/, '(family)/(tabs)/profile/index.tsx'],
   ];
   const full = read('full-description.txt');
 

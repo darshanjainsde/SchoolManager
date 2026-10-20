@@ -174,7 +174,8 @@ export default function SyllabusTrackScreen() {
       {open && open.kind === 'leaf' && track && (
         <MarkSheet
           leaf={open.leaf}
-          base={base}
+          classSectionId={classSectionId ?? ''}
+          subjectId={subjectId ?? ''}
           onClose={() => setOpen(null)}
           onSaved={(t, msg) => { setTrack(t); setOpen(null); setToast(msg); }}
         />
@@ -191,7 +192,10 @@ export default function SyllabusTrackScreen() {
   );
 }
 
-function MarkSheet({ leaf, base, onClose, onSaved }: { leaf: SyllabusLeaf; base: string; onClose: () => void; onSaved: (t: SyllabusTrack, msg: string) => void }) {
+function MarkSheet({ leaf, classSectionId, subjectId, onClose, onSaved }: { leaf: SyllabusLeaf; classSectionId: string; subjectId: string; onClose: () => void; onSaved: (t: SyllabusTrack, msg: string) => void }) {
+  // Spelled out in full so the route-contract check can match each call to its server route.
+  const cs = encodeURIComponent(classSectionId);
+  const subj = encodeURIComponent(subjectId);
   const tokens = useTokens();
   const [status, setStatus] = useState<SyllabusStatus>(leaf.status);
   const [note, setNote] = useState(leaf.note ?? '');
@@ -206,7 +210,7 @@ function MarkSheet({ leaf, base, onClose, onSaved }: { leaf: SyllabusLeaf; base:
       const body: { status?: SyllabusStatus; note?: string } = {};
       if (status !== leaf.status) body.status = status;
       if (note.trim() !== (leaf.note ?? '')) body.note = note.trim();
-      const t = await api.request<SyllabusTrack>(`${base}/progress/${encodeURIComponent(leaf.id)}`, { method: 'PUT', body });
+      const t = await api.request<SyllabusTrack>(`/manage/syllabus/tracks/${cs}/${subj}/progress/${encodeURIComponent(leaf.id)}`, { method: 'PUT', body });
       onSaved(t, body.status ? `${leaf.title}: ${STATUS_LABEL[body.status]}` : 'Note saved.');
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : 'Could not save.');
@@ -218,7 +222,7 @@ function MarkSheet({ leaf, base, onClose, onSaved }: { leaf: SyllabusLeaf; base:
     setBusy(true);
     setErr(null);
     try {
-      const t = await api.request<SyllabusTrack>(`${base}/reach/${encodeURIComponent(leaf.id)}`, { method: 'POST', body: {} });
+      const t = await api.request<SyllabusTrack>(`/manage/syllabus/tracks/${cs}/${subj}/reach/${encodeURIComponent(leaf.id)}`, { method: 'POST', body: {} });
       onSaved(t, 'Everything before it is done.');
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : 'Could not save.');

@@ -10,5 +10,7 @@ export { istTodayISO, startOfIstDay, resolveAsOfDate, liveSlotWhere } from './in
 // The leave desk and its date helpers, consumed by the WhatsApp module so an
 // Approve tapped in a chat runs the very same code path as the console.
 export { LeaveService } from './leave.service';
-export { isoWeekdayOf, toDateStr } from './internal/leave-dates';
+export { isoWeekdayOf, toDateStr, todayIstDateStr } from './internal/leave-dates';
+// Working days of a school's year, consumed by the syllabus tracker's "expected by today".
+export { workingDates } from './internal/school-calendar';
 export { isLeaveDesk } from './internal/leave-desk.guard';

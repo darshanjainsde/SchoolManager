@@ -1,16 +1,17 @@
+import { fmtLongDay } from '@/lib/dates';
 import { useEffect, useMemo, useState } from 'react';
-import { Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { api, ApiError } from '@/lib/api';
 import { useQuery } from '@/lib/query';
 import { useSession } from '@/lib/use-session';
 import { borrowerLine, dueWord, rupees, type Dashboard, type IssueCard, type MemberHit } from '@/lib/library-desk';
-import { Empty, ErrorState, Figure, Page, PageHeader, Pill, Screen, SectionTitle } from '@/components/ui';
+import { Empty, ErrorState, Page, PageHeader, Pill, Screen } from '@/components/ui';
 import { Row, SearchBox } from '@/components/desk';
 import { LoadingRows } from '@/components/Loading';
 import { RoleHero } from '@/components/HeroDeck';
+import { BandGreeting } from '@/components/BandHeader';
+import { HomeMenu } from '@/components/HomeToolGrid';
 import { NotificationBell } from '@/components/NotificationBell';
-import { useTokens } from '@/theme/theme-context';
 // The due date leads: it is the fact the row is sorted by, and the end of a
 // long line is what a narrow phone cuts ("due Jul 21, 2…", re-audit 2026-10-08).
 import { fmtDay } from '@/lib/dates';
@@ -24,7 +25,6 @@ import { fmtDay } from '@/lib/dates';
  * declare yet, so the accession number is typed for now.
  */
 export default function Counter() {
-  const tokens = useTokens();
   const session = useSession();
   const dash = useQuery<Dashboard>('/library/dashboard');
   const [q, setQ] = useState('');
@@ -47,9 +47,8 @@ export default function Counter() {
   const today = dash.data?.today ?? new Date().toISOString().slice(0, 10);
 
   return (
-    <Screen onRefresh={dash.refresh} refreshing={dash.refreshing}>
-      <SectionTitle title={session?.displayName ? `Hi, ${session.displayName.split(' ')[0]}` : 'Counter'} right={<NotificationBell group="(worker)" />} />
-      <Text style={{ marginHorizontal: 4, marginTop: -6, fontSize: 11.5, color: tokens.color.sub }}>Library counter</Text>
+    <Screen band onRefresh={dash.refresh} refreshing={dash.refreshing}>
+      <BandGreeting eyebrow={fmtLongDay(new Date())} line="Library counter" title={session?.displayName ?? 'Counter'} right={<NotificationBell group="(worker)" onBand />} />
 
       <SearchBox testID="counter-search" value={q} onChangeText={setQ} placeholder="Child's name or code, or a teacher" />
       {searchErr && <ErrorState error={searchErr} onRetry={() => setQ(`${q} `.trimEnd())} />}
@@ -75,15 +74,19 @@ export default function Counter() {
                 title={`${dash.data.counts.outNow} ${dash.data.counts.outNow === 1 ? 'book' : 'books'} out`}
                 line={dash.data.counts.dueSoon ? `${dash.data.counts.dueSoon} due back this week` : 'Nothing due back this week'}
                 figures={[
-                  { testID: 'counter-out', value: String(dash.data.counts.outNow), label: 'out now' },
-                  { testID: 'counter-due', value: String(dash.data.counts.dueSoon), label: 'due this week' },
-                  { testID: 'counter-fines', value: rupees(dash.data.counts.finesDueRupees), label: 'fines due', onPress: () => router.push('/(worker)/(tabs)/fines') },
+                  { testID: 'counter-out', value: String(dash.data.counts.outNow), label: 'out now', family: 'learn' },
+                  { testID: 'counter-due', value: String(dash.data.counts.dueSoon), label: 'due this week', tone: dash.data.counts.dueSoon ? 'warn' : 'good' },
+                  { testID: 'counter-fines', value: rupees(dash.data.counts.finesDueRupees), label: 'fines due', family: 'money', onPress: () => router.push('/(worker)/(tabs)/fines') },
                 ]}
-                actions={[
-                  { label: 'Books', icon: 'library', testID: 'hero-act-books', onPress: () => router.push('/(worker)/(tabs)/books') },
-                  { label: 'Hall', icon: 'take', testID: 'hero-act-hall', onPress: () => router.push('/(worker)/(tabs)/hall') },
-                  { label: 'Fines', icon: 'fees', testID: 'hero-act-fines', onPress: () => router.push('/(worker)/(tabs)/fines') },
-                  { label: 'My pay', icon: 'report', testID: 'hero-act-mypay', onPress: () => router.push('/(worker)/(tabs)/profile/salary') },
+              />
+
+              {/* The counter's doors, once, on the grid (direction C). */}
+              <HomeMenu
+                tools={[
+                  { label: 'Books', icon: 'library', testID: 'hero-act-books', route: '/(worker)/(tabs)/books' },
+                  { label: 'Hall', icon: 'take', testID: 'hero-act-hall', route: '/(worker)/(tabs)/hall' },
+                  { label: 'Fines', icon: 'fees', tone: 'amber' as const, testID: 'hero-act-fines', route: '/(worker)/(tabs)/fines' },
+                  { label: 'My pay', icon: 'report', tone: 'green' as const, testID: 'hero-act-mypay', route: '/(worker)/(tabs)/profile/salary' },
                 ]}
               />
               <Page testID="counter-soon">

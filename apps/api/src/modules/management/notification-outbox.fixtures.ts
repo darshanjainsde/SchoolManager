@@ -25,5 +25,6 @@ export const FIXTURES: Record<NotificationOutboxKind, unknown> = {
   LEAVE_CANCELLED: { schoolName: S, leaveId: ID, teacherName: 'Priya Nair', dates: 'Mon 13 – Tue 14 Oct', releasedCovers: 2 },
   COVER_CANCELLED: { schoolName: S, substitutionId: ID, when: 'Mon 13 Oct, P3', className: '9-A', why: 'CHANGED' },
   COVER_UNFILLED: { schoolName: S, gaps: 3, forDate: '2026-10-13', forWhen: 'tomorrow, Mon 13 Oct 2026', note: null },
+  MESSAGE_REPORTED: { schoolName: S, title: 'A message was reported', body: 'Asha Rao reported a conversation with Ravi Kumar (Maths): rude words', threadId: ID, reportId: ID },
   COVER_BATCH: { schoolName: S, leaveId: ID, substituteTeacherId: ID, count: 20, dates: 'Mon 13 – Thu 16 Oct 2026', originalTeacherName: 'Priya Nair' },
 };

@@ -1,3 +1,4 @@
+import { useTermsGate } from '@/components/AccountSafety';
 import { Tabs } from 'expo-router';
 import { StaffTabBar, type StaffTabBarProps } from '@/components/StaffTabBar';
 import { VISIBLE_TABS } from '@/lib/staff-nav';
@@ -12,6 +13,8 @@ import { VISIBLE_TABS } from '@/lib/staff-nav';
  * tabs (Today, Attendance, back → Today), which no stack is involved in.
  */
 export default function StaffTabsLayout() {
+  // Terms + what messages are for, once per person (Play UGC policy, 19 Oct 2026).
+  useTermsGate();
 
   return (
     <Tabs

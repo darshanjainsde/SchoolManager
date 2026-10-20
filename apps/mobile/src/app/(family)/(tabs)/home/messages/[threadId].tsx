@@ -12,6 +12,7 @@ import { BackChipHeader } from '@/components/BackChipHeader';
 import { LoadingRows } from '@/components/Loading';
 import { DUR, useGesture } from '@/theme/motion';
 import { Composer } from '@/components/Composer';
+import { ThreadSafety } from '@/components/ThreadSafety';
 import { Icon } from '@/components/icons';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
@@ -118,6 +119,9 @@ export default function StudentThread() {
   const { threadId } = useLocalSearchParams<{ threadId: string }>();
 
   const [detail, setDetail] = useState<MessageThreadDetail | null>(null);
+  // Report / block (Play UGC policy, 19 Oct 2026): the thread says who blocked it.
+  const flags = (detail?.thread ?? {}) as { blockedByMe?: boolean; blockedByOther?: boolean };
+  const blocked = !!flags.blockedByMe || !!flags.blockedByOther;
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const pinToEnd = usePinToEnd(scrollRef);
@@ -198,6 +202,16 @@ export default function StudentThread() {
             </Text>
           </View>
         )}
+        {detail && threadId && (
+          <ThreadSafety
+            report={(reason) => api.request(`/me/messages/${threadId}/report`, { method: 'POST', body: { reason } })}
+            block={(blocked) => api.request<{ blocked: boolean }>(`/me/messages/${threadId}/block`, { method: 'POST', body: { blocked } })}
+            blockedByMe={!!flags.blockedByMe}
+            blockedByOther={!!flags.blockedByOther}
+            otherName={detail.thread.teacherName}
+            onBlockedChange={(b) => setDetail((d) => (d ? { ...d, thread: { ...d.thread, blockedByMe: b } } : d))}
+          />
+        )}
 
         {error && detail === null && <ErrorState testID="thread-error" error={error} onRetry={() => void load()} />}
         {error && detail !== null && (
@@ -224,7 +238,7 @@ export default function StudentThread() {
         })}
       </ScrollView>
 
-      {detail && (
+      {detail && !blocked && (
         <Composer
           value={body}
           onChangeText={setBody}

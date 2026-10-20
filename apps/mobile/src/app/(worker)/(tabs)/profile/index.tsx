@@ -7,6 +7,7 @@ import { ProfileHead, SignOutRow } from '@/components/ProfileKit';
 import { ErrorState, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { ProfileMenu } from '@/components/ProfileMenu';
+import { PrivacyGroup } from '@/components/AccountSafety';
 import { signOut } from '@/lib/sign-out';
 import { jobFor } from '@/lib/worker-nav';
 import { useSession } from '@/lib/use-session';
@@ -130,6 +131,7 @@ export default function WorkerProfile() {
       {/* Sign out lives at the bottom of Profile because that is where every
           other app has taught people to look — and because before this it
           did not exist anywhere in this portal. */}
+      <PrivacyGroup />
       <SignOutRow testID="profile-signout" onPress={() => confirmSignOut(me ? { initials: initials(name || 'Staff'), name: name || 'Your school record', line: STAFF_ROLE_LABEL[me.staffRole ?? 'OTHER'] ?? 'Staff' } : undefined)} />
     </Screen>
   );

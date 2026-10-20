@@ -2,12 +2,15 @@ import { Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { ApiError } from '@/lib/api';
 import { useQuery } from '@/lib/query';
+import { useFirstPaint } from '@/lib/use-first-paint';
 import { shiftISO, todayISO } from '@/lib/attendance';
 import { fmtDay, fmtLongDay, fmtWeekdayDay } from '@/lib/dates';
 import { leaveTypeLabel } from '@/lib/labels';
 import { Button } from './Button';
 import { Icon } from './icons';
 import { RoleHero } from './HeroDeck';
+import { BandGreeting } from './BandHeader';
+import { HomeMenu } from './HomeToolGrid';
 import { NotificationBell } from './NotificationBell';
 import { LoadingRows } from './Loading';
 import { Card, Empty, Screen } from './ui';
@@ -30,7 +33,7 @@ function initials(name: string): string {
   return ((p[0]?.[0] ?? '') + (p[p.length - 1]?.[0] ?? '')).toUpperCase();
 }
 
-export function AccountsToday({ firstName }: { firstName: string }) {
+export function AccountsToday({ name }: { name: string }) {
   const tokens = useTokens();
   const c = tokens.color;
   const today = todayISO();
@@ -47,20 +50,24 @@ export function AccountsToday({ firstName }: { firstName: string }) {
     .filter((h) => h.startDate.slice(0, 10) >= today)
     .sort((a, b) => a.startDate.localeCompare(b.startDate))
     .slice(0, 2);
+  // ONE first frame: the waiting list is the page (the hero counts it); the
+  // cover gaps, holidays and pay state get a moment to land with it, so the
+  // hero never says "Nothing waiting" with zeros and then changes its mind.
+  const painted = useFirstPaint(pending.data !== null || pending.error !== null, [coverage.loading, holidays.loading, pay.loading]);
   const payLocked = pay.error instanceof ApiError && (pay.error.status === 403 || pay.error.status === 404);
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
   return (
-    <Screen onRefresh={() => { pending.refresh(); coverage.refresh(); holidays.refresh(); }} refreshing={pending.refreshing}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 13, color: c.sub, fontWeight: '500' }}>{fmtLongDay(new Date())} · Accounts</Text>
-          <Text testID="accounts-greeting" style={{ fontSize: 26, lineHeight: 32, fontWeight: '700', letterSpacing: -0.4, color: c.ink }}>{greeting}, {firstName}</Text>
-        </View>
-        <NotificationBell group="(worker)" />
-      </View>
+    <Screen band onRefresh={() => { pending.refresh(); coverage.refresh(); holidays.refresh(); }} refreshing={pending.refreshing}>
+      <BandGreeting
+        eyebrow={fmtLongDay(new Date())}
+        title={name}
+        line="Accounts office"
+        titleTestID="accounts-greeting"
+        right={<NotificationBell group="(worker)" onBand />}
+      />
 
+      {!painted ? <LoadingRows label="Opening the leave desk…" rows={4} /> : (
+      <>
       {/* THE HERO (9 Oct 2026): the desk's day in one card — what waits,
           what needs cover, and the four things this desk does from Home. */}
       <RoleHero
@@ -70,15 +77,20 @@ export function AccountsToday({ firstName }: { firstName: string }) {
         title={waiting.length === 0 ? 'Nothing waiting on you' : waiting.length === 1 ? '1 request waiting' : `${waiting.length} requests waiting`}
         line={gapsTomorrow.length ? `${gapsTomorrow.length} ${gapsTomorrow.length === 1 ? 'class' : 'classes'} tomorrow need a teacher` : 'Every class is covered tomorrow'}
         figures={[
-          { value: String(waiting.length), label: 'waiting', onPress: () => router.push('/(worker)/(tabs)/leavedesk') },
-          { value: String(gaps.length), label: 'need cover', onPress: () => router.push('/(worker)/(tabs)/leavedesk') },
-          { value: payLocked ? 'Locked' : 'Open', label: 'pay', onPress: () => router.push('/(worker)/(tabs)/paydesk') },
+          { value: String(waiting.length), label: 'waiting', family: 'care', onPress: () => router.push('/(worker)/(tabs)/leavedesk') },
+          { value: String(gaps.length), label: 'need cover', tone: gaps.length ? 'warn' : 'good', onPress: () => router.push('/(worker)/(tabs)/leavedesk') },
+          { value: payLocked ? 'Locked' : 'Open', label: 'pay', family: 'money', onPress: () => router.push('/(worker)/(tabs)/paydesk') },
         ]}
-        actions={[
-          { label: 'Decide', icon: 'requests', badge: waiting.length, testID: 'hero-act-decide', onPress: () => router.push('/(worker)/(tabs)/leavedesk') },
-          { label: 'Cover', icon: 'timetable', testID: 'hero-act-cover', onPress: () => router.push('/(worker)/(tabs)/leavedesk') },
-          { label: 'Pay', icon: 'fees', testID: 'hero-act-pay', onPress: () => router.push('/(worker)/(tabs)/paydesk') },
-          { label: 'My pay', icon: 'report', testID: 'hero-act-mypay', onPress: () => router.push('/(worker)/(tabs)/profile/salary') },
+        primary={waiting.length ? { label: waiting.length === 1 ? 'Decide the request' : `Decide the ${waiting.length} requests`, onPress: () => router.push('/(worker)/(tabs)/leavedesk'), testID: 'accounts-decide' } : undefined}
+      />
+
+      {/* The desk's doors, once, on the grid (direction C). */}
+      <HomeMenu
+        tools={[
+          { label: 'Decide', icon: 'requests', tone: 'amber' as const, badge: waiting.length, testID: 'hero-act-decide', route: '/(worker)/(tabs)/leavedesk' },
+          { label: 'Cover', icon: 'timetable', badge: gapsTomorrow.length, testID: 'hero-act-cover', route: '/(worker)/(tabs)/leavedesk' },
+          { label: 'Pay', icon: 'fees', testID: 'hero-act-pay', route: '/(worker)/(tabs)/paydesk' },
+          { label: 'My pay', icon: 'report', tone: 'green' as const, testID: 'hero-act-mypay', route: '/(worker)/(tabs)/profile/salary' },
         ]}
       />
 
@@ -180,6 +192,8 @@ export function AccountsToday({ firstName }: { firstName: string }) {
           })
         )}
       </Card>
+      </>
+      )}
     </Screen>
   );
 }

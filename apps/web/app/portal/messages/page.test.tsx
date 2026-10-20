@@ -32,6 +32,8 @@ function threadRow(overrides: Partial<MessageThreadRow> = {}): MessageThreadRow 
     lastMessageAt: '2026-07-30T09:00:00.000Z',
     lastMessagePreview: 'Next Monday.',
     unreadCount: 1,
+    blockedByMe: false,
+    blockedByOther: false,
     ...overrides,
   };
 }

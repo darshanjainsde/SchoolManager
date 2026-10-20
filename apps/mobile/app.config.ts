@@ -2,12 +2,18 @@ import type { ExpoConfig } from 'expo/config';
 
 // EAS project (owner: darshanjainsde's Expo account). Used for both EAS Build
 // and EAS Update (OTA). If you ever recreate the EAS project, update this id.
-const EAS_PROJECT_ID = 'da9fa7e3-f87c-4d45-91c0-1c546418a52c';
+// SCKOOLS_EAS_PROJECT_ID / SCKOOLS_EAS_OWNER point ONE build at a second
+// Expo project (the `internal-alt` profile in eas.json) when the main
+// account's free builds run out — test APKs only. Play builds never set
+// them, so they stay on this project and its upload keystore.
+// 'none' leaves the id out, so `eas init` can create the project on SCKOOLS_EAS_OWNER.
+const EAS_PROJECT_ID = process.env.SCKOOLS_EAS_PROJECT_ID === 'none' ? undefined : process.env.SCKOOLS_EAS_PROJECT_ID || 'da9fa7e3-f87c-4d45-91c0-1c546418a52c';
+const EAS_OWNER = process.env.SCKOOLS_EAS_OWNER || 'darshanjainsdes-team';
 
 const config: ExpoConfig = {
   name: 'Sckools',
   slug: 'sckools',
-  owner: 'darshanjainsdes-team',
+  owner: EAS_OWNER,
   scheme: 'sckools',
   // 0.2.0 = the UI v2 release (Oct 2026).
   version: '0.2.0',
@@ -73,6 +79,9 @@ const config: ExpoConfig = {
       'android.permission.USE_BIOMETRIC',
       'android.permission.USE_FINGERPRINT',
       'android.permission.READ_APP_BADGE',
+      // Advertising ID: no ads, and children use this app (Google Play
+      // Families policy) — Firebase/Play libraries merge it in otherwise.
+      'com.google.android.gms.permission.AD_ID',
       // Launcher badge counts on OEM launchers (ShortcutBadger via
       // expo-notifications). Fourteen vendor permissions for a number on an
       // icon we never set — off.
@@ -161,7 +170,7 @@ const config: ExpoConfig = {
     sentryDsn:
       process.env.EXPO_PUBLIC_SENTRY_DSN ??
       'https://f260d44287d94e54008d429edf1d64e7@o4511800880398336.ingest.de.sentry.io/4511800888787024',
-    eas: { projectId: EAS_PROJECT_ID },
+    eas: EAS_PROJECT_ID ? { projectId: EAS_PROJECT_ID } : {},
   },
 };
 

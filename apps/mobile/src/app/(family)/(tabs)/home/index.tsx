@@ -4,6 +4,8 @@ import { router } from 'expo-router';
 import type { PortalHome, TimetableSlot } from '@skoolos/types';
 import { useQuery } from '@/lib/query';
 import { useSession } from '@/lib/use-session';
+import { useFirstPaint } from '@/lib/use-first-paint';
+import { QuickActions } from '@/components/QuickActions';
 import { hasFeature } from '@/lib/features';
 import { MORE_ITEMS } from '@/lib/family-nav';
 import type { StudentFees } from '@/lib/fees';
@@ -12,13 +14,13 @@ import { todayISO } from '@/lib/attendance';
 import { minutesOfDay } from '@/lib/teacher-day';
 import { useNowMinutes } from '@/lib/use-now-minutes';
 import { relativeTime } from '@/lib/portal';
-import { Card, ErrorState, Figure, Page, PageHeader, RailRow, RailStatus, Screen, SectionTitle } from '@/components/ui';
+import { Card, ErrorState, Page, PageHeader, RailRow, RailStatus, Screen, SectionTitle } from '@/components/ui';
 import { LoadingRows } from '@/components/Loading';
 import { NotificationBell } from '@/components/NotificationBell';
 import { HomeMenu } from '@/components/HomeToolGrid';
 import { Touchable } from '@/components/Touchable';
 import { Icon, isIconName } from '@/components/icons';
-import { HeroDeck } from '@/components/HeroDeck';
+import { BandGreeting } from '@/components/BandHeader';
 import { StudentHero } from '@/components/StudentHero';
 import { useTokens } from '@/theme/theme-context';
 import { font } from '@/theme/tokens';
@@ -37,40 +39,6 @@ function fullTeacherName(t: { firstName: string; lastName: string }): string {
   return `${t.firstName} ${t.lastName}`.trim();
 }
 
-/**
- * `.dateline` — the date written at the top of a diary page, in the serif
- * italic a person writes a date in, with the amber TODAY tab so a reader can
- * tell at a glance that this page is the current one and not one they have
- * scrolled back to.
- */
-function Dateline() {
-  const tokens = useTokens();
-  const today = fmtLongDay(new Date());
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8, marginHorizontal: 2 }}>
-      <Text
-        style={{ fontFamily: font.serif, fontStyle: 'italic', fontSize: 12.5, color: tokens.color.sub }}
-      >
-        {today}
-      </Text>
-      <Text
-        style={{
-          fontSize: 9.5,
-          fontWeight: '800',
-          letterSpacing: 0.95,
-          color: tokens.color.indigo,
-          backgroundColor: tokens.color.indigo50,
-          borderRadius: 5,
-          paddingHorizontal: 7,
-          paddingVertical: 2,
-          overflow: 'hidden',
-        }}
-      >
-        TODAY
-      </Text>
-    </View>
-  );
-}
 
 /**
  * A card that ARRIVED — a scheduled test, a circular from the office. It
@@ -171,6 +139,10 @@ export default function Home() {
   const unreadMsgs = unread.data?.count ?? 0;
   const error = home.error && !home.data ? home.error : null;
   const refreshing = home.refreshing;
+  // ONE first frame: the child's page is the core; the badges (messages, late
+  // fees, the wall) get a moment to land with it, so no tile pops in after.
+  const painted = useFirstPaint(home.data !== null || error !== null, [unread.loading, fees.loading, wall.loading]);
+  const shown = painted ? profile : null;
 
   /** Pull to refresh. Nothing is cleared first — the old page stays until the new one lands. */
   function refresh() {
@@ -214,84 +186,41 @@ export default function Home() {
   // the current row. Only the live row gets one.
   const livePercent = total > 0 ? Math.min(100, Math.max(0, Math.round((elapsed / total) * 100))) : 0;
 
+  /** Doors from the shared list, in the order asked, each only where the school has its module. */
+  const more = (labels: string[]) =>
+    labels
+      .map((l) => MORE_ITEMS.find((t) => t.label === l))
+      .filter((t): t is (typeof MORE_ITEMS)[number] => !!t && (!t.feature || hasFeature(s, t.feature)))
+      .map((t) => ({ label: t.label, icon: t.icon, route: t.route }));
+
   function railState(s: TimetableSlot): 'past' | 'now' | 'upcoming' {
     if (currentSlot?.id === s.id) return 'now';
     return minutesOfDay(s.period.endTime) <= now ? 'past' : 'upcoming';
   }
 
   return (
-    <Screen onRefresh={refresh} refreshing={refreshing}>
-      {/* On the child's birthday the dateline becomes the banner — the only
-          thing on the page that changes, in the amber the day is allowed. */}
-      {myBirthday && profile ? <BirthdayBanner firstName={profile.firstName} /> : <Dateline />}
-
-      {/* `.greet` + `.kidchip` — the greeting in the diary serif, with the
-          bell and the student's initial pushed to the right margin. */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 2 }}>
-        {/* Same bold-serif treatment as the staff greeting: the name is set
-            like a title, not a form value. */}
-        <Text
-          style={{
-            fontFamily: font.serif,
-            fontSize: 20,
-            fontWeight: '700',
-            letterSpacing: -0.3,
-            color: tokens.color.ink,
-            flex: 1,
-          }}
-        >
-          {profile ? `Hi, ${profile.firstName}` : 'Home'}
-        </Text>
-        <NotificationBell group="(family)" />
-        {profile && (
-          <View
-            style={{
-              width: 30,
-              height: 30,
-              borderRadius: 15,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: tokens.color.indigo,
-            }}
-          >
-            <Text style={{ fontFamily: font.serif, fontSize: 13, fontWeight: '700', color: tokens.color.onBrand }}>
-              {profile.firstName.slice(0, 1)}
-            </Text>
-          </View>
-        )}
-      </View>
+    <Screen band onRefresh={refresh} refreshing={refreshing}>
+      {/* Direction C: the dateline and the greeting sit on the band; the
+          child's sheet overlaps it. On the birthday the banner keeps its place above. */}
+      {myBirthday && shown ? <BirthdayBanner firstName={shown.firstName} /> : null}
+      <BandGreeting
+        eyebrow={fmtLongDay(new Date())}
+        title={shown ? `${shown.firstName} ${shown.lastName ?? ''}`.trim() : 'Home'}
+        line={shown && profile ? `${profile.className ?? 'No class assigned'}${profile.rollNo ? ` · Roll ${profile.rollNo}` : ''}` : undefined}
+        right={<NotificationBell group="(family)" onBand />}
+      />
 
       {error && <ErrorState error={error} onRetry={home.reload} />}
-      {profile === null && !error && (
+      {shown === null && !error && (
         <LoadingRows label="Loading your details…" rows={3} />
       )}
 
-      {profile && (
+      {shown && profile && (
         <>
           {/* Class + roll are the student's OWN (not a parent-facing "your
               child" label) — one shared STUDENT login can't tell who's holding
               the phone, so this must read to either. */}
-          <Text style={{ marginHorizontal: 4, marginTop: 2, fontSize: 12, color: tokens.color.sub }}>
-            {profile.className ?? 'No class assigned'}
-            {profile.rollNo ? ` · Roll ${profile.rollNo}` : ''}
-          </Text>
-
           <StudentHero
-            deck={
-              <HeroDeck
-                actions={[
-                  // The asks ride here now, as badges: an unsigned diary
-                  // remark, an unread message, a late bill. Fees only for a
-                  // school that runs fees on Sckools (it was drawn for all).
-                  { label: 'Ask teacher', icon: 'messages', testID: 'hero-act-ask', badge: unreadMsgs, onPress: () => router.push('/(family)/(tabs)/home/messages') },
-                  { label: 'Diary', icon: 'diary', testID: 'hero-act-diary', badge: diary?.unsignedCount ?? 0, onPress: () => router.push('/(family)/(tabs)/home/diary') },
-                  { label: 'Homework', icon: 'assignments', testID: 'hero-act-homework', onPress: () => router.push('/(family)/(tabs)/home/assignments') },
-                  hasFeature(s, 'FEES')
-                    ? { label: 'Fees', icon: 'fees', testID: 'hero-act-fees', badge: lateBills, onPress: () => router.push('/(family)/(tabs)/fees') }
-                    : { label: 'Results', icon: 'results', testID: 'hero-act-results', badge: nextExam ? 1 : 0, onPress: () => router.push('/(family)/results') },
-                ]}
-              />
-            }
             current={
               currentSlot
                 ? {
@@ -320,44 +249,53 @@ export default function Home() {
             monthPercent={attendanceMarked > 0 ? (attendance?.percent ?? null) : null}
           />
 
+          {/* QUICK ACTIONS (user, 19 Oct 2026): what a family does most, under the sheet. */}
+          <QuickActions
+            actions={[
+              { label: 'Ask teacher', icon: 'messages', testID: 'hero-act-ask', badge: unreadMsgs, onPress: () => router.push('/(family)/(tabs)/home/messages') },
+              { label: 'Homework', icon: 'assignments', testID: 'hero-act-homework', onPress: () => router.push('/(family)/(tabs)/home/assignments') },
+              { label: (diary?.unsignedCount ?? 0) > 0 ? 'Sign diary' : 'Read diary', icon: 'diary', testID: 'hero-act-diary', badge: diary?.unsignedCount ?? 0, onPress: () => router.push('/(family)/(tabs)/home/diary') },
+              hasFeature(s, 'FEES')
+                ? { label: 'Pay fees', icon: 'fees', tone: 'amber' as const, testID: 'hero-act-fees', badge: lateBills, onPress: () => router.push('/(family)/(tabs)/fees') }
+                : { label: 'Results', icon: 'results', testID: 'hero-act-results', badge: nextExam ? 1 : 0, onPress: () => router.push('/(family)/results') },
+            ]}
+          />
+
           {/* THE MENU — one card instead of "Needs you today" + "Go to" (user,
               9 Oct 2026: "make that menu together"). The asks moved into the
               hero's quick actions as badges; every other door is here, badged
               ones first. Hero doors are not repeated. */}
           <HomeMenu
-            tools={[
-              // Results is a hero action when the school has no fees module.
-              ...(hasFeature(s, 'FEES') ? [{ label: 'Results', icon: 'results', route: '/(family)/results', badge: nextExam ? 1 : 0 }] : []),
-              { label: 'Timetable', icon: 'timetable', route: '/(family)/(tabs)/home/timetable' },
-              { label: 'Notices', icon: 'notices', route: '/(family)/(tabs)/home/notices' },
-              { label: 'Holidays', icon: 'holidays', route: '/(family)/(tabs)/home/holidays' },
-              // A paid module's door is drawn only for a school that has it;
-              // the Complaint Box is free, so always (nav-reachability.test).
-              ...MORE_ITEMS.filter((t) => ['Syllabus', 'Sports', 'Library', 'Report cards', 'Birthdays', 'Complaint Box'].includes(t.label))
-                .filter((t) => !t.feature || hasFeature(s, t.feature))
-                .map((t) => ({ label: t.label, icon: t.icon, route: t.route })),
+            groups={[
+              {
+                title: 'Learning',
+                tools: [
+                  // The asks ride on the tiles as badges: an unsigned diary remark, an exam coming up.
+                  // Without Fees, Results is a quick action instead — never both.
+                  ...(hasFeature(s, 'FEES') ? [{ label: 'Results', icon: 'results', route: '/(family)/results', badge: nextExam ? 1 : 0 }] : []),
+                  { label: 'Timetable', icon: 'timetable', route: '/(family)/(tabs)/home/timetable' },
+                  ...more(['Syllabus', 'Report cards']),
+                ],
+              },
+              {
+                title: 'Talk to school',
+                tools: [
+                  { label: 'Notices', icon: 'notices', route: '/(family)/(tabs)/home/notices' },
+                  // Free, so always drawn (nav-reachability.test).
+                  ...more(['Complaint Box']),
+                ],
+              },
+              {
+                title: 'School life',
+                tools: [
+                  { label: 'Holidays', icon: 'holidays', tone: 'green' as const, route: '/(family)/(tabs)/home/holidays', date: String(new Date().getDate()) },
+                  // A paid module's door is drawn only for a school that has it.
+                  ...more(['Library', 'Sports', 'Birthdays']),
+                ],
+              },
             ]}
           />
 
-          {/* At-a-glance KPIs. Only two — "today" is already the hero's status
-              chip and "next test" is the notice above, so repeating them would
-              be noise. Both tiles deep-link to their full screen. */}
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Figure
-              label="This month"
-              value={attendanceMarked > 0 ? `${attendance?.percent}%` : 'No records'}
-              hint={attendanceMarked > 0 ? `${attendance?.present} of ${attendanceMarked} ${attendanceMarked === 1 ? 'day' : 'days'} present` : undefined}
-              tone={attendance && attendanceMarked > 0 && attendance.percent < 75 ? 'warn' : undefined}
-              onPress={() => router.push('/(family)/attendance')}
-            />
-            <Figure
-              label="Latest result"
-              value={latestResult ? `${latestResult.marks}/${latestResult.maxMarks}` : 'None yet'}
-              hint={latestResult ? `${latestResult.subjectName} · class avg ${latestResult.classAverage}` : undefined}
-              tone={latestResult ? (latestResult.marks < latestResult.classAverage ? 'bad' : 'good') : undefined}
-              onPress={() => router.push('/(family)/results')}
-            />
-          </View>
 
           {todaySlots.length > 0 && (
             <>
