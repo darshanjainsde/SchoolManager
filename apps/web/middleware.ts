@@ -112,7 +112,7 @@ const CACHEABLE_TENANT_EXACT = new Set([
 const CACHEABLE_TENANT_PREFIX = ['/blog', '/p/', '/overview/'];
 /** Marketing pages on the platform apex — the same reasoning, no tenant involved. */
 const CACHEABLE_PLATFORM = new Set([
-  '/pricing', '/privacy', '/terms', '/school-website-builder', '/blog',
+  '/pricing', '/privacy', '/terms', '/workplace', '/school-website-builder', '/blog',
 ]);
 
 function cacheableFor(pathname: string, host: string): boolean {
@@ -286,6 +286,7 @@ export const config = {
     '/pricing',
     '/privacy',
     '/terms',
+    '/workplace',
     '/school-website-builder',
     '/login',
     '/owner',
