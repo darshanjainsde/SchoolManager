@@ -48,9 +48,11 @@ const nextConfig = {
       // The staging copy of the marketing site must never be indexed: the
       // static pages carry index,follow (they are the production pages), so
       // the host-level header is what keeps test.sckools.com out of Google.
+      // Staging SCHOOL hosts (raffles.test.sckools.com) are duplicates of the
+      // production school sites and were indexable until this covered them.
       {
         source: '/:path*',
-        has: [{ type: 'host', value: 'test.sckools.com' }],
+        has: [{ type: 'host', value: '(.*\\.)?test\\.sckools\\.com' }],
         headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }],
       },
     ];
@@ -74,7 +76,13 @@ const nextConfig = {
    * Permanent, because the old paths are not coming back.
    */
   async redirects() {
+    const marketingHost = { type: 'host', value: '(test\\.)?sckools\\.com' };
     return [
+      // /about and /contact were 404s on sckools.com while every demo-site
+      // footer and every visitor expected them. Tenant hosts keep their own
+      // /contact page, hence the host guard.
+      { source: '/contact', destination: '/about#contact', permanent: false, has: [marketingHost] },
+      { source: '/connect', destination: '/', permanent: false, has: [marketingHost] },
       { source: '/app/salary', destination: '/app/pay', permanent: true },
       { source: '/app/salary/statutory', destination: '/app/pay/filings', permanent: true },
       { source: '/app/salary/:path*', destination: '/app/pay/:path*', permanent: true },

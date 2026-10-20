@@ -1,6 +1,11 @@
 import type { MetadataRoute } from 'next';
 import { fetchDirectory } from '@/lib/public-api';
 import { fetchGlobalBlog } from '@/lib/blog-api';
+import { fetchPublicSite } from '@/lib/public-api';
+import { getRequestHost } from '@/lib/request';
+import { isPlatformHost } from '@/lib/hosts';
+import { SAMPLE_SLUGS } from '@/lib/sample-schools';
+import { buildSchoolSitemap } from '@/lib/school-sitemap';
 
 /**
  * Marketing pages + every LIVE school's homepage. sckools.com is verified as
@@ -10,12 +15,17 @@ import { fetchGlobalBlog } from '@/lib/blog-api';
  * them from the homepage's own links.
  */
 /**
- * Demo/sample schools that must never be advertised to search engines.
- * Remove a slug here if that school ever becomes a real customer.
+ * On a school's own host this is THAT school's sitemap (its root and the
+ * pages its tier serves), never the marketing one: before this every tenant
+ * answered /sitemap.xml with sckools.com's pages and none of its own.
  */
-const SAMPLE_SLUGS = new Set(['acme', 'beacon', 'darshan', 'rishika', 'riverdale']);
-
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const host = await getRequestHost();
+  if (host && !isPlatformHost(host)) {
+    const site = await fetchPublicSite(host);
+    if (!site) return [];
+    return buildSchoolSitemap(`https://${host.split(':')[0]}`, { school: site.school, pages: (site as { pages?: { slug: string }[] }).pages ?? null });
+  }
   const globalBlog = await fetchGlobalBlog();
   const marketing: MetadataRoute.Sitemap = [
     { url: 'https://sckools.com/', changeFrequency: 'weekly', priority: 1 },
@@ -24,6 +34,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: 'https://sckools.com/start', changeFrequency: 'monthly', priority: 0.6 },
     { url: 'https://sckools.com/school-website-builder', changeFrequency: 'weekly', priority: 0.9 },
     { url: 'https://sckools.com/blog', changeFrequency: 'weekly', priority: 0.7 },
+    { url: 'https://sckools.com/about', changeFrequency: 'monthly', priority: 0.5 },
     ...(globalBlog?.posts ?? []).map((p) => ({
       url: `https://sckools.com/blog/${p.slug}`,
       changeFrequency: 'monthly' as const,

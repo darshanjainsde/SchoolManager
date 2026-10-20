@@ -87,6 +87,8 @@ export async function schoolMetadata(host: string): Promise<Metadata> {
   return {
     title,
     description,
+    // The school's own address is the canonical one, whichever route served it.
+    alternates: { canonical: `https://${host.split(':')[0]}/` },
     ...schoolIconMetadata(icon),
     openGraph: {
       title,

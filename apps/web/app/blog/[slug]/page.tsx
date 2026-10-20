@@ -6,6 +6,7 @@ import { fetchGlobalPost, fetchSchoolPost, type BlogPostFull } from '@/lib/blog-
 import { fetchPublicSite } from '@/lib/public-api';
 import SchoolChrome from '@/components/public/SchoolChrome';
 import PlatformBlogNav from '@/components/blog/PlatformBlogNav';
+import { BLOG_CTA, blogAudienceFor } from '@/components/blog/blog-cta';
 import BlogBlocks from '@/components/blog/BlogBlocks';
 import '@/components/blog/blog.css';
 import { optimised } from '@/lib/img';
@@ -90,7 +91,7 @@ function ArticleBody({ post }: { post: BlogPostFull }) {
           // filling it with the headline makes it an intentional banner instead.
           <header className="blog-hero-cover">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={optimised(post.heroImageUrl, 1600)} alt="" width={1600} height={800} />
+            <img src={optimised(post.heroImageUrl, 1600)} alt={post.title} width={1600} height={800} />
             <div className="blog-hero-cover-text">
               <span className="blog-meta">{meta}</span>
               <h1>{post.title}</h1>
@@ -117,6 +118,7 @@ export default async function BlogPostPage({ params }: Props) {
   if (isPlatformHost(host)) {
     const post = await fetchGlobalPost(slug);
     if (!post) notFound();
+    const cta = BLOG_CTA[blogAudienceFor(post.slug)];
 
     const image = absoluteUrl('https://sckools.com', post.heroImageUrl) ?? 'https://sckools.com/og.png';
     const jsonLd = {
@@ -146,8 +148,8 @@ export default async function BlogPostPage({ params }: Props) {
           <ArticleBody post={post} />
           <div className="wrap" style={{ maxWidth: 760 }}>
             <p className="blog-cta">
-              Want the whole checklist handled for you? See <a href="/school-website-builder">how Sckools builds school websites</a> or
-              jump straight to <a href="/pricing">plans &amp; pricing</a>.
+              {cta.lead} <a href={cta.links[0].href}>{cta.links[0].label}</a> or see{' '}
+              <a href={cta.links[1].href}>{cta.links[1].label}</a>.
             </p>
           </div>
         </div>

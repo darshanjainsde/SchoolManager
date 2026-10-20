@@ -6,6 +6,7 @@ import { isPlatformHost } from '@/lib/hosts';
 import { getRequestHost } from '@/lib/request';
 import { EMPLOYMENT_LABEL, fetchJobs, formatPay } from '@/lib/jobs-api';
 import PlatformBlogNav from '@/components/blog/PlatformBlogNav';
+import { isSampleSchool } from '@/lib/sample-schools';
 
 /**
  * On sckools.com this is the network's job board; on a school's own host it
@@ -39,11 +40,14 @@ export default async function JobsBoardPage({
   if (!isPlatformHost(host)) notFound();
 
   const filters = await searchParams;
-  const jobs = await fetchJobs({
-    employmentType: filters.type,
-    subject: filters.subject,
-    school: filters.school,
-  });
+  // Demo tenants post demo vacancies; the public board is for real schools.
+  const jobs = (
+    await fetchJobs({
+      employmentType: filters.type,
+      subject: filters.subject,
+      school: filters.school,
+    })
+  ).filter((j) => !isSampleSchool(j.school));
 
   return (
     <>

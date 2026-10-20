@@ -6,6 +6,7 @@ import MarketingSite from '@/components/marketing/MarketingSite';
 import { isPlatformHost } from '@/lib/hosts';
 import { getRequestHost } from '@/lib/request';
 import { schoolMetadata, getPublicSite } from '@/lib/school-metadata';
+import { schoolJsonLd } from '@/lib/school-jsonld';
 
 /** Real public profiles only — used for Organization.sameAs entity signals. */
 const SOCIAL_PROFILES: string[] = [
@@ -67,7 +68,12 @@ export default async function HomePage() {
   if (!isPlatformHost(host)) {
     const data = await getPublicSite(host);
     if (data) {
-      return <PublicSite data={data} />;
+      return (
+        <>
+          <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schoolJsonLd(host, data)) }} />
+          <PublicSite data={data} />
+        </>
+      );
     }
     // A school-style host that resolves to no live site (unknown/suspended/not
     // yet live) must 404 — never fall through to platform pages.
