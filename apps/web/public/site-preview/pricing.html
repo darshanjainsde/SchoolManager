@@ -26,7 +26,7 @@ html,body{margin:0;background:#fcfdff}
 .mkt .wrap{max-width:1140px;margin:0 auto;padding:0 24px}
 .mkt .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;margin-bottom:16px;color:var(--teal);background:var(--teal-soft);padding:6px 14px;border-radius:999px}
 .mkt .eyebrow.coral{color:#d14e1b;background:var(--coral-soft)} .mkt .eyebrow.violet{color:var(--violet);background:var(--violet-soft)} .mkt .eyebrow.gold{color:#b27200;background:var(--gold-soft)}
-.mkt h1,.mkt h2,.mkt h3,.mkt h4{font-weight:800;letter-spacing:-.025em;text-wrap:balance;line-height:1.1;margin:0}
+.mkt h1,.mkt h2,.mkt h3,.mkt h4,.mkt .h4{font-weight:800;letter-spacing:-.025em;text-wrap:balance;line-height:1.1;margin:0}
 .mkt p{margin:0}
 .mkt .h-xl{font-size:clamp(2.2rem,4.6vw,3.6rem)} .mkt .h-lg{font-size:clamp(1.6rem,3vw,2.3rem)} .mkt .h-md{font-size:1.3rem}
 .mkt .lede{color:var(--muted);font-size:clamp(.98rem,1.3vw,1.1rem);max-width:40rem}
@@ -103,7 +103,7 @@ html,body{margin:0;background:#fcfdff}
 .mkt .bhero{padding:18px 20px;background:linear-gradient(135deg,#e8fbf7,#f0edff)}
 .mkt .bld{opacity:0;transform:translateY(14px);transition:opacity .55s cubic-bezier(.16,.8,.26,1) var(--d,0s),transform .55s cubic-bezier(.16,.8,.26,1) var(--d,0s)} .mkt.built .bld{opacity:1;transform:none}
 .mkt .bhero .tag{font-size:10px;font-weight:800;letter-spacing:.14em;color:var(--teal)}
-.mkt .bhero h4{font-size:18px;margin:6px 0 4px;font-weight:800} .mkt .bhero p{font-size:12px;color:var(--muted)}
+.mkt .bhero h4,.mkt .bhero .h4{font-size:18px;margin:6px 0 4px;font-weight:800} .mkt .bhero p{font-size:12px;color:var(--muted)}
 .mkt .bhero .mini{margin-top:12px;display:inline-block;background:var(--ink);color:#fff;font-size:11px;font-weight:800;padding:7px 16px;border-radius:999px}
 .mkt .brow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;padding:12px 18px 16px}
 .mkt .bcell{border:1px solid var(--line);border-radius:12px;padding:10px;font-size:10.5px;color:var(--muted);font-weight:700} .mkt .bcell b{display:block;font-size:13px;color:var(--ink)}
@@ -135,7 +135,7 @@ html,body{margin:0;background:#fcfdff}
 .mkt .front .nw{position:absolute;top:12px;right:12px;font-size:9.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#7a4b00;background:var(--gold-soft);padding:3px 8px;border-radius:999px}
 .mkt .back{transform:rotateY(180deg);justify-content:center;color:#fff;box-shadow:var(--sh-lift);background:radial-gradient(ellipse 90% 70% at 85% -10%,rgba(20,184,166,.35),transparent 60%),radial-gradient(ellipse 70% 60% at 0% 110%,rgba(109,74,255,.3),transparent 60%),var(--ink)}
 .mkt .back .x{position:absolute;top:14px;right:16px;background:rgba(255,255,255,.14);border:none;color:#fff;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:13px}
-.mkt .back h4{font-size:1.1rem;margin-bottom:4px} .mkt .back .bform,.mkt .back .ok{width:100%} .mkt .back .bform p{font-size:13px;color:#aec2d6;margin-bottom:14px} .mkt .back .bform p b{color:#7ee8dc}
+.mkt .back h4,.mkt .back .h4{font-size:1.1rem;margin-bottom:4px} .mkt .back .bform,.mkt .back .ok{width:100%} .mkt .back .bform p{font-size:13px;color:#aec2d6;margin-bottom:14px} .mkt .back .bform p b{color:#7ee8dc}
 .mkt .back input{width:100%;padding:13px 15px;border-radius:12px;border:1.5px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);color:#fff;font-size:15px;font-family:inherit} .mkt .back input::placeholder{color:#7e96ad} .mkt .back input:focus{outline:none;border-color:var(--teal-hi);box-shadow:0 0 0 4px rgba(20,184,166,.25)}
 .mkt .back .send{width:100%;justify-content:center;margin-top:12px} .mkt .back .ok{text-align:center}
 .mkt .back .ok .tick{width:56px;height:56px;border-radius:50%;background:rgba(20,184,166,.22);display:grid;place-items:center;font-size:25px;color:#7ee8dc;margin:0 auto 12px;animation:mkPop .4s both} .mkt .back .ok p{font-size:12.5px;color:#aec2d6;margin-top:6px}
@@ -188,7 +188,7 @@ html,body{margin:0;background:#fcfdff}
 .mkt .tvm{background:#000;border-radius:14px;padding:10px;border:1px solid #1f2a3d}
 .mkt .tvm .scr{border-radius:8px;background:linear-gradient(160deg,#0e3f3a,#0a2a2a);padding:12px 14px;display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px;color:#e6f7f3;min-height:150px}
 .mkt .tvm .hd{grid-column:1/3;display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid rgba(255,255,255,.14);padding-bottom:8px} .mkt .tvm .hd b{font-size:16px} .mkt .tvm .hd span{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#9fd6cb}
-.mkt .tvm h5{margin:0 0 6px;font-size:11px;font-weight:800;color:#ffce73;letter-spacing:.04em} .mkt .tvm ul{margin:0;padding:0;list-style:none;display:grid;gap:4px} .mkt .tvm li{display:flex;gap:8px;align-items:baseline} .mkt .tvm li i{width:5px;height:5px;border-radius:50%;background:#ffce73;flex:none;transform:translateY(-2px)}
+.mkt .tvm h5,.mkt .tvm .h5{margin:0 0 6px;font-size:11px;font-weight:800;color:#ffce73;letter-spacing:.04em} .mkt .tvm ul{margin:0;padding:0;list-style:none;display:grid;gap:4px} .mkt .tvm li{display:flex;gap:8px;align-items:baseline} .mkt .tvm li i{width:5px;height:5px;border-radius:50%;background:#ffce73;flex:none;transform:translateY(-2px)}
 .mkt .tvm .stand{width:36%;height:8px;margin:6px auto 0;border-radius:0 0 6px 6px;background:#1a2433}
 
 /* ★ NEW — family app band */
@@ -274,7 +274,7 @@ html,body{margin:0;background:#fcfdff}
 .mkt .sat b{color:#ffce73}
 
 .mkt .ev-pts{grid-template-columns:repeat(3,1fr);margin-top:16px;gap:12px} 
-.mkt .ev-pt{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:12px 14px} .mkt .ev-pt h4{font-size:14px;margin-bottom:3px;color:#ffce73} .mkt .ev-pt p{font-size:12.5px;color:#c4e2da;line-height:1.45}
+.mkt .ev-pt{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:12px 14px} .mkt .ev-pt h4,.mkt .ev-pt .h4{font-size:14px;margin-bottom:3px;color:#ffce73} .mkt .ev-pt p{font-size:12.5px;color:#c4e2da;line-height:1.45}
 /* tiers */
 .mkt .ladder{grid-template-columns:repeat(3,1fr);align-items:end;gap:14px} 
 .mkt .tier{border-radius:var(--r);padding:18px 18px 16px;background:#fff;border:1px solid var(--line);box-shadow:var(--sh);position:relative;transition:transform .35s cubic-bezier(.2,.8,.3,1.1),box-shadow .35s} .mkt .tier:hover{transform:translateY(-10px);box-shadow:var(--sh-lift)}
@@ -335,7 +335,7 @@ html,body{margin:0;background:#fcfdff}
 .mkt .fhero{padding:clamp(48px,6vw,80px) 0 24px;position:relative;overflow:hidden;background:radial-gradient(ellipse 46% 40% at 82% 12%,rgba(109,74,255,.1),transparent 70%),radial-gradient(ellipse 50% 45% at 10% 85%,rgba(20,184,166,.12),transparent 70%),var(--paper)}
 .mkt .filters{display:flex;flex-wrap:wrap;gap:14px 26px;align-items:center;margin-top:26px;padding-top:22px;border-top:1px solid var(--line)}
 .mkt .fgroup{display:flex;align-items:center;gap:6px;flex-wrap:wrap} .mkt .fgroup>span{font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin-right:4px}
-.mkt .fgroup button{border:1.5px solid var(--line2);background:#fff;border-radius:999px;padding:7px 13px;font-size:13.5px;font-weight:800;color:var(--muted);cursor:pointer;transition:all .2s} .mkt .fgroup button:hover{border-color:var(--teal)} .mkt .fgroup button.on{border-color:var(--teal);color:var(--teal);background:var(--teal-soft)}
+.mkt .fgroup button{border:1.5px solid var(--line2);background:#fff;border-radius:999px;padding:7px 13px;font-size:13.5px;font-weight:800;color:var(--muted);cursor:pointer;transition:background-color .2s,border-color .2s,color .2s} .mkt .fgroup button:hover{border-color:var(--teal)} .mkt .fgroup button.on{border-color:var(--teal);color:var(--teal);background:var(--teal-soft)}
 .mkt .search{margin-left:auto;display:flex;align-items:center;gap:8px;border:1.5px solid var(--line2);border-radius:999px;padding:8px 14px;min-width:240px;background:#fff} .mkt .search input{border:0;background:none;font:inherit;font-size:14.5px;color:var(--ink);outline:none;width:100%} .mkt .search:focus-within{border-color:var(--teal);box-shadow:0 0 0 4px rgba(20,184,166,.15)}
 
 .mkt .count{font-size:13.5px;color:var(--muted);margin-top:16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;font-weight:600}
@@ -382,7 +382,7 @@ html,body{margin:0;background:#fcfdff}
 .mkt .fp .now{border-radius:18px;padding:11px 12px;color:#fff;background:linear-gradient(135deg,var(--ind),var(--deep));box-shadow:0 14px 22px -10px rgba(55,48,163,.45)}
 .mkt .fp .now .eb{display:flex;align-items:center;gap:6px;font-size:9.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;opacity:.94}
 .mkt .fp .now .eb i{width:7px;height:7px;border-radius:50%;background:#fff;box-shadow:0 0 6px #fff}
-.mkt .fp .now h5{margin:4px 0 0;font-size:17px;font-weight:800;letter-spacing:-.3px}
+.mkt .fp .now h5,.mkt .fp .now .h5{margin:4px 0 0;font-size:17px;font-weight:800;letter-spacing:-.3px}
 .mkt .fp .now .meta{font-size:11px;opacity:.93;margin-top:2px}
 .mkt .fp .now .bar{height:4px;border-radius:2px;background:rgba(255,255,255,.25);margin-top:8px;overflow:hidden}.mkt .fp .now .bar i{display:block;height:100%;width:62%;background:#fff;border-radius:2px}
 .mkt .fp .now .stc{display:inline-block;margin-top:8px;font-size:11px;font-weight:700;padding:4px 9px;border-radius:10px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.32)}
@@ -463,7 +463,7 @@ html,body{margin:0;background:#fcfdff}
 .mkt .jt button{min-height:48px;border:1.5px solid var(--line2);background:#fff;border-radius:12px;padding:10px 4px;text-align:center;font-size:13.5px;font-weight:800;color:var(--ink);transition:border-color .2s,background .2s,box-shadow .2s;line-height:1.2;white-space:nowrap}
 .mkt .jt button:hover{border-color:var(--teal-hi)} .mkt .jt button.on{border-color:var(--teal);background:var(--teal-soft);color:var(--teal);box-shadow:0 0 0 3px rgba(20,184,166,.12)}
 .mkt .jc{display:flex;flex-wrap:wrap;gap:8px}
-.mkt .jc button{min-height:42px;border:1.5px solid var(--line2);background:#fff;border-radius:999px;padding:0 15px;font-size:14px;font-weight:700;color:var(--ink);transition:all .2s}
+.mkt .jc button{min-height:42px;border:1.5px solid var(--line2);background:#fff;border-radius:999px;padding:0 15px;font-size:14px;font-weight:700;color:var(--ink);transition:background-color .2s,border-color .2s,color .2s}
 .mkt .jc button:hover{border-color:var(--violet)} .mkt .jc button.on{border-color:var(--violet);background:var(--violet-soft);color:var(--violet)}
 .mkt .jc button.clear{color:var(--muted);border-style:dashed}
 /* the promise — the headline of the page */
@@ -498,7 +498,7 @@ html,body{margin:0;background:#fcfdff}
 .mkt .jy-pv .bar{display:flex;gap:6px;align-items:center;padding:9px 12px;background:#f7fafc;border-bottom:1px solid var(--line)}.mkt .jy-pv .bar i{width:8px;height:8px;border-radius:50%;background:var(--line2)}.mkt .jy-pv .bar span{margin-left:8px;font-family:ui-monospace,Menlo,monospace;color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mkt .jy-pv .site{padding:12px}.mkt .jy-pv .nv{display:flex;align-items:center;gap:8px;margin-bottom:10px}.mkt .jy-pv .nv .crest{width:22px;height:22px;border-radius:6px;background:#1F6F5C;flex:none}.mkt .jy-pv .nv b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mkt .jy-pv .nv .lk{margin-left:auto;display:flex;gap:5px}.mkt .jy-pv .nv .lk i{width:22px;height:5px;border-radius:3px;background:var(--line)}
 .mkt .jy-pv .hero{border-radius:10px;min-height:92px;background:linear-gradient(135deg,#1F6F5C,#5cb8a0);color:#fff;padding:12px;display:flex;flex-direction:column;justify-content:flex-end}.mkt .jy-pv .hero b{font-size:15px;letter-spacing:-.02em}.mkt .jy-pv .hero span{font-size:10.5px;opacity:.92}
-.mkt .jy-pv .stack{display:flex;flex-wrap:wrap;gap:5px;padding:0 12px 12px}.mkt .jy-pv .stack i{font-style:normal;font-size:11px;font-weight:800;border-radius:999px;padding:4px 9px;background:var(--teal-soft);color:var(--teal);transition:all .3s}.mkt .jy-pv .stack i.off{background:var(--paper2);color:var(--dim);border:1px dashed var(--line2)}
+.mkt .jy-pv .stack{display:flex;flex-wrap:wrap;gap:5px;padding:0 12px 12px}.mkt .jy-pv .stack i{font-style:normal;font-size:11px;font-weight:800;border-radius:999px;padding:4px 9px;background:var(--teal-soft);color:var(--teal);transition:background-color .3s,color .3s,opacity .3s}.mkt .jy-pv .stack i.off{background:var(--paper2);color:var(--dim);border:1px dashed var(--line2)}
 .mkt .jy-pv .pvf{border-top:1px solid var(--line);padding:10px 12px;font-size:12px;font-weight:700;color:var(--muted);display:flex;justify-content:space-between}
 .mkt .jy-tips{margin-top:14px;display:grid;gap:8px}.mkt .jy-tips div{display:flex;gap:10px;align-items:center;font-size:13px;color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:9px 12px;background:#fff}.mkt .jy-tips span{font-size:16px}
 .mkt .jy-done{text-align:center;padding:30px 0 10px}.mkt .jy-done .tick{width:74px;height:74px;border-radius:50%;background:var(--teal-soft);color:var(--teal);display:grid;place-items:center;font-size:34px;margin:0 auto 18px;animation:mkPop .45s cubic-bezier(.2,.9,.3,1.2) both}
@@ -690,6 +690,37 @@ html,body{margin:0;background:#fcfdff}
 @media(max-width:640px){.mkt .sf{grid-template-columns:1fr}.mkt .swp-steps{grid-template-columns:1fr}.mkt .sto{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:10px;padding:4px 4px 14px;margin:0 -4px;scrollbar-width:none;-webkit-overflow-scrolling:touch}.mkt .sto::-webkit-scrollbar{display:none}.mkt .sto-card{flex:0 0 80%;scroll-snap-align:start}.mkt .swc-in label{grid-template-columns:minmax(0,1fr) 118px}}
 @media(prefers-reduced-motion:reduce){.mkt #sf-n.pop{animation:none}.mkt .sf-box::after,.mkt .sf-body i{transition:none}.mkt .sf-item.rv:not(.in){transform:none}}
 
+
+/* ── UI audit 20 Oct 2026: contrast (WCAG 4.5:1), tap targets (≥24px), the phone at a real screen ratio, phone-width overflow ── */
+.mkt{--dim:#5f7387}
+.mkt .eyebrow{color:#115e59}
+.mkt .eyebrow.violet{color:#5536d6}
+.mkt .eyebrow.gold{color:#7a4b00}
+.mkt .eyebrow.coral{color:#a63a0f}
+.mkt .more,.mkt .sf-link,.mkt .day-hint a,.mkt .day-hint b,.mkt .cb span{color:#0f766e}
+.mkt .vig .tm{color:#7a4b00}
+.mkt .rq .c .ok,.mkt .req.ok,.mkt .tier.std .tk{color:#115e59}
+.mkt .tier.pro .tk{color:#5536d6}
+.mkt .tier.basic .tk{color:#145f87}
+.mkt .more{padding:4px 0;margin:4px 0 -4px}
+.mkt .sf-link{padding:5px 0;margin:5px 0 -5px}
+.mkt .foot .fc a{padding:4px 0;margin:-4px 0 2px}
+.mkt input[type=range]{height:24px;margin-top:10px}
+.mkt p.h4{margin:1.33em 0;font-size:1em;font-weight:bold}
+.mkt p.h5{margin:1.67em 0;font-size:.83em;font-weight:bold}
+/* The family and teacher phones: the screen is 1080×2340 (19.5:9), so the frame keeps that ratio and the
+   home screen is cropped under the pinned tab bar, the way a real phone shows it. Before, the frame grew to
+   fit every block and came out at 2.44:1 — taller and narrower than any phone on sale. */
+.mkt .fp .scr{height:611px;min-height:0}
+.mkt .fp .body{flex:1 1 auto;min-height:0;overflow:hidden}
+@media(max-width:520px){
+  .mkt .hero .chip{display:none}
+  .mkt .browser{transform:none;min-width:0}
+  .mkt .stage{overflow:hidden}
+  .mkt .bbar,.mkt .bhero,.mkt .brow,.mkt .bcell{min-width:0}
+  .mkt .bbar .url{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .mkt .brow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+}
 </style>
 </head>
 <body>
@@ -717,8 +748,8 @@ html,body{margin:0;background:#fcfdff}
 <div class="mkt-modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="mtitle"><div class="mbox">
   <button class="mclose" data-close-modal aria-label="Close">✕</button>
   <h3 id="mtitle">Request a callback</h3><p class="sub" id="msub">A real person calls within one working day and shows you Sckools on your own school, live.</p>
-  <form id="mform"><label for="mf-school">School name</label><input id="mf-school" name="school" placeholder="e.g. Beacon Public School" required><label for="mf-phone">Phone</label><input id="mf-phone" name="phone" type="tel" inputmode="tel" placeholder="+91" required><button class="btn btn-hot" type="submit">Request a callback</button></form>
-  <div class="sent"><div class="tick">✓</div><b style="font-size:1.05rem">Callback requested</b><p class="sub" style="margin-top:6px">We'll call within one working day.</p></div>
+  <form id="mform"><label for="mf-school">School name</label><input id="mf-school" name="school" placeholder="e.g. Beacon Public School" autocomplete="organization" required><label for="mf-phone">Phone</label><input id="mf-phone" name="phone" type="tel" inputmode="tel" placeholder="+91" autocomplete="tel" required><button class="btn btn-hot" type="submit">Request a callback</button></form>
+  <div class="sent" role="status" aria-live="polite"><div class="tick">✓</div><b style="font-size:1.05rem">Callback requested</b><p class="sub" style="margin-top:6px">We'll call within one working day.</p></div>
 </div></div>
 <script>
 /* Catalogue — in the real build: GET /marketing/features from a typed constant beside
@@ -855,7 +886,7 @@ function renderHome(){return `
 <header class="hero" id="top"><div class="dots" aria-hidden="true"></div><div class="aura a1" aria-hidden="true"></div><div class="aura a2" aria-hidden="true"></div><div class="aura a3" aria-hidden="true"></div>
 <div class="wrap hero-in">
   <div>
-    <span class="eyebrow hrv" style="--d:0s">✦ School website · management software (ERP) · family app</span>
+    <span class="eyebrow hrv" style="--d:0s">✦ School website · ERP · family app</span>
     <h1 class="h-xl"><span class="ln"><i style="--d:.05s">Your school,</i></span><span class="ln"><i style="--d:.18s">on a <span class="hl">bigger stage<svg viewBox="0 0 300 24" preserveAspectRatio="none" aria-hidden="true"><path d="M4 16 C 60 22, 120 6, 170 12 S 270 20, 296 10"/></svg></span></i></span></h1>
     <p class="lede hrv" style="--d:.36s">A school website, school management software (what most vendors call an ERP) and a family app — one login, one price per student. The admissions desk, fees and receipts, the attendance register, report cards, the library, the TV in reception, and a live network of schools where your students compete and get discovered.</p>
     <div class="hero-ctas hrv" style="--d:.48s"><button class="btn btn-hot" data-journey>Get for your school →</button><button class="btn btn-ghost" data-callback>Request a callback</button></div>
@@ -864,7 +895,7 @@ function renderHome(){return `
   </div>
   <div class="stage hrv r" style="--d:.3s">
     <div class="browser" id="browser"><div class="bbar"><i style="background:#FF8A80"></i><i style="background:#FFD54F"></i><i style="background:#81E6C0"></i><span class="url">🔒 <span class="tu">beacon.sckools.com</span><i class="caret"></i></span></div>
-      <div class="bhero"><div class="tag bld">ADMISSIONS OPEN 2027–28</div><h4 class="bld" style="--d:.1s">Beacon Public School</h4><p class="bld" style="--d:.2s">Where curiosity meets excellence — Nursery to Grade 12</p><span class="mini bld" style="--d:.3s">Enquire now</span></div>
+      <div class="bhero"><div class="tag bld">ADMISSIONS OPEN 2027–28</div><p class="bld h4" style="--d:.1s">Beacon Public School</p><p class="bld" style="--d:.2s">Where curiosity meets excellence — Nursery to Grade 12</p><span class="mini bld" style="--d:.3s">Enquire now</span></div>
       <div class="brow"><div class="bcell bld" style="--d:.4s"><b>Courses</b><span>flip-card explorer</span></div><div class="bcell bld" style="--d:.5s"><b>Hall of Fame</b><span>class toppers</span></div><div class="bcell bld" style="--d:.6s"><b>Events</b><span>network feed</span></div></div></div>
     <div class="chip ch1"><span class="ci" style="background:var(--teal-soft)">📥</span><div><b>New enquiry</b><span>Sunita, for Grade 3 · just now</span></div><i class="ping"></i></div>
     <div class="chip ch2"><span class="ci" style="background:var(--gold-soft)">✅</span><div><b>Kabir marked absent</b><span>8C · family told 08:14</span></div><i class="ping"></i></div>
@@ -877,7 +908,7 @@ function renderHome(){return `
   <div class="rv"><span class="eyebrow">Everything a modern school needs</span></div>
   <h2 class="h-lg rv" style="transition-delay:.06s">One platform. Zero developers needed.</h2>
   <p class="lede rv" style="margin-top:8px;transition-delay:.12s">Website, admissions desk, fees, register, report cards, library and the family app — in one. <span class="hint" style="margin:0;display:inline">Click a card to ask about it.</span></p>
-  <div class="grid feat" style="margin-top:20px">${FLIP.map((f,i)=>`<div class="rv" style="transition-delay:${i*.06}s"><div class="fl" data-flip><div class="face front">${f.nw?`<span class="nw">${f.nw}</span>`:''}<div class="ic ${f.tone}">${f.icon}</div><h3>${f.title}</h3><p>${f.body}</p><span class="cb"><span>Ask about this</span><i>→</i></span></div><div class="face back"><button class="x" data-unflip aria-label="Close">✕</button><div class="bform"><h4>${f.title}</h4><p>Drop your number — <b>we call you back</b> within a working day.</p><input type="tel" placeholder="+91 98765 43210" inputmode="tel" aria-label="Your phone number"><button class="btn btn-hot send" data-send>Call me back</button></div><div class="ok" hidden><div class="tick">✓</div><b>Got it</b><p>We'll call within a working day.</p></div></div></div></div>`).join('')}</div>
+  <div class="grid feat" style="margin-top:20px">${FLIP.map((f,i)=>`<div class="rv" style="transition-delay:${i*.06}s"><div class="fl" data-flip><div class="face front">${f.nw?`<span class="nw">${f.nw}</span>`:''}<div class="ic ${f.tone}">${f.icon}</div><h3>${f.title}</h3><p>${f.body}</p><span class="cb"><span>Ask about this</span><i>→</i></span></div><div class="face back"><button class="x" data-unflip aria-label="Close">✕</button><div class="bform"><p class="h4">${f.title}</p><p>Drop your number — <b>we call you back</b> within a working day.</p><input type="tel" placeholder="+91 98765 43210" inputmode="tel" aria-label="Your phone number"><button class="btn btn-hot send" data-send>Call me back</button></div><div class="ok" hidden><div class="tick">✓</div><b>Got it</b><p>We'll call within a working day.</p></div></div></div></div>`).join('')}</div>
 </div></section>
 
 <section class="show-sec" aria-label="Pages included"><div class="wrap">
@@ -891,7 +922,7 @@ function renderHome(){return `
   <div class="rv"><span class="eyebrow violet">A day at your school</span></div>
   <h2 class="h-lg rv" style="transition-delay:.06s">Six moments, the way they actually happen. <span style="color:var(--muted);font-weight:600;font-size:.6em">Real screens — tap one for the story.</span></h2>
   <div class="day">
-    <div class="vig" data-a="up"><div class="mock"><div class="tvm"><div class="scr"><div class="hd"><b>Beacon Public School</b><span>Mon 7 Sep · 07:40</span></div><div><h5>TODAY</h5><ul><li><i></i>Inter-school debate, 2pm, Hall</li><li><i></i>Grade 5 field trip leaves 9:15</li><li><i></i>Library open till 5</li></ul></div><div><h5>NOTICES</h5><ul><li><i></i>Unit test — Friday, all sections</li><li><i></i>Fee counter open till 3pm</li><li><i></i>Happy birthday, Aarav (4B) 🎂</li></ul></div></div><div class="stand"></div></div></div><div><span class="tm">07:40 · Gate opens</span><h3>The notice board is a television now.</h3><p>Any TV with a browser. One web address. Updated from the console — nobody touches the TV.</p><a class="more" href="#/features/tv">How Sckools TV works →</a></div></div>
+    <div class="vig" data-a="up"><div class="mock"><div class="tvm"><div class="scr"><div class="hd"><b>Beacon Public School</b><span>Mon 7 Sep · 07:40</span></div><div><p class="h5">TODAY</p><ul><li><i></i>Inter-school debate, 2pm, Hall</li><li><i></i>Grade 5 field trip leaves 9:15</li><li><i></i>Library open till 5</li></ul></div><div><p class="h5">NOTICES</p><ul><li><i></i>Unit test — Friday, all sections</li><li><i></i>Fee counter open till 3pm</li><li><i></i>Happy birthday, Aarav (4B) 🎂</li></ul></div></div><div class="stand"></div></div></div><div><span class="tm">07:40 · Gate opens</span><h3>The notice board is a television now.</h3><p>Any TV with a browser. One web address. Updated from the console — nobody touches the TV.</p><a class="more" href="#/features/tv">How Sckools TV works →</a></div></div>
     <div class="vig" data-a="up"><div class="mock"><div class="mh">4B · Attendance<span>08:12</span></div><div class="reg"><div class="r"><b>Aarav Mehta</b><i class="on">P</i><i>A</i></div><div class="r"><b>Diya Sharma</b><i class="on">P</i><i>A</i></div><div class="r"><b>Kabir Nair</b><i>P</i><i class="ab">A</i></div><div class="r"><b>Riya Iyer</b><i class="on">P</i><i>A</i></div><div class="r"><b>Sahil Verma</b><i>P</i><i class="ab">A</i></div><div class="sum"><span><b>30 present</b> · 2 absent</span><button class="btn btn-hot btn-sm" style="padding:6px 14px;font-size:12.5px">Save · tell families</button></div></div></div><div><span class="tm">08:12 · Period 1</span><h3>Attendance in taps, at the classroom door.</h3><p>Works with no signal. Two absent — their families are told at 08:13, not at the PTM.</p><a class="more" href="#/features/register">How the register works →</a></div></div>
     <div class="vig" data-a="up"><div class="mock"><div class="rcpt"><span class="stamp">PAID</span><div class="cr">Beacon Public School<span>#0412</span></div><dl><dt>Student</dt><dd>Dev Mehta · 1A</dd><dt>Term</dt><dd>Term 2, 2026–27</dd><dt>Mode</dt><dd>UPI</dd><dt>Date</dt><dd>07 Sep 2026 · 11:15</dd></dl><div class="tot"><span>Total paid</span><span>₹24,000</span></div></div></div><div><span class="tm">11:15 · Break</span><h3>Cash or UPI at the counter. A numbered receipt. A ledger that keeps itself.</h3><p>Overdue? One click shows the names; one reminder reaches them all.</p><a class="more" href="#/features/fee-counter">How fees work →</a></div></div>
     <div class="vig" data-a="up"><div class="mock"><div class="mh">Daily Diary · 3C<span>15:35</span></div><div class="dia"><div class="ent">Please send the signed consent form for Friday's trip to the science museum.</div><div class="who">Ms Pillai, class teacher</div><div class="prog"><i></i></div><div class="pl"><span><b>26 signed</b> by families</span><span>4 to chase</span></div></div></div><div><span class="tm">15:35 · Home time</span><h3>A remark home that the family signs on their phone.</h3><p>The teacher sees who hasn't — without a single phone call.</p><a class="more" href="#/features/diary">How the diary works →</a></div></div>
@@ -1040,7 +1071,7 @@ function familyPhone(max){return `<div class="fpw" data-max="${max||560}"><div c
     <div class="dl"><i>Monday, 7 September</i><b>TODAY</b></div>
     <div class="greet"><b>Hi, Ananya 👋</b><span class="bell">🔔<i></i></span><span class="av">A</span></div>
     <div class="cls">4B · Roll 12</div>
-    <div class="now"><div class="eb"><i></i>Now · Period 3</div><h5>Mathematics</h5><div class="meta">Mrs Sharma · 10:15 – 11:00 · 17 min left</div><div class="bar"><i></i></div><span class="stc">✓ Present today</span><div class="cells"><div><b>6</b><span>classes today</span></div><div><b>94%</b><span>this month</span></div></div></div>
+    <div class="now"><div class="eb"><i></i>Now · Period 3</div><p class="h5">Mathematics</p><div class="meta">Mrs Sharma · 10:15 – 11:00 · 17 min left</div><div class="bar"><i></i></div><span class="stc">✓ Present today</span><div class="cells"><div><b>6</b><span>classes today</span></div><div><b>94%</b><span>this month</span></div></div></div>
     <div class="ey">Needs you today</div>
     <div class="domes"><div class="dome amb live"><i>${ICO.diary}<em>1</em></i>Diary</div><div class="dome amb"><i>${ICO.msgs}<em>2</em></i>Messages</div><div class="dome"><i>${ICO.asg}</i>Assignments</div><div class="dome"><i>${ICO.res}<em>1</em></i>Results</div></div>
     <div class="rule"></div>
@@ -1060,7 +1091,7 @@ function teacherPhone(max){return `<div class="fpw" data-max="${max||560}"><div 
   <div class="body">
     <div class="dl"><i>Monday, 7 September</i><b>TODAY</b></div>
     <div class="greet"><b>Good morning, Mrs Sharma</b><span class="bell">🔔<i></i></span><span class="av">S</span></div>
-    <div class="now"><div class="eb"><i></i>Now · Period 3 · 4B</div><h5>Mathematics</h5><div class="meta">Room 12 · 10:15 – 11:00 · 32 students</div><div class="bar"><i></i></div><span class="stc">✓ Register saved 08:12 · 2 absent</span><div class="cells"><div><b>6</b><span>periods today</span></div><div><b>1</b><span>cover · Period 5</span></div></div></div>
+    <div class="now"><div class="eb"><i></i>Now · Period 3 · 4B</div><p class="h5">Mathematics</p><div class="meta">Room 12 · 10:15 – 11:00 · 32 students</div><div class="bar"><i></i></div><span class="stc">✓ Register saved 08:12 · 2 absent</span><div class="cells"><div><b>6</b><span>periods today</span></div><div><b>1</b><span>cover · Period 5</span></div></div></div>
     <div class="ey">Needs you today</div>
     <div class="domes"><div class="dome amb live"><i>${ICO.chk}<em>1</em></i>Register</div><div class="dome amb"><i>${ICO.msgs}<em>3</em></i>Messages</div><div class="dome"><i>${ICO.diary}</i>Diary</div><div class="dome"><i>${ICO.res}</i>Results</div></div>
     <div class="rule"></div>
@@ -1086,7 +1117,7 @@ function consoleMock(){return `<div class="con" aria-label="The admin console fr
   </div></div>`;}
 function webTvMock(){return `<div class="webtv">
   <div class="site" id="site2" data-layout="canvas" style="--sc:#1F6F5C"><div class="bar"><i></i><i></i><i></i><span>beacon.sckools.com</span></div><div class="pg"><div class="nv"><span class="crest"></span><span class="nm">Beacon Public School</span><span class="lk"><i></i><i></i><i></i><i></i></span></div><div class="hero-a" style="min-height:110px"><div class="tx"><b>Admissions open 2027–28</b><i>Nursery to Grade 12 · Jaipur</i><u>Enquire now</u></div></div><div class="grid3"><div></div><div></div><div></div></div></div></div>
-  <div class="tvm"><div class="scr" style="min-height:120px"><div class="hd"><b>Reception TV</b><span>07:40</span></div><div><h5>TODAY</h5><ul><li><i></i>Debate, 2pm, Hall</li><li><i></i>Library till 5</li></ul></div><div><h5>NOTICES</h5><ul><li><i></i>Unit test Friday</li><li><i></i>Happy birthday, Aarav 🎂</li></ul></div></div><div class="stand"></div></div>
+  <div class="tvm"><div class="scr" style="min-height:120px"><div class="hd"><b>Reception TV</b><span>07:40</span></div><div><p class="h5">TODAY</p><ul><li><i></i>Debate, 2pm, Hall</li><li><i></i>Library till 5</li></ul></div><div><p class="h5">NOTICES</p><ul><li><i></i>Unit test Friday</li><li><i></i>Happy birthday, Aarav 🎂</li></ul></div></div><div class="stand"></div></div>
 </div>`;}
 const DESKS=[
  {id:'office',em:'🏫',tint:'var(--violet-soft)',name:'The front office',sub:'principal, admin, accounts',mock:consoleMock},
