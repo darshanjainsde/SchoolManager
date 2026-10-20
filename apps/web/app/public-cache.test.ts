@@ -59,7 +59,7 @@ describe('pages the edge may hold', () => {
 
   it('caches the marketing pages on the platform apex', async () => {
     const mw = await load();
-    for (const p of ['/pricing', '/privacy', '/terms', '/school-website-builder']) {
+    for (const p of ['/pricing', '/privacy', '/terms', '/workplace', '/school-website-builder']) {
       expect(cc(mw(req(PLATFORM, p))), p).toMatch(/^public, s-maxage=\d+/);
     }
   });
