@@ -736,6 +736,7 @@ html,body{margin:0;background:#fcfdff}
 .mkt .shp .d{color:#115e59}
 .mkt .fp .scr{--grn:#137a50}
 .mkt .fp .tabs{color:#9c99ba}
+.mkt .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 </style>
 </head>
 <body>
@@ -944,7 +945,7 @@ function renderHome(){return `
     <div class="vig" data-a="up"><div class="mock"><div class="rc"><div class="crest"><i></i><div><b>Beacon Public School</b><small>Report card · Term 1 · Kabir Nair, 8C</small></div></div><table><tr><td>Mathematics</td><td>42 / 50</td></tr><tr><td>Science</td><td>44 / 50</td></tr><tr><td>English</td><td>39 / 50</td></tr><tr><td>Hindi</td><td>45 / 50</td></tr></table><div class="rem">“Kabir asks the questions the class needs asked. Neater handwriting, please.”</div></div></div><div><span class="tm">15:30 · Home time</span><h3>Report cards from published marks. Printed by the press. In the family app.</h3><p>1,100 students in a minute. Remarks by the teacher, on the phone.</p><a class="more" href="#/features/report-cards">How report cards work →</a></div></div>
     <div class="vig" data-a="up"><div class="mock"><div class="mh">Requests<span>18:20</span></div><div class="rq"><div class="c done"><div><b>Leave · Ms Desai · 14–15 Oct</b><small>Balance after: 4 days</small></div><button class="ok">Approved</button></div><div class="c"><div><b>Register fix · 4B · 6 Sep</b><small>“Riya was in the medical room”</small></div><button class="ok">Approve</button></div><div class="c"><div><b>Leave · Mr Rao · 9 Sep</b><small>Cover: Ms Iyer is free at Period 5</small></div><button class="ok">Approve</button></div></div></div><div><span class="tm">18:20 · After hours</span><h3>Six requests, cleared from the sofa.</h3><p>Leave and register fixes, one queue, one tap each.</p><a class="more" href="#/features/requests">How requests work →</a></div></div>
   </div>
-  <div class="day-hint">← scroll for the rest of the day →&nbsp;&nbsp;·&nbsp;&nbsp;<a href="#/features" class="b" style="color:#0f766e;font-weight:800">All ${F.length} features</a></div>
+  <div class="day-hint">← scroll for the rest of the day →&nbsp;&nbsp;·&nbsp;&nbsp;<a href="#/features" class="b" style="color:#0f766e;font-weight:800;padding:4px 0">All ${F.length} features</a></div>
 </div></section>
 
 ${proHTML()}
@@ -959,7 +960,7 @@ ${proHTML()}
 <section class="events-sec" id="events" aria-label="Events network"><div class="wrap"><div class="ev-card"><div class="beam" aria-hidden="true"></div>
   <div class="ev-top"><div><div class="rv"><span class="eyebrow">🎪 The Sckools Events Network</span></div><h2 class="h-lg rv" style="transition-delay:.06s">Inter-school events.<br>One shared stage.</h2><p class="lede rv" style="margin-top:14px;transition-delay:.12s">Alone, a school event reaches your students. On the network, it reaches every school on Sckools — bigger crowds, real competition, and sponsors we bring to you.</p></div>
   <div class="ev-viz rv" aria-hidden="true"><div class="ev-stage"><div class="orbit o1"></div><div class="orbit o2"></div><div class="core">YOUR<br>EVENT</div></div><div class="sat-ring"><div class="sat" style="--a:-35deg">🏫 every school sees it</div><div class="sat" style="--a:55deg">🎟 <b>ticket</b> types</div><div class="sat" style="--a:145deg">🤝 sponsors matched</div><div class="sat" style="--a:235deg">📺 on the TV</div></div></div></div>
-  <div class="grid ev-pts" tabindex="0" aria-label="What the network gives your event"><div class="ev-pt rv"><h3 class="h4">Your students, a bigger arena</h3><p>Debates, sports, science fairs, olympiads — students compete across schools and stay in sync with today's standards.</p></div><div class="ev-pt rv" style="transition-delay:.08s"><h3 class="h4">Families register on your site</h3><p>Ticket types, a list you can print, one-tap join for families already signed in. Target some schools, or open it to all.</p></div><div class="ev-pt rv" style="transition-delay:.16s"><h3 class="h4">We find sponsors for you</h3><p>Tell us the event — Sckools pitches brands and partners on your behalf. You focus on students; we bring the backing.</p></div></div>
+  <div class="grid ev-pts" role="region" tabindex="0" aria-label="What the network gives your event"><div class="ev-pt rv"><h3 class="h4">Your students, a bigger arena</h3><p>Debates, sports, science fairs, olympiads — students compete across schools and stay in sync with today's standards.</p></div><div class="ev-pt rv" style="transition-delay:.08s"><h3 class="h4">Families register on your site</h3><p>Ticket types, a list you can print, one-tap join for families already signed in. Target some schools, or open it to all.</p></div><div class="ev-pt rv" style="transition-delay:.16s"><h3 class="h4">We find sponsors for you</h3><p>Tell us the event — Sckools pitches brands and partners on your behalf. You focus on students; we bring the backing.</p></div></div>
 </div></div></section>
 
 <section id="tiers" aria-label="Plans"><div class="wrap">
@@ -1141,7 +1142,7 @@ const DESKS=[
  {id:'beyond',em:'🌐',tint:'var(--sky-soft)',name:'Beyond the gate',sub:'website, network, TV',mock:webTvMock},
 ];
 function tileHTML(f,i){const t=tierOf(f.key);return `<button class="tile ${matches(f)?'':'dim'}" data-open="${f.id}" title="${esc(f.hint)}"><span class="em ic ${TONES[i%5]}">${EM[f.id]||'✦'}</span><b>${esc(f.name)}</b><small class="hint">${esc(f.hint)}</small>${f.new?'<span class="nw">NEW</span>':''}<span class="dot dot-${t==='BASIC'?'basic':t==='STANDARD'?'std':t==='PRO'?'pro':'req'}" title="${TL[t]}"></span></button>`;}
-function desksHTML(){return DESKS.map((d,k)=>{const fs=F.filter(f=>f.col===d.id);return `<div class="desk" id="desk-${d.id}">
+function desksHTML(){return '<h2 class="sr-only">The four desks</h2>'+DESKS.map((d,k)=>{const fs=F.filter(f=>f.col===d.id);return `<div class="desk" id="desk-${d.id}">
   <div data-a="${k%2?'right':'left'}">${d.mock()}</div>
   <div><div class="dh rv"><span class="who" style="background:${d.tint}">${d.em}</span><div><h3>${d.name}</h3><small>${d.sub} · ${fs.length} features</small></div></div>
   <div class="tiles" id="tiles-${d.id}">${fs.map((f,i)=>tileHTML(f,i)).join('')}</div></div>
