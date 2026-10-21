@@ -737,6 +737,8 @@ html,body{margin:0;background:#fcfdff}
 .mkt .fp .scr{--grn:#137a50}
 .mkt .fp .tabs{color:#9c99ba}
 .mkt .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.mkt .fp .scr.shot{height:auto;min-height:0}
+.mkt .fp .scr.shot img{display:block;width:100%;height:auto;aspect-ratio:9/16;object-fit:cover;object-position:top}
 </style>
 </head>
 <body>
@@ -1082,45 +1084,9 @@ const EM={bell:'🔔','staff-att':'🪪',today:'📅',notices:'📣',tv:'📺',f
 const TONES=['t','v','c','g','s'];
 const ICO={diary:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 3h11a2 2 0 0 1 2 2v16H8a2 2 0 0 1-2-2z" fill="currentColor" fill-opacity=".18"/><path d="M6 3v18M10 8h6M10 12h6"/></svg>',msgs:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 5h16v11H9l-5 4z" fill="currentColor" fill-opacity=".18"/><path d="M8 9h8M8 12h5"/></svg>',asg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="5" y="4" width="14" height="17" rx="2" fill="currentColor" fill-opacity=".18"/><path d="M9 9h6M9 13h6M9 17h3"/></svg>',res:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20h16" /><rect x="6" y="11" width="3" height="7" fill="currentColor" fill-opacity=".25"/><rect x="11" y="6" width="3" height="12" fill="currentColor" fill-opacity=".25"/><rect x="16" y="9" width="3" height="9" fill="currentColor" fill-opacity=".25"/></svg>',tt:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="4" y="5" width="16" height="15" rx="2" fill="currentColor" fill-opacity=".18"/><path d="M4 10h16M9 5v15"/></svg>',not:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 11l11-5v12l-11-5z" fill="currentColor" fill-opacity=".18"/><path d="M5 11v3M18 9a3 3 0 0 1 0 4"/></svg>',hol:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><circle cx="12" cy="12" r="4" fill="currentColor" fill-opacity=".25"/></svg>',home:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11l8-7 8 7v9H4z"/><path d="M10 20v-6h4v6"/></svg>',chk:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 12l3 3 5-6"/></svg>',stat:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 19h16M7 16v-5M12 16V7M17 16v-8"/></svg>',per:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20a8 8 0 0 1 16 0"/></svg>'};
 /* The family home, as apps/mobile draws it: dateline → greeting → StudentHero → Needs you today → KPIs → Today's classes → Go to → bar */
-function familyPhone(max){return `<div class="fpw" data-max="${max||560}"><div class="fp" aria-label="The family app home screen, an example"><div class="scr">
-  <div class="body">
-    <div class="dl"><i>Monday, 7 September</i><b>TODAY</b></div>
-    <div class="greet"><b>Hi, Ananya 👋</b><span class="bell">🔔<i></i></span><span class="av">A</span></div>
-    <div class="cls">4B · Roll 12</div>
-    <div class="now"><div class="eb"><i></i>Now · Period 3</div><p class="h5">Mathematics</p><div class="meta">Mrs Sharma · 10:15 – 11:00 · 17 min left</div><div class="bar"><i></i></div><span class="stc">✓ Present today</span><div class="cells"><div><b>6</b><span>classes today</span></div><div><b>94%</b><span>this month</span></div></div></div>
-    <div class="ey">Needs you today</div>
-    <div class="domes"><div class="dome amb live"><i>${ICO.diary}<em>1</em></i>Diary</div><div class="dome amb"><i>${ICO.msgs}<em>2</em></i>Messages</div><div class="dome"><i>${ICO.asg}</i>Assignments</div><div class="dome"><i>${ICO.res}<em>1</em></i>Results</div></div>
-    <div class="rule"></div>
-    <div class="kpis"><div class="kpi"><small>This month</small><b class="g">94%</b><span>17 of 18 days present</span></div><div class="kpi"><small>Latest result</small><b class="g">42/50</b><span>Maths · class avg 34</span></div></div>
-    <div class="page"><div class="ph"><b>Today's classes</b><span>Full week</span></div>
-      <div class="rail first done"><span class="t">08:15<br>09:00</span><div><b>English</b><small>Ms Pillai</small></div><span class="st">✓</span></div>
-      <div class="rail now"><span class="t">10:15<br>11:00</span><div><b>Mathematics</b><small>Mrs Sharma</small></div><span class="st">now</span></div>
-      <div class="rail"><span class="t">11:00<br>11:45</span><div><b>Hindi</b><small>Ms Desai</small></div><span class="st">P4</span></div>
-    </div>
-    <div class="ey">Go to</div>
-    <div class="domes"><div class="dome"><i>${ICO.tt}</i>Timetable</div><div class="dome amb"><i>${ICO.not}</i>Notices</div><div class="dome grn"><i>${ICO.hol}</i>Holidays</div></div>
-  </div>
-  <div class="tabs"><div class="on">${ICO.home}Home</div><div>${ICO.chk}Attendance</div><div>${ICO.stat}Results</div><div>${ICO.per}Profile</div></div>
-</div></div></div>`;}
+function familyPhone(max){return `<div class="fpw" data-max="${max||560}"><div class="fp" aria-label="The family app home screen, 19 Oct 2026 release: today's card, Ask teacher, Homework, Read diary, Pay fees, then Results, Timetable, Syllabus and Report cards"><div class="scr shot"><img src="/site-preview/app/family-home.jpg" alt="" width="1080" height="1920" loading="lazy" decoding="async"><div class="tabs"><div class="on">${ICO.home}Home</div><div>${ICO.chk}Attendance</div><div>${ICO.stat}Results</div><div>${ICO.per}Profile</div></div></div></div></div>`;}
 /* The staff Today screen — same paper, the teacher's day */
-function teacherPhone(max){return `<div class="fpw" data-max="${max||560}"><div class="fp" aria-label="The teacher app, an example"><div class="scr">
-  <div class="body">
-    <div class="dl"><i>Monday, 7 September</i><b>TODAY</b></div>
-    <div class="greet"><b>Good morning, Mrs Sharma</b><span class="bell">🔔<i></i></span><span class="av">S</span></div>
-    <div class="now"><div class="eb"><i></i>Now · Period 3 · 4B</div><p class="h5">Mathematics</p><div class="meta">Room 12 · 10:15 – 11:00 · 32 students</div><div class="bar"><i></i></div><span class="stc">✓ Register saved 08:12 · 2 absent</span><div class="cells"><div><b>6</b><span>periods today</span></div><div><b>1</b><span>cover · Period 5</span></div></div></div>
-    <div class="ey">Needs you today</div>
-    <div class="domes"><div class="dome amb live"><i>${ICO.chk}<em>1</em></i>Register</div><div class="dome amb"><i>${ICO.msgs}<em>3</em></i>Messages</div><div class="dome"><i>${ICO.diary}</i>Diary</div><div class="dome"><i>${ICO.res}</i>Results</div></div>
-    <div class="rule"></div>
-    <div class="page"><div class="ph"><b>Today</b><span>Full week</span></div>
-      <div class="rail first done"><span class="t">08:15<br>09:00</span><div><b>6B · Maths</b><small>Register saved</small></div><span class="st">✓</span></div>
-      <div class="rail now"><span class="t">10:15<br>11:00</span><div><b>4B · Maths</b><small>Room 12</small></div><span class="st">now</span></div>
-      <div class="rail"><span class="t">12:30<br>13:15</span><div><b>9A · Maths (cover)</b><small>for Mr Rao</small></div><span class="st">P5</span></div>
-    </div>
-    <div class="ey">Go to</div>
-    <div class="domes"><div class="dome"><i>${ICO.tt}</i>Timetable</div><div class="dome"><i>${ICO.asg}</i>Assignments</div><div class="dome amb"><i>${ICO.not}</i>Announce</div><div class="dome grn"><i>${ICO.hol}</i>Leave</div></div>
-  </div>
-  <div class="tabs"><div class="on">${ICO.home}Today</div><div>${ICO.chk}Attendance</div><div>${ICO.tt}Timetable</div><div>${ICO.per}Profile</div></div>
-</div></div></div>`;}
+function teacherPhone(max){return `<div class="fpw" data-max="${max||560}"><div class="fp" aria-label="The teacher app home screen, 19 Oct 2026 release: 1 register still open, Take register, Set homework, Post notice, Write diary, and Do now"><div class="scr shot"><img src="/site-preview/app/teacher-home.jpg" alt="" width="1080" height="1920" loading="lazy" decoding="async"><div class="tabs"><div class="on">${ICO.home}Today</div><div>${ICO.chk}Attendance</div><div>${ICO.tt}Timetable</div><div>${ICO.per}Profile</div></div></div></div>`;}
 /* The admin console front desk */
 function consoleMock(){return `<div class="con" aria-label="The admin console front desk, an example">
   <div class="bar"><i></i><i></i><i></i>Front desk · Beacon Public School<span>Mon 7 Sep</span></div>
