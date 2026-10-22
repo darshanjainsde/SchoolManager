@@ -740,23 +740,24 @@ html,body{margin:0;background:#fcfdff}
 .mkt .fp .scr.shot{height:auto;min-height:0}
 .mkt .fp .scr.shot img{display:block;width:100%;height:auto;aspect-ratio:9/16;object-fit:cover;object-position:top}
 /* ── hero scene ── */
-/* Sckools hero scene (hs-): a 770×584 device cascade scaled as one object to its column.
+/* Sckools hero scene (hs-): an 800×600 device cascade scaled as one object to its column.
    PC monitor with the school's website at the back, laptop with the console front-right,
    the teacher's phone with the app front-left, the principal's phone on WhatsApp front-right.
    Every class is prefixed hs- so nothing collides with the page it lives in. */
-.hs-wrap{--dw:770;--dh:584;position:relative;width:min(770px,100%);aspect-ratio:770/584;margin-inline:auto}
-@media (min-width:1260px){.hs-wrap{width:min(770px,calc(100% + 80px))}}
+.hs-wrap{--dw:800;--dh:600;position:relative;width:min(800px,100%);aspect-ratio:800/600;margin-inline:auto}
+@media (min-width:1260px){.hs-wrap{width:min(800px,calc(100% + 110px))}}
 .hs{--hs-good:#1b7a4a;--hs-good-soft:#e3f5ea;--hs-warn:#9a5200;--hs-warn-soft:#fff0dc;--hs-app-bg:#eaf3eb;--hs-app-ink:#012707;position:absolute;left:0;top:0;width:calc(var(--dw)*1px);height:calc(var(--dh)*1px);transform-origin:top left;line-height:1.5}
 .hs,.hs *{box-sizing:border-box;margin:0}
 .hs p{margin:0}
 
-/* PC monitor at the back: 540 wide, screen 520×292.5 (16:9) = 24 browser bar + the website */
-.hs-mon{position:absolute;left:0;top:0;width:540px;z-index:1}
-.hs-mfr{position:relative;background:#141a21;border-radius:12px;padding:10px 10px 18px;box-shadow:0 30px 50px -24px rgba(16,36,59,.45),inset 0 0 0 1px rgba(255,255,255,.07)}
-.hs-mfr:after{content:"";position:absolute;left:50%;bottom:6px;width:26px;height:4px;margin-left:-13px;border-radius:2px;background:#2b3542}
-.hs-mscr{position:relative;aspect-ratio:16/9;background:#f6f7fa;border-radius:4px;overflow:hidden}
-.hs-neck{width:70px;height:44px;margin:0 auto;background:linear-gradient(90deg,#9ea7b1,#c9cfd6 50%,#9ea7b1);border-radius:0 0 3px 3px}
-.hs-foot{width:260px;height:12px;margin:0 auto;background:linear-gradient(#d5dae0,#b3bac3);border-radius:4px 4px 10px 10px;box-shadow:0 14px 22px -12px rgba(16,36,59,.5)}
+/* PC monitor at the back, Mac-style: aluminium body 560 wide, 8-px bezel, 40-px chin, screen 544×306 (16:9) = 24 browser bar + the website, slim L-stand */
+.hs-mon{position:absolute;left:0;top:0;width:560px;z-index:1}
+.hs-mfr{position:relative;background:linear-gradient(180deg,#f4f5f7,#dfe2e7);border-radius:16px;padding:8px 8px 40px;box-shadow:inset 0 1px 0 #fff,inset 0 0 0 1px rgba(16,36,59,.16),0 30px 50px -24px rgba(16,36,59,.45)}
+.hs-mfr:after{content:"";position:absolute;left:50%;bottom:16px;width:22px;height:5px;margin-left:-11px;border-radius:3px;background:rgba(16,36,59,.2)}
+.hs-mscr{position:relative;aspect-ratio:16/9;background:#f6f7fa;border-radius:6px;overflow:hidden}
+.hs-mscr:after{content:"";position:absolute;inset:0;border-radius:6px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.45),inset 0 2px 8px rgba(0,0,0,.16);pointer-events:none;z-index:3}
+.hs-neck{width:56px;height:34px;margin:-1px auto 0;background:linear-gradient(90deg,#c3c8cf,#edeff2 50%,#c3c8cf);border-radius:0 0 3px 3px;box-shadow:inset 0 -1px 0 rgba(16,36,59,.15)}
+.hs-foot{width:200px;height:8px;margin:0 auto;background:linear-gradient(#f0f2f4,#c6cbd2);border-radius:4px;box-shadow:0 3px 4px rgba(16,36,59,.25),0 14px 20px -10px rgba(16,36,59,.4)}
 .hs-bbar{position:absolute;left:0;right:0;top:0;height:20px;background:#e9edf2;display:flex;align-items:center;gap:5px;padding:0 9px;font-size:8px;color:#4a5668;z-index:1}
 .hs-bbar i{width:6px;height:6px;border-radius:50%;background:#d2d7df;display:block;flex:none}
 .hs-bbar .hs-url{margin:0 auto;background:#fff;border-radius:6px;padding:1px 12px;min-width:200px;text-align:center;font-weight:600;color:#2b3a4e;white-space:nowrap}
@@ -765,25 +766,28 @@ html,body{margin:0;background:#fcfdff}
 .hs-mscr .hs-bbar i{width:7px;height:7px}
 .hs-page{position:absolute;left:0;right:0;top:20px;bottom:0;background:#f6f7fa}
 .hs-mscr .hs-page{top:24px}
-.hs-lscr .hs-page{background:linear-gradient(90deg,#0f1a2b 15%,#f6f7fa 15%)}
+.hs-lscr .hs-page{top:31px;background:linear-gradient(90deg,#0f1a2b 15%,#f6f7fa 15%)}
 .hs-page img{position:absolute;left:0;top:0;width:100%;height:auto;display:block;max-width:none}
 
-/* laptop, front-right; its base stands 30 px above the phones' baseline because it is a step behind them */
-.hs-lap{position:absolute;left:310px;top:291.5px;width:380px;z-index:2}
-.hs-lid{position:relative;background:#141a21;border-radius:16px 16px 4px 4px;padding:12px 12px 14px;box-shadow:0 30px 50px -24px rgba(16,36,59,.45),inset 0 0 0 1px rgba(255,255,255,.07)}
-.hs-lid:before{content:"";position:absolute;left:50%;top:4px;width:5px;height:5px;margin-left:-2.5px;border-radius:50%;background:#2b3542;box-shadow:inset 0 0 0 1px #0a0d12}
-.hs-lscr{position:relative;aspect-ratio:16/10;background:#f6f7fa;border-radius:4px;overflow:hidden}
-.hs-base{position:relative;height:14px;margin:0 -20px;background:linear-gradient(#e9ecf0,#c7cdd5);border-radius:2px 2px 12px 12px;box-shadow:0 16px 24px -14px rgba(16,36,59,.55)}
-.hs-base:before{content:"";position:absolute;left:50%;top:0;width:90px;height:5px;margin-left:-45px;background:#b0b7c1;border-radius:0 0 6px 6px}
+/* laptop, front-right, Mac-style: aluminium lid 400 wide, black inner bezel with a notch, screen 376×235 (16:10) = 11 menu strip + 20 browser bar + the console; base 30 px above the phones' baseline */
+.hs-lap{position:absolute;left:318px;top:297px;width:400px;z-index:2}
+.hs-lid{position:relative;background:linear-gradient(180deg,#e9ebee,#cfd3d9);border-radius:18px 18px 3px 3px;padding:5px 5px 6px;box-shadow:inset 0 1px 0 #fff,inset 0 0 0 1px rgba(16,36,59,.16),0 30px 50px -24px rgba(16,36,59,.5)}
+.hs-bz{position:relative;background:#0b0e13;border-radius:14px 14px 2px 2px;padding:7px 7px 9px}
+.hs-bz:before{content:"";position:absolute;left:50%;top:7px;width:34px;height:9px;margin-left:-17px;border-radius:0 0 7px 7px;background:#0b0e13;z-index:3}
+.hs-lscr{position:relative;aspect-ratio:16/10;background:#f6f7fa;border-radius:5px 5px 2px 2px;overflow:hidden}
+.hs-lscr .hs-menu{position:absolute;left:0;right:0;top:0;height:11px;background:#dde2e8;border-bottom:1px solid #cfd5dc}
+.hs-lscr .hs-bbar{top:11px}
+.hs-base{position:relative;height:12px;margin:0 -16px;background:linear-gradient(#f2f3f5,#c9ced5);border-radius:2px 2px 12px 12px;box-shadow:inset 0 1px 0 #fff,0 16px 24px -14px rgba(16,36,59,.55)}
+.hs-base:before{content:"";position:absolute;left:50%;top:0;width:80px;height:4px;margin-left:-40px;background:#aeb4bc;border-radius:0 0 4px 4px}
 
 /* phones: screen 212×413 = 22 status bar + 9:16 screenshot (212×377) + 14 gesture bar */
-.hs-ph{position:absolute;top:151px;width:232px;height:433px;background:#0e1218;border-radius:34px;padding:10px;box-shadow:0 44px 64px -30px rgba(16,36,59,.6),inset 0 0 0 1.5px #2a313b}
-.hs-ph.hs-l{left:0;z-index:4}
-.hs-ph.hs-r{left:566px;top:195px;transform:scale(.88);transform-origin:top left;z-index:3}
-.hs-ph i.hs-k{position:absolute;background:#2a313b;border-radius:2px;display:block}
+.hs-ph{position:absolute;width:232px;height:433px;background:linear-gradient(90deg,#3a414b,#14181d 5% 95%,#3a414b);border-radius:36px;padding:10px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.14),inset 0 1px 0 rgba(255,255,255,.22),0 18px 22px -12px rgba(16,36,59,.5),0 44px 64px -30px rgba(16,36,59,.6)}
+.hs-ph.hs-l{left:0;top:210px;transform:scale(.9);transform-origin:top left;z-index:4}
+.hs-ph.hs-r{left:610px;top:237px;transform:scale(.82);transform-origin:top left;z-index:3}
+.hs-ph i.hs-k{position:absolute;background:linear-gradient(90deg,#4a525c,#2a313b);border-radius:2px;display:block}
 .hs-l i.hs-k1{left:-2.5px;top:96px;width:3px;height:26px}.hs-l i.hs-k2{left:-2.5px;top:132px;width:3px;height:44px}.hs-l i.hs-k3{right:-2.5px;top:120px;width:3px;height:56px}
 .hs-r i.hs-k1{right:-2.5px;top:96px;width:3px;height:26px}.hs-r i.hs-k2{right:-2.5px;top:132px;width:3px;height:44px}.hs-r i.hs-k3{left:-2.5px;top:120px;width:3px;height:56px}
-.hs-scr{position:relative;width:212px;height:413px;border-radius:25px;overflow:hidden;background:var(--hs-app-bg)}
+.hs-scr{position:relative;width:212px;height:413px;border-radius:27px;overflow:hidden;background:var(--hs-app-bg);box-shadow:0 0 0 .5px rgba(0,0,0,.7)}
 .hs-scr:before{content:"";position:absolute;left:50%;top:6px;width:9px;height:9px;margin-left:-4.5px;border-radius:50%;background:#0b0f14;box-shadow:inset 0 0 0 1.5px #1c232c;z-index:7}
 .hs-sb{position:absolute;left:0;right:0;top:0;height:22px;display:flex;align-items:center;justify-content:space-between;padding:0 16px 0 15px;font-size:9.5px;font-weight:700;letter-spacing:.01em;z-index:6;color:#fff}
 .hs-sb.hs-dark{color:#0f2419}
@@ -843,7 +847,7 @@ html,body{margin:0;background:#fcfdff}
 .hs-wa .hs-gest:after{background:rgba(17,27,33,.45)}
 
 /* console cards, popping off the top edge of the laptop lid */
-.hs-co{position:absolute;left:322px;top:238px;width:226px;background:var(--card,#fff);border:1px solid var(--line,#e3ecf2);border-radius:13px;padding:9px 11px 9px 10px;display:grid;grid-template-columns:30px 1fr;gap:9px;align-items:center;box-shadow:var(--sh-lift,0 30px 60px -24px rgba(16,36,59,.35));opacity:0;z-index:5}
+.hs-co{position:absolute;left:330px;top:244px;width:226px;background:var(--card,#fff);border:1px solid var(--line,#e3ecf2);border-radius:13px;padding:9px 11px 9px 10px;display:grid;grid-template-columns:30px 1fr;gap:9px;align-items:center;box-shadow:var(--sh-lift,0 30px 60px -24px rgba(16,36,59,.35));opacity:0;z-index:5}
 .hs-co .hs-ico{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:var(--hs-good-soft);color:var(--hs-good)}
 .hs-co .hs-ico svg{width:16px;height:16px}
 .hs-co.hs-warn .hs-ico{background:var(--hs-warn-soft);color:var(--hs-warn)}
@@ -854,7 +858,7 @@ html,body{margin:0;background:#fcfdff}
 .hs-co .hs-src{position:absolute;left:10px;top:-9px;font-size:9px;font-weight:800;padding:2px 7px;border-radius:999px;background:var(--violet-soft,#ece6ff);color:var(--violet,#6d4aff);line-height:1.4}
 
 /* a Sckools person: a chat bubble over the monitor's top-right corner */
-.hs-sup{position:absolute;left:544px;top:0;width:226px;background:var(--card,#fff);border:1px solid var(--line,#e3ecf2);border-radius:16px 16px 16px 4px;padding:10px 12px 11px;box-shadow:var(--sh-lift,0 30px 60px -24px rgba(16,36,59,.35));z-index:6;opacity:0}
+.hs-sup{position:absolute;left:574px;top:0;width:226px;background:var(--card,#fff);border:1px solid var(--line,#e3ecf2);border-radius:16px 16px 16px 4px;padding:10px 12px 11px;box-shadow:var(--sh-lift,0 30px 60px -24px rgba(16,36,59,.35));z-index:6;opacity:0}
 .hs-sup .hs-hd{display:flex;align-items:center;gap:8px}
 .hs-sup .hs-sav{width:28px;height:28px;border-radius:50%;background:var(--teal,#0d9488);color:#fff;font-weight:800;font-size:12px;display:grid;place-items:center;position:relative;flex:none}
 .hs-sup .hs-sav:after{content:"";position:absolute;right:-1px;bottom:-1px;width:8px;height:8px;border-radius:50%;background:#22c55e;border:2px solid var(--card,#fff)}
@@ -872,7 +876,7 @@ html,body{margin:0;background:#fcfdff}
 @media (max-width:640px){
   .hs-wrap{--dw:480;--dh:470;width:min(480px,100%);aspect-ratio:480/470}
   .hs-lap,.hs-mon{display:none}
-  .hs-ph{top:30px}.hs-ph.hs-r{left:auto;right:0;top:30px;transform:none}
+  .hs-ph{top:30px;transform:none}.hs-ph.hs-l{top:30px}.hs-ph.hs-r{left:auto;right:0;top:30px}
   .hs-co{left:136px;top:404px;width:208px}
   .hs-sup{left:127px;top:0;width:226px;border-radius:16px}
 }
@@ -1053,7 +1057,7 @@ function renderHome(){return `
   <div class="hrv r" style="--d:.3s">
 <div class="hs-wrap"><div class="hs" role="img" aria-label="A school morning in Sckools: the school's website on a monitor, the office console on a laptop, a teacher taking the register on the app, the principal approving a leave request from WhatsApp, and a Sckools person checking in.">
 <div class="hs-mon" aria-hidden="true"><div class="hs-mfr"><div class="hs-mscr"><div class="hs-bbar"><i></i><i></i><i></i><span class="hs-url">raffles.sckools.com</span></div><div class="hs-page"><img src="/site-preview/hs/site.jpg" alt="" width="1200" height="627" decoding="async"></div></div></div><div class="hs-neck"></div><div class="hs-foot"></div></div>
-<div class="hs-lap" aria-hidden="true"><div class="hs-lid"><div class="hs-lscr"><div class="hs-bbar"><i></i><i></i><i></i><span class="hs-url">raffles.sckools.com/app</span></div><div class="hs-page"><img src="/site-preview/hs/console.jpg" alt="" width="900" height="409" decoding="async"></div></div></div><div class="hs-base"></div></div>
+<div class="hs-lap" aria-hidden="true"><div class="hs-lid"><div class="hs-bz"><div class="hs-lscr"><div class="hs-menu"></div><div class="hs-bbar"><i></i><i></i><i></i><span class="hs-url">raffles.sckools.com/app</span></div><div class="hs-page"><img src="/site-preview/hs/console.jpg" alt="" width="900" height="409" decoding="async"></div></div></div></div><div class="hs-base"></div></div>
 <div class="hs-co" data-hs="co1"><span class="hs-src">Console</span><span class="hs-chip">Done</span><div class="hs-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div><div><b>Attendance today</b><small>V-C &#183; 26 of 27 present &#183; 8:52</small></div></div>
 <div class="hs-co hs-warn" data-hs="co2"><span class="hs-src">Console</span><span class="hs-chip">Waiting</span><div class="hs-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><div><b>Leave request</b><small>Rekha Sinha &#183; 2 days &#183; 5 periods to cover</small></div></div>
 <div class="hs-co" data-hs="co3"><span class="hs-src">Console</span><span class="hs-chip">Approved</span><div class="hs-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div><div><b>Leave approved</b><small>Cover asked from 3 teachers &#183; 8:54</small></div></div>
@@ -1502,7 +1506,7 @@ route();loadPricing();if(location.hash==='#callback'){history.replaceState(null,
     if(current){current.destroy();current=null;}
     var w=document.querySelector('.hs-wrap'); if(!w) return null;
     var s=w.querySelector('.hs');
-    function fit(){var dw=parseFloat(getComputedStyle(w).getPropertyValue('--dw'))||770;s.style.transform='scale('+(w.clientWidth/dw)+')';}
+    function fit(){var dw=parseFloat(getComputedStyle(w).getPropertyValue('--dw'))||800;s.style.transform='scale('+(w.clientWidth/dw)+')';}
     fit(); var ro=null; if('ResizeObserver' in window){ro=new ResizeObserver(fit);ro.observe(w);} else addEventListener('resize',fit);
     var el=function(k){return s.querySelector('[data-hs="'+k+'"]')};
     var tapL=el('tapL'),tapR=el('tapR'),att=el('att'),pill=el('pill'),t13=el('t13'),snack=el('snack'),co1=el('co1'),co2=el('co2'),co3=el('co3'),s1=el('s1'),s2=el('s2'),s3=el('s3'),tk=el('tk'),sup=el('sup'),dots=el('dots'),body=el('body'),approve=el('approve');
