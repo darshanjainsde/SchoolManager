@@ -83,7 +83,7 @@ html,body{margin:0;background:#fcfdff}
 
 .mkt .ln{display:block;overflow:hidden;padding-bottom:.24em;margin-bottom:-.24em}
 .mkt .ln i{display:block;font-style:normal;transform:translateY(130%);transition:transform .9s cubic-bezier(.16,.9,.24,1) var(--d,0s)} .mkt.go .ln i{transform:none}
-.mkt .hero-in{position:relative;display:grid;grid-template-columns:1.08fr .92fr;gap:56px;align-items:center;width:100%}
+.mkt .hero-in{position:relative;display:grid;grid-template-columns:1fr 1.22fr;gap:40px;align-items:center;width:100%}
 
 .mkt .hero .lede{margin:16px 0 20px} .mkt .hero-ctas{display:flex;gap:14px;flex-wrap:wrap}
 .mkt .hero-call{margin-top:12px;font-size:13.5px;font-weight:600;color:var(--muted)} .mkt .hero-call a{color:var(--teal);font-weight:800;text-decoration:underline;text-underline-offset:3px}
@@ -739,6 +739,144 @@ html,body{margin:0;background:#fcfdff}
 .mkt .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .mkt .fp .scr.shot{height:auto;min-height:0}
 .mkt .fp .scr.shot img{display:block;width:100%;height:auto;aspect-ratio:9/16;object-fit:cover;object-position:top}
+/* ── hero scene ── */
+/* Sckools hero scene (hs-): a 770×584 device cascade scaled as one object to its column.
+   PC monitor with the school's website at the back, laptop with the console front-right,
+   the teacher's phone with the app front-left, the principal's phone on WhatsApp front-right.
+   Every class is prefixed hs- so nothing collides with the page it lives in. */
+.hs-wrap{--dw:770;--dh:584;position:relative;width:min(770px,100%);aspect-ratio:770/584;margin-inline:auto}
+@media (min-width:1260px){.hs-wrap{width:min(770px,calc(100% + 80px))}}
+.hs{--hs-good:#1b7a4a;--hs-good-soft:#e3f5ea;--hs-warn:#9a5200;--hs-warn-soft:#fff0dc;--hs-app-bg:#eaf3eb;--hs-app-ink:#012707;position:absolute;left:0;top:0;width:calc(var(--dw)*1px);height:calc(var(--dh)*1px);transform-origin:top left;line-height:1.5}
+.hs,.hs *{box-sizing:border-box;margin:0}
+.hs p{margin:0}
+
+/* PC monitor at the back: 540 wide, screen 520×292.5 (16:9) = 24 browser bar + the website */
+.hs-mon{position:absolute;left:0;top:0;width:540px;z-index:1}
+.hs-mfr{position:relative;background:#141a21;border-radius:12px;padding:10px 10px 18px;box-shadow:0 30px 50px -24px rgba(16,36,59,.45),inset 0 0 0 1px rgba(255,255,255,.07)}
+.hs-mfr:after{content:"";position:absolute;left:50%;bottom:6px;width:26px;height:4px;margin-left:-13px;border-radius:2px;background:#2b3542}
+.hs-mscr{position:relative;aspect-ratio:16/9;background:#f6f7fa;border-radius:4px;overflow:hidden}
+.hs-neck{width:70px;height:44px;margin:0 auto;background:linear-gradient(90deg,#9ea7b1,#c9cfd6 50%,#9ea7b1);border-radius:0 0 3px 3px}
+.hs-foot{width:260px;height:12px;margin:0 auto;background:linear-gradient(#d5dae0,#b3bac3);border-radius:4px 4px 10px 10px;box-shadow:0 14px 22px -12px rgba(16,36,59,.5)}
+.hs-bbar{position:absolute;left:0;right:0;top:0;height:20px;background:#e9edf2;display:flex;align-items:center;gap:5px;padding:0 9px;font-size:8px;color:#4a5668;z-index:1}
+.hs-bbar i{width:6px;height:6px;border-radius:50%;background:#d2d7df;display:block;flex:none}
+.hs-bbar .hs-url{margin:0 auto;background:#fff;border-radius:6px;padding:1px 12px;min-width:200px;text-align:center;font-weight:600;color:#2b3a4e;white-space:nowrap}
+.hs-bbar .hs-url::before{content:"\1F512\FE0E";font-size:7px;margin-right:5px;opacity:.6}
+.hs-mscr .hs-bbar{height:24px;font-size:9.5px;gap:6px;padding:0 10px}
+.hs-mscr .hs-bbar i{width:7px;height:7px}
+.hs-page{position:absolute;left:0;right:0;top:20px;bottom:0;background:#f6f7fa}
+.hs-mscr .hs-page{top:24px}
+.hs-lscr .hs-page{background:linear-gradient(90deg,#0f1a2b 15%,#f6f7fa 15%)}
+.hs-page img{position:absolute;left:0;top:0;width:100%;height:auto;display:block;max-width:none}
+
+/* laptop, front-right; its base stands 30 px above the phones' baseline because it is a step behind them */
+.hs-lap{position:absolute;left:310px;top:291.5px;width:380px;z-index:2}
+.hs-lid{position:relative;background:#141a21;border-radius:16px 16px 4px 4px;padding:12px 12px 14px;box-shadow:0 30px 50px -24px rgba(16,36,59,.45),inset 0 0 0 1px rgba(255,255,255,.07)}
+.hs-lid:before{content:"";position:absolute;left:50%;top:4px;width:5px;height:5px;margin-left:-2.5px;border-radius:50%;background:#2b3542;box-shadow:inset 0 0 0 1px #0a0d12}
+.hs-lscr{position:relative;aspect-ratio:16/10;background:#f6f7fa;border-radius:4px;overflow:hidden}
+.hs-base{position:relative;height:14px;margin:0 -20px;background:linear-gradient(#e9ecf0,#c7cdd5);border-radius:2px 2px 12px 12px;box-shadow:0 16px 24px -14px rgba(16,36,59,.55)}
+.hs-base:before{content:"";position:absolute;left:50%;top:0;width:90px;height:5px;margin-left:-45px;background:#b0b7c1;border-radius:0 0 6px 6px}
+
+/* phones: screen 212×413 = 22 status bar + 9:16 screenshot (212×377) + 14 gesture bar */
+.hs-ph{position:absolute;top:151px;width:232px;height:433px;background:#0e1218;border-radius:34px;padding:10px;box-shadow:0 44px 64px -30px rgba(16,36,59,.6),inset 0 0 0 1.5px #2a313b}
+.hs-ph.hs-l{left:0;z-index:4}
+.hs-ph.hs-r{left:566px;top:195px;transform:scale(.88);transform-origin:top left;z-index:3}
+.hs-ph i.hs-k{position:absolute;background:#2a313b;border-radius:2px;display:block}
+.hs-l i.hs-k1{left:-2.5px;top:96px;width:3px;height:26px}.hs-l i.hs-k2{left:-2.5px;top:132px;width:3px;height:44px}.hs-l i.hs-k3{right:-2.5px;top:120px;width:3px;height:56px}
+.hs-r i.hs-k1{right:-2.5px;top:96px;width:3px;height:26px}.hs-r i.hs-k2{right:-2.5px;top:132px;width:3px;height:44px}.hs-r i.hs-k3{left:-2.5px;top:120px;width:3px;height:56px}
+.hs-scr{position:relative;width:212px;height:413px;border-radius:25px;overflow:hidden;background:var(--hs-app-bg)}
+.hs-scr:before{content:"";position:absolute;left:50%;top:6px;width:9px;height:9px;margin-left:-4.5px;border-radius:50%;background:#0b0f14;box-shadow:inset 0 0 0 1.5px #1c232c;z-index:7}
+.hs-sb{position:absolute;left:0;right:0;top:0;height:22px;display:flex;align-items:center;justify-content:space-between;padding:0 16px 0 15px;font-size:9.5px;font-weight:700;letter-spacing:.01em;z-index:6;color:#fff}
+.hs-sb.hs-dark{color:#0f2419}
+.hs-sb svg{display:block;height:9px;width:auto}
+.hs-sb .hs-ics{display:flex;align-items:center;gap:3px}
+.hs-screen{position:absolute;inset:0;isolation:isolate}
+.hs-screen>img{position:absolute;left:0;top:22px;width:212px;height:377px;display:block;max-width:none}
+.hs-gest{position:absolute;left:0;right:0;bottom:0;height:14px;background:var(--hs-app-bg)}
+.hs-gest:after{content:"";position:absolute;left:50%;bottom:4px;width:44px;height:3px;margin-left:-22px;border-radius:2px;background:rgba(1,39,7,.45)}
+.hs-s-home .hs-sbg{position:absolute;left:0;right:0;top:0;height:22px;background:linear-gradient(90deg,#012707,#073113)}
+.hs-s-att{z-index:2;transform:translateX(212px)}
+.hs-s-att .hs-sbg{position:absolute;left:0;right:0;top:0;height:22px;background:var(--hs-app-bg)}
+/* register-screen state, drawn on the screenshot's own geometry (source 1080×1920, k = 0.1963) */
+.hs-pill{position:absolute;left:8.6px;top:74.6px;width:194.8px;height:21.6px;border-radius:11px;background:#fff;display:flex;align-items:center;justify-content:center;gap:2px;font-size:6.6px;font-weight:600;color:#4f5e53;opacity:0;box-shadow:inset 0 0 0 .5px #dbe6dd}
+.hs-pill b{font-size:7.9px;font-weight:800;color:#0f2419;margin-left:2px}
+.hs-pill b.hs-g{color:#1f7a4a}.hs-pill b.hs-rd{color:#c43c3c}.hs-pill b.hs-am{color:#8a5a00}
+.hs-t13{position:absolute;left:17.1px;top:200px;width:25.5px;height:25.6px;border-radius:5.5px;background:#fbe4e6;color:#c43c3c;font-size:6.9px;font-weight:700;display:grid;place-items:center;opacity:0}
+.hs-snack{position:absolute;left:12px;right:12px;bottom:56px;background:#0f2419;color:#fff;font-size:9.5px;font-weight:600;padding:8px 11px;border-radius:12px;display:flex;align-items:center;gap:7px;box-shadow:0 10px 24px -8px rgba(0,0,0,.45);opacity:0;z-index:5}
+.hs-snack i{width:14px;height:14px;border-radius:50%;background:#1f7a4a;display:grid;place-items:center;font-style:normal;font-size:9px;flex:none}
+.hs-tap{position:absolute;left:0;top:0;width:26px;height:26px;margin:-13px 0 0 -13px;border-radius:50%;background:rgba(16,36,59,.22);box-shadow:0 0 0 2px rgba(255,255,255,.8),0 2px 10px rgba(0,0,0,.25);opacity:0;z-index:9;pointer-events:none}
+
+/* WhatsApp, drawn to the Android light theme */
+.hs-wa{background:#efeae2}
+.hs-wa .hs-sbg{position:absolute;left:0;right:0;top:0;height:22px;background:#f7f8fa}
+.hs-wah{position:absolute;left:0;right:0;top:22px;height:50px;background:#f7f8fa;border-bottom:1px solid #e4e7ea;display:flex;align-items:center;gap:5px;padding:0 7px 0 5px;z-index:3}
+.hs-wah .hs-bk{width:8px;height:8px;border-left:1.8px solid #111b21;border-bottom:1.8px solid #111b21;transform:rotate(45deg);margin-right:1px;flex:none}
+.hs-wah .hs-av{width:27px;height:27px;border-radius:50%;background:var(--hs-app-ink);color:#fff;font-size:10.5px;font-weight:800;display:grid;place-items:center;flex:none;letter-spacing:.02em}
+.hs-wah .hs-who{flex:1;min-width:0;line-height:1.2}
+.hs-wah .hs-who b{display:block;font-size:10px;font-weight:600;color:#111b21;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hs-wah .hs-who span{display:block;font-size:9.2px;color:#667781;white-space:nowrap}
+.hs-wah .hs-act{display:flex;gap:8px;align-items:center;color:#111b21;flex:none}
+.hs-wah .hs-act svg{width:13px;height:13px;display:block}
+.hs-chat{position:absolute;left:0;right:0;top:72px;bottom:46px;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;padding:0 8px 6px;background:#efeae2;background-image:radial-gradient(rgba(60,40,20,.055) 1px,transparent 1.2px);background-size:9px 9px}
+.hs-date{align-self:center;background:#fff;color:#54656f;font-size:8.5px;font-weight:600;padding:3px 8px;border-radius:7px;box-shadow:0 1px .5px rgba(0,0,0,.13);margin-bottom:6px;letter-spacing:.02em}
+.hs-slot{overflow:hidden;flex:none}
+.hs-slot.hs-h{height:0}
+.hs-m{position:relative;max-width:88%;font-size:10.4px;line-height:1.36;padding:5px 7px 6px;border-radius:8px;margin-top:5px;box-shadow:0 1px .5px rgba(0,0,0,.13);color:#111b21;width:fit-content}
+.hs-m b{display:block;font-weight:700;margin-bottom:1px}
+.hs-m.hs-in{background:#fff;border-top-left-radius:0;margin-left:5px}
+.hs-m.hs-out{background:#d9fdd3;border-top-right-radius:0;margin-left:auto;margin-right:5px}
+.hs-m.hs-in:before,.hs-m.hs-out:before{content:"";position:absolute;top:0;width:0;height:0;border:6px solid transparent}
+.hs-m.hs-in:before{left:-6px;border-top-color:#fff;border-right-color:#fff;border-left-width:0}
+.hs-m.hs-out:before{right:-6px;border-top-color:#d9fdd3;border-left-color:#d9fdd3;border-right-width:0}
+.hs-m time{float:right;font-size:8px;color:#667781;margin:7px 0 -4px 9px;white-space:nowrap}
+.hs-m .hs-tk{display:inline-block;margin-left:2px;color:#8696a0;font-style:normal;letter-spacing:-.22em;font-weight:700}
+.hs-m .hs-btns{clear:both;margin:7px -7px -6px;border-top:1px solid #e9edef}
+.hs-m .hs-btns span{display:flex;align-items:center;justify-content:center;gap:4px;padding:5px 4px;color:#027eb5;font-weight:600;font-size:10.4px}
+.hs-m .hs-btns span+span{border-top:1px solid #e9edef}
+.hs-m .hs-btns svg{width:10px;height:10px}
+.hs-comp{position:absolute;left:0;right:0;bottom:14px;height:32px;display:flex;align-items:center;gap:5px;padding:0 6px;background:#efeae2;z-index:3}
+.hs-comp .hs-box{flex:1;height:26px;background:#fff;border-radius:13px;display:flex;align-items:center;gap:7px;padding:0 9px;font-size:10px;color:#8696a0;min-width:0}
+.hs-comp .hs-box svg{width:12px;height:12px;color:#54656f;flex:none}
+.hs-comp .hs-box span{flex:1}
+.hs-comp .hs-mic{width:26px;height:26px;border-radius:50%;background:#00a884;display:grid;place-items:center;flex:none}
+.hs-comp .hs-mic svg{width:12px;height:12px}
+.hs-wa .hs-gest{background:#f0f2f5}
+.hs-wa .hs-gest:after{background:rgba(17,27,33,.45)}
+
+/* console cards, popping off the top edge of the laptop lid */
+.hs-co{position:absolute;left:322px;top:238px;width:226px;background:var(--card,#fff);border:1px solid var(--line,#e3ecf2);border-radius:13px;padding:9px 11px 9px 10px;display:grid;grid-template-columns:30px 1fr;gap:9px;align-items:center;box-shadow:var(--sh-lift,0 30px 60px -24px rgba(16,36,59,.35));opacity:0;z-index:5}
+.hs-co .hs-ico{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:var(--hs-good-soft);color:var(--hs-good)}
+.hs-co .hs-ico svg{width:16px;height:16px}
+.hs-co.hs-warn .hs-ico{background:var(--hs-warn-soft);color:var(--hs-warn)}
+.hs-co b{display:block;font-size:11.5px;letter-spacing:-.01em;line-height:1.25;color:var(--ink,#10243b)}
+.hs-co small{display:block;font-size:10.5px;color:var(--muted,#54687d);line-height:1.3;margin-top:1px}
+.hs-co .hs-chip{position:absolute;right:10px;top:-9px;font-size:9.5px;font-weight:800;padding:2px 8px;border-radius:999px;background:var(--hs-good);color:#fff;line-height:1.4}
+.hs-co.hs-warn .hs-chip{background:var(--gold,#f5a623);color:#3b2a00}
+.hs-co .hs-src{position:absolute;left:10px;top:-9px;font-size:9px;font-weight:800;padding:2px 7px;border-radius:999px;background:var(--violet-soft,#ece6ff);color:var(--violet,#6d4aff);line-height:1.4}
+
+/* a Sckools person: a chat bubble over the monitor's top-right corner */
+.hs-sup{position:absolute;left:544px;top:0;width:226px;background:var(--card,#fff);border:1px solid var(--line,#e3ecf2);border-radius:16px 16px 16px 4px;padding:10px 12px 11px;box-shadow:var(--sh-lift,0 30px 60px -24px rgba(16,36,59,.35));z-index:6;opacity:0}
+.hs-sup .hs-hd{display:flex;align-items:center;gap:8px}
+.hs-sup .hs-sav{width:28px;height:28px;border-radius:50%;background:var(--teal,#0d9488);color:#fff;font-weight:800;font-size:12px;display:grid;place-items:center;position:relative;flex:none}
+.hs-sup .hs-sav:after{content:"";position:absolute;right:-1px;bottom:-1px;width:8px;height:8px;border-radius:50%;background:#22c55e;border:2px solid var(--card,#fff)}
+.hs-sup .hs-hd b{display:block;font-size:11.5px;line-height:1.2;color:var(--ink,#10243b)}
+.hs-sup .hs-hd span{display:block;font-size:10px;color:var(--muted,#54687d)}
+.hs-sup .hs-dots{display:flex;gap:3px;margin:10px 0 2px 2px;height:12px;align-items:center;overflow:hidden}
+.hs-sup .hs-dots i{width:5px;height:5px;border-radius:50%;background:var(--dim,#5f7387);opacity:.45;display:block}
+.hs-sup .hs-body{overflow:hidden;height:0}
+.hs-sup p{font-size:11.2px;line-height:1.4;margin-top:8px;color:var(--ink,#10243b)}
+.hs-sup .hs-acts{display:flex;gap:6px;margin-top:9px}
+.hs-sup .hs-acts span{font-size:10.5px;font-weight:800;padding:5px 10px;border-radius:999px;border:1.5px solid var(--line2,#cbdce6);color:var(--ink,#10243b);line-height:1.3}
+.hs-sup .hs-acts span.hs-y{background:var(--teal,#0d9488);border-color:var(--teal,#0d9488);color:#fff}
+
+/* under 640 px the monitor and laptop leave; the two phones carry the scene at full size (480×470 box) */
+@media (max-width:640px){
+  .hs-wrap{--dw:480;--dh:470;width:min(480px,100%);aspect-ratio:480/470}
+  .hs-lap,.hs-mon{display:none}
+  .hs-ph{top:30px}.hs-ph.hs-r{left:auto;right:0;top:30px;transform:none}
+  .hs-co{left:136px;top:404px;width:208px}
+  .hs-sup{left:127px;top:0;width:226px;border-radius:16px}
+}
+@media (prefers-reduced-motion:reduce){.hs .hs-tap{display:none}}
 </style>
 </head>
 <body>
@@ -906,18 +1044,35 @@ function renderHome(){return `
   <div>
     <span class="eyebrow hrv" style="--d:0s">✦ School website · ERP · family app</span>
     <h1 class="h-xl"><span class="ln"><i style="--d:.05s">Your school,</i></span><span class="ln"><i style="--d:.18s">on a <span class="hl">bigger stage<svg viewBox="0 0 300 24" preserveAspectRatio="none" aria-hidden="true"><path d="M4 16 C 60 22, 120 6, 170 12 S 270 20, 296 10"/></svg></span></i></span></h1>
-    <p class="lede hrv" style="--d:.36s">A school website, school management software (what most vendors call an ERP) and a family app — one login, one price per student. The admissions desk, fees and receipts, the attendance register, report cards, the library, the TV in reception, and a live network of schools where your students compete and get discovered.</p>
+    <p class="lede hrv" style="--d:.36s">A school website, school management software (what most vendors call an ERP) and a family app. One login. One price per student.</p>
     <div class="hero-ctas hrv" style="--d:.48s"><button class="btn btn-hot" data-journey>Get for your school →</button><button class="btn btn-ghost" data-callback>Request a callback</button></div>
+    <p class="hero-call hrv" style="--d:.52s">The website for families, the console for the office, the app for teachers, and WhatsApp for the principal. One login.</p>
     <a class="ptag hrv" style="--d:.56s" href="#/pricing" title="Click to see exact pricing" aria-label="Pricing starts from ₹ per student, a year. Click to see exact pricing."><span class="amt"><em>Starting from</em><span data-from>₹30</span><small>per student · a year</small></span><span class="tx"><b>Basic · Standard · Pro</b><span>Priced per student. App included.</span><i>Click to see exact pricing <u>→</u></i></span></a>
     <div class="trust hrv" style="--d:.6s"><div class="t"><b data-count="13">0</b><span>modules, one login</span></div><div class="t"><b data-count="51">0</b><span>features, listed</span></div><div class="t"><b data-count="1">0</b><span>price, per student a year</span></div><div class="t"><b data-count="4">0</b><span>apps + the TV</span></div></div>
   </div>
-  <div class="stage hrv r" style="--d:.3s">
-    <div class="browser" id="browser"><div class="bbar"><i style="background:#FF8A80"></i><i style="background:#FFD54F"></i><i style="background:#81E6C0"></i><span class="url">🔒 <span class="tu">beacon.sckools.com</span><i class="caret"></i></span></div>
-      <div class="bhero"><div class="tag bld">ADMISSIONS OPEN 2027–28</div><p class="bld h4" style="--d:.1s">Beacon Public School</p><p class="bld" style="--d:.2s">Where curiosity meets excellence — Nursery to Grade 12</p><span class="mini bld" style="--d:.3s">Enquire now</span></div>
-      <div class="brow"><div class="bcell bld" style="--d:.4s"><b>Courses</b><span>flip-card explorer</span></div><div class="bcell bld" style="--d:.5s"><b>Hall of Fame</b><span>class toppers</span></div><div class="bcell bld" style="--d:.6s"><b>Events</b><span>network feed</span></div></div></div>
-    <div class="chip ch1"><span class="ci" style="background:var(--teal-soft)">📥</span><div><b>New enquiry</b><span>Sunita, for Grade 3 · just now</span></div><i class="ping"></i></div>
-    <div class="chip ch2"><span class="ci" style="background:var(--gold-soft)">✅</span><div><b>Kabir marked absent</b><span>8C · family told 08:14</span></div><i class="ping"></i></div>
-    <div class="chip ch3"><span class="ci" style="background:var(--violet-soft)">🧾</span><div><b>Receipt #0412 printed</b><span>Term 2 · ₹24,000 · UPI</span></div><i class="ping"></i></div>
+  <div class="hrv r" style="--d:.3s">
+<div class="hs-wrap"><div class="hs" role="img" aria-label="A school morning in Sckools: the school's website on a monitor, the office console on a laptop, a teacher taking the register on the app, the principal approving a leave request from WhatsApp, and a Sckools person checking in.">
+<div class="hs-mon" aria-hidden="true"><div class="hs-mfr"><div class="hs-mscr"><div class="hs-bbar"><i></i><i></i><i></i><span class="hs-url">raffles.sckools.com</span></div><div class="hs-page"><img src="/site-preview/hs/site.jpg" alt="" width="1200" height="627" decoding="async"></div></div></div><div class="hs-neck"></div><div class="hs-foot"></div></div>
+<div class="hs-lap" aria-hidden="true"><div class="hs-lid"><div class="hs-lscr"><div class="hs-bbar"><i></i><i></i><i></i><span class="hs-url">raffles.sckools.com/app</span></div><div class="hs-page"><img src="/site-preview/hs/console.jpg" alt="" width="900" height="409" decoding="async"></div></div></div><div class="hs-base"></div></div>
+<div class="hs-co" data-hs="co1"><span class="hs-src">Console</span><span class="hs-chip">Done</span><div class="hs-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div><div><b>Attendance today</b><small>V-C &#183; 26 of 27 present &#183; 8:52</small></div></div>
+<div class="hs-co hs-warn" data-hs="co2"><span class="hs-src">Console</span><span class="hs-chip">Waiting</span><div class="hs-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><div><b>Leave request</b><small>Rekha Sinha &#183; 2 days &#183; 5 periods to cover</small></div></div>
+<div class="hs-co" data-hs="co3"><span class="hs-src">Console</span><span class="hs-chip">Approved</span><div class="hs-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div><div><b>Leave approved</b><small>Cover asked from 3 teachers &#183; 8:54</small></div></div>
+<div class="hs-ph hs-l" aria-hidden="true"><i class="hs-k hs-k1"></i><i class="hs-k hs-k2"></i><i class="hs-k hs-k3"></i><div class="hs-scr">
+<div class="hs-screen hs-s-home"><div class="hs-sbg"></div><img src="/site-preview/hs/teacher-home.jpg" alt="" width="540" height="960" fetchpriority="high"><div class="hs-sb"><span>8:51</span><span class="hs-ics"><svg viewBox="0 0 16 10"><rect x="0" y="6" width="3" height="4" rx=".6" fill="currentColor"/><rect x="4" y="4" width="3" height="6" rx=".6" fill="currentColor"/><rect x="8" y="2" width="3" height="8" rx=".6" fill="currentColor"/><rect x="12" y="0" width="3" height="10" rx=".6" fill="currentColor"/></svg><svg viewBox="0 0 14 10"><path d="M7 9.5a1.2 1.2 0 1 0 0-2.4 1.2 1.2 0 0 0 0 2.4zM2.6 5.6a6.2 6.2 0 0 1 8.8 0l-1.3 1.3a4.4 4.4 0 0 0-6.2 0zM0 3a10 10 0 0 1 14 0l-1.3 1.3a8.2 8.2 0 0 0-11.4 0z" fill="currentColor"/></svg><svg viewBox="0 0 22 10"><rect x=".5" y=".5" width="18" height="9" rx="2" fill="none" stroke="currentColor"/><rect x="2" y="2" width="13" height="6" rx="1" fill="currentColor"/><rect x="19.5" y="3" width="2" height="4" rx=".7" fill="currentColor"/></svg></span></div><div class="hs-gest"></div></div>
+<div class="hs-screen hs-s-att" data-hs="att"><div class="hs-sbg"></div><img src="/site-preview/hs/take-register.jpg" alt="" width="540" height="960" decoding="async"><div class="hs-sb hs-dark"><span>8:52</span><span class="hs-ics"><svg viewBox="0 0 16 10"><rect x="0" y="6" width="3" height="4" rx=".6" fill="currentColor"/><rect x="4" y="4" width="3" height="6" rx=".6" fill="currentColor"/><rect x="8" y="2" width="3" height="8" rx=".6" fill="currentColor"/><rect x="12" y="0" width="3" height="10" rx=".6" fill="currentColor"/></svg><svg viewBox="0 0 14 10"><path d="M7 9.5a1.2 1.2 0 1 0 0-2.4 1.2 1.2 0 0 0 0 2.4zM2.6 5.6a6.2 6.2 0 0 1 8.8 0l-1.3 1.3a4.4 4.4 0 0 0-6.2 0zM0 3a10 10 0 0 1 14 0l-1.3 1.3a8.2 8.2 0 0 0-11.4 0z" fill="currentColor"/></svg><svg viewBox="0 0 22 10"><rect x=".5" y=".5" width="18" height="9" rx="2" fill="none" stroke="currentColor"/><rect x="2" y="2" width="13" height="6" rx="1" fill="currentColor"/><rect x="19.5" y="3" width="2" height="4" rx=".7" fill="currentColor"/></svg></span></div>
+<div class="hs-pill" data-hs="pill"><b>27</b>students &#183;<b class="hs-g">26</b>present &#183;<b class="hs-rd">1</b>absent &#183;<b class="hs-am">0</b>late</div><div class="hs-t13" data-hs="t13">13</div><div class="hs-snack" data-hs="snack"><i>&#10003;</i>Register sent &#183; families told</div><div class="hs-gest"></div></div>
+<div class="hs-tap" data-hs="tapL"></div></div></div>
+<div class="hs-ph hs-r" aria-hidden="true"><i class="hs-k hs-k1"></i><i class="hs-k hs-k2"></i><i class="hs-k hs-k3"></i><div class="hs-scr hs-wa"><div class="hs-sbg"></div>
+<div class="hs-sb hs-dark"><span>8:53</span><span class="hs-ics"><svg viewBox="0 0 16 10"><rect x="0" y="6" width="3" height="4" rx=".6" fill="currentColor"/><rect x="4" y="4" width="3" height="6" rx=".6" fill="currentColor"/><rect x="8" y="2" width="3" height="8" rx=".6" fill="currentColor"/><rect x="12" y="0" width="3" height="10" rx=".6" fill="currentColor"/></svg><svg viewBox="0 0 14 10"><path d="M7 9.5a1.2 1.2 0 1 0 0-2.4 1.2 1.2 0 0 0 0 2.4zM2.6 5.6a6.2 6.2 0 0 1 8.8 0l-1.3 1.3a4.4 4.4 0 0 0-6.2 0zM0 3a10 10 0 0 1 14 0l-1.3 1.3a8.2 8.2 0 0 0-11.4 0z" fill="currentColor"/></svg><svg viewBox="0 0 22 10"><rect x=".5" y=".5" width="18" height="9" rx="2" fill="none" stroke="currentColor"/><rect x="2" y="2" width="13" height="6" rx="1" fill="currentColor"/><rect x="19.5" y="3" width="2" height="4" rx=".7" fill="currentColor"/></svg></span></div>
+<div class="hs-wah"><span class="hs-bk"></span><span class="hs-av">RP</span><div class="hs-who"><b>Raffles Primary School</b><span>Business account</span></div><span class="hs-act"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></span></div>
+<div class="hs-chat"><div class="hs-date">Today</div>
+<div class="hs-slot"><div class="hs-m hs-in">Good morning. 24 of 26 registers are in by 8:30. V-C and VIII-B are still open.<time>8:31</time></div></div>
+<div class="hs-slot hs-h" data-hs="s1"><div class="hs-m hs-in"><b>Leave request</b>Rekha Sinha (class teacher, V-C) has applied for leave on Mon 22 &#8211; Tue 23 Oct, 2 days. 5 periods need cover.<time>8:53</time><div class="hs-btns"><span data-hs="approve"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>Approve</span><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>Reject</span></div></div></div>
+<div class="hs-slot hs-h" data-hs="s2"><div class="hs-m hs-out">Approve<time>8:53<i class="hs-tk" data-hs="tk">&#10003;&#10003;</i></time></div></div>
+<div class="hs-slot hs-h" data-hs="s3"><div class="hs-m hs-in"><b>Approved &#10003;</b>Rekha has been told. Cover for 5 periods asked from Ms Iyer, Mr Rao and Ms D&#8217;Souza. You will get one message when it is filled.<time>8:54</time></div></div></div>
+<div class="hs-comp"><span class="hs-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0"/><path d="M9 10h.01M15 10h.01"/></svg><span>Message</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.5l-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l9-9a3.5 3.5 0 0 1 5 5l-9 9a1.5 1.5 0 0 1-2.1-2.1l8.3-8.3"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></span><span class="hs-mic"><svg viewBox="0 0 24 24" fill="#fff"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M6 11a6 6 0 0 0 12 0h-1.6a4.4 4.4 0 0 1-8.8 0zM11.2 17h1.6v4h-1.6z"/></svg></span></div><div class="hs-gest"></div><div class="hs-tap" data-hs="tapR"></div></div></div>
+<div class="hs-sup" data-hs="sup" aria-hidden="true"><div class="hs-hd"><span class="hs-sav">R</span><div><b>Rhea &#183; Sckools team</b><span>Online &#183; replies in minutes</span></div></div><div class="hs-dots" data-hs="dots"><i></i><i></i><i></i></div><div class="hs-body" data-hs="body"><p>Your school is set up. Want a 10-minute walkthrough of cover duty before Monday? I can call now.</p><div class="hs-acts"><span class="hs-y">Call me</span><span>Later</span></div></div></div>
+</div></div>
   </div>
 </div></header>
 <div class="marq" aria-hidden="true"><div class="track">${[...MARQ,...MARQ].map(([e,b,r])=>`<span class="mchip">${e} <b>${b}</b>${r?' '+r:''}</span>`).join('')}</div><div class="track rev">${[...MARQ,...MARQ].reverse().map(([e,b,r])=>`<span class="mchip">${e} <b>${b}</b>${r?' '+r:''}</span>`).join('')}</div></div>
@@ -1210,7 +1365,7 @@ function parseHash(){const h=location.hash||(window.__ROUTE?'#/'+window.__ROUTE:
 function renderNav(page){const on=h=>(h==='#/features'&&page==='features')||(h==='#/pricing'&&page==='pricing')?'on':'';document.getElementById('navlinks').innerHTML=NAV.map(n=>`<a href="${n.href}" class="lnk ${on(n.href)}">${n.label}</a>`).join('');document.getElementById('mmenu').innerHTML=NAV.map(n=>`<a href="${n.href}" class="${on(n.href)}">${n.label}</a>`).join('')+`<a href="tel:+919599443324" style="color:var(--teal)">📞 Call +91 95994 43324</a><button class="btn btn-hot btn-sm" data-callback>Request a callback</button>`;}
 let lastPage=null;
 function route(){const r=parseHash(),app=document.getElementById('app'),first=lastPage===null;if(r.params.who)filt.who=r.params.who;if(r.params.plan)filt.plan=r.params.plan;const page=r.page==='features'?'features':r.page==='pricing'?'pricing':'home',isStart=r.page==='start';
-  if(page!==lastPage){clearTimeout(proTimer);app.innerHTML=page==='features'?renderFeatures():page==='pricing'?renderPricing():renderHome();lastPage=page;if(!r.anchor)scrollTo(0,0);if(root.classList.contains('go'))observe();if(page==='home'){heroLoop();startPro();if(root.classList.contains('built'))setTimeout(typeUrl,200);}fitPhones();setTimeout(fitPhones,350);}
+  if(page!==lastPage){clearTimeout(proTimer);app.innerHTML=page==='features'?renderFeatures():page==='pricing'?renderPricing():renderHome();lastPage=page;if(!r.anchor)scrollTo(0,0);if(root.classList.contains('go'))observe();if(page==='home'){heroLoop();if(typeof hsInit==='function')hsInit();startPro();if(root.classList.contains('built'))setTimeout(typeUrl,200);}fitPhones();setTimeout(fitPhones,350);}
   renderNav(page);renderPrices();document.getElementById('mmenu').classList.remove('open');document.getElementById('burger').setAttribute('aria-expanded','false');
   if(r.anchor){const go=()=>{const el=document.getElementById(r.anchor);if(el)el.scrollIntoView({behavior:(first||document.hidden)?'auto':'smooth',block:'start'});};setTimeout(go,40);setTimeout(go,420);}
   if(page==='features'&&r.id)openDrawer(r.id);else closeDrawer();
@@ -1335,6 +1490,84 @@ function okNow_(t){return t.dataset.ji==='phone'?t.value.replace(/\D/g,'').lengt
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.matches('#jy input.jy-in')){e.preventDefault();if(J.step===1){if(valid(1)){J.tried=false;goStep(2);}else{J.tried=true;saveJ();refreshJourney();}}else if(J.step===2){if(valid(2)){document.querySelector('#jy-foot [data-j="submit"]')?.click();}else{J.tried=true;saveJ();refreshJourney();}}}});
 
 route();loadPricing();if(location.hash==='#callback'){history.replaceState(null,'','/');openModal('');}
+/* ── hero scene ── */
+/* Sckools hero scene: fit-to-column + a 16.1 s looping timeline with no library.
+   Every frame rebuilds each animated element's state from the items that have started,
+   so a wrap back to 0 s returns everything to its stylesheet defaults for free. */
+(function(){
+  var current=null;
+  var EASE={o2:function(p){return 1-(1-p)*(1-p)},o3:function(p){return 1-Math.pow(1-p,3)},i3:function(p){return p*p*p},back:function(p){var c=1.6,d=c+1;return 1+d*Math.pow(p-1,3)+c*Math.pow(p-1,2)},lin:function(p){return p}};
+  var DEF={o:1,x:0,y:0,s:1,h:0,m:0};
+  function hsInit(){
+    if(current){current.destroy();current=null;}
+    var w=document.querySelector('.hs-wrap'); if(!w) return null;
+    var s=w.querySelector('.hs');
+    function fit(){var dw=parseFloat(getComputedStyle(w).getPropertyValue('--dw'))||770;s.style.transform='scale('+(w.clientWidth/dw)+')';}
+    fit(); var ro=null; if('ResizeObserver' in window){ro=new ResizeObserver(fit);ro.observe(w);} else addEventListener('resize',fit);
+    var el=function(k){return s.querySelector('[data-hs="'+k+'"]')};
+    var tapL=el('tapL'),tapR=el('tapR'),att=el('att'),pill=el('pill'),t13=el('t13'),snack=el('snack'),co1=el('co1'),co2=el('co2'),co3=el('co3'),s1=el('s1'),s2=el('s2'),s3=el('s3'),tk=el('tk'),sup=el('sup'),dots=el('dots'),body=el('body'),approve=el('approve');
+    var items=[];
+    function tw(e,from,to,at,dur,ease){items.push({el:e,from:from,to:to,at:at,dur:dur||0,ease:EASE[ease||'o2']});}
+    function tap(e,x,y,at){tw(e,null,{x:x,y:y},at,0);tw(e,{s:.4,o:0},{s:1,o:1},at,.16);tw(e,null,{s:1.7,o:0},at+.16,.4);}
+    function cardIn(e,at){tw(e,{o:0,y:14,s:.96},{o:1,y:0,s:1},at,.45,'back');}
+    function cardOut(e,at){tw(e,null,{o:0,y:-10},at,.3);}
+    function bubble(slot,at){tw(slot,{h:0},{h:'auto'},at,.42);tw(slot.firstElementChild,{o:0,y:12,s:.97},{o:1,y:0,s:1},at+.05,.42);}
+    /* the Approve button's centre in the WhatsApp screen's own pixels, read when the tap fires */
+    function centre(axis){return function(){var r=approve.getBoundingClientRect(),b=tapR.parentNode.getBoundingClientRect(),k=b.width/212;return axis==='x'?(r.left-b.left+r.width/2)/k:(r.top-b.top+r.height/2)/k;};}
+    /* act 1: the register */
+    tap(tapL,106,139,.9);
+    tw(att,{x:212},{x:0},1.2,.55,'o3');
+    tap(tapL,30,213,2.3);
+    tw(t13,{o:0,s:.7},{o:1,s:1},2.45,.22);
+    tw(pill,{o:0},{o:1},2.5,.2);
+    tap(tapL,106,335,3.3);
+    tw(snack,{o:0,y:18},{o:1,y:0},3.55,.38);
+    cardIn(co1,3.75);
+    tw(snack,null,{o:0},5.6,.3);
+    /* act 2: leave, approved from WhatsApp */
+    bubble(s1,5.5);
+    cardOut(co1,5.45); cardIn(co2,5.8);
+    tw(tapR,null,{x:centre('x'),y:centre('y')},7.0,0);
+    tw(tapR,{s:.4,o:0},{s:1,o:1},7.02,.16); tw(tapR,null,{s:1.7,o:0},7.18,.4);
+    bubble(s2,7.3);
+    tw(tk,null,{c:'#53bdeb'},8.2,0);
+    bubble(s3,8.7);
+    cardOut(co2,8.65); cardIn(co3,9.0);
+    /* act 3: a Sckools person */
+    tw(sup,{o:0,y:10,s:.95},{o:1,y:0,s:1},10.3,.4,'back');
+    var ds=dots.children; for(var i=0;i<3;i++){for(var c=0;c<6;c++){var up=c%2===0;tw(ds[i],up?{o:.45,y:0}:{o:1,y:-3},up?{o:1,y:-3}:{o:.45,y:0},10.5+i*.12+c*.28,.28,'lin');}}
+    tw(dots,null,{h:0,m:0,o:0},11.6,.25);
+    tw(body,{h:0},{h:'auto'},11.65,.45);
+    /* reset: animate out; the wrap to 0 s clears the rest */
+    tw(co3,null,{o:0},14.6,.35); tw(sup,null,{o:0},14.6,.35);
+    tw(att,null,{x:212},14.7,.5,'i3');
+    tw(s1,null,{h:0},14.75,.4); tw(s2,null,{h:0},14.75,.4); tw(s3,null,{h:0},14.75,.4);
+    tw(t13,null,{o:0},15.25,0); tw(pill,null,{o:0},15.25,0); tw(body,null,{h:0},15.25,0);
+    var period=16.1;
+    function state(t){var map=new Map();for(var i=0;i<items.length;i++){var it=items[i];if(t<it.at)continue;var p=it.dur?Math.min(1,(t-it.at)/it.dur):1,e=it.ease(p),st=map.get(it.el);if(!st){st={};map.set(it.el,st);}for(var k in it.to){var to=it.to[k];if(typeof to==='function')to=to();if(to==='auto')to=it.el.scrollHeight;var from=(it.from&&k in it.from)?it.from[k]:(k in st?st[k]:DEF[k]);st[k]=(typeof to==='string')?(p>=1?to:(k in st?st[k]:'')):from+(to-from)*e;}}return map;}
+    var prev=new Set();
+    function put(e,prop,val){var c=e.__hs||(e.__hs={});if(c[prop]===val)return;c[prop]=val;e.style[prop]=val;}
+    function apply(map){map.forEach(function(st,e){var tr='';if('x' in st||'y' in st)tr+='translate('+(st.x||0)+'px,'+(st.y||0)+'px)';if('s' in st)tr+=' scale('+st.s+')';put(e,'transform',tr);put(e,'opacity','o' in st?String(st.o):'');put(e,'height','h' in st?st.h+'px':'');put(e,'margin','m' in st?st.m+'px':'');put(e,'color','c' in st?st.c:'');});prev.forEach(function(e){if(!map.has(e)){put(e,'transform','');put(e,'opacity','');put(e,'height','');put(e,'margin','');put(e,'color','');}});prev=new Set(map.keys());}
+    var now=function(){return performance.now()/1000}, t0=now(), paused=false, pauseAt=0, raf=0, hover=false, offscreen=false;
+    function cur(){var t=(paused?pauseAt:now()-t0)%period;return t<0?t+period:t;}
+    function frame(){apply(state(cur()));raf=requestAnimationFrame(frame);}
+    function pause(t){if(typeof t==='number'){t0=now()-t;}if(!paused){pauseAt=now()-t0;paused=true;}else if(typeof t==='number'){pauseAt=t;}cancelAnimationFrame(raf);apply(state(cur()));}
+    function play(){if(hover||offscreen)return;if(!paused)return;t0=now()-pauseAt;paused=false;cancelAnimationFrame(raf);raf=requestAnimationFrame(frame);}
+    var reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var io=null, onEnter=function(){hover=true;pause();}, onLeave=function(){hover=false;play();};
+    if(reduce){pause(14.2);}
+    else{
+      s.addEventListener('mouseenter',onEnter); s.addEventListener('mouseleave',onLeave);
+      if('IntersectionObserver' in window){io=new IntersectionObserver(function(en){offscreen=!en[0].isIntersecting;if(offscreen)pause();else play();},{threshold:.1});io.observe(s);}
+      raf=requestAnimationFrame(frame);
+    }
+    current={pause:pause,play:play,seek:function(t){pause(t);},resume:function(){hover=false;offscreen=false;play();},destroy:function(){cancelAnimationFrame(raf);if(ro)ro.disconnect();if(io)io.disconnect();s.removeEventListener('mouseenter',onEnter);s.removeEventListener('mouseleave',onLeave);}};
+    window.__hs=current; return current;
+  }
+  window.hsInit=hsInit;
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){hsInit();});else hsInit();
+})();
+
 </script>
 </body>
 </html>
