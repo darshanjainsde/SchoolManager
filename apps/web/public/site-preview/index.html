@@ -338,7 +338,7 @@ html,body{margin:0;background:#fcfdff}
 @keyframes mkPop{from{opacity:0;transform:scale(.92) translateY(14px)}to{opacity:1;transform:none}}
 .mkt-modal h3{margin:0 0 6px;font-weight:800;font-size:1.3rem} .mkt-modal .sub{font-size:14px;color:#54687d;margin-bottom:18px}
 .mkt-modal label{display:block;font-size:12px;font-weight:800;color:#54687d;margin:13px 0 5px;letter-spacing:.04em} .mkt-modal input{width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid #cbdce6;background:#fff;color:#10243b;font-size:14.5px;font-family:inherit} .mkt-modal input:focus{outline:none;border-color:#14b8a6;box-shadow:0 0 0 4px rgba(20,184,166,.15)}
-.mkt-modal .btn{width:100%;justify-content:center;margin-top:22px} .mkt-modal .mclose{position:absolute;top:16px;right:18px;background:#f1f7f8;border:none;color:#54687d;font-size:15px;cursor:pointer;width:32px;height:32px;border-radius:50%}
+.mkt-modal .ferr{display:block;color:#b3410f;font-size:12.5px;font-weight:700;margin-top:6px} .mkt-modal .ferr[hidden]{display:none} .mkt-modal input[aria-invalid="true"]{border-color:#d14e1b} .mkt-modal .btn{width:100%;justify-content:center;margin-top:22px} .mkt-modal .mclose{position:absolute;top:16px;right:18px;background:#f1f7f8;border:none;color:#54687d;font-size:15px;cursor:pointer;width:32px;height:32px;border-radius:50%}
 .mkt-modal .sent{text-align:center;padding:26px 0;display:none} .mkt-modal .sent .tick{width:62px;height:62px;border-radius:50%;background:#d8f3ef;display:grid;place-items:center;font-size:28px;color:#0d9488;margin:0 auto 16px;animation:mkPop .4s both}
 .mkt-modal.done form{display:none} .mkt-modal.done .sent{display:block} .mkt-modal .proto{font-size:12px;color:#8ca0b3;text-align:center;margin-top:12px}
 /* ★ NEW — features page, same vocabulary */
@@ -876,13 +876,13 @@ html,body{margin:0;background:#fcfdff}
   <div class="scrim" id="scrim"></div>
   <aside class="drawer" id="drawer" aria-label="Feature detail" aria-hidden="true"><div class="in" id="drawer-in"></div></aside>
   <div class="jy" id="jy" role="dialog" aria-modal="true" aria-label="Build your Sckools"></div>
-</div>
 <div class="mkt-modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="mtitle"><div class="mbox">
   <button class="mclose" data-close-modal aria-label="Close">✕</button>
   <h3 id="mtitle">Request a callback</h3><p class="sub" id="msub">A real person calls within one working day and shows you Sckools on your own school, live.</p>
-  <form id="mform"><label for="mf-school">School name</label><input id="mf-school" name="school" placeholder="e.g. Beacon Public School" autocomplete="organization" required><label for="mf-phone">Phone</label><input id="mf-phone" name="phone" type="tel" inputmode="tel" placeholder="+91" autocomplete="tel" required><button class="btn btn-hot" type="submit">Request a callback</button></form>
+  <form id="mform" novalidate><label for="mf-school">School name</label><input id="mf-school" name="school" placeholder="e.g. Beacon Public School" autocomplete="organization" required aria-describedby="mf-school-err"><span class="ferr" id="mf-school-err" hidden></span><label for="mf-phone">Phone</label><input id="mf-phone" name="phone" type="tel" inputmode="tel" placeholder="+91 98765 43210" autocomplete="tel" required aria-describedby="mf-phone-err"><span class="ferr" id="mf-phone-err" hidden></span><button class="btn btn-hot" type="submit">Request a callback</button></form>
   <div class="sent" role="status" aria-live="polite"><div class="tick">✓</div><b style="font-size:1.05rem">Callback requested</b><p class="sub" style="margin-top:6px">We'll call within one working day.</p></div>
 </div></div>
+</div>
 <script>
 /* Catalogue — in the real build: GET /marketing/features from a typed constant beside
    packages/db/src/features.ts. Tier badges are COMPUTED from TIER_FEATURES, never typed. */
@@ -1355,7 +1355,12 @@ document.addEventListener('click',e=>{const t=e.target.closest('[data-journey],[
 document.addEventListener('input',e=>{if(e.target.id==='q'){filt.q=e.target.value.trim();refilter();}if(e.target.id==='calc-n'){document.querySelectorAll('.calc-n-echo').forEach(x=>x.textContent=(+e.target.value).toLocaleString('en-IN'));renderPrices();}});
 document.addEventListener('click',e=>{const b=e.target.closest('.cur [data-cur]');if(!b)return;CUR=b.dataset.cur;try{localStorage.setItem('sk-cur',CUR);}catch(x){}renderPrices();});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeDrawer();closeModal();}});
-document.getElementById('mform').addEventListener('submit',async e=>{e.preventDefault();const f=e.target,btn=f.querySelector('button[type=submit]');btn.disabled=true;btn.textContent='Sending…';const r=await submitLead({school:f.school.value.trim(),phone:f.phone.value.trim(),interest:document.getElementById('msub').dataset.interest||'',source:'modal'});btn.disabled=false;btn.textContent='Request a callback';let err=f.querySelector('.err');if(r==='ok'){err&&err.remove();document.getElementById('modal').classList.add('done');f.reset();}else{if(!err){err=document.createElement('p');err.className='err';err.style.cssText='color:#d14e1b;font-size:13px;margin-top:10px;font-weight:700';f.appendChild(err);}err.textContent=r==='rate'?'Too many requests — please try again in a minute.':'Could not send. Please call +91 95994 43324.';}});
+/* Field checks in our own words; the browser's bubble never shows (novalidate). */
+function mfCheck(f){let first=null;const say=(inp,msg)=>{const el=document.getElementById(inp.id+'-err');inp.setAttribute('aria-invalid',msg?'true':'false');if(el){el.textContent=msg||'';el.hidden=!msg;}if(msg&&!first)first=inp;};
+  say(f.school,f.school.value.trim()?'':'Tell us the school\'s name.');
+  const ph=f.phone.value.trim();say(f.phone,!ph?'A number we can call you on.':/^\+?[\d\s\-()]{7,20}$/.test(ph)?'':'That does not look like a phone number.');return first;}
+document.getElementById('mform').addEventListener('input',e=>{const inp=e.target;if(inp.id!=='mf-school'&&inp.id!=='mf-phone')return;if(inp.getAttribute('aria-invalid')==='true'){inp.setAttribute('aria-invalid','false');const el=document.getElementById(inp.id+'-err');if(el)el.hidden=true;}});
+document.getElementById('mform').addEventListener('submit',async e=>{e.preventDefault();const f=e.target,btn=f.querySelector('button[type=submit]');const bad=mfCheck(f);if(bad){bad.focus();return;}btn.disabled=true;btn.textContent='Sending…';const r=await submitLead({school:f.school.value.trim(),phone:f.phone.value.trim(),interest:document.getElementById('msub').dataset.interest||'',source:'modal'});btn.disabled=false;btn.textContent='Request a callback';let err=f.querySelector('.err');if(r==='ok'){err&&err.remove();document.getElementById('modal').classList.add('done');f.reset();}else{if(!err){err=document.createElement('p');err.className='err';err.style.cssText='color:#d14e1b;font-size:13px;margin-top:10px;font-weight:700';f.appendChild(err);}err.textContent=r==='rate'?'Too many requests — please try again in a minute.':'Could not send. Please call +91 95994 43324.';}});
 document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal();});
 /* ═════════ Build your Sckools — two screens ═════════
    Modules ARE the FeatureKey union; dependencies mirror the product (Fees, Library, Press run on Management).
