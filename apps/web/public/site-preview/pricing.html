@@ -299,7 +299,7 @@ html,body{margin:0;background:#fcfdff}
 .mkt .tier ul{list-style:none;margin:0;padding:0;display:grid;gap:3px} .mkt .tier li{font-size:12.5px;line-height:1.4;display:flex;gap:10px;align-items:flex-start} .mkt .tier li::before{content:'✓';color:var(--teal);font-weight:800;flex-shrink:0}
 .mkt .tier .tmore{font-size:12.5px;color:var(--muted);margin-top:6px} .mkt .tier .tmore a{color:var(--teal);font-weight:800}
 .mkt .tier.pro{box-shadow:0 6px 14px rgba(109,74,255,.08),0 36px 70px -24px rgba(109,74,255,.35)}
-.mkt .tier.pro::after{content:'MOST GROWTH';position:absolute;top:-13px;right:22px;font-size:10px;font-weight:800;letter-spacing:.16em;background:linear-gradient(135deg,var(--violet),#9b7bff);padding:5px 15px;border-radius:999px;color:#fff;box-shadow:0 8px 18px -6px rgba(109,74,255,.6)}
+.mkt .tier.std::after{content:'MOST SCHOOLS';position:absolute;top:-13px;right:22px;font-size:10px;font-weight:800;letter-spacing:.16em;background:linear-gradient(135deg,var(--teal),#2fc4b2);padding:5px 15px;border-radius:999px;color:#fff;box-shadow:0 8px 18px -6px rgba(109,74,255,.6)}
 /* switch */
 .mkt .vs{grid-template-columns:1fr 1fr;gap:12px} 
 .mkt .sw2{display:grid;grid-template-columns:1.15fr .85fr;gap:clamp(18px,3vw,36px);align-items:center} 
@@ -587,7 +587,16 @@ html,body{margin:0;background:#fcfdff}
 .mkt .pcard .est{margin-top:6px;font-size:13px;color:var(--muted);font-weight:600;font-variant-numeric:tabular-nums} .mkt .pcard .est b{color:var(--ink)}
 .mkt .pcard ul{list-style:none;margin:16px 0 0;padding:0;display:grid;gap:7px;font-size:14px} .mkt .pcard li{display:flex;gap:9px;align-items:flex-start} .mkt .pcard li::before{content:'✓';color:var(--teal);font-weight:800;flex-shrink:0}
 .mkt .pcard .btn{margin-top:auto;justify-content:center;margin-top:20px}
-.mkt .pcard.pro::after{content:'MOST SCHOOLS';position:absolute;top:-13px;right:22px;font-size:10px;font-weight:800;letter-spacing:.16em;background:linear-gradient(135deg,var(--violet),#9b7bff);padding:5px 15px;border-radius:999px;color:#fff}
+.mkt .pcard.std::after{content:'MOST SCHOOLS';position:absolute;top:-13px;right:22px;font-size:10px;font-weight:800;letter-spacing:.16em;background:linear-gradient(135deg,var(--teal),#2fc4b2);padding:5px 15px;border-radius:999px;color:#fff}
+.mkt .pm{margin-top:34px} .mkt .pm .one{margin-top:6px}
+.mkt .pm-grid{display:grid;grid-template-columns:minmax(0,1.7fr) repeat(3,minmax(56px,.5fr));border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:#fff;font-size:14px;margin-top:16px;box-shadow:var(--sh)}
+.mkt .pm-grid>div{padding:10px 14px;border-bottom:1px solid var(--line);min-width:0;display:flex;align-items:center}
+.mkt .pm-grid>div:nth-last-child(-n+4){border-bottom:0}
+.mkt .pm-h{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);background:var(--paper2);justify-content:center} .mkt .pm-h:first-child{justify-content:flex-start} .mkt .pm-h.b{color:#1b7fb4} .mkt .pm-h.s{color:var(--teal)} .mkt .pm-h.p{color:var(--violet)}
+.mkt .pm-g{grid-column:1/-1;font-weight:800;font-size:12.5px;letter-spacing:.02em;color:var(--muted);background:var(--paper2);padding-top:8px;padding-bottom:8px}
+.mkt .pm-n{line-height:1.4} .mkt .pm-t{justify-content:center;font-weight:800;font-size:16px} .mkt .pm-t.b{color:#1b7fb4} .mkt .pm-t.s{color:var(--teal)} .mkt .pm-t.p{color:var(--violet)} .mkt .pm-t.x{color:var(--line2)}
+.mkt .pm-foot{margin-top:12px;font-size:12.5px;color:var(--muted)}
+@media(max-width:640px){.mkt .pm-grid{font-size:12.5px;grid-template-columns:minmax(0,1.4fr) repeat(3,minmax(40px,.5fr))} .mkt .pm-grid>div{padding:8px 8px} .mkt .pm-h{font-size:10px;letter-spacing:.06em}}
 .mkt .calc{margin-top:26px;border-radius:var(--r);padding:22px 24px;background:linear-gradient(120deg,var(--violet-soft),var(--teal-soft));border:1px solid #d9d2f5;display:grid;grid-template-columns:1fr auto;gap:16px 28px;align-items:center} @media(max-width:760px){.mkt .calc{grid-template-columns:1fr}}
 .mkt .calc h3{font-size:1.1rem} .mkt .calc p{font-size:13.5px;color:var(--muted);margin-top:4px}
 .mkt .calc input[type=range]{width:100%;margin-top:14px;accent-color:var(--teal)}
@@ -886,7 +895,8 @@ html,body{margin:0;background:#fcfdff}
 <script>
 /* Catalogue — in the real build: GET /marketing/features from a typed constant beside
    packages/db/src/features.ts. Tier badges are COMPUTED from TIER_FEATURES, never typed. */
-const TIER_FEATURES={BASIC:['PUBLIC_SITE','GALLERY','ENQUIRY','SOCIAL'],STANDARD:['PUBLIC_SITE','GALLERY','ENQUIRY','SOCIAL','ABOUT_CONTACT','EVENTS','BLOG'],PRO:['PUBLIC_SITE','GALLERY','ENQUIRY','SOCIAL','ABOUT_CONTACT','EVENTS','BLOG','MANAGEMENT','HIRING','LIBRARY','FEES']};
+/* Plan Ladder v2 (22 Oct 2026) — mirrors packages/db/src/features.ts. Basic: be found. Standard: run the day (the ERP). Pro: run everything. */
+const TIER_FEATURES={BASIC:['PUBLIC_SITE','GALLERY','ENQUIRY','SOCIAL','ABOUT_CONTACT','EVENTS'],STANDARD:['PUBLIC_SITE','GALLERY','ENQUIRY','SOCIAL','ABOUT_CONTACT','EVENTS','EVENTS_HOST','MANAGEMENT','BLOG'],PRO:['PUBLIC_SITE','GALLERY','ENQUIRY','SOCIAL','ABOUT_CONTACT','EVENTS','EVENTS_HOST','MANAGEMENT','BLOG','HIRING','LIBRARY','FEES','ALUMNI','PRESS','SPORTS','SALARY','COURSE_MANAGEMENT','EXAM_HALL','WHATSAPP']};
 function tierOf(k){if(k==='CORE'||TIER_FEATURES.BASIC.includes(k))return'BASIC';if(TIER_FEATURES.STANDARD.includes(k))return'STANDARD';if(TIER_FEATURES.PRO.includes(k))return'PRO';return'REQUEST';}
 const TL={BASIC:'Basic',STANDARD:'Standard',PRO:'Pro',REQUEST:'On request'},TP={BASIC:'pill-basic',STANDARD:'pill-std',PRO:'pill-pro',REQUEST:'pill-req'};
 const PERIODS=[{id:'gate',t:'07:40',name:'Gate opens'},{id:'p1',t:'08:15',name:'Period 1'},{id:'break',t:'11:00',name:'Break'},{id:'lunch',t:'13:00',name:'Lunch'},{id:'home',t:'15:30',name:'Home time'},{id:'evening',t:'18:00',name:'After hours'}];
@@ -910,16 +920,16 @@ const F=[
  {id:'shelf',key:'LIBRARY',col:'family',when:'break',name:'Reader shelf',hint:'what\'s out, when it\'s due',does:'What your child has out and when it is due — and a way to say “we lost it”.',moment:'Wednesday, 11:20. “Charlotte\'s Web, due Friday.” Found under the bed.',runs:['Mobile app','Family portal']},
  {id:'fee-counter',key:'FEES',col:'office',when:'break',new:'Aug 2026',name:'Fee counter',hint:'cash, UPI, numbered receipt',does:'Take cash or UPI at the counter, print a numbered receipt, and the ledger updates itself. Online payment when you switch it on.',moment:'Thursday, 11:15. Term 2 paid in cash. Receipt numbered, printed, and on his phone before he reaches the car.',runs:['Admin console']},
  {id:'fee-setup',key:'FEES',col:'office',when:'break',new:'Aug 2026',name:'Fee plans & concessions',hint:'terms, plans, late-fee rule',does:'Terms, categories, a plan per class, concessions per child. A late-fee rule you set once. Every number on the dashboard opens to the names behind it.',moment:'Friday, 11:30. “₹2,14,000 overdue” — click — forty-one names — one reminder to all.',runs:['Admin console']},
- {id:'network',key:'EVENTS',col:'beyond',when:'break',name:'Events network',hint:'every school sees your event',does:'Publish your event; every school on Sckools sees it. Open it to all, or to the schools you choose.',moment:'Saturday, 11:00. Six schools, four hundred students, one science fair — hosted by you, filled by the network.',runs:['Public site','Admin console']},
+ {id:'network',key:'EVENTS_HOST',col:'beyond',when:'break',name:'Events network',hint:'every school sees your event',does:'Publish your event; every school on Sckools sees it. Open it to all, or to the schools you choose.',moment:'Saturday, 11:00. Six schools, four hundred students, one science fair — hosted by you, filled by the network.',runs:['Public site','Admin console']},
  {id:'connect',key:'EVENTS',col:'beyond',when:'break',name:'Event registration',hint:'families register on your site',does:'A family registers on your site, picks a ticket type, done. One tap if already signed in.',moment:'A parent at another school registers their child for your debate in thirty seconds.',runs:['Public site']},
  {id:'results',key:'MANAGEMENT',col:'staff',when:'lunch',name:'Tests & results',hint:'publish when ready, not before',does:'Schedule a test, enter marks, publish when you are ready. Families see only published results and the class average — never another child\'s marks.',moment:'Monday, 13:10. Mrs Nair enters 6A\'s marks over lunch and leaves them unpublished until she has checked twice.',runs:['Teacher portal','Mobile app','Admin console']},
  {id:'assignments',key:'MANAGEMENT',col:'staff',when:'lunch',name:'Assignments',hint:'post once, see who has seen it',does:'Post it once. See who has seen it.',moment:'Tuesday, 13:00. By evening 28 of 32 families have opened it. She knows which four to remind.',runs:['Teacher portal','Mobile app']},
  {id:'notes',key:'MANAGEMENT',col:'staff',when:'lunch',name:'Class notes & to-dos',hint:'per class, per day',does:'A note per class per day — for you, or for the subject teacher who takes them next.',moment:'“5B: three without PT kit — tell coach.” The coach sees it at Period 6.',runs:['Teacher portal','Mobile app']},
  {id:'timetable',key:'MANAGEMENT',col:'office',when:'lunch',name:'Timetable',hint:'build once, versioned',does:'Build it once, with conflicts caught as you type. Versioned — last month\'s timetable is still last month\'s.',moment:'The new-term timetable goes live on Monday. Every teacher\'s app changes on Monday, not today.',runs:['Admin console','Teacher portal','Mobile app']},
  {id:'sessions',key:'MANAGEMENT',col:'office',when:'evening',name:'Year end, in one go',hint:'next year planned, every child decided',does:'Plan the next session as a draft: copy the classes, decide every child (promote, repeat, leave), copy the timetable, review. Start is one transaction, so nothing is ever half done.',moment:'28 March. 800 decisions made over a week; the new year starts on one tap on 1 April.',runs:['Admin console']},
- {id:'sports',key:'MANAGEMENT',col:'office',when:'break',name:'Sports desk',hint:'houses, meets, the record book',does:'Houses and coaches, tournaments with fixtures and results, a points table that keeps itself, and a record book that remembers who holds the 100 m.',moment:'Sports day, 15:10. Red house leads by 14 after the relay; the record board updates itself.',runs:['Admin console','Public site']},
- {id:'whatsapp',key:'MANAGEMENT',col:'office',when:'p1',new:'Oct 2026',name:'Run it from WhatsApp',hint:'approve, cover, got it — from the message',does:'Leave requests, cover duty and absence notices arrive on WhatsApp as real messages with buttons. Approve, pick a cover teacher, say got it, without opening anything. Results, notices and diary remarks reach families there too.',moment:'08:53. The principal approves Rekha’s leave from WhatsApp; three teachers are asked to cover by 08:54.',runs:['WhatsApp','Admin console']},
- {id:'exam-hall',key:'MANAGEMENT',col:'office',when:'lunch',new:'Aug 2026',name:'Exam hall',hint:'rooms & seating, printed',does:'Rooms and seating plans for exam days, generated and printed.',moment:'Seating for 340 students across nine rooms, pinned by 13:40.',runs:['Admin console']},
+ {id:'sports',key:'SPORTS',col:'office',when:'break',name:'Sports desk',hint:'houses, meets, the record book',does:'Houses and coaches, tournaments with fixtures and results, a points table that keeps itself, and a record book that remembers who holds the 100 m.',moment:'Sports day, 15:10. Red house leads by 14 after the relay; the record board updates itself.',runs:['Admin console','Public site']},
+ {id:'whatsapp',key:'WHATSAPP',col:'office',when:'p1',new:'Oct 2026',name:'Run it from WhatsApp',hint:'approve, cover, got it — from the message',does:'Leave requests, cover duty and absence notices arrive on WhatsApp as real messages with buttons. Approve, pick a cover teacher, say got it, without opening anything. Results, notices and diary remarks reach families there too.',moment:'08:53. The principal approves Rekha’s leave from WhatsApp; three teachers are asked to cover by 08:54.',runs:['WhatsApp','Admin console']},
+ {id:'exam-hall',key:'EXAM_HALL',col:'office',when:'lunch',new:'Aug 2026',name:'Exam hall',hint:'rooms & seating, printed',does:'Rooms and seating plans for exam days, generated and printed.',moment:'Seating for 340 students across nine rooms, pinned by 13:40.',runs:['Admin console']},
  {id:'letterhead',key:'MANAGEMENT',col:'office',when:'lunch',name:'Letterhead',hint:'email from your own address',does:'Every email the school sends goes out on your letterhead, from your own address.',moment:'A fee reminder arrives from accounts@yourschool.in with your crest at the top.',runs:['Admin console']},
  {id:'fam-timetable',key:'MANAGEMENT',col:'family',when:'lunch',name:'Timetable & results at home',hint:'never another child\'s marks',does:'Today\'s periods. Published marks. The class average — computed in the database, so nothing else can leak.',moment:'A grandmother checks what Ananya has after lunch and packs the right books.',runs:['Mobile app','Family portal']},
  {id:'blog',key:'BLOG',col:'beyond',when:'lunch',name:'School blog',hint:'syndicated to the network',does:'Write it; it is on your site. Send it to sckools.com and it reaches every school — credit and search ranking pointing back to you.',moment:'The principal\'s note on morning reading gets read by parents at eleven other schools.',runs:['Public site','Admin console']},
@@ -987,10 +997,24 @@ function dealLeft(){if(!DEAL.ends)return null;const ms=DEAL.ends.getTime()-Date.
 function renderDeal(){const left=dealLeft();if(DEAL.on&&left===0){DEAL.on=false;clearInterval(dealTimer);dealTimer=null;renderPrices();if(typeof swRender==="function")swRender();if(typeof refreshJourney==="function"&&document.getElementById('jy-panel'))refreshJourney();}document.querySelectorAll('[data-deal]').forEach(el=>{if(!DEAL.on){el.hidden=true;return;}el.hidden=false;el.innerHTML=`<b>${esc(DEAL.label||'Limited offer')}</b> · ${DEAL.pct}% off every plan${left?` · ends in <b>${left}</b>`:''}`;});}
 function startDeal(){clearInterval(dealTimer);dealTimer=null;if(DEAL.on&&DEAL.ends)dealTimer=setInterval(renderDeal,1000);}
 const PLAN_DEFS=[
- {key:'basic',tier:'BASIC',cls:'basic',name:'Basic',tag:'Be found.',who:'A world-class website and every enquiry on your admissions desk.',items:['Your website — studio, 7 first screens, 45 section layouts, 22 festivals','Courses, gallery, admissions & hall of fame','Admissions desk: enquiry → visit → admitted','Own domain, SSL, hosting, nightly backups','Updates every month, free']},
- {key:'standard',tier:'STANDARD',cls:'std',name:'Standard',tag:'Join the network.',who:'Everything in Basic, plus your community connected and your events on every school.',items:['Events on the shared network feed; families register on your site','Ticket types, audiences, sponsors we bring','About, principal & contact pages; announcements on site and TV','School blog syndicated to sckools.com','Priority support — real humans, fast']},
- {key:'pro',tier:'PRO',cls:'pro',name:'Pro',tag:'Run the school.',who:'Everything in Standard, plus the office, the staff room and the family app.',items:['Morning Bell, admissions desk, timetable, leave & cover','Fees — counter, UPI, online, receipts, late-fee rules','The register — taps, offline-safe, families told at 08:14','Tests & results, diary, messages, the family app','Library counter, Sckools TV, jobs board','Report cards, certificates, exam hall — switched on at onboarding, no extra charge']},
+ {key:'basic',tier:'BASIC',cls:'basic',name:'Basic',tag:'Be found.',who:'A website that fills its own admissions desk.',items:['Website studio: 45 layouts, 22 festival skins, your own domain','About, principal & contact, gallery, courses, hall of fame','Admissions desk: enquiry → visit → admitted','Network events on your site; families register there','Hosting, SSL, nightly backups, updates every month']},
+ {key:'standard',tier:'STANDARD',cls:'std',name:'Standard',tag:'Run the day.',who:'Everything in Basic, plus the whole office, the staff room and the family app.',items:['Students, teachers, staff, classes, sessions','The register, leave & cover, requests, Morning Bell','Timetable & availability, tests & results, diary, messages','The family app and the staff app, Sckools TV','Host your own events, school blog']},
+ {key:'pro',tier:'PRO',cls:'pro',name:'Pro',tag:'Run everything.',who:'Everything in Standard, plus money, exams, documents and every specialist desk.',items:['Fees: counter, UPI, online, receipts, late-fee rules','Pay: HR & salaries, pay runs, payslips','Exam hall, report cards, certificates, print store','Library, sports, syllabus tracker, jobs board, alumni','Your school on WhatsApp: approve, cover, got it — from the message']},
 ];
+/* The comparison matrix on /pricing. Every row names the key that gates it, so a tick is computed from TIER_FEATURES and can never disagree with the cards. */
+const PLAN_ROWS=[
+ {g:'Website & admissions',rows:[['Website studio: 45 layouts, 22 festival skins, own domain','PUBLIC_SITE'],['About, principal & contact pages','ABOUT_CONTACT'],['Gallery, social links, courses, hall of fame','GALLERY'],['Admissions desk: enquiry → visit → admitted','ENQUIRY'],['Network events on your site; families register there','EVENTS'],['Host your own events: tickets, audiences, sponsors','EVENTS_HOST'],['School blog, syndicated to sckools.com','BLOG']]},
+ {g:'The office',rows:[['Students, teachers, staff, classes, sessions','MANAGEMENT'],['The register: taps, offline-safe, families told at 08:14','MANAGEMENT'],['Leave & cover, requests, Morning Bell','MANAGEMENT'],['Timetable & availability, holidays','MANAGEMENT'],['Tests & results, published to families','MANAGEMENT'],['Diary, assignments, messages, announcements, Sckools TV','MANAGEMENT'],['The family app and the staff app (Android)','MANAGEMENT']]},
+ {g:'Money & documents',rows:[['Fees: counter, UPI, online, receipts','FEES'],['Pay: HR & salaries, pay runs, payslips','SALARY'],['Exam hall: rooms & seating plans','EXAM_HALL'],['Report cards, certificates, print store','PRESS']]},
+ {g:'Specialist desks',rows:[['Library counter & reader shelf','LIBRARY'],['Sports: houses, meets, records','SPORTS'],['Syllabus tracker','COURSE_MANAGEMENT'],['Jobs board on sckools.com/jobs','HIRING'],['Alumni','ALUMNI'],['Your school on WhatsApp','WHATSAPP']]},
+ {g:'Always included',rows:[['Own domain, SSL, hosting, nightly backups','CORE'],['Updates every month, real people on the phone','CORE']]},
+];
+function planMatrix(){const o=['BASIC','STANDARD','PRO'],cls={BASIC:'b',STANDARD:'s',PRO:'p'};
+  const cell=(k,t)=>{const need=tierOf(k);const on=need!=='REQUEST'&&o.indexOf(need)<=o.indexOf(t);return `<div class="pm-t ${on?cls[t]:'x'}" aria-label="${on?'Included in':'Not in'} ${TL[t]}">${on?'✓':'—'}</div>`;};
+  return `<section class="pm" id="compare" aria-label="Compare plans"><div class="rv"><span class="eyebrow violet">Plan by plan</span></div><h2 class="h2 rv" style="transition-delay:.05s">What a school gets in each plan.</h2><p class="one rv" style="transition-delay:.1s">Everything in a plan stays in the next one up. A tick is a desk your school can open on day one.</p>
+  <div class="pm-grid rv" role="table" aria-label="Plan comparison" style="transition-delay:.15s"><div class="pm-h" role="columnheader">Desk</div>${o.map(t=>`<div class="pm-h ${cls[t]}" role="columnheader">${TL[t]}</div>`).join('')}
+  ${PLAN_ROWS.map(g=>`<div class="pm-g" role="rowheader">${g.g}</div>${g.rows.map(([n,k])=>`<div class="pm-n" role="cell">${n}</div>${o.map(t=>cell(k,t)).join('')}`).join('')}`).join('')}</div>
+  <p class="pm-foot rv">Prices are per student, per year, set in the plan cards above. Report cards and print orders are quoted per job by the press; WhatsApp sends from the school&#39;s own number, set up with us.</p></section>`;}
 const byId=Object.fromEntries(F.map(f=>[f.id,f]));
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const pill=f=>{const t=tierOf(f.key);return `<span class="pill ${TP[t]}">${TL[t]}</span>`;};
@@ -1013,7 +1037,7 @@ function scene(i){
 }
 let stars='';{let s=0x5c0015;const r=()=>{s=(s+0x6d2b79f5)>>>0;let t=s;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296;};for(let i=0;i<26;i++)stars+=`<span class="pro-star" style="left:${(r()*100).toFixed(1)}%;top:${(r()*100).toFixed(1)}%;animation-delay:${(r()*3.5).toFixed(2)}s"></span>`;}
 function proHTML(){return `<section class="pro-band" id="pro" aria-label="Inside Pro"><div class="wrap"><div class="pro-card"><div class="pro-grain" aria-hidden="true"></div>
-  <div class="pro-head"><div><div class="rv"><span class="pro-kick"><span class="dot"></span>The Pro tier</span></div>
+  <div class="pro-head"><div><div class="rv"><span class="pro-kick"><span class="dot"></span>The Pro plan</span></div>
   <h2 class="h-lg rv" style="transition-delay:.06s">Your school, running on one quiet engine.</h2>
   <p class="lede pro-sub rv" style="transition-delay:.12s">A website is where it starts. <em>Pro</em> is everything behind it — the office on the web, the app in every pocket, WhatsApp in the loop, and a stage past your gates.</p></div>
   <div class="rv" style="transition-delay:.18s"><button class="btn btn-hot btn-sm" data-journey="PRO">Get a quote for Pro</button></div></div>
@@ -1111,10 +1135,11 @@ ${proHTML()}
   <h2 class="h-lg rv" style="transition-delay:.06s">Upgrade your school, starting from <span data-from>₹30</span> per student, a year. <span style="color:var(--muted);font-weight:600;font-size:.6em">Billed once a year. Add modules any day.</span></h2>
   <p class="deal rv" data-deal hidden></p>
   <div class="grid ladder" style="margin-top:16px">
-    <div class="rv">${tierCard('basic','Basic','Be found.','A world-class site, every enquiry on your admissions desk.','BASIC',null,[{g:'Your website',items:['Studio: 7 first screens, 45 layouts, 22 festivals','Courses, gallery, admissions & hall of fame','Own domain, SSL, hosting, nightly backups']},{g:'Admissions',items:['Enquiry forms on every page → one desk']}],'btn-ghost')}</div>
-    <div class="rv" style="transition-delay:.1s">${tierCard('std','Standard','Join the network.','Your community connected, your events on every school.','STANDARD','Everything in Basic, plus',[{g:'Network reach',items:['Events on the shared feed, families register on your site','Ticket types, audiences, sponsors we bring']},{g:'Community',items:['About, principal & contact pages, announcements','School blog syndicated to sckools.com','Priority support — real humans, fast']}],'btn-hot')}</div>
-    <div class="rv" style="transition-delay:.2s">${tierCard('pro','Pro','Run the school.','Run the school: register, fees, results, library, the app, the TV.','PRO','Everything in Standard, plus',[{g:'The office',items:['Morning Bell, admissions desk, timetable, leave & cover','Fees — counter, UPI, online, receipts, late-fee rules','Report cards, certificates, exam hall — switched on at onboarding']},{g:'Staff room & families',items:['The register — taps, offline-safe, families told at 08:14','Tests & results, diary, messages, the family app','Library counter, Sckools TV, jobs board']}],'btn-ink')}</div>
+    <div class="rv">${tierCard('basic','Basic','Be found.','A website that fills its own admissions desk.','BASIC',null,[{g:'Your website',items:['Website studio: 45 layouts, 22 festival skins','About, principal & contact, gallery, courses, hall of fame','Own domain, SSL, hosting, nightly backups']},{g:'Admissions & events',items:['Admissions desk: enquiry → visit → admitted','Network events on your site; families register there']}],'btn-ghost')}</div>
+    <div class="rv" style="transition-delay:.1s">${tierCard('std','Standard','Run the day.','The whole office, the staff room and the family app.','STANDARD','Everything in Basic, plus',[{g:'The office',items:['Students, teachers, staff, classes, sessions','The register, leave & cover, requests, Morning Bell','Timetable & availability, holidays, Sckools TV']},{g:'Classroom & families',items:['Tests & results, diary, assignments, messages','The family app and the staff app','Host your own events, school blog']}],'btn-hot')}</div>
+    <div class="rv" style="transition-delay:.2s">${tierCard('pro','Pro','Run everything.','Money, exams, documents and every specialist desk.','PRO','Everything in Standard, plus',[{g:'Money & documents',items:['Fees: counter, UPI, online, receipts','Pay: HR & salaries, payslips','Exam hall, report cards, certificates, print store']},{g:'Specialist desks',items:['Library, sports, syllabus tracker','Jobs board, alumni','Your school on WhatsApp']}],'btn-ink')}</div>
   </div>
+  <p class="rv" style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center"><a class="btn btn-ghost btn-sm" href="#/pricing">Compare every desk, plan by plan</a><span style="font-size:13px;color:var(--muted)">Everything in a plan stays in the next one up.</span></p>
 </div></section>
 
 <section id="switch" style="background:var(--paper2);border-top:1px solid var(--line)" aria-label="Why switch"><div class="wrap">
@@ -1134,11 +1159,11 @@ ${proHTML()}
           <div class="r tot"><span>Three vendors, three logins</span><b data-sw="today">₹1,41,000</b></div>
         </div>
       </div>
-      <div class="swx-card us rv" style="transition-delay:.14s"><h3>On Sckools <em>Pro: website, office, app, WhatsApp, TV</em></h3>
+      <div class="swx-card us rv" style="transition-delay:.14s"><h3>On Sckools <em>Standard: website, office, the apps, TV</em></h3>
         <p class="swx-offer" data-sw="offer" hidden></p>
         <div class="swx-price"><b data-sw="rate">₹60</b><s data-sw="list" hidden>₹60</s><span>per student, a year</span></div>
         <div class="swx-rows">
-          <div class="r"><span>Website, office, app, WhatsApp, reception TV</span><b>included</b></div>
+          <div class="r"><span>Website, office, family & staff apps, reception TV</span><b>included</b></div>
           <div class="r"><span>Message packs, add-ons, setup fee</span><b>none</b></div>
           <div class="r tot"><span data-sw="forn">For 500 students</span><span class="swx-tot"><b data-sw="us">₹30,000</b><i data-sw="after" hidden></i></span></div>
         </div>
@@ -1185,12 +1210,14 @@ function renderPricing(){return `
 <section style="padding-top:18px"><div class="wrap">
   <div class="pgrid">${PLAN_DEFS.map((p,i)=>`<div class="pcard ${p.cls} rv" style="transition-delay:${i*.08}s"><div class="nm">${p.name} <span style="color:var(--muted);font-weight:700;font-size:.9rem">— ${p.tag}</span></div><div class="who">${p.who}</div><div class="big"><b data-price="${p.key}">${fmtMoney(priceOf(p.key),CUR)}</b><small>per student / year</small></div><div class="est">for <b><span class="calc-n-echo">500</span> students</b> ≈ <b data-est="${p.key}">${fmtMoney(priceOf(p.key)*500,CUR)} / year</b></div><ul>${p.items.map(x=>`<li>${x}</li>`).join('')}</ul><button class="btn ${p.key==='pro'?'btn-ink':p.key==='standard'?'btn-hot':'btn-ghost'} btn-sm" data-journey="${p.tier}">Get ${p.name} for your school</button></div>`).join('')}</div>
   <div class="calc rv"><div><h3>What would it cost your school?</h3><p>Slide to your student count — every plan updates. Billed once a year; no per-user seats, no setup fee.</p><input type="range" id="calc-n" min="100" max="3000" step="50" value="500" aria-label="Number of students"><div class="rows">${PLAN_DEFS.map(p=>`<div><span>${p.name}</span><b data-est="${p.key}">${fmtMoney(priceOf(p.key)*500,CUR)} / year</b></div>`).join('')}</div></div><div class="n"><span id="calc-out">500</span><small>students</small></div></div>
+  ${planMatrix()}
   <div class="incl"><div><span>🌐</span>Own domain, SSL &amp; hosting</div><div><span>⚡</span>Updates every month, free</div><div><span>🔁</span>We migrate your site, free</div><div><span>🛠️</span>2 months of custom features</div><div><span>🧩</span>Add a module any day</div><div><span>📞</span>Real people on the phone</div></div>
   <div class="faq">
     <details><summary>Is it really per student, per year?</summary><p>Yes. Multiply the plan price by your student count — that's the year. No per-teacher seats, no setup fee, no charge for the app.</p></details>
     <details><summary>Can we start small and add modules later?</summary><p>Yes. Pick what you need today; ask for more whenever you're ready and it's on the same day. You only pay for what's switched on.</p></details>
     <details><summary>What if we already have a website?</summary><p>We move it for free — same domain, same branding, zero downtime. Then it starts improving every month instead of going stale.</p></details>
-    <details><summary>Do fees, report cards and the library cost extra?</summary><p>They're part of Pro. Report cards, certificates and alumni are switched on per school, on request, at no extra charge.</p></details>
+    <details><summary>What is the difference between Standard and Pro?</summary><p>Standard runs the school day: the office, the register, timetable, results, diary and the family app. Pro adds the money desks (fees, pay), the exam hall, report cards and the print store, the library, sports, syllabus, jobs, alumni, and the school on WhatsApp. The table above shows every desk, plan by plan.</p></details>
+    <details><summary>Do fees, report cards and the library cost extra?</summary><p>They're part of Pro, at no extra charge. Only two things are priced per job: print orders from the press, and the WhatsApp conversations Meta bills when a school sends from its own number.</p></details>
     <details><summary>Is there an iPhone app?</summary><p>The family and teacher app is on Android today. On iPhone, families and teachers use the same web portal in the browser, with the same login and the same notices, results, diary and fees.</p></details>
     <details><summary>How do we pay?</summary><p>Once a year, by bank transfer or UPI, against a GST invoice. Ask for a quote and we'll send exact figures for your school.</p></details>
   </div>
@@ -1247,7 +1274,7 @@ function renderFeatures(){const total=F.length,shown=F.filter(matches).length;re
     <div class="fgroup" role="group" aria-label="Plan"><span>Plan</span><button class="${filt.plan==='all'?'on':''}" data-plan="all">Any</button><button class="${filt.plan==='BASIC'?'on':''}" data-plan="BASIC">Basic</button><button class="${filt.plan==='STANDARD'?'on':''}" data-plan="STANDARD">Standard</button><button class="${filt.plan==='PRO'?'on':''}" data-plan="PRO">Pro</button></div>
     <label class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="q" placeholder="absent, receipt, diary…" value="${esc(filt.q)}" aria-label="Search features"></label>
   </div>
-  <div class="count hrv" style="--d:.56s"><span id="count">Showing ${shown} of ${total}</span><span class="legend"><span><i style="background:var(--sky)"></i>Basic</span><span><i style="background:var(--teal-hi)"></i>Standard</span><span><i style="background:var(--violet)"></i>Pro</span><span><i style="border:1.5px dashed var(--dim)"></i>On request</span></span></div>
+  <div class="count hrv" style="--d:.56s"><span id="count">Showing ${shown} of ${total}</span><span class="legend"><span><i style="background:var(--sky)"></i>Basic</span><span><i style="background:var(--teal-hi)"></i>Standard</span><span><i style="background:var(--violet)"></i>Pro</span></span></div>
 </div></header>
 <section style="padding-top:8px"><div class="wrap" id="desks">${desksHTML()}</div></section>
 <section id="where" style="background:var(--paper2);border-top:1px solid var(--line)"><div class="wrap"><div class="rv"><span class="eyebrow">What runs where</span></div><h2 class="h-lg rv" style="transition-delay:.06s">Four apps, one system.</h2>
@@ -1275,17 +1302,17 @@ function swMoney(v){const c=(typeof CUR!=='undefined'&&CUR==='usd')?'usd':'inr';
 /* The bill, side by side. Sckools figures come from PRICES (the owner's rates) through priceOf(), so a running discount shows here too. */
 function swRender(){const root=document.querySelector('.swx');if(!root)return;const c=(typeof CUR!=='undefined'&&CUR==='usd')?'usd':'inr';const d=SW_DEF[c],n=SW.n,q=k=>root.querySelector('[data-sw="'+k+'"]');
   const today=d.web+d.erp*n+d.x;q('web').textContent=swMoney(d.web);q('erp-rate').textContent=swMoney(d.erp)+' per student';q('erp').textContent=swMoney(d.erp*n);q('x').textContent=swMoney(d.x);q('today').textContent=swMoney(today);
-  const list=listOf('pro',c),rate=priceOf('pro',c),us=rate*n;
+  const list=listOf('standard',c),rate=priceOf('standard',c),us=rate*n;
   q('rate').textContent=swMoney(rate);const ls=q('list');ls.hidden=!DEAL.on;ls.textContent=swMoney(list);
   const off=q('offer');if(DEAL.on){off.hidden=false;off.textContent=(DEAL.label||'Limited offer')+(DEAL.ends?' till '+DEAL.ends.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):'')+' · '+DEAL.pct+'% off';}else off.hidden=true;
   q('forn').textContent='For '+n.toLocaleString('en-IN')+' students';q('us').textContent=swMoney(us);const af=q('after');af.hidden=!DEAL.on;af.textContent=swMoney(list*n)+' after the offer';
   root.querySelectorAll('[data-swn]').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.swn===n?'true':'false'));
   const v=q('verdict'),diff=today-us;
-  if(diff>0){v.className='swx-verdict';v.textContent='You keep '+swMoney(diff)+' a year, and gain the app, WhatsApp, the reception TV, the events network and updates every month.';}
-  else if(diff<0){v.className='swx-verdict more';v.textContent=swMoney(-diff)+' more a year, for the website, the office, the app, WhatsApp, the TV and the network in one bill, one login.';}
-  else{v.className='swx-verdict';v.textContent='Same money. One bill, one login, with the app, WhatsApp, the TV and the network included.';}}
+  if(diff>0){v.className='swx-verdict';v.textContent='You keep '+swMoney(diff)+' a year, and gain the app, the reception TV, the events network and updates every month.';}
+  else if(diff<0){v.className='swx-verdict more';v.textContent=swMoney(-diff)+' more a year, for the website, the office, the app, the TV and the network in one bill, one login.';}
+  else{v.className='swx-verdict';v.textContent='Same money. One bill, one login, with the app, the TV and the network included.';}}
 document.addEventListener('click',e=>{const sb=e.target.closest('[data-swn]');if(sb){SW.n=+sb.dataset.swn||500;swSave();swRender();return;}
-  const cb=e.target.closest('[data-switch-call]');if(cb){const t=document.querySelector('[data-sw="today"]')?.textContent||'',u=document.querySelector('[data-sw="us"]')?.textContent||'';openModal('switching');const ms=document.getElementById('msub');if(ms)ms.dataset.interest='Switch from website+ERP | Students: '+SW.n+' | Today: '+t+' vs Sckools Pro: '+u;return;}});
+  const cb=e.target.closest('[data-switch-call]');if(cb){const t=document.querySelector('[data-sw="today"]')?.textContent||'',u=document.querySelector('[data-sw="us"]')?.textContent||'';openModal('switching');const ms=document.getElementById('msub');if(ms)ms.dataset.interest='Switch from website+ERP | Students: '+SW.n+' | Today: '+t+' vs Sckools Standard: '+u;return;}});
 function swInit(){swRender();}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',swInit);else swInit();
 function openModal(i){const m=document.getElementById('modal');m.classList.remove('done');m.classList.add('open');document.getElementById('msub').dataset.interest=i||'';document.getElementById('msub').textContent=i?`Ask about ${i}. A real person calls within one working day and shows you exactly that, on your own school.`:'A real person calls within one working day and shows you Sckools on your own school, live.';m.querySelector('input').focus();}
@@ -1367,7 +1394,7 @@ document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='
    In the real build "Request my quote" POSTs /marketing/leads with { ...contact, source:'journey', journey:{...} }. */
 const MODULES=[
  {k:'PUBLIC_SITE',em:'🌐',name:'Website',hint:'your domain, studio, 22 festivals',locked:true},
- {k:'EVENTS',em:'🎪',name:'Events network',hint:'inter-school events, tickets, sponsors — every school',locked:true},
+ {k:'EVENTS',em:'🎪',name:'Events network',hint:'network events on your site; host your own from Standard',locked:true},
  {k:'ENQUIRY',em:'🗂️',name:'Admissions desk',hint:'every enquiry, worked to admitted'},
  {k:'GALLERY',em:'🖼️',name:'Gallery',hint:'photos & video, lightbox'},
  {k:'ABOUT_CONTACT',em:'📢',name:'About & announcements',hint:'principal, contact, notices, TV'},
@@ -1376,11 +1403,15 @@ const MODULES=[
  {k:'FEES',em:'🧾',name:'Fees & receipts',hint:'counter, UPI, late-fee rules',needs:'MANAGEMENT'},
  {k:'REPORTS',key:'PRESS',em:'🖨️',name:'Report cards',hint:'generated per term, remarks, printed',needs:'MANAGEMENT'},
  {k:'CERTS',key:'PRESS',em:'📜',name:'Certificates',hint:'bonafide, TC, character — numbered, printed',needs:'MANAGEMENT'},
- {k:'EXAM_HALL',key:'MANAGEMENT',em:'🪑',name:'Exam hall',hint:'rooms & seating plans, printed',needs:'MANAGEMENT'},
+ {k:'EXAM_HALL',em:'🪑',name:'Exam hall',hint:'rooms & seating plans, printed',needs:'MANAGEMENT'},
  {k:'LIBRARY',em:'📚',name:'Library',hint:'counter, fines, reader shelf',needs:'MANAGEMENT'},
  {k:'BLOG',em:'✍️',name:'Blog',hint:'syndicated across the network'},
  {k:'HIRING',em:'💼',name:'Hiring',hint:'jobs board, applications'},
  {k:'ALUMNI',em:'🎓',name:'Alumni',hint:'batches, gifts you can follow'},
+ {k:'SPORTS',em:'🏅',name:'Sports',hint:'houses, meets, the record book',needs:'MANAGEMENT'},
+ {k:'SALARY',em:'💰',name:'Pay & salaries',hint:'pay runs, payslips, leave to pay',needs:'MANAGEMENT'},
+ {k:'COURSE_MANAGEMENT',em:'📖',name:'Syllabus tracker',hint:'chapters reached, per class and subject',needs:'MANAGEMENT'},
+ {k:'WHATSAPP',em:'💬',name:'WhatsApp',hint:'approve leave, assign cover, got it — from the message',needs:'MANAGEMENT'},
 ];
 const QUICK=[
  {id:'found',name:'🌐 Website & admissions',mods:['PUBLIC_SITE','ENQUIRY','GALLERY','ABOUT_CONTACT']},

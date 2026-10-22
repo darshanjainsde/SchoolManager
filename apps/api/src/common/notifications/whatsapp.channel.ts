@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { Logger } from '@nestjs/common';
-import type { PrismaClient } from '@skoolos/db';
+import { resolveFeatures, type PrismaClient } from '@skoolos/db';
 import { ensureConnected, sharedRedis, type SharedRedis } from '../redis/redis.client';
 import type { DeliveryChannel, DeliveryOutcome, NotificationMessage } from './notification.types';
 import { actionIdentity } from './whatsapp/actions';
@@ -32,7 +32,7 @@ import { templateFor, type WhatsAppTemplate } from './whatsapp/templates';
  * FAILED ledger row with Meta's reason, so "this number is not on WhatsApp"
  * becomes a fact the office can act on rather than a swallowed log line.
  */
-type Db = Pick<PrismaClient, 'user' | 'student' | 'teacher' | 'staff' | 'whatsAppSettings' | 'whatsAppDelivery'>;
+type Db = Pick<PrismaClient, 'user' | 'student' | 'teacher' | 'staff' | 'whatsAppSettings' | 'whatsAppDelivery'> & Partial<Pick<PrismaClient, 'school'>>;
 
 interface SchoolSettings {
   enabled: boolean;
@@ -317,6 +317,27 @@ export class WhatsAppChannel implements DeliveryChannel {
     return { ok: true, messageId };
   }
 
+  /**
+   * WhatsApp is a Pro feature (the WHATSAPP key, plan ladder of 2026-10-22).
+   * The school's switch is necessary, never sufficient: a school moved off Pro
+   * stops sending within SETTINGS_TTL_MS even with its switch still on, so a
+   * downgrade never keeps billing Meta conversations to a school that no
+   * longer pays for them. Read straight from the school row rather than through
+   * FeatureResolverService: this channel runs in the outbox drain on the
+   * platform client with no Nest injection, and the 10 s cache here already
+   * bounds the cost. Older callers (and the unit mocks) hand in a Db without
+   * the school delegate; for them the plan is unknown and the switch decides.
+   */
+  private async planAllowsWhatsApp(schoolId: string): Promise<boolean> {
+    const school = this.prisma.school;
+    if (!school) return true;
+    const row = await school.findUnique({
+      where: { id: schoolId },
+      select: { tier: true, featureOverrides: { select: { featureKey: true, enabled: true } } },
+    });
+    return !!row && resolveFeatures(row.tier, row.featureOverrides).has('WHATSAPP');
+  }
+
   async settingsFor(schoolId: string): Promise<SchoolSettings> {
     const hit = this.settingsCache.get(schoolId);
     if (hit && Date.now() - hit.at < SETTINGS_TTL_MS) return hit.value;
@@ -326,7 +347,8 @@ export class WhatsAppChannel implements DeliveryChannel {
         where: { schoolId },
         select: { enabled: true, phoneNumberId: true },
       });
-      value = { enabled: row?.enabled ?? false, phoneNumberId: row?.phoneNumberId ?? null };
+      const allowed = (row?.enabled ?? false) && (await this.planAllowsWhatsApp(schoolId));
+      value = { enabled: allowed, phoneNumberId: row?.phoneNumberId ?? null };
     } catch (e) {
       // The API deploys before a migration has necessarily run (and a deploy
       // must never be broken by that order). A missing table reads as "off"

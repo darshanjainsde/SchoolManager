@@ -38,6 +38,34 @@ describe('WhatsAppChannel', () => {
     expect(d.whatsAppSettings.findUnique.mock.calls[0][0].where).toEqual({ schoolId: SCHOOL });
   });
 
+  it('sends nothing for a school whose plan lacks WHATSAPP, even with its own switch on (plan ladder, Pro only)', async () => {
+    const school = { findUnique: jest.fn().mockResolvedValue({ tier: 'STANDARD', featureOverrides: [] }) };
+    const d = db({ school });
+    const f = okFetch();
+    expect(await new WhatsAppChannel(d as never, () => CFG, f, () => null).send('p@x', MSG, SCHOOL)).toBe(false);
+    expect(f).not.toHaveBeenCalled();
+    expect(school.findUnique.mock.calls[0][0].where).toEqual({ id: SCHOOL });
+  });
+
+  it('sends for a Standard school given WHATSAPP as a trial override, and for a Pro school by plan', async () => {
+    for (const row of [
+      { tier: 'STANDARD', featureOverrides: [{ featureKey: 'WHATSAPP', enabled: true }] },
+      { tier: 'PRO', featureOverrides: [] },
+    ]) {
+      const d = db({ school: { findUnique: jest.fn().mockResolvedValue(row) } });
+      const f = okFetch();
+      expect(await new WhatsAppChannel(d as never, () => CFG, f, () => null).send('p@x', MSG, SCHOOL)).toBe(true);
+      expect(f).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('a Pro school protected by a disabled WHATSAPP override is off, whatever its switch says', async () => {
+    const d = db({ school: { findUnique: jest.fn().mockResolvedValue({ tier: 'PRO', featureOverrides: [{ featureKey: 'WHATSAPP', enabled: false }] }) } });
+    const f = okFetch();
+    expect(await new WhatsAppChannel(d as never, () => CFG, f, () => null).send('p@x', MSG, SCHOOL)).toBe(false);
+    expect(f).not.toHaveBeenCalled();
+  });
+
   it('turns the login email into the guardian phone, sends the template, and writes a SENT ledger row under that school', async () => {
     const d = db();
     const f = okFetch();

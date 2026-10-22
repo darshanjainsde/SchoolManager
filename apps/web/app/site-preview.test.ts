@@ -47,13 +47,32 @@ describe('site-preview bundle', () => {
     expect(index).not.toContain('shipped in 2 weeks');
   });
 
-  it('uses one set of plan taglines and one sentence for on-request features', () => {
+  it('uses one set of plan taglines and nothing is "on request" any more', () => {
     expect(index).not.toContain("'Be engaging.'");
     expect(index).not.toContain("'Be the stage.'");
+    expect(index).not.toContain("'Join the network.'");
+    expect(index).not.toContain("'Run the school.'");
     expect(index).not.toContain('exam hall — on request');
-    expect(index).not.toContain('exam hall — printed');
-    expect(index).toContain('Join the network.');
-    expect(index).toContain('Run the school.');
+    expect(index).not.toContain('switched on at onboarding');
+    expect(index).not.toContain('>On request<');
+    expect(index).toContain("'Be found.'");
+    expect(index).toContain("'Run the day.'");
+    expect(index).toContain("'Run everything.'");
+  });
+
+  it('every feature tile names a key one of the three plans carries, so no pill can read "on request"', () => {
+    const tiers = /const TIER_FEATURES=(\{[^\n]+\});/.exec(index);
+    expect(tiers).not.toBeNull();
+    const pro: string[] = JSON.parse(tiers![1].replace(/'/g, '"').replace(/(\w+):/g, '"$1":')).PRO;
+    expect(pro.length).toBeGreaterThan(15);
+    const keys = [...index.matchAll(/\{id:'[^']+',key:'([A-Z_]+)'/g)].map((m) => m[1]);
+    expect(keys.length).toBeGreaterThan(40);
+    for (const k of keys) if (k !== 'CORE') expect(pro).toContain(k);
+    // The comparison matrix is built from the same sets.
+    const rows = [...index.matchAll(/\['[^']+','([A-Z_]+)'\]/g)].map((m) => m[1]);
+    expect(rows.length).toBeGreaterThan(20);
+    for (const k of rows) if (k !== 'CORE') expect(pro).toContain(k);
+    expect(index).toContain('planMatrix()');
   });
 
   it('discloses the Android-only app at first mention and in the FAQ', () => {

@@ -52,12 +52,13 @@ export class SetStatusDto {
  * `apps/web/app/platform/schools/[id]/feature-keys.test.ts` now parses all
  * three and fails if any disagrees. Keep this list in step with `ALL_KEYS`.
  *
- * LIBRARY belongs to no tier by design, so this route is the ONLY way it is
- * ever switched on. Omitting it here makes the whole library feature
- * unreachable no matter what the UI offers.
+ * Every key is in a tier since the 2026-10 plan ladder, but this route is
+ * still the only way a school is lifted above its plan (a trial) or protected
+ * from a module its plan now carries (a disabled override). Omitting a key
+ * here makes that impossible no matter what the UI offers.
  */
 export class SetFeatureDto {
-  @IsIn(['PUBLIC_SITE', 'GALLERY', 'ENQUIRY', 'SOCIAL', 'ABOUT_CONTACT', 'EVENTS', 'MANAGEMENT', 'BLOG', 'HIRING', 'LIBRARY', 'ALUMNI', 'FEES', 'PRESS', 'SPORTS', 'SALARY', 'COURSE_MANAGEMENT'])
+  @IsIn(['PUBLIC_SITE', 'GALLERY', 'ENQUIRY', 'SOCIAL', 'ABOUT_CONTACT', 'EVENTS', 'EVENTS_HOST', 'MANAGEMENT', 'BLOG', 'HIRING', 'LIBRARY', 'ALUMNI', 'FEES', 'PRESS', 'SPORTS', 'SALARY', 'COURSE_MANAGEMENT', 'EXAM_HALL', 'WHATSAPP'])
   featureKey!: string;
   @IsBoolean() enabled!: boolean;
 }

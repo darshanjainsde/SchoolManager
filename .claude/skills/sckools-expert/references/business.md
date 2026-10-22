@@ -6,13 +6,15 @@ Sckools is the operating system for a school: a website studio, an admissions de
 
 ## Plans and tiers
 
+Plan Ladder v2, decided 2026-10-22 (`packages/db/src/features.ts`):
+
 | Plan | Feature keys (`inventory/features.md`) | Pitch |
 |---|---|---|
-| Basic | PUBLIC_SITE, GALLERY, ENQUIRY, SOCIAL | "Be found": website studio, courses, gallery, admissions desk, hall of fame, own domain |
-| Standard | + ABOUT_CONTACT, EVENTS, BLOG | "Join the network": events on every school, ticketing, blog syndicated to sckools.com |
-| Pro | + MANAGEMENT, HIRING, LIBRARY, FEES | "Run the school": office, staff room, family app, TV, library, jobs |
+| Basic | PUBLIC_SITE, GALLERY, ENQUIRY, SOCIAL, ABOUT_CONTACT, EVENTS | "Be found": website studio with about/contact, gallery, admissions desk, network events on your site (families register there), own domain |
+| Standard | + EVENTS_HOST, MANAGEMENT, BLOG | "Run the day": the whole ERP — people, sessions, register, leave & cover, timetable & availability, tests & results, diary, messages, announcements, TV, both apps; host your own events; blog |
+| Pro | + FEES, SALARY, EXAM_HALL, PRESS, LIBRARY, SPORTS, HIRING, ALUMNI, COURSE_MANAGEMENT, WHATSAPP | "Run everything": fees, pay & salaries, exam hall, report cards & print store, library, sports, jobs, alumni, syllabus tracker, the school on WhatsApp |
 
-ALUMNI and PRESS (certificates, report cards, exam hall) are override-only today ("on request"). Overrides per school live in `FeatureOverride` and are set from the owner console.
+Every key is in a tier now; nothing is "on request". Overrides per school live in `FeatureOverride` and are set from the owner console: a disabled override protects a live Pro school from a module its plan newly carries (`apps/api/scripts/plan-ladder-protect.ts`, run before the production migration), an enabled one is a trial above the plan. Marks and results stay in Standard (MANAGEMENT); only the seating desk moved to EXAM_HALL. WhatsApp is gated three ways: the settings and phone-verification routes (WHATSAPP), and the outbound channel re-checks the plan every 10 s.
 
 ## Pricing (decided 2026-09-07)
 
