@@ -2401,6 +2401,20 @@ model MarketingConfig {
   /// it by trying.
   loginOtpEnabled Boolean @default(false)
 
+  /// The four headline figures under the hero's buttons on sckools.com
+  /// ("13 modules, one login" …). JSON array of `{ n: number, label: string }`,
+  /// at most four; an empty array means "use the site's own defaults".
+  heroStats Json @default("[]")
+
+  /// A time-boxed discount the site shows as the struck-through list price,
+  /// the reduced price, and a countdown. OFF by default. Once `discountEndsAt`
+  /// has passed the public config reports it off, whatever the switch says,
+  /// so a forgotten offer cannot outlive its date.
+  discountEnabled Boolean   @default(false)
+  discountPercent Int       @default(50)
+  discountLabel   String    @default("Launch offer")
+  discountEndsAt  DateTime?
+
   updatedAt DateTime @updatedAt
 }
 

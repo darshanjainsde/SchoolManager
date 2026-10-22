@@ -1,5 +1,7 @@
 import {
-  IsBoolean, IsIn, IsInt, IsEmail, IsISO8601, IsOptional, IsString, Length, Matches, Min } from 'class-validator';
+  ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsEmail, IsISO8601, IsOptional, IsString, Length, Matches, Max, Min,
+  ValidateIf, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 
 /** Digits with optional +, spaces, dashes, parens — 7..16 significant chars. */
 const PHONE_RE = /^\+?[\d\s\-()]{7,20}$/;
@@ -132,6 +134,28 @@ export class UpdateMarketingConfigDto {
   @IsOptional()
   @IsBoolean()
   loginOtpEnabled?: boolean;
+
+  /**
+   * The four figures under the hero's buttons. Optional for the same reason as
+   * `loginOtpEnabled`: a console that does not know the field must not wipe it.
+   */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(4)
+  @ValidateNested({ each: true })
+  @Type(() => HeroStatDto)
+  heroStats?: HeroStatDto[];
+
+  @IsOptional() @IsBoolean() discountEnabled?: boolean;
+  @IsOptional() @IsInt() @Min(1) @Max(90) discountPercent?: number;
+  @IsOptional() @IsString() @Length(0, 40) discountLabel?: string;
+  /** ISO 8601 instant, or null to run the offer with no end date. */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsISO8601() discountEndsAt?: string | null;
+}
+
+export class HeroStatDto {
+  @IsInt() @Min(0) @Max(99999) n!: number;
+  @IsString() @Length(1, 40) label!: string;
 }
 
 export interface PublicMarketingConfig {
@@ -142,4 +166,8 @@ export interface PublicMarketingConfig {
   };
   contactEmail: string;
   contactPhone: string;
+  /** Empty when the owner has not set any; the site then shows its own defaults. */
+  heroStats: { n: number; label: string }[];
+  /** Already resolved against the clock: `enabled` is false once `endsAt` has passed. */
+  discount: { enabled: boolean; percent: number; label: string; endsAt: string | null };
 }

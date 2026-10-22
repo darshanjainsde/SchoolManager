@@ -1,7 +1,7 @@
 import { validateSync } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
-import { MarketingService } from './marketing.service';
-import { CreateLeadActivityDto, CreateLeadDto, UpdateLeadDto } from './marketing.dto';
+import { MarketingService, heroStatsOf, resolveDiscount } from './marketing.service';
+import { CreateLeadActivityDto, CreateLeadDto, UpdateLeadDto, UpdateMarketingConfigDto } from './marketing.dto';
 import type { MailService } from '../../common/mail/mail.service';
 
 const prismaMock = {
@@ -16,6 +16,12 @@ const prismaMock = {
       priceProInr: 4999,
       contactEmail: 'admin@sckools.com',
       contactPhone: '',
+      loginOtpEnabled: false,
+      heroStats: [],
+      discountEnabled: false,
+      discountPercent: 50,
+      discountLabel: 'Launch offer',
+      discountEndsAt: null,
       updatedAt: new Date(),
     }),
   },
@@ -83,6 +89,35 @@ describe('MarketingService', () => {
     expect(prismaMock.marketingConfig.upsert).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 'default' } }),
     );
+  });
+
+  it('getPublicConfig reports an empty hero list and an off discount for an untouched row', async () => {
+    const cfg = await svc.getPublicConfig();
+    expect(cfg.heroStats).toEqual([]);
+    expect(cfg.discount).toEqual({ enabled: false, percent: 50, label: 'Launch offer', endsAt: null });
+  });
+
+  it('updateConfig stores hero stats trimmed and the end date as a Date, and null clears it', async () => {
+    await svc.updateConfig({
+      ...baseConfig(),
+      heroStats: [{ n: 13, label: ' modules, one login ' }],
+      discountEnabled: true,
+      discountPercent: 50,
+      discountEndsAt: '2026-11-30T18:30:00.000Z',
+    });
+    const data = prismaMock.marketingConfig.upsert.mock.calls.at(-1)[0].update;
+    expect(data.heroStats).toEqual([{ n: 13, label: 'modules, one login' }]);
+    expect(data.discountEndsAt).toEqual(new Date('2026-11-30T18:30:00.000Z'));
+    expect(data.discountEnabled).toBe(true);
+
+    await svc.updateConfig({ ...baseConfig(), discountEndsAt: null });
+    expect(prismaMock.marketingConfig.upsert.mock.calls.at(-1)[0].update.discountEndsAt).toBeNull();
+
+    // A console that does not send the new fields leaves them alone.
+    await svc.updateConfig(baseConfig());
+    const untouched = prismaMock.marketingConfig.upsert.mock.calls.at(-1)[0].update;
+    expect('heroStats' in untouched).toBe(false);
+    expect('discountEndsAt' in untouched).toBe(false);
   });
 
   it('createLead trims fields, stores the row and fires notification email', async () => {
@@ -157,5 +192,45 @@ describe('MarketingService — lead pipeline', () => {
   it('throws NotFound rather than silently creating when the lead is gone', async () => {
     prismaMock.marketingLead.findUnique.mockResolvedValueOnce(null);
     await expect(svc.updateLead('missing', { status: 'WON' } as UpdateLeadDto)).rejects.toThrow('not found');
+  });
+});
+
+function baseConfig(): UpdateMarketingConfigDto {
+  return {
+    priceBasicUsd: 1, priceBasicInr: 30, priceStdUsd: 2, priceStdInr: 45, priceProUsd: 3, priceProInr: 60,
+    contactEmail: 'admin@sckools.com', contactPhone: '',
+  };
+}
+
+describe('resolveDiscount — the clock decides, not only the switch', () => {
+  const row = (over: Partial<Parameters<typeof resolveDiscount>[0]>) => ({
+    discountEnabled: true, discountPercent: 50, discountLabel: 'Launch offer', discountEndsAt: null as Date | null, ...over,
+  });
+  const now = new Date('2026-10-22T10:00:00.000Z');
+
+  it('is on with no end date while the switch is on', () => {
+    expect(resolveDiscount(row({}), now).enabled).toBe(true);
+  });
+  it('is on until the end date, then off at and after it', () => {
+    expect(resolveDiscount(row({ discountEndsAt: new Date('2026-10-22T10:00:01.000Z') }), now).enabled).toBe(true);
+    expect(resolveDiscount(row({ discountEndsAt: now }), now).enabled).toBe(false);
+    expect(resolveDiscount(row({ discountEndsAt: new Date('2026-10-01T00:00:00.000Z') }), now).enabled).toBe(false);
+  });
+  it('is off when the switch is off, whatever the date', () => {
+    expect(resolveDiscount(row({ discountEnabled: false, discountEndsAt: new Date('2027-01-01T00:00:00.000Z') }), now).enabled).toBe(false);
+  });
+  it('serialises the end date as an ISO instant for the site countdown', () => {
+    expect(resolveDiscount(row({ discountEndsAt: new Date('2026-11-30T18:30:00.000Z') }), now).endsAt).toBe('2026-11-30T18:30:00.000Z');
+  });
+});
+
+describe('heroStatsOf — the JSON column read defensively', () => {
+  it('keeps well-formed entries, drops junk, caps at four, rounds numbers', () => {
+    expect(heroStatsOf([{ n: 13.4, label: 'modules' }, { label: 'no number' }, 'x', null, { n: 1, label: 'a' }, { n: 2, label: 'b' }, { n: 3, label: 'c' }, { n: 4, label: 'd' }]))
+      .toEqual([{ n: 13, label: 'modules' }, { n: 1, label: 'a' }, { n: 2, label: 'b' }, { n: 3, label: 'c' }]);
+  });
+  it('returns an empty list for anything that is not an array', () => {
+    expect(heroStatsOf(null)).toEqual([]);
+    expect(heroStatsOf({})).toEqual([]);
   });
 });

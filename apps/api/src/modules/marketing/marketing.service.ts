@@ -12,6 +12,30 @@ import {
   UpdateMarketingConfigDto,
 } from './marketing.dto';
 
+/** The JSON column, read defensively: anything that is not `{n, label}` is dropped. */
+export function heroStatsOf(raw: unknown): { n: number; label: string }[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((s): s is { n: number; label: string } =>
+      !!s && typeof s === 'object' && Number.isFinite((s as { n?: unknown }).n) && typeof (s as { label?: unknown }).label === 'string')
+    .slice(0, 4)
+    .map((s) => ({ n: Math.round(s.n), label: s.label }));
+}
+
+/**
+ * The discount as the public site should show it NOW. The switch alone is not
+ * the truth: an offer whose end has passed is off, so a forgotten countdown
+ * never keeps selling at half price.
+ */
+export function resolveDiscount(
+  c: Pick<MarketingConfig, 'discountEnabled' | 'discountPercent' | 'discountLabel' | 'discountEndsAt'>,
+  now: Date,
+): PublicMarketingConfig['discount'] {
+  const endsAt = c.discountEndsAt ? c.discountEndsAt.toISOString() : null;
+  const expired = !!c.discountEndsAt && c.discountEndsAt.getTime() <= now.getTime();
+  return { enabled: c.discountEnabled && !expired, percent: c.discountPercent, label: c.discountLabel, endsAt };
+}
+
 /** Logging one of these counts as having reached the lead. NOTE does not. */
 const CONTACT_KINDS = new Set(['CALL', 'WHATSAPP', 'EMAIL', 'MEETING']);
 
@@ -52,12 +76,20 @@ export class MarketingService {
       },
       contactEmail: c.contactEmail,
       contactPhone: c.contactPhone,
+      heroStats: heroStatsOf(c.heroStats),
+      discount: resolveDiscount(c, new Date()),
     };
   }
 
   async updateConfig(dto: UpdateMarketingConfigDto): Promise<MarketingConfig> {
     const db = getPlatformPrisma();
-    const data = { ...dto, contactPhone: dto.contactPhone ?? '' };
+    const { heroStats, discountEndsAt, ...rest } = dto;
+    const data = {
+      ...rest,
+      contactPhone: dto.contactPhone ?? '',
+      ...(heroStats !== undefined ? { heroStats: heroStats.map((s) => ({ n: s.n, label: s.label.trim() })) } : {}),
+      ...(discountEndsAt !== undefined ? { discountEndsAt: discountEndsAt === null ? null : new Date(discountEndsAt) } : {}),
+    };
     return db.marketingConfig.upsert({ where: { id: 'default' }, update: data, create: data });
   }
 
