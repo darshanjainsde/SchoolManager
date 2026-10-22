@@ -60,6 +60,17 @@ describe('site-preview bundle', () => {
     expect(index).toContain("'Run everything.'");
   });
 
+  it('every mock the pages draw closes the divs it opens, so a desk never nests inside the one before it', () => {
+    // 2026-10-23: the staff-room phone mock was one </div> short and the two desks after it rendered inside its column.
+    const mocks = [...index.matchAll(/function (\w+(?:Mock|Phone))\([^)]*\)\{return `([\s\S]*?)`;\}/g)];
+    expect(mocks.length).toBeGreaterThan(3);
+    for (const [, name, html] of mocks) {
+      const opens = (html.match(/<div\b/g) || []).length;
+      const closes = (html.match(/<\/div>/g) || []).length;
+      expect({ name, opens, closes }).toEqual({ name, opens, closes: opens });
+    }
+  });
+
   it('every feature tile names a key one of the three plans carries, so no pill can read "on request"', () => {
     const tiers = /const TIER_FEATURES=(\{[^\n]+\});/.exec(index);
     expect(tiers).not.toBeNull();
