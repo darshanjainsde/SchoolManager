@@ -178,6 +178,14 @@ describe('RLS coverage across every tenant table', () => {
       'MarketingLead',
       'MetricRollup',
       'PasswordResetToken',
+      // Refer & Earn (20261023_090000). A promoter is a person outside every
+      // school, and a referral is about a school that does not exist yet, so
+      // none of these can carry a schoolId. All five are platform_only.
+      'Promoter',
+      'Referral',
+      'ReferralEvent',
+      'ReferralPayout',
+      'ReferralTask',
       // The sample-pack library (20261002_010000). Platform level on purpose:
       // a pack belongs to the platform, not to the school it was cut from, so
       // deleting that school can never take the pack with it. Guarded by the

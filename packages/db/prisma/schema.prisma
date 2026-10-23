@@ -5848,4 +5848,5 @@ model ReferralTask {
 
   @@index([status, createdAt])
   @@index([promoterId, kind, status])
+  @@index([referralId])
 }

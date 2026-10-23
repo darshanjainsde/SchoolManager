@@ -87,12 +87,17 @@ export interface MinimalSchool {
  * subdomain of PLATFORM_HOST (defaults to "localhost") matching the
  * school's slug — see school-lookup.service.ts.
  */
-export async function seedMinimalSchool(): Promise<MinimalSchool> {
+/**
+ * `tier` defaults to PRO. Since Plan Ladder v2 (22 Oct 2026) PRO holds every
+ * feature, so a suite that needs a school WITHOUT one (the feature-gate
+ * tests) seeds a STANDARD school instead of relying on "in no tier".
+ */
+export async function seedMinimalSchool(opts: { tier?: 'BASIC' | 'STANDARD' | 'PRO' } = {}): Promise<MinimalSchool> {
   const db = getPlatformPrisma();
   const slug = `authz-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 
   const school = await db.school.create({
-    data: { slug, name: `Authz Test School ${slug}`, tier: 'PRO', status: 'LIVE' },
+    data: { slug, name: `Authz Test School ${slug}`, tier: opts.tier ?? 'PRO', status: 'LIVE' },
   });
 
   // Real hash so these rows would also work if a future suite reuses them

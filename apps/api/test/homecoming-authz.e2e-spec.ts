@@ -163,7 +163,8 @@ describe('Alumni Office authorization', () => {
      * case anyway, and it needs no cache surgery.
      */
     it('refuses EVERY route with 403 for a school that does not have ALUMNI', async () => {
-      const plain = await seedMinimalSchool();
+      // ALUMNI is PRO since Plan Ladder v2, so the school without it is STANDARD.
+      const plain = await seedMinimalSchool({ tier: 'STANDARD' });
       const plainToken = signSchoolToken({
         sub: plain.adminUserId,
         schoolId: plain.schoolId,

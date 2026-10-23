@@ -2,7 +2,7 @@
  * The syllabus tracker, role to door, on real Postgres through the booted API.
  *
  * What is proven here, in the order a school would hit it:
- *   - the feature is in no tier: every door is shut until the owner's override;
+ *   - the feature is PRO-only: on a STANDARD school every door is shut until the owner's override;
  *   - who may knock (role), then who may MARK (the timetable decides, not the role);
  *   - chapters are shared by every section of a grade and outlive the year,
  *     progress belongs to one section — a sibling section opens with the same
@@ -71,7 +71,7 @@ describe('syllabus tracker: doors, marking, sharing and privacy', () => {
     const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = mod.createNestApplication();
     await app.init();
-    school = await seedMinimalSchool();
+    school = await seedMinimalSchool({ tier: 'STANDARD' }); // COURSE_MANAGEMENT is PRO since Plan Ladder v2
     const p = db();
     const sid = school.schoolId;
 
@@ -116,7 +116,7 @@ describe('syllabus tracker: doors, marking, sharing and privacy', () => {
 
   // ── 1. The feature switch ──────────────────────────────────────────────────
 
-  describe('with COURSE_MANAGEMENT off (a PRO school, no override)', () => {
+  describe('with COURSE_MANAGEMENT off (a STANDARD school, no override)', () => {
     it('every door is shut, for every role, with 403 and never a payload', async () => {
       await admin().get('/manage/syllabus/overview').expect(403);
       await teacher1().get('/manage/syllabus/mine').expect(403);

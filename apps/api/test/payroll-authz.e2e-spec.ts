@@ -161,12 +161,12 @@ describe('salary authorization', () => {
   });
 
   it('shuts the whole module for a school without the SALARY feature, even for an admin', async () => {
-    // SALARY is in no tier at all, so PRO is not enough — the override is the
-    // only way in, and removing it must close every route rather than leave a
+    // SALARY is a PRO feature since Plan Ladder v2, so the school without it is
+    // a STANDARD one — and the gate must close every route rather than leave a
     // back door on one somebody bookmarked.
     const slug = `nosalary-${Date.now()}`;
     const db = getPlatformPrisma();
-    const school = await db.school.create({ data: { slug, name: 'No Salary School', tier: 'PRO', status: 'LIVE' } });
+    const school = await db.school.create({ data: { slug, name: 'No Salary School', tier: 'STANDARD', status: 'LIVE' } });
     const user = await db.user.create({
       data: { schoolId: school.id, email: `a@${slug}.test`, role: 'SCHOOL_ADMIN', passwordHash: 'x', canSeeSalary: true },
     });

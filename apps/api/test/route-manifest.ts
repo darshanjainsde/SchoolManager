@@ -18,6 +18,39 @@
  * this becomes a list of good intentions.
  */
 export const AUTHZ_REVIEWED: string[] = [
+  // Refer & Earn (23 Oct 2026): promoter-contract.e2e-spec.ts asserts the two
+  // public doors are rate-limited and anonymous, every /promoter route needs a
+  // promoter token (401 without, 403 for a school/platform token, suspended
+  // promoters refused on writes), and every /owner/referrals route is
+  // platform-only (401 anon, 403 school tokens).
+  "GET /promoter/auth/channels",
+  "POST /promoter/auth/start",
+  "POST /promoter/auth/verify",
+  "GET /promoter/me",
+  "PATCH /promoter/me",
+  "POST /promoter/sign-out-all",
+  "POST /promoter/commission-request",
+  "GET /promoter/referrals",
+  "POST /promoter/referrals",
+  "GET /promoter/referrals/:id",
+  "POST /promoter/referrals/:id/notes",
+  "PUT /promoter/payout-details",
+  "GET /promoter/payouts",
+  "GET /owner/referrals/tasks",
+  "GET /owner/referrals/promoters",
+  "POST /owner/referrals/promoters",
+  "PATCH /owner/referrals/promoters/:id/commission",
+  "PATCH /owner/referrals/promoters/:id/status",
+  "POST /owner/referrals/promoters/:id/kyc-verified",
+  "POST /owner/referrals/promoters/:id/login-link",
+  "GET /owner/referrals/payouts",
+  "PATCH /owner/referrals/payouts/:id/paid",
+  "GET /owner/referrals/settings",
+  "PUT /owner/referrals/settings",
+  "GET /owner/referrals",
+  "POST /owner/referrals/:id/accept",
+  "POST /owner/referrals/:id/reject",
+  "PATCH /owner/referrals/:id/stage",
   // Report and block (Play UGC policy, 19 Oct 2026): message-report-block.e2e-spec.ts
   // asserts 401 anon, 403 wrong role, 404 non-participant, and the behaviour.
   "POST /manage/messages/:threadId/report",
