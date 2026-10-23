@@ -269,6 +269,10 @@ export const config = {
     // console-segments.test.ts looks for — so the guard could not see it
     // either. That test now detects a session by the CREDENTIAL as well.
     '/alumni/:path*',
+    // Refer & Earn: the promoter portal keeps a 30-day bearer token in
+    // localStorage (sk_promoter_session) and /earn is where it is minted.
+    '/promoter/:path*',
+    '/earn/:path*',
     // Public school-site and marketing pages — matched so the cache header
     // above can be applied. They carry no session; see cacheableFor.
     '/',

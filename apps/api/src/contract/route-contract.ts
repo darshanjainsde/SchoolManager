@@ -481,6 +481,9 @@ export function webSurface(): Surface {
       teacher: { roles: ['TEACHER'], mode: 'all' },
       staff: { roles: ['STAFF'], mode: 'all' },
       alumni: { roles: ['ALUMNUS'], mode: 'all' },
+      // Refer & Earn: a promoter token has no school role; its routes carry no @Roles and are guarded by audience alone.
+      promoter: { roles: ['PROMOTER'], mode: 'all' },
+      earn: { roles: ['PROMOTER'], mode: 'all' },
       // Office console: admins plus the staff desks it hosts (ACCOUNTS, ADMISSIONS…).
       app: { roles: ['SCHOOL_ADMIN', 'STAFF'], mode: 'any' },
       library: { roles: ['STAFF', 'SCHOOL_ADMIN', 'TEACHER'], mode: 'any' },

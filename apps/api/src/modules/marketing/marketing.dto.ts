@@ -29,6 +29,12 @@ export class CreateLeadDto {
   @Length(1, 120)
   name?: string;
 
+  /** A promoter's code from ?ref=CODE on sckools.com (Refer & Earn). Unknown codes are ignored. */
+  @IsOptional()
+  @IsString()
+  @Matches(/^[A-Za-z0-9]{3,12}$/)
+  ref?: string;
+
   @IsString()
   @Matches(PHONE_RE, { message: 'phone must be a valid phone number' })
   phone!: string;

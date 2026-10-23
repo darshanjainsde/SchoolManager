@@ -19,7 +19,7 @@ import { SckoolsLogo } from '@/components/brand/sckools-logo';
  * marketing.css is imported here on purpose so tenant blog pages (which never
  * render this component) do not ship it in their bundle.
  */
-export type PlatformNavVariant = 'index' | 'post' | 'jobs' | 'job' | 'builder' | 'about';
+export type PlatformNavVariant = 'index' | 'post' | 'jobs' | 'job' | 'builder' | 'about' | 'earn';
 
 const LINKS: { href: string; label: string; variants: PlatformNavVariant[] }[] = [
   { href: '/features', label: 'Features', variants: [] },
@@ -28,6 +28,7 @@ const LINKS: { href: string; label: string; variants: PlatformNavVariant[] }[] =
   { href: '/blog', label: 'Blog', variants: ['index', 'post'] },
   { href: '/jobs', label: 'Jobs', variants: ['jobs', 'job'] },
   { href: '/about', label: 'About', variants: ['about'] },
+  { href: '/earn', label: 'Refer & earn', variants: ['earn'] },
 ];
 
 export default function PlatformBlogNav({ variant }: { variant: PlatformNavVariant }) {

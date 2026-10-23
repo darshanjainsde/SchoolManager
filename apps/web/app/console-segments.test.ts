@@ -77,7 +77,11 @@ function code(src: string): string {
  * everywhere it can be READ. Covering the whole tenant site, or moving that
  * session off localStorage, is the real fix.
  */
-const KNOWN_SESSION_SEGMENTS = ['alumni'];
+const KNOWN_SESSION_SEGMENTS = ['alumni',
+  // Refer & Earn: lib/promoter-session.ts keeps `sk_promoter_session` in
+  // localStorage and sends it as a bearer token; /promoter uses it and /earn
+  // mints it. Both import the helper rather than naming the key themselves.
+  'promoter', 'earn'];
 
 /** Top-level segments that establish a session, by cookie or by bearer token. */
 function sessionSegments(): string[] {

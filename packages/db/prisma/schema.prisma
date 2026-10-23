@@ -2349,6 +2349,7 @@ model MarketingLead {
   updatedAt DateTime @updatedAt
 
   activities LeadActivity[]
+  referral   Referral?
 
   @@index([status, createdAt])
   @@index([nextFollowUpAt])
@@ -2414,6 +2415,15 @@ model MarketingConfig {
   discountPercent Int       @default(50)
   discountLabel   String    @default("Launch offer")
   discountEndsAt  DateTime?
+
+  /// Refer & Earn (2026-10-23). The owner sets every promoter's rate by hand;
+  /// `referralLadder` is only the suggestion the Tasks tab pre-fills from the
+  /// promoter's "how many schools" answer. Money is in paise.
+  referralLadder          Json @default("{\"1-2\":8,\"3-5\":10,\"6-10\":12,\"10+\":15}")
+  referralCapMinor        Int  @default(5000000)
+  referralPayoutDays      Int  @default(30)
+  referralAttributionDays Int  @default(90)
+  referralTdsPct          Int  @default(2)
 
   updatedAt DateTime @updatedAt
 }
@@ -5633,4 +5643,209 @@ model SyllabusStudentNote {
   @@unique([studentId, chapterId])
   @@index([schoolId, studentId])
   @@index([chapterId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Refer & Earn (2026-10-23). Platform tables: no schoolId, read only through
+// the platform client by the owner console and the promoter portal. RLS is
+// enabled with no policies, like MarketingLead, so the Data API sees nothing.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum PromoterStatus {
+  ACTIVE
+  SUSPENDED
+  REMOVED
+}
+
+enum ReferralStatus {
+  LOGGED
+  ACCEPTED
+  CONTACTED
+  DEMO_DONE
+  PROPOSAL_SENT
+  WON
+  LIVE
+  PAYOUT_DUE
+  PAID
+  REJECTED
+  LOST
+}
+
+enum ReferralTaskKind {
+  COMMISSION
+  REFERRAL
+  KYC
+}
+
+enum ReferralTaskStatus {
+  OPEN
+  DONE
+}
+
+enum ReferralPayoutStatus {
+  DUE
+  PAID
+  ON_HOLD
+}
+
+enum ReferralEventActor {
+  PROMOTER
+  OWNER
+  SYSTEM
+}
+
+/// A person who introduces schools. Signs in by a one-time code (email or
+/// WhatsApp); no password. `tokenVersion` is bumped on suspend/remove so a
+/// token minted earlier stops working at the next request.
+model Promoter {
+  id        String         @id @default(uuid()) @db.Uuid
+  code      String         @unique
+  name      String
+  email     String?        @unique
+  phoneE164 String?        @unique
+  city      String?
+  status    PromoterStatus @default(ACTIVE)
+  statusReason String?
+
+  /// The questionnaire. `expect` is one of the ladder keys ("1-2", "3-5", "6-10", "10+").
+  who           String?
+  expect        String?
+  areas         String?
+  know          String?
+  schoolsInMind String?
+  hasGst        Boolean @default(false)
+  questionnaireAt DateTime?
+
+  /// The rate, set by the owner per person. Null until set.
+  commissionPct   Int?
+  commissionCapMinor Int?
+  commissionNote  String?
+  commissionSetAt DateTime?
+
+  /// Payout details, asked for before the first payout. Verified by the owner.
+  payeeName   String?
+  pan         String?
+  bankAccount String?
+  ifsc        String?
+  upi         String?
+  gstin       String?
+  address     String?
+  payoutDetailsAt DateTime?
+  kycVerifiedAt   DateTime?
+
+  tokenVersion Int      @default(0)
+  lastSeenAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  referrals Referral[]
+  payouts   ReferralPayout[]
+  tasks     ReferralTask[]
+
+  @@index([status, createdAt])
+  @@index([city])
+}
+
+/// One school a promoter introduced. Becomes a MarketingLead when accepted,
+/// and links to the School once it is live. Money in paise.
+model Referral {
+  id         String         @id @default(uuid()) @db.Uuid
+  promoterId String         @db.Uuid
+  promoter   Promoter       @relation(fields: [promoterId], references: [id], onDelete: Cascade)
+  leadId     String?        @unique @db.Uuid
+  lead       MarketingLead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  /// The live school, once there is one. Platform-level pointer; this table is
+  /// not tenant data and is never read through a tenant client.
+  wonSchoolId String?       @db.Uuid
+
+  schoolName    String
+  schoolKey     String
+  city          String
+  area          String?
+  studentsApprox Int?
+  board         String?
+  contactName   String
+  contactRole   String?
+  contactPhone  String
+  contactPhoneKey String
+  contactEmail  String?
+  planInterest  String?
+  howKnown      String?
+  consent       Boolean  @default(false)
+  /// Set when the school itself arrived through the promoter's link (?ref=CODE).
+  viaLink       Boolean  @default(false)
+
+  status        ReferralStatus @default(LOGGED)
+  statusReason  String?
+  attributionUntil DateTime
+  invoiceMinor  Int?
+  rewardMinor   Int?
+  liveAt        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events ReferralEvent[]
+  payout ReferralPayout?
+  tasks  ReferralTask[]
+
+  @@index([promoterId, createdAt])
+  @@index([status, createdAt])
+  @@index([schoolKey])
+  @@index([contactPhoneKey])
+  @@index([city])
+}
+
+/// Append-only timeline for one referral: stage moves and notes.
+model ReferralEvent {
+  id         String             @id @default(uuid()) @db.Uuid
+  referralId String             @db.Uuid
+  referral   Referral           @relation(fields: [referralId], references: [id], onDelete: Cascade)
+  actor      ReferralEventActor
+  fromStatus ReferralStatus?
+  toStatus   ReferralStatus?
+  body       String?
+  createdAt  DateTime           @default(now())
+
+  @@index([referralId, createdAt])
+}
+
+/// What is owed for one live referral. One per referral, ever.
+model ReferralPayout {
+  id         String               @id @default(uuid()) @db.Uuid
+  promoterId String               @db.Uuid
+  promoter   Promoter             @relation(fields: [promoterId], references: [id], onDelete: Cascade)
+  referralId String               @unique @db.Uuid
+  referral   Referral             @relation(fields: [referralId], references: [id], onDelete: Cascade)
+  grossMinor Int
+  tdsMinor   Int
+  netMinor   Int
+  dueOn      DateTime
+  status     ReferralPayoutStatus @default(DUE)
+  utr        String?
+  paidOn     DateTime?
+  note       String?
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+
+  @@index([status, dueOn])
+  @@index([promoterId])
+}
+
+/// Something waiting on the owner: a commission request, a new referral to
+/// accept, payout details to verify. Closed by the action that resolves it.
+model ReferralTask {
+  id         String             @id @default(uuid()) @db.Uuid
+  kind       ReferralTaskKind
+  status     ReferralTaskStatus @default(OPEN)
+  promoterId String             @db.Uuid
+  promoter   Promoter           @relation(fields: [promoterId], references: [id], onDelete: Cascade)
+  referralId String?            @db.Uuid
+  referral   Referral?          @relation(fields: [referralId], references: [id], onDelete: Cascade)
+  note       String?
+  createdAt  DateTime           @default(now())
+  doneAt     DateTime?
+
+  @@index([status, createdAt])
+  @@index([promoterId, kind, status])
 }

@@ -227,7 +227,7 @@ export class WhatsAppChannel implements DeliveryChannel {
    * outside the notification kinds), still written to the ledger under the
    * school. Resolves false and records the reason on refusal, like send().
    */
-  async deliverWith(schoolId: string, phone: string, kind: string, label: string, fn: (cfg: WhatsAppConfig, phoneNumberId: string | null, fetchImpl: typeof fetch) => Promise<SendResult>): Promise<{ ok: boolean; code: number | null }> {
+  async deliverWith(schoolId: string | null, phone: string, kind: string, label: string, fn: (cfg: WhatsAppConfig, phoneNumberId: string | null, fetchImpl: typeof fetch) => Promise<SendResult>): Promise<{ ok: boolean; code: number | null }> {
     const cfg = this.config();
     if (!cfg) return { ok: false, code: null };
     const settings = await this.settingsFor(schoolId);
@@ -241,14 +241,15 @@ export class WhatsAppChannel implements DeliveryChannel {
       const code = e instanceof WhatsAppApiError ? e.code : null;
       const reason = e instanceof WhatsAppApiError ? `${e.message} (code ${e.code ?? '?'})` : (e as Error).message;
       this.logger.warn(`WhatsApp ${label} to ${phone} failed: ${reason}`);
-      try {
+      // A promoter's code has no school to file under; its OtpChallenge row is the record.
+      if (schoolId) try {
         await this.prisma.whatsAppDelivery.create({ data: { schoolId, phone, kind, templateName: label, status: 'FAILED', error: reason.slice(0, 500) } });
       } catch (ledgerErr) {
         this.logger.error(`Could not record WhatsApp failure: ${(ledgerErr as Error).message}`);
       }
       return { ok: false, code };
     }
-    try {
+    if (schoolId) try {
       await this.prisma.whatsAppDelivery.create({ data: { schoolId, phone, kind, templateName: label, waMessageId: messageId, status: 'SENT', sentAt: new Date() } });
     } catch (ledgerErr) {
       // Meta has the message. Not recording it must never turn into "failed".
@@ -338,7 +339,10 @@ export class WhatsAppChannel implements DeliveryChannel {
     return !!row && resolveFeatures(row.tier, row.featureOverrides).has('WHATSAPP');
   }
 
-  async settingsFor(schoolId: string): Promise<SchoolSettings> {
+  async settingsFor(schoolId: string | null): Promise<SchoolSettings> {
+    // No school (a promoter's sign-in code): the platform's own number, and no
+    // per-school switch to consult.
+    if (!schoolId) return { enabled: false, phoneNumberId: null };
     const hit = this.settingsCache.get(schoolId);
     if (hit && Date.now() - hit.at < SETTINGS_TTL_MS) return hit.value;
     let value: SchoolSettings = { enabled: false, phoneNumberId: null };

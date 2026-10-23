@@ -1,8 +1,9 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Optional, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { getPlatformPrisma } from '@skoolos/db';
 import type { LeadActivity, MarketingConfig, MarketingLead } from '@skoolos/db';
 import { MailService } from '../../common/mail/mail.service';
 import { runInBackground } from '../../common/notifications/run-in-background';
+import { ReferralsService } from '../referrals';
 import {
   CreateLeadActivityDto,
   CreateLeadDto,
@@ -58,7 +59,7 @@ export interface LeadDetail extends MarketingLead {
 export class MarketingService {
   private readonly logger = new Logger(MarketingService.name);
 
-  constructor(private readonly mail: MailService) {}
+  constructor(private readonly mail: MailService, @Optional() private readonly referrals?: ReferralsService) {}
 
   /** Returns the singleton config, creating it with defaults on first read. */
   async getConfigRow(): Promise<MarketingConfig> {
@@ -113,6 +114,12 @@ export class MarketingService {
       () => this.mail.sendLeadNotification(config.contactEmail, lead),
       () => undefined,
     );
+    // Refer & Earn: a quote asked for from a promoter's link is their referral.
+    // Best-effort and after the lead exists; an unknown code is simply ignored.
+    if (dto.ref && this.referrals) {
+      const ref = dto.ref;
+      runInBackground(() => this.referrals!.attributeLead(ref, lead), () => undefined);
+    }
     return { ok: true };
   }
 

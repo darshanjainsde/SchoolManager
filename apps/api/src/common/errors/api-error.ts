@@ -211,6 +211,19 @@ export type ErrorCode =
   /** Another login of the school already verified that number — 409. */
   | 'PHONE_TAKEN'
   /** One-time codes (login, reset, verify): too many asked for this phone, or asked again within a minute. */
+  // ─── Refer & Earn ──────────────────────────────────────────────────────────
+  /** The promoter account is suspended or removed — pair with 403. */
+  | 'PROMOTER_SUSPENDED'
+  /** Sign-up needs a name the first time an address is seen — pair with 400. */
+  | 'PROMOTER_NAME_REQUIRED'
+  /** A referral the owner cannot act on in its current stage — pair with 409. */
+  | 'REFERRAL_BAD_TRANSITION'
+  /** Marking a school live needs the promoter's rate first — pair with 409. */
+  | 'REFERRAL_RATE_NOT_SET'
+  /** Marking live needs the first-year invoice amount — pair with 400. */
+  | 'REFERRAL_INVOICE_REQUIRED'
+  /** A payout cannot be paid without the promoter's payout details — pair with 409. */
+  | 'PAYOUT_DETAILS_MISSING'
   | 'OTP_RATE_LIMITED'
   /** No sender could deliver the code (not on WhatsApp, SMS not enabled, platform not set up). */
   | 'OTP_UNDELIVERABLE'

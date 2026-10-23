@@ -250,6 +250,7 @@ const MNAV_LINKS: { href: string; label: string }[] = [
   { href: '#switch', label: 'Why switch' },
   { href: '/jobs', label: 'Jobs' },
   { href: '/blog', label: 'Blog' },
+  { href: '/earn', label: 'Refer & earn' },
 ];
 
 function MnavLink({ href, label, className }: { href: string; label: string; className: string }) {
@@ -619,7 +620,7 @@ export default function MarketingSite({ config }: { config: MarketingConfigData 
               {config.contactPhone ? <> · 📞 <a href={`tel:${config.contactPhone.replace(/\s/g, '')}`}>{config.contactPhone}</a></> : null}
             </div>
             <div style={{ marginTop: 6 }}>
-              <a href="/pricing">Pricing</a> · <a href="#events">Events Network</a> · <Link href="/jobs">Jobs</Link>
+              <a href="/pricing">Pricing</a> · <a href="#events">Events Network</a> · <Link href="/jobs">Jobs</Link> · <Link href="/earn">Refer &amp; earn</Link>
             </div>
           </div>
         </div>

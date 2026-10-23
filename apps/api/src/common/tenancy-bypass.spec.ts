@@ -40,6 +40,11 @@ const ALLOWED: Record<string, string> = {
   'modules/features/internal/feature-resolver.service.ts':
     'reads a school tier to decide feature gates, before tenant scoping',
 
+  // ── Refer & Earn: promoters are platform identities with no school ───────
+  'modules/referrals/promoter-auth.service.ts': 'a promoter signs in before any tenant exists; Promoter is a platform table',
+  'modules/referrals/promoter-jwt.guard.ts': 'loads the promoter row per request to honour suspension (tokenVersion)',
+  'modules/referrals/referrals.service.ts': 'Promoter/Referral/ReferralPayout/ReferralTask are platform tables (deny-all RLS); the owner and the promoter read them through the platform client only',
+
   // ── Auth and credentials: cross-cutting identity state ────────────────────
   'modules/auth/internal/auth.service.ts': 'users/sessions are platform-wide identities',
   'modules/auth/internal/password-reset.service.ts': 'reset tokens are keyed by user, not school',

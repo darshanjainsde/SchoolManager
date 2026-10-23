@@ -43,6 +43,7 @@ import { MailWebhooksModule } from './modules/mail-webhooks/mail-webhooks.module
 import { PressModule } from './modules/press';
 import { SyllabusModule } from './modules/syllabus';
 import { RedisThrottlerModule } from './common/throttler/redis-throttler.module';
+import { ReferralsModule } from './modules/referrals';
 import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storage';
 
 @Module({
@@ -113,6 +114,7 @@ import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storag
     FeesModule,
     PressModule,
     SyllabusModule,
+    ReferralsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

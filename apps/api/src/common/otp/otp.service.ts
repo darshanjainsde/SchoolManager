@@ -48,30 +48,10 @@ export class OtpService {
     return this.senders.enabledNames().length > 0;
   }
 
-  async start(purpose: OtpPurpose, phone: string, ctx: { schoolId: string; userId?: string | null; ip?: string | null }): Promise<StartedChallenge> {
+  async start(purpose: OtpPurpose, phone: string, ctx: { schoolId: string | null; userId?: string | null; ip?: string | null }): Promise<StartedChallenge> {
     const db = getPlatformPrisma();
     const now = Date.now();
-    const [latest, lastHour, lastDay] = await Promise.all([
-      // `sentVia` is written ONLY after a sender actually carried the code, so
-      // this counts codes that reached somebody. A challenge whose send failed
-      // must not start a cooldown: there is nobody to spam, and making the
-      // person wait a minute for a message that was never sent — while telling
-      // them to "check WhatsApp" — is the product lying to them.
-      db.otpChallenge.findFirst({
-        where: { phone, purpose, sentVia: { isEmpty: false } },
-        orderBy: { createdAt: 'desc' },
-        select: { createdAt: true },
-      }),
-      db.otpChallenge.count({ where: { phone, purpose, sentVia: { isEmpty: false }, createdAt: { gt: new Date(now - 3_600_000) } } }),
-      db.otpChallenge.count({ where: { phone, purpose, sentVia: { isEmpty: false }, createdAt: { gt: new Date(now - 86_400_000) } } }),
-    ]);
-    if (latest && now - latest.createdAt.getTime() < OTP_RESEND_AFTER_MS) {
-      throw new ApiError('OTP_RATE_LIMITED', 'A code was sent less than a minute ago. Check WhatsApp, or wait a moment.', 429, 'phone');
-    }
-    if (lastHour >= OTP_PER_HOUR || lastDay >= OTP_PER_DAY) {
-      throw new ApiError('OTP_RATE_LIMITED', 'Too many codes for this number. Try again later, or use your password.', 429, 'phone');
-    }
-
+    await this.assertNotRateLimited(db, phone, purpose, now, 'phone');
     const id = randomUUID();
     const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
     await db.otpChallenge.create({
@@ -95,7 +75,7 @@ export class OtpService {
               // code template on this account, so retrying cannot help. Send
               // them to the door that does work instead of leaving them on a
               // screen that will fail every time.
-              ? 'Signing in by code is not switched on yet. Please sign in with your password instead.'
+              ? (purpose === 'PROMOTER' ? 'WhatsApp codes are not switched on yet. Use the email door instead.' : 'Signing in by code is not switched on yet. Please sign in with your password instead.')
               : 'The code could not be delivered just now. Try again in a minute.';
       this.logger.warn(`OTP ${purpose} to ${phone} undeliverable: ${out.failures.map((f) => `${f.name}: ${f.reason}`).join('; ') || 'no sender enabled'}`);
       throw new ApiError('OTP_UNDELIVERABLE', why, 502, 'phone');
@@ -105,11 +85,63 @@ export class OtpService {
   }
 
   /**
+   * The same resend/hour/day limits for every carrier. `field` names the input
+   * the client should mark — "phone" for a number, "email" for an address.
+   */
+  private async assertNotRateLimited(db: ReturnType<typeof getPlatformPrisma>, address: string, purpose: OtpPurpose, now: number, field: 'phone' | 'email'): Promise<void> {
+    const [latest, lastHour, lastDay] = await Promise.all([
+      db.otpChallenge.findFirst({
+        where: { phone: address, purpose, sentVia: { isEmpty: false } },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true },
+      }),
+      db.otpChallenge.count({ where: { phone: address, purpose, sentVia: { isEmpty: false }, createdAt: { gt: new Date(now - 3_600_000) } } }),
+      db.otpChallenge.count({ where: { phone: address, purpose, sentVia: { isEmpty: false }, createdAt: { gt: new Date(now - 86_400_000) } } }),
+    ]);
+    const where = field === 'email' ? 'your inbox' : 'WhatsApp';
+    if (latest && now - latest.createdAt.getTime() < OTP_RESEND_AFTER_MS) {
+      throw new ApiError('OTP_RATE_LIMITED', `A code was sent less than a minute ago. Check ${where}, or wait a moment.`, 429, field);
+    }
+    if (lastHour >= OTP_PER_HOUR || lastDay >= OTP_PER_DAY) {
+      throw new ApiError('OTP_RATE_LIMITED', field === 'email' ? 'Too many codes for this address. Try again later.' : purpose === 'PROMOTER' ? 'Too many codes for this number. Try again later, or use your email.' : 'Too many codes for this number. Try again later, or use your password.', 429, field);
+    }
+  }
+
+  /**
+   * A code carried by something other than the phone senders — today, email
+   * for Refer & Earn. The challenge row, limits and the check are the same as
+   * for a phone; only the carrier differs, and the caller supplies it. The
+   * address is stored in the `phone` column (it is "the thing the code went
+   * to"); a schema rename for one column would cost a migration for nothing.
+   */
+  async startEmail(purpose: OtpPurpose, email: string, ctx: { ip?: string | null }, carry: (code: string) => Promise<boolean>): Promise<StartedChallenge> {
+    const db = getPlatformPrisma();
+    const now = Date.now();
+    const address = email.trim().toLowerCase();
+    await this.assertNotRateLimited(db, address, purpose, now, 'email');
+    const id = randomUUID();
+    const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
+    await db.otpChallenge.create({
+      data: { id, phone: address, purpose, codeHash: hashOtp(id, code), expiresAt: new Date(now + OTP_TTL_MS), schoolId: null, userId: null, ip: ctx.ip ?? null },
+    });
+    let ok = false;
+    try { ok = await carry(code); } catch (e) { this.logger.warn(`OTP ${purpose} email to ${address} threw: ${(e as Error).message}`); }
+    if (!ok) {
+      await db.otpChallenge.update({ where: { id }, data: { consumedAt: new Date() } }).catch(() => undefined);
+      throw new ApiError('OTP_UNDELIVERABLE', 'The code could not be emailed just now. Try again in a minute, or use WhatsApp.', 502, 'email');
+    }
+    await db.otpChallenge.update({ where: { id }, data: { sentVia: ['email'] } });
+    const [user, domain] = address.split('@');
+    const masked = `${user.slice(0, 2)}${'•'.repeat(Math.max(1, user.length - 2))}@${domain}`;
+    return { challengeId: id, phoneMasked: masked, sentVia: ['email'], expiresIn: OTP_TTL_MS / 1000 };
+  }
+
+  /**
    * Consume a code. Every refusal has its own error code so a client can say
    * the right thing: unknown challenge (a stale screen), expired or already
    * used, locked after five wrong tries, or simply wrong with tries left.
    */
-  async check(challengeId: string, code: string, expectPurpose?: OtpPurpose): Promise<CheckedChallenge> {
+  async check(challengeId: string, code: string, expectPurpose?: OtpPurpose, opts: { consume?: boolean } = {}): Promise<CheckedChallenge> {
     const db = getPlatformPrisma();
     const row = await db.otpChallenge.findUnique({ where: { id: challengeId } });
     if (!row || (expectPurpose && row.purpose !== expectPurpose)) {
@@ -126,7 +158,13 @@ export class OtpService {
       const left = OTP_MAX_ATTEMPTS - row.attempts - 1;
       throw new ApiError('OTP_WRONG', left > 0 ? `That code is not right. ${left} ${left === 1 ? 'try' : 'tries'} left.` : 'That code is not right. Ask for a new one.', 400, 'code');
     }
-    await db.otpChallenge.update({ where: { id: row.id }, data: { consumedAt: new Date() } });
+    // `consume: false` is a peek: the code is right, but the caller still has a
+    // question to ask (a first-timer's name) before the challenge is spent.
+    if (opts.consume !== false) {
+      // Atomic: two parallel verifies with the right code must not both win.
+      const spent = await db.otpChallenge.updateMany({ where: { id: row.id, consumedAt: null }, data: { consumedAt: new Date() } });
+      if (spent.count === 0) throw new ApiError('OTP_EXPIRED', 'That code was already used — ask for a new one.', 400, 'code');
+    }
     return { id: row.id, phone: row.phone, purpose: row.purpose as OtpPurpose, schoolId: row.schoolId, userId: row.userId };
   }
 }

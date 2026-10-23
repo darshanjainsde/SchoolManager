@@ -11,7 +11,7 @@ import { OWNER_HOST } from '@/lib/hosts';
 import {
   LayoutDashboard, TrendingUp, School, FileText, PlusCircle,
   Printer, Briefcase, Link2, Compass, Activity, Gauge, LogOut, Menu, X, Users, Settings, Archive,
-  PackageOpen } from 'lucide-react';
+  PackageOpen, Handshake } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import '../sk-theme.css';
 import { cn } from '@/lib/cn';
@@ -31,9 +31,10 @@ import { ConsoleSkeleton } from '@/components/console-skeleton';
 /* Line icons, not emoji. Emoji render in the OS's own colours and sizes, so
    nine of them down a dark rail read as nine unrelated stickers rather than
    one navigation — and they are the surest tell of an unfinished interface. */
-const NAV_ITEMS: { href: string; label: string; icon: LucideIcon; badge?: 'newLeads' }[] = [
+const NAV_ITEMS: { href: string; label: string; icon: LucideIcon; badge?: 'newLeads' | 'referralTasks' }[] = [
   { href: '/platform', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/platform/leads', label: 'Leads', icon: Users, badge: 'newLeads' },
+  { href: '/platform/referrals', label: 'Referrals', icon: Handshake, badge: 'referralTasks' },
   { href: '/platform/scale', label: 'Scale', icon: TrendingUp },
   { href: '/platform/schools', label: 'Schools', icon: School },
   { href: '/platform/backups', label: 'Backups', icon: Archive },
@@ -129,7 +130,7 @@ export default function PlatformLayout({ children }: { children: ReactNode }) {
   // already loaded and quietly absent when it has not.
   const overview = useQuery({
     queryKey: ['owner-overview'],
-    queryFn: () => probeApi.get<{ attention?: { newLeads?: number } }>('/owner/overview'),
+    queryFn: () => probeApi.get<{ attention?: { newLeads?: number; referralTasks?: number } }>('/owner/overview'),
     enabled: !isLogin && status === 'authed' && audience === 'platform',
     staleTime: 60_000,
   });

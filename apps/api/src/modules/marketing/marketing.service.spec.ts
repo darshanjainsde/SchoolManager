@@ -54,7 +54,9 @@ const prismaMock = {
   $transaction: jest.fn().mockImplementation((ops) => Promise.all(ops)),
 };
 
-jest.mock('@skoolos/db', () => ({ getPlatformPrisma: () => prismaMock }));
+// The service now reaches the referrals module (for ?ref attribution), whose
+// index pulls in controllers that read enums off the real package at load.
+jest.mock('@skoolos/db', () => ({ ...jest.requireActual('@skoolos/db'), getPlatformPrisma: () => prismaMock }));
 
 function dto(input: Partial<CreateLeadDto>): CreateLeadDto {
   return plainToInstance(CreateLeadDto, { source: 'modal', phone: '+91 98765 43210', ...input });
