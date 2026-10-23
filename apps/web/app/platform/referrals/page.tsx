@@ -65,6 +65,16 @@ export default function ReferralsPage() {
       {tab === 'referrals' && <ReferralsTab api={api} enabled={signedIn} onDone={invalidate} />}
       {tab === 'payouts' && <Payouts api={api} q={due} onDone={invalidate} />}
       {tab === 'settings' && <SettingsTab api={api} enabled={signedIn} />}
+      <style>{`
+        .rf-two { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+        .rf-decide { background: var(--sk-bg-2); border: 1px solid var(--sk-line); border-radius: var(--sk-r-sm); padding: 12px 14px; }
+        .rf-kv { display: grid; grid-template-columns: minmax(110px, auto) minmax(0, 1fr); gap: 6px 14px; margin: 0; font-size: 13.5px; }
+        .rf-kv dt { color: var(--sk-ink-3); }
+        .rf-kv dd { margin: 0; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+        .rf-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .rf-actions .sk-btn { min-height: 40px; }
+        @media (max-width: 860px) { .rf-two { grid-template-columns: 1fr; } }
+      `}</style>
     </div>
   );
 }
@@ -77,12 +87,42 @@ function Tasks({ api, q, onDone }: { api: Api; q: ReturnType<typeof useQuery<Tas
   if (q.isLoading) return <p className="sk-state">Loading tasks…</p>;
   if (q.isError) return <QueryError error={q.error} onRetry={q.refetch} />;
   const list = q.data ?? [];
-  if (list.length === 0) return <div className="sk-card"><div className="sk-card-b" style={{ alignItems: 'center', padding: 28 }}><b>Nothing waiting on you.</b><p className="sk-muted" style={{ margin: 0 }}>Commission requests, new referrals and payout details to verify appear here.</p></div></div>;
-  return <div style={{ display: 'grid', gap: 12 }}>{list.map((t) => <TaskCard key={t.id} api={api} t={t} onDone={onDone} />)}</div>;
+  const n = (k: Task['kind']) => list.filter((t) => t.kind === k).length;
+  return (
+    <>
+      <div className="sk-own-attention" style={{ marginBottom: 14 }}>
+        <Attn n={n('COMMISSION')} title="Commission requests" sub="a rate to set" />
+        <Attn n={n('REFERRAL')} title="New referrals" sub="accept or reject" />
+        <Attn n={n('KYC')} title="Payout details" sub="to verify before paying" />
+      </div>
+      {list.length === 0 ? (
+        <div className="sk-card"><div className="sk-card-b" style={{ alignItems: 'center', textAlign: 'center', padding: '28px 18px' }}><b>Nothing waiting on you.</b><p className="sk-muted" style={{ margin: 0 }}>Commission requests, new referrals and payout details to verify appear here.</p></div></div>
+      ) : (
+        <div style={{ display: 'grid', gap: 12 }}>{list.map((t) => <TaskCard key={t.id} api={api} t={t} onDone={onDone} />)}</div>
+      )}
+    </>
+  );
+}
+
+/** The owner console's attention tile (the Leads page recipe), warm only when there is something to do. */
+function Attn({ n, title, sub }: { n: number; title: string; sub: string }) {
+  return (
+    <div className="sk-own-attn" data-urgent={n > 0 ? 'true' : 'false'}>
+      <span className="n">{n}</span>
+      <div style={{ minWidth: 0 }}><div className="t">{title}</div><div className="s">{sub}</div></div>
+    </div>
+  );
+}
+
+const KIND: Record<Task['kind'], string> = { COMMISSION: 'Commission request', REFERRAL: 'New referral', KYC: 'Payout details to verify' };
+
+function KV({ rows }: { rows: [string, React.ReactNode][] }) {
+  return <dl className="rf-kv">{rows.map(([k, v]) => <div key={k} style={{ display: 'contents' }}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>;
 }
 
 function TaskCard({ api, t, onDone }: { api: Api; t: Task; onDone: () => void }) {
   const p = t.promoter;
+  const r = t.referral;
   const [pct, setPct] = useState(String(t.suggestedPct ?? 10));
   const [cap, setCap] = useState(String(Math.round((p.commissionCapMinor ?? t.suggestedCapMinor) / 100)));
   const [note, setNote] = useState('');
@@ -92,67 +132,64 @@ function TaskCard({ api, t, onDone }: { api: Api; t: Task; onDone: () => void })
     onSuccess: () => { toast.success('Done.'); onDone(); },
     onError: (e) => toast.error(msg(e)),
   });
-  const QA = ({ rows }: { rows: [string, React.ReactNode][] }) => (
-    <dl style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '4px 12px', fontSize: 13.5, margin: 0 }}>{rows.map(([k, v]) => <div key={k} style={{ display: 'contents' }}><dt className="sk-muted">{k}</dt><dd style={{ margin: 0, fontWeight: 600 }}>{v}</dd></div>)}</dl>
-  );
+  const reasonOk = reason.trim().length >= 3;
+  const title = t.kind === 'REFERRAL' && r ? r.schoolName : p.name;
+  const sub = t.kind === 'REFERRAL' && r
+    ? `${[r.area, r.city].filter(Boolean).join(', ')}${r.studentsApprox ? ` · about ${r.studentsApprox.toLocaleString('en-IN')} students` : ''}${r.planInterest ? ` · ${r.planInterest}` : ''} · referred by ${p.name} (${p.code})${r.viaLink ? ' through their link' : ''}`
+    : `${[p.city, p.email, p.phoneE164].filter(Boolean).join(' · ')} · joined ${when(p.createdAt)} · ${p.referred} referral${p.referred === 1 ? '' : 's'} so far`;
+  const verdict = t.lapsed ? <span className="sk-pill" data-tone="warn">Lapsed: not accepted inside the window</span>
+    : t.duplicate ? <span className="sk-pill" data-tone="bad">{t.duplicate.kind === 'referral' ? `Another promoter holds this school${t.duplicate.on ? ` since ${when(t.duplicate.on)}` : ''}` : t.duplicate.kind === 'lead' ? 'Already in your lead pipeline' : t.duplicate.kind === 'school' ? 'Already live on Sckools' : 'Held by a lapsed referral'}</span>
+    : <span className="sk-pill" data-tone="good">No match in referrals, leads or schools</span>;
   return (
     <div className="sk-card">
-      <div className="sk-card-b" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.2fr) minmax(0,1fr)', gap: 16 }}>
-        <div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
-            <span className="sk-pill" data-tone="warn">{t.kind === 'COMMISSION' ? 'Commission request' : t.kind === 'REFERRAL' ? 'New referral' : 'Payout details to verify'}</span>
-            <span className="sk-pill" data-tone="neutral">{when(t.createdAt)}</span>
-          </div>
-          {t.kind === 'REFERRAL' && t.referral ? (
-            <>
-              <h3 style={{ margin: '0 0 2px', fontSize: 15.5 }}>{t.referral.schoolName} · {[t.referral.area, t.referral.city].filter(Boolean).join(', ')}</h3>
-              <p className="sk-muted" style={{ margin: '0 0 10px' }}>by {p.name} ({p.code}){t.referral.studentsApprox ? ` · about ${t.referral.studentsApprox} students` : ''}{t.referral.planInterest ? ` · ${t.referral.planInterest}` : ''}{t.referral.viaLink ? ' · came through their link' : ''}</p>
-              <QA rows={[['Contact', `${t.referral.contactName}${t.referral.contactRole ? `, ${t.referral.contactRole}` : ''} · ${t.referral.contactPhone}${t.referral.contactEmail ? ` · ${t.referral.contactEmail}` : ''}`], ['Consent', t.referral.consent ? 'Declared by the promoter' : <span style={{ color: 'var(--sk-bad)' }}>Not declared</span>], ['How they know them', t.referral.howKnown || '—'], ['Duplicate check', t.lapsed ? <span className="sk-pill" data-tone="warn" key="d">Lapsed: not accepted inside the window</span> : t.duplicate ? <span className="sk-pill" data-tone="bad" key="d">{t.duplicate.kind === 'referral' ? `Another promoter holds this school${t.duplicate.on ? ` since ${when(t.duplicate.on)}` : ''}` : t.duplicate.kind === 'lead' ? 'Already in your lead pipeline' : t.duplicate.kind === 'school' ? 'Already live on Sckools' : 'Held by a lapsed referral'}</span> : <span className="sk-pill" data-tone="good" key="d">No match in referrals, leads or schools</span>]]} />
-            </>
+      <div className="sk-card-h">
+        <h3>{title}</h3>
+        <span className="sk-pill" data-tone="warn">{KIND[t.kind]}</span>
+        <span className="sk-muted" style={{ marginLeft: 'auto', fontSize: 12 }}>{when(t.createdAt)}</span>
+        <p className="sk-muted">{sub}</p>
+      </div>
+      <div className="sk-card-b rf-two">
+        <section className="sk-detail-sec">
+          <div className="sk-lab">{t.kind === 'REFERRAL' ? 'The referral' : t.kind === 'COMMISSION' ? 'Their answers' : 'Details on file'}</div>
+          {t.kind === 'REFERRAL' && r ? (
+            <KV rows={[['Contact', `${r.contactName}${r.contactRole ? `, ${r.contactRole}` : ''}`], ['Phone', r.contactPhone], ['Email', r.contactEmail || '—'], ['Consent', r.consent ? 'Declared by the promoter' : <span style={{ color: 'var(--sk-bad)' }}>Not declared</span>], ['How they know them', r.howKnown || '—'], ['Duplicate check', verdict]]} />
+          ) : t.kind === 'COMMISSION' ? (
+            <KV rows={[['Who', p.who || '—'], ['Expects', p.expect ? `${p.expect} schools in six months` : '—'], ['Areas', p.areas || p.city || '—'], ['How they know schools', p.know || '—'], ['Schools in mind', p.schoolsInMind || '—'], ['GST', p.hasGst ? 'Yes' : 'No']]} />
           ) : (
-            <>
-              <h3 style={{ margin: '0 0 2px', fontSize: 15.5 }}>{p.name}{p.city ? ` · ${p.city}` : ''}</h3>
-              <p className="sk-muted" style={{ margin: '0 0 10px' }}>{[p.email, p.phoneE164].filter(Boolean).join(' · ')} · joined {when(p.createdAt)} · {p.referred} referral{p.referred === 1 ? '' : 's'} so far</p>
-              {t.kind === 'COMMISSION' ? (
-                <QA rows={[['Who', p.who || '—'], ['Expects', p.expect ? `${p.expect} schools in six months` : '—'], ['Areas', p.areas || p.city || '—'], ['How they know schools', p.know || '—'], ['Schools in mind', p.schoolsInMind || '—'], ['GST', p.hasGst ? 'Yes' : 'No']]} />
-              ) : (
-                <QA rows={[['Payee', p.payeeName || '—'], ['PAN', p.pan || '—'], ['Account', p.bankAccount ? `${p.bankAccount}${p.ifsc ? ` · ${p.ifsc}` : ''}` : '—'], ['UPI', p.upi || '—'], ['GSTIN', p.gstin || '—'], ['Note', t.note || '—']]} />
-              )}
-            </>
+            <KV rows={[['Payee', p.payeeName || '—'], ['PAN', p.pan || '—'], ['Account', p.bankAccount ? `${p.bankAccount}${p.ifsc ? ` · ${p.ifsc}` : ''}` : '—'], ['UPI', p.upi || '—'], ['GSTIN', p.gstin || '—'], ['Why now', t.note || 'Details saved by the promoter']]} />
           )}
-        </div>
-        <div style={{ background: 'var(--sk-bg-2)', border: '1px solid var(--sk-line)', borderRadius: 10, padding: 12, display: 'grid', gap: 10, alignContent: 'start' }}>
+        </section>
+        <section className="sk-detail-sec rf-decide">
+          <div className="sk-lab">Your decision</div>
           {t.kind === 'COMMISSION' && (
             <>
               <p className="sk-muted" style={{ margin: 0, fontSize: 12.5 }}>Suggested from your ladder for “{p.expect ?? '?'}”: <b>{t.suggestedPct ?? 10}%</b>, cap {rupees(t.suggestedCapMinor)}. Change anything.</p>
-              <FieldRow min={120}>
+              <FieldRow min={130}>
                 <Field id={`pct-${t.id}`} label="Commission %">{(f) => <input {...f} className="sk-input" type="number" min={1} max={50} value={pct} onChange={(e) => setPct(e.target.value)} />}</Field>
                 <Field id={`cap-${t.id}`} label="Cap per school (₹, 0 = none)">{(f) => <input {...f} className="sk-input" type="number" min={0} value={cap} onChange={(e) => setCap(e.target.value)} />}</Field>
               </FieldRow>
               <Field id={`note-${t.id}`} label="Note the promoter sees">{(f) => <textarea {...f} className="sk-input" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Good network in Kota; 10% to start, reviewed after three live schools." />}</Field>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button className="sk-btn" data-variant="primary" disabled={run.isPending} onClick={() => run.mutate(() => api.patch(`/owner/referrals/promoters/${p.id}/commission`, { pct: Number(pct), capMinor: Math.round(Number(cap) * 100), note: note.trim() || undefined }))}>Set commission</button>
-                <button className="sk-btn" data-icon data-tone="bad" disabled={run.isPending || reason.trim().length < 3} onClick={() => run.mutate(() => api.patch(`/owner/referrals/promoters/${p.id}/status`, { status: 'REMOVED', reason: reason.trim() }))}>Decline account</button>
-              </div>
-              <input className="sk-input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason, if declining (the person sees it)" aria-label="Reason for declining" />
             </>
           )}
-          {t.kind === 'REFERRAL' && t.referral && (
-            <>
-              <p className="sk-muted" style={{ margin: 0, fontSize: 12.5 }}>Accepting creates the lead in your pipeline with source <code>referral:{p.code}</code>.</p>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button className="sk-btn" data-variant="primary" disabled={run.isPending || !!t.duplicate || t.lapsed} title={t.duplicate || t.lapsed ? 'Reject it with the reason shown' : undefined} onClick={() => run.mutate(() => api.post(`/owner/referrals/${t.referral!.id}/accept`, {}))}>Accept</button>
-                <button className="sk-btn" data-icon data-tone="bad" disabled={run.isPending || reason.trim().length < 3} onClick={() => run.mutate(() => api.post(`/owner/referrals/${t.referral!.id}/reject`, { reason: reason.trim() }))}>Reject with reason</button>
-              </div>
-              <input className="sk-input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason, if rejecting (the promoter sees it)" aria-label="Reason for rejecting" />
-            </>
+          {t.kind === 'REFERRAL' && <p className="sk-muted" style={{ margin: 0, fontSize: 12.5 }}>Accepting creates the lead in your pipeline with source <code>referral:{p.code}</code>, and the promoter is told.</p>}
+          {t.kind === 'KYC' && <p className="sk-muted" style={{ margin: 0, fontSize: 12.5 }}>Check the PAN and that the account name matches the payee. Nothing is paid until this is verified.</p>}
+          {t.kind !== 'KYC' && (
+            <Field id={`reason-${t.id}`} label={t.kind === 'COMMISSION' ? 'Reason, only if declining (the person sees it)' : 'Reason, only if rejecting (the promoter sees it)'}>{(f) => <textarea {...f} className="sk-input" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} />}</Field>
           )}
-          {t.kind === 'KYC' && (
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <button className="sk-btn" data-variant="primary" disabled={run.isPending || !p.payoutDetailsAt} onClick={() => run.mutate(() => api.post(`/owner/referrals/promoters/${p.id}/kyc-verified`, {}))}>{p.payoutDetailsAt ? 'Verified' : 'Waiting for details'}</button>
-            </div>
-          )}
-        </div>
+          <div className="rf-actions">
+            {t.kind === 'COMMISSION' && (<>
+              <button className="sk-btn" data-variant="primary" disabled={run.isPending} onClick={() => run.mutate(() => api.patch(`/owner/referrals/promoters/${p.id}/commission`, { pct: Number(pct), capMinor: Math.round(Number(cap) * 100), note: note.trim() || undefined }))}>Set commission</button>
+              <button className="sk-btn" data-variant="danger" disabled={run.isPending || !reasonOk} title={reasonOk ? undefined : 'Write the reason first'} onClick={() => run.mutate(() => api.patch(`/owner/referrals/promoters/${p.id}/status`, { status: 'REMOVED', reason: reason.trim() }))}>Decline account</button>
+            </>)}
+            {t.kind === 'REFERRAL' && r && (<>
+              <button className="sk-btn" data-variant="primary" disabled={run.isPending || !!t.duplicate || t.lapsed} title={t.duplicate || t.lapsed ? 'Reject it with the reason shown' : undefined} onClick={() => run.mutate(() => api.post(`/owner/referrals/${r.id}/accept`, {}))}>Accept</button>
+              <button className="sk-btn" data-variant="danger" disabled={run.isPending || !reasonOk} title={reasonOk ? undefined : 'Write the reason first'} onClick={() => run.mutate(() => api.post(`/owner/referrals/${r.id}/reject`, { reason: reason.trim() }))}>Reject with reason</button>
+            </>)}
+            {t.kind === 'KYC' && (
+              <button className="sk-btn" data-variant="primary" disabled={run.isPending || !p.payoutDetailsAt} onClick={() => run.mutate(() => api.post(`/owner/referrals/promoters/${p.id}/kyc-verified`, {}))}>{p.payoutDetailsAt ? 'Mark verified' : 'Waiting for details'}</button>
+            )}
+          </div>
+        </section>
       </div>
     </div>
   );
@@ -190,7 +227,7 @@ function Promoters({ api, enabled, onDone }: { api: Api; enabled: boolean; onDon
                 <Cell>
                   <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                     <button className="sk-btn" onClick={() => setRateFor(p)}>Set rate</button>
-                    {p.status === 'ACTIVE' ? <button className="sk-btn" data-icon data-tone="bad" onClick={() => { const reason = window.prompt(`Pause ${p.name}? Say why; they see it.`); if (reason && reason.trim().length >= 3) run.mutate(() => api.patch(`/owner/referrals/promoters/${p.id}/status`, { status: 'SUSPENDED', reason: reason.trim() })); }}>Pause</button> : <button className="sk-btn" onClick={() => run.mutate(() => api.patch(`/owner/referrals/promoters/${p.id}/status`, { status: 'ACTIVE' }))}>Restore</button>}
+                    {p.status === 'ACTIVE' ? <button className="sk-btn" data-variant="danger" onClick={() => { const reason = window.prompt(`Pause ${p.name}? Say why; they see it.`); if (reason && reason.trim().length >= 3) run.mutate(() => api.patch(`/owner/referrals/promoters/${p.id}/status`, { status: 'SUSPENDED', reason: reason.trim() })); }}>Pause</button> : <button className="sk-btn" onClick={() => run.mutate(() => api.patch(`/owner/referrals/promoters/${p.id}/status`, { status: 'ACTIVE' }))}>Restore</button>}
                     {p.email && <button className="sk-btn" onClick={() => run.mutate(() => api.post(`/owner/referrals/promoters/${p.id}/login-link`, {}))}>Send login</button>}
                   </div>
                 </Cell>
@@ -256,8 +293,11 @@ function ReferralsTab({ api, enabled, onDone }: { api: Api; enabled: boolean; on
   const figures = { logged: rows.length, inProgress: rows.filter((r) => !['PAYOUT_DUE', 'PAID', 'LIVE', 'REJECTED', 'LOST'].includes(r.status)).length, live: rows.filter((r) => ['LIVE', 'PAYOUT_DUE', 'PAID'].includes(r.status)).length, owedMinor: rows.filter((r) => r.payout && r.payout.status === 'DUE').reduce((a, r) => a + (r.payout?.netMinor ?? 0), 0) };
   return (
     <>
-      <div className="sk-kpis" style={{ marginBottom: 12 }}>
-        {[['Logged', String(figures.logged)], ['In progress', String(figures.inProgress)], ['Live', String(figures.live)], ['Owed', rupees(figures.owedMinor)]].map(([l, v]) => <div key={l} className="sk-kpi"><span className="lab">{l}</span><span className="n">{v}</span></div>)}
+      <div className="sk-own-attention" style={{ marginBottom: 12 }}>
+        <Attn n={figures.logged} title="Logged" sub="every referral" />
+        <Attn n={figures.inProgress} title="In progress" sub="accepted → won" />
+        <Attn n={figures.live} title="Live" sub="paid Sckools" />
+        <div className="sk-own-attn" data-urgent={figures.owedMinor > 0 ? 'true' : 'false'}><span className="n" style={{ fontSize: 18 }}>{rupees(figures.owedMinor)}</span><div style={{ minWidth: 0 }}><div className="t">Owed</div><div className="s">net, due to promoters</div></div></div>
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
         <input className="sk-input" style={{ width: 240 }} placeholder="Search school, contact, phone…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search referrals" />
@@ -281,7 +321,7 @@ function ReferralsTab({ api, enabled, onDone }: { api: Api; enabled: boolean; on
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                       {next && next !== 'LIVE' && <button className="sk-btn" disabled={run.isPending} onClick={() => run.mutate(() => next === 'ACCEPTED' ? api.post(`/owner/referrals/${r.id}/accept`, {}) : api.patch(`/owner/referrals/${r.id}/stage`, { status: next }))}>→ {STAGE_LABEL[next]}</button>}
                       {next === 'LIVE' && <button className="sk-btn" data-variant="primary" onClick={() => setLive(r)}>→ Live &amp; paid</button>}
-                      {!['REJECTED', 'LOST', 'PAID', 'PAYOUT_DUE', 'LIVE'].includes(r.status) && <button className="sk-btn" data-icon data-tone="bad" onClick={() => setLost(r)}>{r.status === 'LOGGED' ? 'Reject' : 'Lost'}</button>}
+                      {!['REJECTED', 'LOST', 'PAID', 'PAYOUT_DUE', 'LIVE'].includes(r.status) && <button className="sk-btn" data-variant="danger" onClick={() => setLost(r)}>{r.status === 'LOGGED' ? 'Reject' : 'Lost'}</button>}
                     </div>
                   </Cell>
                 </Row>

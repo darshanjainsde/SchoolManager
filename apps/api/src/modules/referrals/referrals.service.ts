@@ -367,15 +367,15 @@ export class ReferralsService {
   }
 
   async listTasks() {
-    const tasks = await this.db.referralTask.findMany({ where: { status: 'OPEN' }, orderBy: { createdAt: 'asc' }, include: { promoter: true, referral: { include: { events: { orderBy: { createdAt: 'asc' } } } } } });
+    const tasks = await this.db.referralTask.findMany({ where: { status: 'OPEN' }, orderBy: { createdAt: 'asc' }, include: { promoter: { include: { _count: { select: { referrals: true } } } }, referral: { include: { events: { orderBy: { createdAt: 'asc' } } } } } });
     const settings = await this.settings();
     return Promise.all(tasks.map(async (t) => {
-      const { pan, bankAccount, ...p } = t.promoter;
+      const { pan, bankAccount, _count, ...p } = t.promoter;
       const r = t.referral;
       const duplicate = t.kind === 'REFERRAL' && r ? await this.duplicateOf(r.schoolKey, r.contactPhoneKey, r.schoolName, { excludePromoterId: r.promoterId, excludeReferralId: r.id }) : null;
       return {
         ...t,
-        promoter: { ...p, panMasked: pan ? `${pan.slice(0, 2)}•••••${pan.slice(-2)}` : null, ...(t.kind === 'KYC' ? { pan, bankAccount } : {}) },
+        promoter: { ...p, referred: _count.referrals, panMasked: pan ? `${pan.slice(0, 2)}•••••${pan.slice(-2)}` : null, ...(t.kind === 'KYC' ? { pan, bankAccount } : {}) },
         suggestedPct: t.kind === 'COMMISSION' ? suggestedPct(settings.ladder, t.promoter.expect) ?? 10 : null,
         suggestedCapMinor: settings.capMinor,
         duplicate,
