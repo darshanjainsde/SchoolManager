@@ -72,7 +72,7 @@ export const NAV_MODEL: NavEntry[] = [
     items: [
       { href: '/app/website', label: 'Website', icon: Globe },
       { href: '/app/blog', label: 'Blog', icon: Newspaper, requiredFeature: 'BLOG' },
-      { href: '/app/events', label: 'Events', icon: CalendarHeart, requiredFeature: 'EVENTS' },
+      { href: '/app/events', label: 'Events', icon: CalendarHeart, requiredFeature: 'EVENTS_HOST' },
     ],
   },
   {
@@ -114,7 +114,7 @@ export const NAV_MODEL: NavEntry[] = [
     kind: 'group', key: 'exams', label: 'Exams', icon: NotebookPen,
     items: [
       { href: '/app/syllabus', label: 'Syllabus', icon: ListChecks, requiredFeature: 'COURSE_MANAGEMENT' },
-      { href: '/app/exam-hall', label: 'Exam Hall', icon: Armchair, requiredFeature: 'MANAGEMENT' },
+      { href: '/app/exam-hall', label: 'Exam Hall', icon: Armchair, requiredFeature: 'EXAM_HALL' },
       { href: '/app/press', label: 'Reports & Documents', icon: Printer, requiredFeature: 'PRESS' },
     ],
   },

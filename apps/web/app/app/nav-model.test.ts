@@ -52,6 +52,22 @@ describe('the grouped sidebar model', () => {
     expect(labels).toEqual(['Dashboard', '▾Website', '▾Admissions', 'Announcements', 'My profile']);
   });
 
+  it('a STANDARD school (plan ladder v2) sees the whole office and hosts events, but no money or specialist desk', () => {
+    const standard = ['PUBLIC_SITE', 'GALLERY', 'ENQUIRY', 'SOCIAL', 'ABOUT_CONTACT', 'EVENTS', 'EVENTS_HOST', 'MANAGEMENT', 'BLOG'];
+    const hrefs = navLeaves(visibleModel(standard)).map((l) => l.href);
+    for (const h of ['/app/students', '/app/timetable', '/app/availability', '/app/sessions', '/app/leave', '/app/events', '/app/blog', '/app/settings']) expect(hrefs).toContain(h);
+    for (const h of ['/app/fees', '/app/pay', '/app/library', '/app/sports', '/app/alumni', '/app/jobs', '/app/press', '/app/syllabus', '/app/exam-hall']) expect(hrefs).not.toContain(h);
+  });
+
+  it('a BASIC school reads the network (EVENTS) without a hosting desk; EVENTS_HOST opens it', () => {
+    const basic = ['PUBLIC_SITE', 'GALLERY', 'ENQUIRY', 'SOCIAL', 'ABOUT_CONTACT', 'EVENTS'];
+    expect(navLeaves(visibleModel(basic)).map((l) => l.href)).not.toContain('/app/events');
+    expect(navLeaves(visibleModel([...basic, 'EVENTS_HOST'])).map((l) => l.href)).toContain('/app/events');
+    // The exam hall is its own Pro key now; MANAGEMENT alone no longer shows it.
+    expect(navLeaves(visibleModel([...basic, 'MANAGEMENT'])).map((l) => l.href)).not.toContain('/app/exam-hall');
+    expect(navLeaves(visibleModel([...basic, 'MANAGEMENT', 'EXAM_HALL'])).map((l) => l.href)).toContain('/app/exam-hall');
+  });
+
   it('null features (still loading) shows everything — a slow fetch must not hide screens', () => {
     expect(navLeaves(visibleModel(null)).length).toBe(EVERY_ROUTE.length);
   });

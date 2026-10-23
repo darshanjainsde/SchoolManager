@@ -15,7 +15,7 @@ import { PreviewSeatingDto, SaveSeatingDto } from './management.dto';
  */
 @Controller('manage/seating')
 @UseGuards(SchoolJwtGuard, RequireFeatureGuard, RolesGuard)
-@RequireFeature('MANAGEMENT')
+@RequireFeature('EXAM_HALL') // the exam hall is Pro; marks and results stay with MANAGEMENT
 @Roles('SCHOOL_ADMIN')
 export class SeatingController {
   constructor(

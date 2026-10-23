@@ -11,11 +11,12 @@ import { codeTemplates } from '../notifications/whatsapp/templates';
  * many senders there are — the login, the reset and the verify flows all
  * call `OtpSenders.fanOut` and read back which channels carried the code.
  */
-export type OtpPurpose = 'LOGIN' | 'RESET' | 'VERIFY_PHONE';
+export type OtpPurpose = 'LOGIN' | 'RESET' | 'VERIFY_PHONE' | 'PROMOTER';
 
 export interface OtpSendContext {
-  /** The school the ledger row is filed under — the profile's, or the login's. */
-  schoolId: string;
+  /** The school the ledger row is filed under — the profile's, or the login's.
+   *  Null for a promoter (Refer & Earn): no school, the platform's own number. */
+  schoolId: string | null;
   purpose: OtpPurpose;
 }
 

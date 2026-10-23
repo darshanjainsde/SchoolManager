@@ -1,4 +1,4 @@
-const otp = { findFirst: jest.fn(), count: jest.fn(), create: jest.fn(), update: jest.fn().mockResolvedValue({}), findUnique: jest.fn() };
+const otp = { findFirst: jest.fn(), count: jest.fn(), create: jest.fn(), update: jest.fn().mockResolvedValue({}), updateMany: jest.fn().mockResolvedValue({ count: 1 }), findUnique: jest.fn() };
 jest.mock('@skoolos/db', () => ({ ...jest.requireActual('@skoolos/db'), getPlatformPrisma: () => ({ otpChallenge: otp }) }));
 
 import { OtpService, hashOtp, OTP_MAX_ATTEMPTS } from './otp.service';
@@ -83,8 +83,7 @@ describe('OtpService', () => {
       otp.findUnique.mockResolvedValueOnce(row());
       const r = await svc().check('c1', ' 482911 ', 'LOGIN');
       expect(r).toEqual({ id: 'c1', phone: PHONE, purpose: 'LOGIN', schoolId: SCHOOL, userId: 'u1' });
-      expect(otp.update.mock.calls[0][0]).toMatchObject({ where: { id: 'c1' } });
-      expect(otp.update.mock.calls[0][0].data.consumedAt).toBeInstanceOf(Date);
+      expect(otp.updateMany.mock.calls[0][0]).toMatchObject({ where: { id: 'c1', consumedAt: null }, data: { consumedAt: expect.any(Date) } });
     });
     it('unknown id, wrong purpose, used, expired, locked, wrong — each its own answer', async () => {
       otp.findUnique.mockResolvedValueOnce(null);
@@ -158,3 +157,18 @@ describe('the rate limit counts codes that were actually sent', () => {
   });
 });
 
+describe('consuming a code is atomic', () => {
+  it('the second of two simultaneous verifies with the right code is refused as already used', async () => {
+    const svc = new OtpService(new OtpSenders({ name: 'whatsapp', enabled: () => true, send: async () => ({ ok: true, code: null }) } as unknown as never, { name: 'sms', enabled: () => false, send: async () => ({ ok: false, code: null }) } as unknown as never));
+    const id = '11111111-1111-4111-8111-111111111111';
+    otp.findUnique.mockResolvedValue({ id, phone: PHONE, purpose: 'PROMOTER', codeHash: hashOtp(id, '482913'), expiresAt: new Date(Date.now() + 60_000), attempts: 0, consumedAt: null, schoolId: null, userId: null });
+    otp.updateMany.mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 });
+    await expect(svc.check(id, '482913', 'PROMOTER')).resolves.toMatchObject({ phone: PHONE });
+    await expect(svc.check(id, '482913', 'PROMOTER')).rejects.toMatchObject({ response: { code: 'OTP_EXPIRED' } });
+    expect(otp.updateMany.mock.calls[0][0].where).toEqual({ id, consumedAt: null });
+    // A peek never spends it.
+    otp.updateMany.mockClear();
+    await expect(svc.check(id, '482913', 'PROMOTER', { consume: false })).resolves.toMatchObject({ phone: PHONE });
+    expect(otp.updateMany).not.toHaveBeenCalled();
+  });
+});

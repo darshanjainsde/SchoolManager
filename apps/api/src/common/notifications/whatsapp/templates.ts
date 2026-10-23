@@ -97,8 +97,8 @@ export function verifyCodeTemplate(code: string): WhatsAppTemplate {
  * template — a code with slightly-off words beats asking the person to say
  * "Hi" first, while Meta is still reviewing the neutral one.
  */
-export function codeTemplates(purpose: 'LOGIN' | 'RESET' | 'VERIFY_PHONE', code: string): WhatsAppTemplate[] {
-  return purpose === 'LOGIN' ? [loginCodeTemplate(code)] : [verifyCodeTemplate(code), loginCodeTemplate(code)];
+export function codeTemplates(purpose: 'LOGIN' | 'RESET' | 'VERIFY_PHONE' | 'PROMOTER', code: string): WhatsAppTemplate[] {
+  return purpose === 'LOGIN' || purpose === 'PROMOTER' ? [loginCodeTemplate(code)] : [verifyCodeTemplate(code), loginCodeTemplate(code)];
 }
 
 /** When the 24-hour window has closed and a list cannot be sent: point at the console instead. */

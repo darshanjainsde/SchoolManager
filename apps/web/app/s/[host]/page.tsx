@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { fetchPublicBirthdays, fetchPublicRecords, fetchPublicSite } from '@/lib/public-api';
 import PublicSite from '@/components/public/PublicSite';
+import { schoolJsonLd } from '@/lib/school-jsonld';
 import { schoolMetadata } from '@/lib/school-metadata';
 
 /**
@@ -65,5 +66,10 @@ export default async function SchoolHomePage({ params }: Params) {
       : null;
   // The records band needs the book; fetched only when the school shows one.
   const records = data.records?.enabled ? await fetchPublicRecords(decodeURIComponent(host)) : null;
-  return <PublicSite data={data} birthdays={birthdays} records={records} />;
+  return (
+    <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schoolJsonLd(decodeURIComponent(host), data)) }} />
+      <PublicSite data={data} birthdays={birthdays} records={records} />
+    </>
+  );
 }

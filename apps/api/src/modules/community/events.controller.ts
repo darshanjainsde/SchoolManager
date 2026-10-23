@@ -11,7 +11,9 @@ import { CreateEventDto, RegisterDto, SetRegistrationStatusDto, UpdateEventDto }
  *  reachable with a STUDENT or PARENT token. Every caller is under /app, which
  *  is already SCHOOL_ADMIN-only, so nothing legitimate loses access. */
 @UseGuards(SchoolJwtGuard, RequireFeatureGuard, RolesGuard)
-@RequireFeature('EVENTS')
+// Hosting is EVENTS_HOST (Standard); reading the network and registering is
+// EVENTS (Basic) — see public-registration.controller and the portal.
+@RequireFeature('EVENTS_HOST')
 @Roles('SCHOOL_ADMIN')
 @Controller('manage/events')
 export class EventsController {

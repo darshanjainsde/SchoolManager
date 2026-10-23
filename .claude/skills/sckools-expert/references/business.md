@@ -6,13 +6,15 @@ Sckools is the operating system for a school: a website studio, an admissions de
 
 ## Plans and tiers
 
+Plan Ladder v2, decided 2026-10-22 (`packages/db/src/features.ts`):
+
 | Plan | Feature keys (`inventory/features.md`) | Pitch |
 |---|---|---|
-| Basic | PUBLIC_SITE, GALLERY, ENQUIRY, SOCIAL | "Be found": website studio, courses, gallery, admissions desk, hall of fame, own domain |
-| Standard | + ABOUT_CONTACT, EVENTS, BLOG | "Join the network": events on every school, ticketing, blog syndicated to sckools.com |
-| Pro | + MANAGEMENT, HIRING, LIBRARY, FEES | "Run the school": office, staff room, family app, TV, library, jobs |
+| Basic | PUBLIC_SITE, GALLERY, ENQUIRY, SOCIAL, ABOUT_CONTACT, EVENTS | "Be found": website studio with about/contact, gallery, admissions desk, network events on your site (families register there), own domain |
+| Standard | + EVENTS_HOST, MANAGEMENT, BLOG | "Run the day": the whole ERP — people, sessions, register, leave & cover, timetable & availability, tests & results, diary, messages, announcements, TV, both apps; host your own events; blog |
+| Pro | + FEES, SALARY, EXAM_HALL, PRESS, LIBRARY, SPORTS, HIRING, ALUMNI, COURSE_MANAGEMENT, WHATSAPP | "Run everything": fees, pay & salaries, exam hall, report cards & print store, library, sports, jobs, alumni, syllabus tracker, the school on WhatsApp |
 
-ALUMNI and PRESS (certificates, report cards, exam hall) are override-only today ("on request"). Overrides per school live in `FeatureOverride` and are set from the owner console.
+Every key is in a tier now; nothing is "on request". Overrides per school live in `FeatureOverride` and are set from the owner console: a disabled override protects a live Pro school from a module its plan newly carries (`apps/api/scripts/plan-ladder-protect.ts`, run before the production migration), an enabled one is a trial above the plan. Marks and results stay in Standard (MANAGEMENT); only the seating desk moved to EXAM_HALL. WhatsApp is gated three ways: the settings and phone-verification routes (WHATSAPP), and the outbound channel re-checks the plan every 10 s.
 
 ## Pricing (decided 2026-09-07)
 
@@ -36,3 +38,15 @@ Per student, per year, in INR and USD, set by the owner in `/platform/settings` 
 ## Brand
 
 Sckools name everywhere; Tassel-S logo; indigo `#4F46E5` / amber `#F59E0B`; the school-site "daylight" palette on the marketing pages (teal `#0d9488`, violet `#6d4aff`, gold `#f5a623`, coral `#ff7a45`).
+
+## Refer & Earn (built 2026-10-23, staging first)
+
+A promoter (any adult: teacher, parent, tuition owner, supplier, consultant) introduces schools and is paid a share of the school's first-year payment once it is live and has paid. Nothing is paid for a lead.
+
+- **Public page** `sckools.com/earn` (apps/web/app/earn, components/earn). Says NO rates: the rate is set per person by the owner.
+- **Sign in / sign up**: one door, a six-digit code by email (MailService) or WhatsApp (the platform's OTP senders, `OtpPurpose 'PROMOTER'`, challenge `schoolId` null). No password. First-timer gives a name and the questionnaire (who, how many schools in six months, areas, how they know schools, GST). Token: audience `promoter`, 30 days, signed with an HMAC-derived secret (`promoterSecret()`), `ver` = `Promoter.tokenVersion`; kept in localStorage `sk_promoter_session`; /earn and /promoter are in the middleware CSP matcher.
+- **Promoter portal** `sckools.com/promoter` (`.sk-*` look): dashboard with the commission card (not set → "Get my commission %" → pending → set), figures, referrals; log a referral (required: school, city, contact, phone, consent; instant duplicate check); timeline per referral; payouts (PAN + bank or UPI, statement with gross/TDS/net); share link `/start?ref=CODE` (the static site stores `sk-ref` 90 days and sends `ref` with every lead; `MarketingService.createLead` → `ReferralsService.attributeLead`).
+- **Owner console** `owner.sckools.com/platform/referrals`: Tasks (commission requests with the questionnaire beside a rate box pre-filled from the ladder; new referrals with accept/reject; payout details to verify), Promoters (filters, set rate, pause/restore with a reason, send login link, add by hand), Referrals (filters by promoter/city/stage, stage moves that also move the lead, mark live with the invoice → payout), Payouts (mark paid with UTR, CSV), Settings (ladder, cap, payout days, attribution days, TDS %). Sidebar badge = open tasks (`attention.referralTasks`).
+- **Rules in code** (`apps/api/src/modules/referrals/referral-rules.ts`): first accepted referral holds a school for `referralAttributionDays` (default 90); schools already in the lead pipeline (180 days) or already live are refused with the reason; stages move forward only; LIVE needs the rate and the invoice and creates the ONE payout (`rewardMinor` = pct of invoice capped by the promoter's cap or the platform cap; TDS `referralTdsPct`); PAYOUT_DUE → PAID on mark paid; suspension bumps `tokenVersion`.
+- **Data**: `Promoter`, `Referral` (→ `MarketingLead` on accept, source `referral:CODE`), `ReferralEvent`, `ReferralPayout`, `ReferralTask`; settings on `MarketingConfig.referral*`. Platform tables: RLS on, `platform_only` deny-all policy, read through the BYPASSRLS client only. Migration `20261023_090000_refer_and_earn`.
+- **Tests**: `referral-rules.spec`, `referrals.dto.spec`, `referrals.service.spec`, `promoter-auth.spec` (unit); `test/promoter-contract.e2e-spec.ts` (booted app: audiences, masking, suspended, required fields, owner host); web `lib/promoter-session.test.ts`; `console-segments.test.ts` covers the new sessions.

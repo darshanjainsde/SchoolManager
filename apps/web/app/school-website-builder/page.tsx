@@ -3,14 +3,15 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { isPlatformHost } from '@/lib/hosts';
 import { getRequestHost } from '@/lib/request';
-import { SckoolsLogo } from '@/components/brand/sckools-logo';
+import PlatformBlogNav from '@/components/blog/PlatformBlogNav';
+import { fetchMarketingConfig } from '@/lib/public-api';
 import { LP_FAQ } from '@/components/marketing/lp-faq-data';
 import '@/components/marketing/marketing.css';
 
 export const metadata: Metadata = {
   title: 'School Website Builder — Launch Your School’s Website in Days | Sckools',
   description:
-    'Build a website for your school without developers. Sckools includes design, hosting, your own domain, an admissions enquiry engine and the inter-school events network — one flat yearly plan.',
+    'Build a website for your school without developers. Sckools includes design, hosting, your own domain, an admissions enquiry engine and the inter-school events network — one price per student, per year.',
   alternates: { canonical: 'https://sckools.com/school-website-builder' },
   metadataBase: new URL('https://sckools.com'),
   openGraph: {
@@ -41,6 +42,9 @@ const INCLUDED = [
 export default async function SchoolWebsiteBuilderPage() {
   const host = await getRequestHost();
   if (!isPlatformHost(host)) notFound();
+  const cfg = await fetchMarketingConfig();
+  const basic = cfg.prices.basic.inr;
+  const example = (basic * 400).toLocaleString('en-IN');
 
   const jsonLd = [
     {
@@ -73,15 +77,8 @@ export default async function SchoolWebsiteBuilderPage() {
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <PlatformBlogNav variant="builder" />
       <div className="mkt">
-      <nav className="mnav" aria-label="Main">
-        <div className="mnav-in">
-          <Link href="/" className="logo"><SckoolsLogo size={32} /></Link>
-          <a className="lnk" href="/pricing">Pricing</a>
-          <Link className="lnk" href="/blog">Blog</Link>
-          <a className="btn btn-hot btn-sm" href="/pricing">Get started</a>
-        </div>
-      </nav>
 
       <header className="lp-hero">
         <div className="wrap">
@@ -89,8 +86,8 @@ export default async function SchoolWebsiteBuilderPage() {
           <h1 className="h-lg lp-h1">Build a website for your school<br />— without hiring anyone.</h1>
           <p className="lede">
             Sckools gives your school a complete, professionally designed website with hosting, your own
-            domain, an admissions enquiry engine and a live inter-school events network. One flat yearly
-            plan. Live in days.
+            domain, an admissions enquiry engine and a live inter-school events network. One price per
+            student, per year: for a 400-student school, Basic is ₹{example} a year, everything included. Live in days.
           </p>
           <div className="lp-actions">
             <a className="lp-cta" href="/pricing">See plans &amp; pricing</a>
@@ -183,8 +180,8 @@ export default async function SchoolWebsiteBuilderPage() {
             ))}
           </div>
           <p className="lede" style={{ textAlign: 'center', marginTop: 36 }}>
-            Ready to see your school on a bigger stage? <a href="/pricing" style={{ fontWeight: 700 }}>Pick a plan</a> or
-            request a callback from the <Link href="/" style={{ fontWeight: 700 }}>homepage</Link>.
+            Ready to see your school on a bigger stage? <a href="/pricing" style={{ fontWeight: 700 }}>Pick a plan</a> or{' '}
+            <Link href="/#callback" style={{ fontWeight: 700 }}>request a callback</Link>.
           </p>
         </div>
       </section>

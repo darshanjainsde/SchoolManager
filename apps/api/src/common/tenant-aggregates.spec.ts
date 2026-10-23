@@ -51,7 +51,10 @@ import { join, relative, sep } from 'node:path';
  */
 
 /** Files allowed a relation `_count`. Prefer to keep this empty. */
-const RELATION_COUNT_ALLOWED: Record<string, string> = {};
+const RELATION_COUNT_ALLOWED: Record<string, string> = {
+  'modules/referrals/referrals.service.ts':
+    'Promoter and Referral are platform tables with no schoolId — a promoter\'s referral count has no tenant to scope by, so the relation form cannot leak across one',
+};
 
 /** Files allowed an argument-less aggregate, each genuinely cross-tenant. */
 const BARE_AGGREGATE_ALLOWED: Record<string, string> = {

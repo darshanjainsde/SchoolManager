@@ -10,7 +10,7 @@ export const LP_FAQ: { q: string; a: string }[] = [
   },
   {
     q: 'Is Sckools better than hiring a web design agency?',
-    a: 'An agency builds you a static site and charges again for every change. Sckools costs a flat yearly price that includes hosting, your domain, SSL, ongoing updates, an admissions enquiry inbox, and the inter-school events network — and your staff make changes themselves, instantly.',
+    a: 'An agency builds you a static site and charges again for every change. Sckools costs one per-student yearly price that includes hosting, your domain, SSL, ongoing updates, an admissions enquiry inbox, and the inter-school events network — and your staff make changes themselves, instantly.',
   },
   {
     q: 'Can the website handle admission enquiries?',

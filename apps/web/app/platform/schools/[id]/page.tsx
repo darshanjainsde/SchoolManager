@@ -56,6 +56,7 @@ const ALL_FEATURES = [
   'SOCIAL',
   'ABOUT_CONTACT',
   'EVENTS',
+  'EVENTS_HOST',
   'MANAGEMENT',
   'BLOG',
   'HIRING',
@@ -66,19 +67,52 @@ const ALL_FEATURES = [
   'SPORTS',
   'SALARY',
   'COURSE_MANAGEMENT',
+  'EXAM_HALL',
+  'WHATSAPP',
 ] as const;
 
 type FeatureKey = (typeof ALL_FEATURES)[number];
 
-// Mirrors packages/db/src/features.ts's TIER_FEATURES, for the same reason and
-// under the same guard as ALL_FEATURES above. PRO grants HIRING — this copy
-// said it did not, so the badge beside HIRING would have read "override" for a
-// Pro school that gets it by plan. LIBRARY is in NO tier deliberately.
+// Mirrors packages/db/src/features.ts's TIER_FEATURES (Plan Ladder v2,
+// 2026-10-22), for the same reason and under the same guard as ALL_FEATURES
+// above. Basic = be found; Standard = the ERP; Pro = everything.
 const TIER_FEATURES: Record<SchoolDetail['tier'], ReadonlySet<FeatureKey>> = {
-  BASIC: new Set(['PUBLIC_SITE', 'GALLERY', 'ENQUIRY', 'SOCIAL']),
-  STANDARD: new Set(['PUBLIC_SITE', 'GALLERY', 'ENQUIRY', 'SOCIAL', 'ABOUT_CONTACT', 'EVENTS', 'BLOG']),
-  PRO: new Set(['PUBLIC_SITE', 'GALLERY', 'ENQUIRY', 'SOCIAL', 'ABOUT_CONTACT', 'EVENTS', 'MANAGEMENT', 'BLOG', 'HIRING', 'FEES']),
+  BASIC: new Set(['PUBLIC_SITE', 'GALLERY', 'ENQUIRY', 'SOCIAL', 'ABOUT_CONTACT', 'EVENTS']),
+  STANDARD: new Set(['PUBLIC_SITE', 'GALLERY', 'ENQUIRY', 'SOCIAL', 'ABOUT_CONTACT', 'EVENTS', 'EVENTS_HOST', 'MANAGEMENT', 'BLOG']),
+  PRO: new Set(['PUBLIC_SITE', 'GALLERY', 'ENQUIRY', 'SOCIAL', 'ABOUT_CONTACT', 'EVENTS', 'EVENTS_HOST', 'MANAGEMENT', 'BLOG', 'HIRING', 'LIBRARY', 'FEES', 'ALUMNI', 'PRESS', 'SPORTS', 'SALARY', 'COURSE_MANAGEMENT', 'EXAM_HALL', 'WHATSAPP']),
 };
+
+/** What each key means to a person, and the plan it comes with. The ladder on
+ *  this page is drawn from this list, so the owner reads "Exam hall · Pro"
+ *  rather than a bare EXAM_HALL. */
+const FEATURE_INFO: Record<FeatureKey, { name: string; what: string }> = {
+  PUBLIC_SITE: { name: 'Website', what: 'Studio, own domain, pages, courses, hall of fame' },
+  GALLERY: { name: 'Gallery', what: 'Photos and video on the site' },
+  ENQUIRY: { name: 'Admissions desk', what: 'Enquiry forms and the enquiry → visit → admitted pipeline' },
+  SOCIAL: { name: 'Social links', what: 'Instagram, Facebook, YouTube on the site' },
+  ABOUT_CONTACT: { name: 'About & contact', what: 'Principal, address, phone, map, affiliation' },
+  EVENTS: { name: 'Events Network (attend)', what: 'Network events on the site; families register there' },
+  EVENTS_HOST: { name: 'Events Network (host)', what: 'Create events, tickets, audiences, sponsors' },
+  MANAGEMENT: { name: 'The ERP', what: 'People, sessions, register, leave, timetable, exams & results, diary, TV, both apps' },
+  BLOG: { name: 'Blog', what: 'School blog, syndicated to sckools.com' },
+  HIRING: { name: 'Jobs board', what: 'Vacancies on sckools.com/jobs, applications in the console' },
+  LIBRARY: { name: 'Library', what: 'Counter, hall, books, fines, reader shelf' },
+  ALUMNI: { name: 'Alumni', what: 'Batches, claims, gifts, homecoming' },
+  FEES: { name: 'Fees', what: 'Counter, UPI, online, receipts, late-fee rules' },
+  PRESS: { name: 'Reports & documents', what: 'Report cards, certificates, print store' },
+  SPORTS: { name: 'Sports', what: 'Houses, meets, fixtures, records' },
+  SALARY: { name: 'Pay', what: 'HR & salaries, pay runs, payslips' },
+  COURSE_MANAGEMENT: { name: 'Syllabus tracker', what: 'Chapters reached, per class and subject' },
+  EXAM_HALL: { name: 'Exam hall', what: 'Rooms and seating plans for exam days' },
+  WHATSAPP: { name: 'WhatsApp', what: 'Leave, cover and notices answered from the message; needs the school\'s Meta number' },
+};
+
+const PLAN_ORDER: SchoolDetail['tier'][] = ['BASIC', 'STANDARD', 'PRO'];
+const PLAN_NAME: Record<SchoolDetail['tier'], string> = { BASIC: 'Basic', STANDARD: 'Standard', PRO: 'Pro' };
+/** The lowest plan that carries a key. Every key is in Pro since the ladder. */
+function planOf(key: FeatureKey): SchoolDetail['tier'] {
+  return PLAN_ORDER.find((t) => TIER_FEATURES[t].has(key)) ?? 'PRO';
+}
 
 const TIER_TONE: Record<SchoolDetail['tier'], 'neutral' | 'info' | 'success'> = {
   BASIC: 'neutral',
@@ -250,73 +284,67 @@ export default function SchoolDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Feature toggles ─────────────────────────────────────────────────── */}
+      {/* Feature flags — drawn as the plan ladder ─────────────────────── */}
       <Card>
         <CardHeader>
           <CardTitle>Feature flags</CardTitle>
           <CardDescription>
-            Tier-granted features are included in the plan. Override labels mean the
-            feature was manually enabled or disabled outside the tier default.
+            Listed by the plan that carries them. "In plan" comes with {PLAN_NAME[school.tier]};
+            "added" is a trial above the plan; "removed" is a module this school is
+            protected from (untick to lift it).
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ul className="divide-y divide-slate-100">
-            {ALL_FEATURES.map((key) => {
-              const isEnabled = featureSet.has(key);
-              const isTierGranted = tierFeatures.has(key);
-              const pending = featureMutation.isPending && featureMutation.variables?.featureKey === key;
-
-              // Determine label
-              let labelTone: 'neutral' | 'info' | 'success' = 'neutral';
-              let labelText = '';
-              if (isEnabled) {
-                if (isTierGranted) {
-                  labelTone = 'info';
-                  labelText = 'tier';
-                } else {
-                  labelTone = 'success';
-                  labelText = 'override';
-                }
-              } else if (!isTierGranted) {
-                labelTone = 'neutral';
-                labelText = '';
-              } else {
-                // Tier would grant it but it's disabled — shouldn't normally happen
-                // unless a manual override disabled it
-                labelTone = 'neutral';
-                labelText = 'tier-off';
-              }
-
-              return (
-                <li key={key} className="flex items-center justify-between py-3">
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      id={`feat-${key}`}
-                      checked={isEnabled}
-                      disabled={pending || featureMutation.isPending}
-                      onChange={(e) =>
-                        featureMutation.mutate({ featureKey: key, enabled: e.target.checked })
-                      }
-                      className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-50 cursor-pointer"
-                    />
-                    <label
-                      htmlFor={`feat-${key}`}
-                      className="text-sm font-mono text-slate-700 select-none cursor-pointer"
-                    >
-                      {key}
-                    </label>
-                    {labelText && (
-                      <Badge tone={labelTone}>{labelText}</Badge>
-                    )}
-                  </div>
-                  {pending && (
-                    <span className="text-xs text-slate-400">Saving…</span>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+          {PLAN_ORDER.map((plan) => {
+            const keys = ALL_FEATURES.filter((k) => planOf(k) === plan);
+            const planIncluded = TIER_FEATURES[school.tier].has(keys[0]);
+            return (
+              <div key={plan} className="mb-4 last:mb-0">
+                <div className="mb-1 flex items-center gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{PLAN_NAME[plan]}</span>
+                  <Badge tone={planIncluded ? 'info' : 'neutral'}>{planIncluded ? 'in this school\'s plan' : 'above the plan'}</Badge>
+                </div>
+                <ul className="divide-y divide-slate-100 rounded-md border border-slate-200">
+                  {keys.map((key) => {
+                    const isEnabled = featureSet.has(key);
+                    const isTierGranted = tierFeatures.has(key);
+                    const pending = featureMutation.isPending && featureMutation.variables?.featureKey === key;
+                    let labelTone: 'neutral' | 'info' | 'success' = 'neutral';
+                    let labelText = '';
+                    if (isEnabled && isTierGranted) { labelTone = 'info'; labelText = 'in plan'; }
+                    else if (isEnabled) { labelTone = 'success'; labelText = 'added'; }
+                    else if (isTierGranted) { labelTone = 'neutral'; labelText = 'removed'; }
+                    const info = FEATURE_INFO[key];
+                    return (
+                      <li key={key} className="flex items-start justify-between gap-3 px-3 py-2.5">
+                        <div className="flex min-w-0 items-start gap-3">
+                          <input
+                            type="checkbox"
+                            id={`feat-${key}`}
+                            checked={isEnabled}
+                            disabled={pending || featureMutation.isPending}
+                            onChange={(e) =>
+                              featureMutation.mutate({ featureKey: key, enabled: e.target.checked })
+                            }
+                            className="mt-1 h-4 w-4 cursor-pointer rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-50"
+                          />
+                          <label htmlFor={`feat-${key}`} className="min-w-0 cursor-pointer select-none">
+                            <span className="flex flex-wrap items-center gap-2">
+                              <span className="text-sm font-medium text-slate-800">{info.name}</span>
+                              <span className="font-mono text-[11px] text-slate-400">{key}</span>
+                              {labelText && <Badge tone={labelTone}>{labelText}</Badge>}
+                            </span>
+                            <span className="block text-xs text-slate-500">{info.what}</span>
+                          </label>
+                        </div>
+                        {pending && <span className="shrink-0 text-xs text-slate-400">Saving…</span>}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            );
+          })}
         </CardContent>
       </Card>
 

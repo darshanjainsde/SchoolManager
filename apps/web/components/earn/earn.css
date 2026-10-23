@@ -1,0 +1,57 @@
+/* Refer & Earn — the public page and the sign-in door. Rides on marketing.css
+   (.mkt tokens, .lp-* sections, .eyebrow, .h-lg, .lede, .wrap); only what the
+   sign-up card and the three-step strip need is added here, all under .earn-. */
+.mkt .earn-hero { display: grid; grid-template-columns: 1.15fr .85fr; gap: 36px; align-items: center; text-align: left; }
+.mkt .earn-hero .lede { margin-left: 0; margin-right: 0; }
+.mkt .earn-promise { display: grid; gap: 10px; }
+.mkt .earn-promise div { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; box-shadow: var(--sh); display: flex; gap: 12px; align-items: flex-start; }
+.mkt .earn-promise i { width: 36px; height: 36px; border-radius: 11px; flex: none; display: grid; place-items: center; font-size: 18px; font-style: normal; background: var(--teal-soft); }
+.mkt .earn-promise b { display: block; font-size: 14px; }
+.mkt .earn-promise span { font-size: 13px; color: var(--muted); }
+.mkt .earn-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+.mkt .earn-fine { margin: 14px 0 0; font-size: 13px; color: var(--muted); }
+.mkt .earn-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.mkt .earn-step { background: #fff; border: 1px solid var(--line); border-radius: var(--r); padding: 18px; box-shadow: var(--sh); }
+.mkt .earn-step .n { width: 30px; height: 30px; border-radius: 999px; background: var(--ink); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 13px; margin-bottom: 10px; }
+.mkt .earn-step b { display: block; font-size: 15px; margin-bottom: 4px; }
+.mkt .earn-step p { margin: 0; color: var(--muted); font-size: 13.5px; }
+.mkt .earn-rules { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 24px; padding: 0; margin: 0; list-style: none; }
+.mkt .earn-rules li { display: flex; gap: 10px; font-size: 14px; }
+.mkt .earn-rules li::before { content: '✓'; color: var(--teal); font-weight: 800; }
+.mkt .earn-faq details { border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; margin-bottom: 8px; background: #fff; }
+.mkt .earn-faq summary { font-weight: 700; cursor: pointer; font-size: 14.5px; }
+.mkt .earn-faq p { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
+
+/* the door */
+.mkt .earn-card { background: #fff; border: 1px solid var(--line); border-radius: 22px; padding: 26px; box-shadow: var(--sh); max-width: 560px; margin: 0 auto; }
+.mkt .earn-card h3 { margin: 0 0 4px; font-size: 20px; letter-spacing: -.02em; }
+.mkt .earn-card .hint { color: var(--muted); font-size: 13.5px; margin: 0 0 16px; }
+.mkt .earn-f { display: grid; gap: 12px; }
+.mkt .earn-f2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.mkt .earn-card label { display: grid; gap: 5px; font-size: 12.5px; font-weight: 700; color: var(--muted); }
+.mkt .earn-card input, .mkt .earn-card select, .mkt .earn-card textarea { width: 100%; box-sizing: border-box; min-height: 44px; border: 1.5px solid var(--line2); border-radius: 12px; padding: 10px 12px; background: #fff; color: var(--ink); font: inherit; font-size: 15px; }
+.mkt .earn-card textarea { min-height: 84px; resize: vertical; }
+.mkt .earn-card input:focus-visible, .mkt .earn-card select:focus-visible, .mkt .earn-card textarea:focus-visible { outline: 3px solid var(--teal-hi); outline-offset: 1px; border-color: var(--teal); }
+.mkt .earn-card [aria-invalid="true"] { border-color: #b42318; }
+.mkt .earn-seg { display: flex; flex-wrap: wrap; gap: 8px; }
+.mkt .earn-seg button { border: 1.5px solid var(--line2); background: #fff; color: var(--ink); border-radius: 999px; padding: 8px 14px; font: inherit; font-weight: 700; font-size: 13px; min-height: 40px; cursor: pointer; }
+.mkt .earn-seg button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: #fff; }
+.mkt .earn-seg button:focus-visible { outline: 3px solid var(--teal-hi); outline-offset: 2px; }
+.mkt .earn-prog { display: flex; gap: 6px; margin-bottom: 16px; }
+.mkt .earn-prog i { flex: 1; height: 5px; border-radius: 999px; background: var(--line); }
+.mkt .earn-prog i.on { background: var(--teal); }
+.mkt .earn-code { text-align: center; font-size: 24px; letter-spacing: .3em; font-family: ui-monospace, Menlo, monospace; }
+.mkt .earn-err { color: #b42318; font-size: 13px; font-weight: 600; min-height: 1em; }
+.mkt .earn-check { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; font-weight: 500; color: var(--ink); }
+.mkt .earn-check input { width: 20px; height: 20px; min-height: 0; margin-top: 1px; flex: none; accent-color: var(--teal); }
+.mkt .earn-btns { display: flex; gap: 10px; flex-wrap: wrap; }
+.mkt .earn-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 0; border-radius: 999px; padding: 12px 20px; font: inherit; font-weight: 800; font-size: 14px; min-height: 44px; background: var(--teal); color: #fff; cursor: pointer; box-shadow: 0 10px 24px -12px rgba(13,148,136,.7); }
+.mkt .earn-btn.ghost { background: #fff; color: var(--ink); border: 1.5px solid var(--line2); box-shadow: none; }
+.mkt .earn-btn.ink { background: var(--ink); box-shadow: none; }
+.mkt .earn-btn:disabled { background: var(--paper2); color: var(--muted); box-shadow: none; cursor: default; }
+.mkt .earn-btn:focus-visible { outline: 3px solid var(--violet); outline-offset: 2px; }
+.mkt .earn-link { background: none; border: 0; padding: 0; font: inherit; color: var(--teal); font-weight: 700; cursor: pointer; text-decoration: underline; }
+@media (max-width: 860px) {
+  .mkt .earn-hero, .mkt .earn-steps, .mkt .earn-rules, .mkt .earn-f2 { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) { .mkt .earn-card * { transition: none !important; } }

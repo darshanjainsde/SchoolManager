@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { renderWithProviders, type ApiStub } from '@/test/render';
 import { useApi } from '@/lib/use-api';
+import { ApiError } from '@/lib/api';
 import { useHost } from '@/components/use-host';
 import { WhatsAppSettings as WhatsAppCard } from './whatsapp-settings';
 
@@ -41,6 +42,14 @@ describe('WhatsApp settings', () => {
     fireEvent.click(screen.getByTestId('whatsapp-toggle'));
     await waitFor(() => expect(api.put).toHaveBeenCalledWith('/manage/whatsapp-settings', { enabled: true }));
     expect(await screen.findByText('On — families receive WhatsApp')).toBeInTheDocument();
+  });
+
+  it('says WhatsApp is part of Pro when the plan refuses the settings, instead of an error box', async () => {
+    const api = stub(BASE);
+    api.get.mockRejectedValue(new ApiError(403, 'Feature not enabled', null));
+    renderWithProviders(<WhatsAppCard />);
+    expect(await screen.findByTestId('whatsapp-plan-notice')).toHaveTextContent('part of the Pro plan');
+    expect(screen.queryByTestId('whatsapp-toggle')).toBeNull();
   });
 
   it('says plainly when the platform number is not connected, and disables the test send', async () => {

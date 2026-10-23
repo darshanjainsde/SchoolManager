@@ -35,6 +35,8 @@ export interface OverviewResponse {
    */
   attention: {
     newLeads: number;
+    /** Refer & Earn tasks waiting on the owner: commission requests, referrals to accept, payout details to verify. */
+    referralTasks: number;
     followUpsDue: number;
     pendingEvents: number;
     pendingBlogPosts: number;
@@ -141,11 +143,12 @@ export class OwnerOverviewService {
       db.event.groupBy({ by: ['schoolId'], _count: true }),
     ]);
 
-    const [enquiriesThisMonth, newLeads, students, images] = await Promise.all([
+    const [enquiriesThisMonth, newLeads, students, images, referralTasks] = await Promise.all([
       db.enquiry.count({ where: { createdAt: { gte: monthStart } } }),
       db.marketingLead.count({ where: { status: 'NEW' } }),
       db.student.groupBy({ by: ['schoolId'], _count: true }),
       db.mediaAsset.groupBy({ by: ['schoolId'], _count: true }),
+      db.referralTask.count({ where: { status: 'OPEN' } }).catch(() => 0),
     ]);
 
     const [followUpsDue, pendingEvents, pendingBlogPosts, leadsWonThisMonth] = await Promise.all([
@@ -193,6 +196,7 @@ export class OwnerOverviewService {
       },
       attention: {
         newLeads,
+        referralTasks,
         followUpsDue,
         pendingEvents,
         pendingBlogPosts,

@@ -1,0 +1,484 @@
+'use client';
+import { useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { useApi } from '@/lib/use-api';
+import { OWNER_HOST } from '@/lib/hosts';
+import { useAuthStore } from '@/lib/auth-store';
+import { Cell, Field, FieldRow, Overlay, Row, RowList, RowTitle } from '@/components/ui/kit';
+import { QueryError } from '@/components/ui/query-state';
+import { STAGE_LABEL, stageTone, rupees, when, type ReferralStatus } from '@/lib/promoter-session';
+import '../../sk-theme.css';
+
+type Tab = 'tasks' | 'promoters' | 'referrals' | 'payouts' | 'settings';
+const TABS: { k: Tab; l: string }[] = [{ k: 'tasks', l: 'Tasks' }, { k: 'promoters', l: 'Promoters' }, { k: 'referrals', l: 'Referrals' }, { k: 'payouts', l: 'Payouts' }, { k: 'settings', l: 'Settings' }];
+
+interface Promoter {
+  id: string; code: string; name: string; email: string | null; phoneE164: string | null; city: string | null; status: 'ACTIVE' | 'SUSPENDED' | 'REMOVED'; statusReason: string | null;
+  who: string | null; expect: string | null; areas: string | null; know: string | null; schoolsInMind: string | null; hasGst: boolean;
+  commissionPct: number | null; commissionCapMinor: number | null; commissionNote: string | null; commissionSetAt: string | null;
+  payeeName: string | null; panMasked: string | null; bankAccountMasked: string | null; ifsc: string | null; upi: string | null; gstin: string | null; payoutDetailsAt: string | null; kycVerifiedAt: string | null;
+  createdAt: string; referred: number; live: number; earnedMinor: number; paidMinor: number; openTasks: string[];
+}
+interface Referral {
+  id: string; schoolName: string; city: string; area: string | null; studentsApprox: number | null; contactName: string; contactRole: string | null; contactPhone: string; contactEmail: string | null; planInterest: string | null; howKnown: string | null; consent: boolean; viaLink: boolean;
+  status: ReferralStatus; statusReason: string | null; attributionUntil: string; lapsed: boolean; invoiceMinor: number | null; rewardMinor: number | null; createdAt: string; leadId: string | null;
+  promoter: { id: string; name: string; code: string; commissionPct: number | null; commissionCapMinor: number | null };
+  payout: { id: string; status: string; netMinor: number; dueOn: string } | null;
+  events: { actor: string; fromStatus: ReferralStatus | null; toStatus: ReferralStatus | null; body: string | null; createdAt: string }[];
+}
+interface Task { id: string; kind: 'COMMISSION' | 'REFERRAL' | 'KYC'; createdAt: string; note: string | null; promoter: Promoter & { pan?: string | null; bankAccount?: string | null }; referral: Referral | null; suggestedPct: number | null; suggestedCapMinor: number; duplicate: { kind: 'referral' | 'lead' | 'school' | 'lapsed'; on?: string } | null; lapsed: boolean }
+interface Payout { id: string; grossMinor: number; tdsMinor: number; netMinor: number; dueOn: string; status: 'DUE' | 'PAID' | 'ON_HOLD'; utr: string | null; paidOn: string | null; referral: { id: string; schoolName: string; city: string; invoiceMinor: number | null }; promoter: Promoter & { detailsComplete: boolean; kycVerified: boolean } }
+interface Settings { ladder: Record<string, number>; capMinor: number; payoutDays: number; attributionDays: number; tdsPct: number }
+
+const NEXT: Partial<Record<ReferralStatus, ReferralStatus>> = { LOGGED: 'ACCEPTED', ACCEPTED: 'CONTACTED', CONTACTED: 'DEMO_DONE', DEMO_DONE: 'PROPOSAL_SENT', PROPOSAL_SENT: 'WON', WON: 'LIVE' };
+const Pill = ({ s }: { s: ReferralStatus }) => <span className="sk-pill" data-tone={stageTone(s)}>{STAGE_LABEL[s]}</span>;
+const msg = (e: unknown) => (e as Error)?.message || 'Something went wrong.';
+
+export default function ReferralsPage() {
+  const signedIn = useAuthStore((s) => s.status) === 'authed';
+  const api = useApi({ audience: 'platform', hostHeader: OWNER_HOST });
+  const qc = useQueryClient();
+  const [tab, setTab] = useState<Tab>('tasks');
+  const invalidate = () => { for (const k of ['owner-ref-tasks', 'owner-ref-promoters', 'owner-ref-referrals', 'owner-ref-payouts', 'owner-overview', 'owner-leads']) void qc.invalidateQueries({ queryKey: [k] }); };
+
+  const tasks = useQuery({ queryKey: ['owner-ref-tasks'], queryFn: () => api.get<Task[]>('/owner/referrals/tasks'), enabled: signedIn });
+  const due = useQuery({ queryKey: ['owner-ref-payouts'], queryFn: () => api.get<Payout[]>('/owner/referrals/payouts'), enabled: signedIn });
+  const openTasks = tasks.data?.length ?? 0;
+  const dueCount = (due.data ?? []).filter((y) => y.status === 'DUE').length;
+
+  return (
+    <div>
+      <header className="sk-pagehead">
+        <h1>Referrals</h1>
+        <p>Refer &amp; Earn: the people who introduce schools, the schools they logged, and what is owed. Every accepted referral is also a lead in your pipeline.</p>
+      </header>
+      <nav className="sk-tabs" aria-label="Referral sections">
+        {TABS.map((t) => (
+          <button key={t.k} type="button" className="sk-tab" data-active={tab === t.k} onClick={() => setTab(t.k)} style={{ background: 'none', border: 0, borderBottom: '2px solid transparent', cursor: 'pointer', font: 'inherit' }}>
+            {t.l}{t.k === 'tasks' && openTasks ? <span className="sk-pill" data-tone="warn">{openTasks}</span> : null}{t.k === 'payouts' && dueCount ? <span className="sk-pill" data-tone="warn">{dueCount}</span> : null}
+          </button>
+        ))}
+      </nav>
+      {tab === 'tasks' && <Tasks api={api} q={tasks} onDone={invalidate} />}
+      {tab === 'promoters' && <Promoters api={api} enabled={signedIn} onDone={invalidate} />}
+      {tab === 'referrals' && <ReferralsTab api={api} enabled={signedIn} onDone={invalidate} />}
+      {tab === 'payouts' && <Payouts api={api} q={due} onDone={invalidate} />}
+      {tab === 'settings' && <SettingsTab api={api} enabled={signedIn} />}
+      <style>{`
+        .rf-two { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+        .rf-decide { background: var(--sk-bg-2); border: 1px solid var(--sk-line); border-radius: var(--sk-r-sm); padding: 12px 14px; }
+        .rf-kv { display: grid; grid-template-columns: minmax(min(100%, 110px), auto) minmax(0, 1fr); gap: 6px 14px; margin: 0; font-size: 13.5px; }
+        .rf-kv dt { color: var(--sk-ink-3); }
+        .rf-kv dd { margin: 0; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+        .rf-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .rf-actions .sk-btn { min-height: 40px; }
+        @media (max-width: 860px) { .rf-two { grid-template-columns: 1fr; } }
+        /* A phone: the fact list is one column (a 110px label beside a 3-word
+           value was two half-empty columns), and a stacked row keeps its
+           figures on ONE line each — "7 referred · 2 live · ₹1,24,950 earned"
+           instead of six lines of number-over-caption. */
+        @media (max-width: 560px) {
+          .rf-kv { grid-template-columns: 1fr; gap: 1px 0; }
+          .rf-kv dt { margin-top: 7px; font-size: 11.5px; }
+          .rf-list .sk-rowline { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: start; }
+          .rf-list .sk-rowcell { flex: 1 1 100%; }
+          /* Figures share a line in equal parts, number over caption, so the
+             same column lines up across rows and no tile is orphaned: three
+             on Promoters (7 · 2 · ₹1,24,950), four on Payouts as a 2×2 (a
+             third was too narrow for ₹52,90,942 and broke it mid-number). A
+             figure never wraps; the part is sized so the largest fits. */
+          .rf-list .sk-rowcell[data-align="end"] .sk-rowtitle { white-space: nowrap; overflow-wrap: normal; font-size: 13px; }
+          .rf-figs3 .sk-rowcell[data-align="end"] { flex: 0 0 calc((100% - 32px) / 3); }
+          .rf-figs2 .sk-rowcell[data-align="end"] { flex: 0 0 calc((100% - 16px) / 2); }
+          .rf-figs1 .sk-rowcell[data-align="end"] { flex: 0 0 auto; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+type Api = ReturnType<typeof useApi>;
+
+// ─── Tasks ──────────────────────────────────────────────────────────────────
+
+function Tasks({ api, q, onDone }: { api: Api; q: ReturnType<typeof useQuery<Task[]>>; onDone: () => void }) {
+  if (q.isLoading) return <p className="sk-state">Loading tasks…</p>;
+  if (q.isError) return <QueryError error={q.error} onRetry={q.refetch} />;
+  const list = q.data ?? [];
+  const n = (k: Task['kind']) => list.filter((t) => t.kind === k).length;
+  return (
+    <>
+      <div className="sk-own-attention" style={{ marginBottom: 14 }}>
+        <Attn n={n('COMMISSION')} title="Commission requests" sub="a rate to set" />
+        <Attn n={n('REFERRAL')} title="New referrals" sub="accept or reject" />
+        <Attn n={n('KYC')} title="Payout details" sub="to verify before paying" />
+      </div>
+      {list.length === 0 ? (
+        <div className="sk-card"><div className="sk-card-b" style={{ alignItems: 'center', textAlign: 'center', padding: '28px 18px' }}><b>Nothing waiting on you.</b><p className="sk-muted" style={{ margin: 0 }}>Commission requests, new referrals and payout details to verify appear here.</p></div></div>
+      ) : (
+        <div style={{ display: 'grid', gap: 12 }}>{list.map((t) => <TaskCard key={t.id} api={api} t={t} onDone={onDone} />)}</div>
+      )}
+    </>
+  );
+}
+
+/** The owner console's attention tile (the Leads page recipe), warm only when there is something to do. */
+function Attn({ n, title, sub }: { n: number; title: string; sub: string }) {
+  return (
+    <div className="sk-own-attn" data-urgent={n > 0 ? 'true' : 'false'}>
+      <span className="n">{n}</span>
+      <div style={{ minWidth: 0 }}><div className="t">{title}</div><div className="s">{sub}</div></div>
+    </div>
+  );
+}
+
+const KIND: Record<Task['kind'], string> = { COMMISSION: 'Commission request', REFERRAL: 'New referral', KYC: 'Payout details to verify' };
+
+function KV({ rows }: { rows: [string, React.ReactNode][] }) {
+  return <dl className="rf-kv">{rows.map(([k, v]) => <div key={k} style={{ display: 'contents' }}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>;
+}
+
+function TaskCard({ api, t, onDone }: { api: Api; t: Task; onDone: () => void }) {
+  const p = t.promoter;
+  const r = t.referral;
+  const [pct, setPct] = useState(String(t.suggestedPct ?? 10));
+  const [cap, setCap] = useState(String(Math.round((p.commissionCapMinor ?? t.suggestedCapMinor) / 100)));
+  const [note, setNote] = useState('');
+  const [reason, setReason] = useState('');
+  const run = useMutation({
+    mutationFn: (fn: () => Promise<unknown>) => fn(),
+    onSuccess: () => { toast.success('Done.'); onDone(); },
+    onError: (e) => toast.error(msg(e)),
+  });
+  const reasonOk = reason.trim().length >= 3;
+  const title = t.kind === 'REFERRAL' && r ? r.schoolName : p.name;
+  const sub = t.kind === 'REFERRAL' && r
+    ? `${[r.area, r.city].filter(Boolean).join(', ')}${r.studentsApprox ? ` · about ${r.studentsApprox.toLocaleString('en-IN')} students` : ''}${r.planInterest ? ` · ${r.planInterest}` : ''} · referred by ${p.name} (${p.code})${r.viaLink ? ' through their link' : ''}`
+    : `${[p.city, p.email, p.phoneE164].filter(Boolean).join(' · ')} · joined ${when(p.createdAt)} · ${p.referred} referral${p.referred === 1 ? '' : 's'} so far`;
+  // A pill never wraps, so it carries one word; the sentence sits beside it as text that can.
+  const verdict = t.lapsed ? <><span className="sk-pill" data-tone="warn">Lapsed</span> not accepted inside the window</>
+    : t.duplicate ? <><span className="sk-pill" data-tone="bad">Duplicate</span> {t.duplicate.kind === 'referral' ? `another promoter holds this school${t.duplicate.on ? ` since ${when(t.duplicate.on)}` : ''}` : t.duplicate.kind === 'lead' ? 'already in your lead pipeline' : t.duplicate.kind === 'school' ? 'already live on Sckools' : 'held by a lapsed referral'}</>
+    : <><span className="sk-pill" data-tone="good">Clear</span> no match in referrals, leads or schools</>;
+  return (
+    <div className="sk-card">
+      <div className="sk-card-h">
+        <h3>{title}</h3>
+        <span className="sk-pill" data-tone="warn">{KIND[t.kind]}</span>
+        <span className="sk-muted" style={{ marginLeft: 'auto', fontSize: 12 }}>{when(t.createdAt)}</span>
+        <p className="sk-muted">{sub}</p>
+      </div>
+      <div className="sk-card-b rf-two">
+        <section className="sk-detail-sec">
+          <div className="sk-lab">{t.kind === 'REFERRAL' ? 'The referral' : t.kind === 'COMMISSION' ? 'Their answers' : 'Details on file'}</div>
+          {t.kind === 'REFERRAL' && r ? (
+            <KV rows={[['Contact', `${r.contactName}${r.contactRole ? `, ${r.contactRole}` : ''}`], ['Phone', r.contactPhone], ['Email', r.contactEmail || '—'], ['Consent', r.consent ? 'Declared by the promoter' : <span style={{ color: 'var(--sk-bad)' }}>Not declared</span>], ['How they know them', r.howKnown || '—'], ['Duplicate check', verdict]]} />
+          ) : t.kind === 'COMMISSION' ? (
+            <KV rows={[['Who', p.who || '—'], ['Expects', p.expect ? `${p.expect} schools in six months` : '—'], ['Areas', p.areas || p.city || '—'], ['How they know schools', p.know || '—'], ['Schools in mind', p.schoolsInMind || '—'], ['GST', p.hasGst ? 'Yes' : 'No']]} />
+          ) : (
+            <KV rows={[['Payee', p.payeeName || '—'], ['PAN', p.pan || '—'], ['Account', p.bankAccount ? `${p.bankAccount}${p.ifsc ? ` · ${p.ifsc}` : ''}` : '—'], ['UPI', p.upi || '—'], ['GSTIN', p.gstin || '—'], ['Why now', t.note || 'Details saved by the promoter']]} />
+          )}
+        </section>
+        <section className="sk-detail-sec rf-decide">
+          <div className="sk-lab">Your decision</div>
+          {t.kind === 'COMMISSION' && (
+            <>
+              <p className="sk-muted" style={{ margin: 0, fontSize: 12.5 }}>Suggested from your ladder for “{p.expect ?? '?'}”: <b>{t.suggestedPct ?? 10}%</b>, cap {rupees(t.suggestedCapMinor)}. Change anything.</p>
+              <FieldRow min={130}>
+                <Field id={`pct-${t.id}`} label="Commission %">{(f) => <input {...f} className="sk-input" type="number" min={1} max={50} value={pct} onChange={(e) => setPct(e.target.value)} />}</Field>
+                <Field id={`cap-${t.id}`} label="Cap per school (₹, 0 = none)">{(f) => <input {...f} className="sk-input" type="number" min={0} value={cap} onChange={(e) => setCap(e.target.value)} />}</Field>
+              </FieldRow>
+              <Field id={`note-${t.id}`} label="Note the promoter sees">{(f) => <textarea {...f} className="sk-input" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Good network in Kota; 10% to start, reviewed after three live schools." />}</Field>
+            </>
+          )}
+          {t.kind === 'REFERRAL' && <p className="sk-muted" style={{ margin: 0, fontSize: 12.5 }}>Accepting creates the lead in your pipeline with source <code>referral:{p.code}</code>, and the promoter is told.</p>}
+          {t.kind === 'KYC' && <p className="sk-muted" style={{ margin: 0, fontSize: 12.5 }}>Check the PAN and that the account name matches the payee. Nothing is paid until this is verified.</p>}
+          {t.kind !== 'KYC' && (
+            <Field id={`reason-${t.id}`} label={t.kind === 'COMMISSION' ? 'Reason, only if declining (the person sees it)' : 'Reason, only if rejecting (the promoter sees it)'}>{(f) => <textarea {...f} className="sk-input" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} />}</Field>
+          )}
+          <div className="rf-actions">
+            {t.kind === 'COMMISSION' && (<>
+              <button className="sk-btn" data-variant="primary" disabled={run.isPending} onClick={() => run.mutate(() => api.patch(`/owner/referrals/promoters/${p.id}/commission`, { pct: Number(pct), capMinor: Math.round(Number(cap) * 100), note: note.trim() || undefined }))}>Set commission</button>
+              <button className="sk-btn" data-variant="danger" disabled={run.isPending || !reasonOk} title={reasonOk ? undefined : 'Write the reason first'} onClick={() => run.mutate(() => api.patch(`/owner/referrals/promoters/${p.id}/status`, { status: 'REMOVED', reason: reason.trim() }))}>Decline account</button>
+            </>)}
+            {t.kind === 'REFERRAL' && r && (<>
+              <button className="sk-btn" data-variant="primary" disabled={run.isPending || !!t.duplicate || t.lapsed} title={t.duplicate || t.lapsed ? 'Reject it with the reason shown' : undefined} onClick={() => run.mutate(() => api.post(`/owner/referrals/${r.id}/accept`, {}))}>Accept</button>
+              <button className="sk-btn" data-variant="danger" disabled={run.isPending || !reasonOk} title={reasonOk ? undefined : 'Write the reason first'} onClick={() => run.mutate(() => api.post(`/owner/referrals/${r.id}/reject`, { reason: reason.trim() }))}>Reject with reason</button>
+            </>)}
+            {t.kind === 'KYC' && (
+              <button className="sk-btn" data-variant="primary" disabled={run.isPending || !p.payoutDetailsAt} onClick={() => run.mutate(() => api.post(`/owner/referrals/promoters/${p.id}/kyc-verified`, {}))}>{p.payoutDetailsAt ? 'Mark verified' : 'Waiting for details'}</button>
+            )}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+// ─── Promoters ──────────────────────────────────────────────────────────────
+
+function Promoters({ api, enabled, onDone }: { api: Api; enabled: boolean; onDone: () => void }) {
+  const [q, setQ] = useState(''); const [city, setCity] = useState(''); const [status, setStatus] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [rateFor, setRateFor] = useState<Promoter | null>(null);
+  const list = useQuery({ queryKey: ['owner-ref-promoters', q, city, status], queryFn: () => api.get<Promoter[]>(`/owner/referrals/promoters?${new URLSearchParams({ ...(q ? { q } : {}), ...(city ? { city } : {}), ...(status ? { status } : {}) })}`), enabled });
+  const cities = useMemo(() => [...new Set((list.data ?? []).map((p) => p.city).filter(Boolean))] as string[], [list.data]);
+  const run = useMutation({ mutationFn: (fn: () => Promise<unknown>) => fn(), onSuccess: () => { toast.success('Done.'); onDone(); void list.refetch(); }, onError: (e) => toast.error(msg(e)) });
+  return (
+    <>
+      <div className="sk-headrow" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+        <input className="sk-input" style={{ width: 240 }} placeholder="Search name, phone, email, code…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search promoters" />
+        <select className="sk-input" style={{ width: 'auto' }} value={city} onChange={(e) => setCity(e.target.value)} aria-label="City"><option value="">Any city</option>{cities.map((c) => <option key={c}>{c}</option>)}</select>
+        <select className="sk-input" style={{ width: 'auto' }} value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status"><option value="">Active and paused</option><option value="ACTIVE">Active</option><option value="SUSPENDED">Paused</option></select>
+        <span style={{ flex: 1 }} />
+        <button className="sk-btn" data-variant="primary" onClick={() => setAdding(true)}>+ Add a promoter</button>
+      </div>
+      {list.isLoading ? <p className="sk-state">Loading promoters…</p> : list.isError ? <QueryError error={list.error} onRetry={list.refetch} /> : (
+        <section className="sk-card" aria-label="Promoters">
+          <div className="sk-card-h"><h3>Promoters</h3><span className="sk-muted" style={{ marginLeft: 'auto', fontSize: 12 }}>{(list.data ?? []).length} {(list.data ?? []).length === 1 ? 'person' : 'people'}</span><p className="sk-muted">Everyone with an account, their rate, and what they have brought in. Rates are set per person.</p></div>
+          <div className="sk-card-b">
+          <RowList columns="minmax(0,1.6fr) minmax(0,1fr) auto auto auto auto auto" label="Promoters" className="rf-list rf-figs3">
+            {(list.data ?? []).map((p) => (
+              <Row key={p.id}>
+                <Cell><RowTitle title={<>{p.name} {p.status === 'SUSPENDED' && <span className="sk-pill" data-tone="bad">paused</span>}{!p.payoutDetailsAt && <span className="sk-pill" data-tone="warn">no payout details</span>}</>} sub={`${p.code} · ${[p.email, p.phoneE164].filter(Boolean).join(' · ')} · joined ${when(p.createdAt)}`} /></Cell>
+                <Cell><RowTitle title={p.city || '—'} sub={`${p.who || '—'}${p.expect ? ` · expects ${p.expect}` : ''}`} /></Cell>
+                <Cell>{p.commissionPct ? <RowTitle title={`${p.commissionPct}%`} sub={`cap ${p.commissionCapMinor ? rupees(p.commissionCapMinor) : 'none'}`} /> : <span className="sk-pill" data-tone="warn">not set</span>}</Cell>
+                <Cell align="end"><RowTitle title={String(p.referred)} sub="referred" /></Cell>
+                <Cell align="end"><RowTitle title={String(p.live)} sub="live" /></Cell>
+                <Cell align="end"><RowTitle title={rupees(p.earnedMinor)} sub="earned" /></Cell>
+                <Cell>
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                    <button className="sk-btn" onClick={() => setRateFor(p)}>Set rate</button>
+                    {p.status === 'ACTIVE' ? <button className="sk-btn" data-variant="danger" onClick={() => { const reason = window.prompt(`Pause ${p.name}? Say why; they see it.`); if (reason && reason.trim().length >= 3) run.mutate(() => api.patch(`/owner/referrals/promoters/${p.id}/status`, { status: 'SUSPENDED', reason: reason.trim() })); }}>Pause</button> : <button className="sk-btn" onClick={() => run.mutate(() => api.patch(`/owner/referrals/promoters/${p.id}/status`, { status: 'ACTIVE' }))}>Restore</button>}
+                    {p.email && <button className="sk-btn" onClick={() => run.mutate(() => api.post(`/owner/referrals/promoters/${p.id}/login-link`, {}))}>Send login</button>}
+                  </div>
+                </Cell>
+              </Row>
+            ))}
+            {(list.data ?? []).length === 0 && <p className="sk-muted" style={{ padding: '8px 0', margin: 0 }}>No promoter matches.</p>}
+          </RowList>
+          </div>
+        </section>
+      )}
+      {adding && <AddPromoter api={api} onClose={() => setAdding(false)} onDone={() => { setAdding(false); onDone(); void list.refetch(); }} />}
+      {rateFor && <SetRate api={api} p={rateFor} onClose={() => setRateFor(null)} onDone={() => { setRateFor(null); onDone(); void list.refetch(); }} />}
+    </>
+  );
+}
+
+function AddPromoter({ api, onClose, onDone }: { api: Api; onClose: () => void; onDone: () => void }) {
+  const [f, setF] = useState({ name: '', email: '', phone: '', city: '' });
+  const [err, setErr] = useState<string | null>(null);
+  const run = useMutation({ mutationFn: () => api.post('/owner/referrals/promoters', { name: f.name.trim(), email: f.email.trim() || undefined, phone: f.phone.trim() || undefined, city: f.city.trim() || undefined }), onSuccess: () => { toast.success('Promoter added; they sign in with a code.'); onDone(); }, onError: (e) => setErr(msg(e)) });
+  return (
+    <Overlay title="Add a promoter" subtitle="For people you recruit in person. They sign in with a one-time code on the email or number you give." onClose={onClose} side="center"
+      footer={<>{err ? <span className="sk-state err">{err}</span> : <span />}<button className="sk-btn" onClick={onClose}>Cancel</button><button className="sk-btn" data-variant="primary" disabled={run.isPending || f.name.trim().length < 2 || (!f.email.trim() && !f.phone.trim())} onClick={() => run.mutate()}>Add</button></>}>
+      <Field id="ap-name" label="Name">{(p) => <input {...p} className="sk-input" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} autoFocus />}</Field>
+      <FieldRow>
+        <Field id="ap-email" label="Email">{(p) => <input {...p} className="sk-input" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />}</Field>
+        <Field id="ap-phone" label="WhatsApp number">{(p) => <input {...p} className="sk-input" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} />}</Field>
+      </FieldRow>
+      <Field id="ap-city" label="City (optional)">{(p) => <input {...p} className="sk-input" value={f.city} onChange={(e) => setF({ ...f, city: e.target.value })} />}</Field>
+    </Overlay>
+  );
+}
+
+function SetRate({ api, p, onClose, onDone }: { api: Api; p: Promoter; onClose: () => void; onDone: () => void }) {
+  const [pct, setPct] = useState(String(p.commissionPct ?? 10));
+  const [cap, setCap] = useState(String(Math.round((p.commissionCapMinor ?? 5_000_000) / 100)));
+  const [note, setNote] = useState(p.commissionNote ?? '');
+  const [err, setErr] = useState<string | null>(null);
+  const run = useMutation({ mutationFn: () => api.patch(`/owner/referrals/promoters/${p.id}/commission`, { pct: Number(pct), capMinor: Math.round(Number(cap) * 100), note: note.trim() || undefined }), onSuccess: () => { toast.success(`${p.name} now sees ${pct}%.`); onDone(); }, onError: (e) => setErr(msg(e)) });
+  return (
+    <Overlay title={`Commission for ${p.name}`} subtitle={`${p.who ?? '—'} · expects ${p.expect ?? '—'} · ${p.areas ?? p.city ?? ''}`} onClose={onClose} side="center"
+      footer={<>{err ? <span className="sk-state err">{err}</span> : <span />}<button className="sk-btn" onClick={onClose}>Cancel</button><button className="sk-btn" data-variant="primary" disabled={run.isPending || !(Number(pct) >= 1 && Number(pct) <= 50)} onClick={() => run.mutate()}>Set commission</button></>}>
+      <FieldRow min={140}>
+        <Field id="sr-pct" label="Commission %">{(f) => <input {...f} className="sk-input" type="number" min={1} max={50} value={pct} onChange={(e) => setPct(e.target.value)} />}</Field>
+        <Field id="sr-cap" label="Cap per school (₹, 0 = none)">{(f) => <input {...f} className="sk-input" type="number" min={0} value={cap} onChange={(e) => setCap(e.target.value)} />}</Field>
+      </FieldRow>
+      <Field id="sr-note" label="Note the promoter sees">{(f) => <textarea {...f} className="sk-input" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />}</Field>
+      {p.know && <p className="sk-muted" style={{ margin: 0, fontSize: 13 }}><b>How they know schools:</b> {p.know}</p>}
+    </Overlay>
+  );
+}
+
+// ─── Referrals ──────────────────────────────────────────────────────────────
+
+function ReferralsTab({ api, enabled, onDone }: { api: Api; enabled: boolean; onDone: () => void }) {
+  const [q, setQ] = useState(''); const [pid, setPid] = useState(''); const [city, setCity] = useState(''); const [status, setStatus] = useState('');
+  const [live, setLive] = useState<Referral | null>(null);
+  const [lost, setLost] = useState<Referral | null>(null);
+  const list = useQuery({ queryKey: ['owner-ref-referrals', q, pid, city, status], queryFn: () => api.get<Referral[]>(`/owner/referrals?${new URLSearchParams({ ...(q ? { q } : {}), ...(pid ? { promoterId: pid } : {}), ...(city ? { city } : {}), ...(status ? { status } : {}) })}`), enabled });
+  const promoters = useQuery({ queryKey: ['owner-ref-promoters', '', '', ''], queryFn: () => api.get<Promoter[]>('/owner/referrals/promoters'), enabled });
+  const cities = useMemo(() => [...new Set((list.data ?? []).map((r) => r.city).filter(Boolean))], [list.data]);
+  const run = useMutation({ mutationFn: (fn: () => Promise<unknown>) => fn(), onSuccess: () => { toast.success('Done.'); onDone(); void list.refetch(); }, onError: (e) => toast.error(msg(e)) });
+  const rows = list.data ?? [];
+  const figures = { logged: rows.length, inProgress: rows.filter((r) => !['PAYOUT_DUE', 'PAID', 'LIVE', 'REJECTED', 'LOST'].includes(r.status)).length, live: rows.filter((r) => ['LIVE', 'PAYOUT_DUE', 'PAID'].includes(r.status)).length, owedMinor: rows.filter((r) => r.payout && r.payout.status === 'DUE').reduce((a, r) => a + (r.payout?.netMinor ?? 0), 0) };
+  return (
+    <>
+      <div className="sk-own-attention" style={{ marginBottom: 12 }}>
+        <Attn n={figures.logged} title="Logged" sub="every referral" />
+        <Attn n={figures.inProgress} title="In progress" sub="accepted → won" />
+        <Attn n={figures.live} title="Live" sub="paid Sckools" />
+        <div className="sk-own-attn" data-urgent={figures.owedMinor > 0 ? 'true' : 'false'}><span className="n" style={{ fontSize: 18 }}>{rupees(figures.owedMinor)}</span><div style={{ minWidth: 0 }}><div className="t">Owed</div><div className="s">net, due to promoters</div></div></div>
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+        <input className="sk-input" style={{ width: 240 }} placeholder="Search school, contact, phone…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search referrals" />
+        <select className="sk-input" style={{ width: 'auto' }} value={pid} onChange={(e) => setPid(e.target.value)} aria-label="Promoter"><option value="">Any promoter</option>{(promoters.data ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+        <select className="sk-input" style={{ width: 'auto' }} value={city} onChange={(e) => setCity(e.target.value)} aria-label="City"><option value="">Any city</option>{cities.map((c) => <option key={c}>{c}</option>)}</select>
+        <select className="sk-input" style={{ width: 'auto' }} value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Stage"><option value="">Any stage</option>{(Object.keys(STAGE_LABEL) as ReferralStatus[]).map((s) => <option key={s} value={s}>{STAGE_LABEL[s]}</option>)}</select>
+      </div>
+      {list.isLoading ? <p className="sk-state">Loading referrals…</p> : list.isError ? <QueryError error={list.error} onRetry={list.refetch} /> : (
+        <section className="sk-card" aria-label="Referrals">
+          <div className="sk-card-h"><h3>Referrals</h3><span className="sk-muted" style={{ marginLeft: 'auto', fontSize: 12 }}>{rows.length} shown</span><p className="sk-muted">Every school a promoter logged, with the lead it became. A stage move here also moves the lead.</p></div>
+          <div className="sk-card-b">
+          <RowList columns="minmax(0,1.6fr) minmax(0,1.1fr) minmax(0,.9fr) auto auto auto" label="Referrals" className="rf-list rf-figs1">
+            {rows.map((r) => {
+              const next = NEXT[r.status];
+              return (
+                <Row key={r.id}>
+                  <Cell><RowTitle title={<>{r.schoolName}{r.viaLink && <span className="sk-pill" data-tone="info">via link</span>}{r.lapsed && <span className="sk-pill" data-tone="neutral">lapsed</span>}</>} sub={`${[r.area, r.city].filter(Boolean).join(', ')}${r.studentsApprox ? ` · ~${r.studentsApprox} students` : ''} · logged ${when(r.createdAt)}`} /></Cell>
+                  <Cell><RowTitle title={r.contactName} sub={<>{r.contactRole ? `${r.contactRole} · ` : ''}{r.contactPhone}{!r.consent && <span style={{ color: 'var(--sk-bad)' }}> · no consent</span>}</>} /></Cell>
+                  <Cell><RowTitle title={r.promoter.name} sub={r.promoter.commissionPct ? `${r.promoter.commissionPct}%` : 'rate not set'} /></Cell>
+                  <Cell><Pill s={r.status} />{r.statusReason && (r.status === 'REJECTED' || r.status === 'LOST') && <div className="sk-muted" style={{ fontSize: 11.5 }}>{r.statusReason}</div>}</Cell>
+                  <Cell align="end">{r.rewardMinor ? <b>{rupees(r.rewardMinor)}</b> : '—'}</Cell>
+                  <Cell>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      {next && next !== 'LIVE' && <button className="sk-btn" disabled={run.isPending} onClick={() => run.mutate(() => next === 'ACCEPTED' ? api.post(`/owner/referrals/${r.id}/accept`, {}) : api.patch(`/owner/referrals/${r.id}/stage`, { status: next }))}>→ {STAGE_LABEL[next]}</button>}
+                      {next === 'LIVE' && <button className="sk-btn" data-variant="primary" onClick={() => setLive(r)}>→ Live &amp; paid</button>}
+                      {!['REJECTED', 'LOST', 'PAID', 'PAYOUT_DUE', 'LIVE'].includes(r.status) && <button className="sk-btn" data-variant="danger" onClick={() => setLost(r)}>{r.status === 'LOGGED' ? 'Reject' : 'Lost'}</button>}
+                    </div>
+                  </Cell>
+                </Row>
+              );
+            })}
+            {rows.length === 0 && <p className="sk-muted" style={{ padding: '8px 0', margin: 0 }}>No referral matches.</p>}
+          </RowList>
+          </div>
+        </section>
+      )}
+      {live && <MarkLive api={api} r={live} onClose={() => setLive(null)} onDone={() => { setLive(null); onDone(); void list.refetch(); }} />}
+      {lost && <CloseReferral api={api} r={lost} onClose={() => setLost(null)} onDone={() => { setLost(null); onDone(); void list.refetch(); }} />}
+    </>
+  );
+}
+
+function MarkLive({ api, r, onClose, onDone }: { api: Api; r: Referral; onClose: () => void; onDone: () => void }) {
+  const [inv, setInv] = useState('');
+  const [err, setErr] = useState<string | null>(null);
+  const pct = r.promoter.commissionPct;
+  const cap = r.promoter.commissionCapMinor;
+  const preview = pct && Number(inv) > 0 ? Math.min(Math.round(Number(inv) * 100 * pct / 100), cap || Infinity) : 0;
+  const run = useMutation({ mutationFn: () => api.patch(`/owner/referrals/${r.id}/stage`, { status: 'LIVE', invoiceMinor: Math.round(Number(inv) * 100) }), onSuccess: () => { toast.success(`${r.schoolName} is live; the payout is in the queue.`); onDone(); }, onError: (e) => setErr(msg(e)) });
+  return (
+    <Overlay title={`${r.schoolName} is live and has paid`} subtitle="The first-year invoice decides the reward. One payout per school, ever." onClose={onClose} side="center"
+      footer={<>{err ? <span className="sk-state err">{err}</span> : <span />}<button className="sk-btn" onClick={onClose}>Cancel</button><button className="sk-btn" data-variant="primary" disabled={run.isPending || !(Number(inv) > 0) || !pct} onClick={() => run.mutate()}>Mark live</button></>}>
+      {!pct && <div className="sk-note" data-tone="bad">{r.promoter.name} has no commission rate yet. Set it under Promoters first.</div>}
+      <Field id="ml-inv" label="First-year invoice (₹, what the school paid)">{(f) => <input {...f} className="sk-input" type="number" min={1} value={inv} onChange={(e) => setInv(e.target.value)} autoFocus />}</Field>
+      <p className="sk-muted" style={{ margin: 0 }}>Reward: <b>{preview ? rupees(preview) : '—'}</b>{pct ? ` (${pct}%${cap ? `, cap ${rupees(cap)}` : ''})` : ''}. TDS is deducted at the rate in Settings; the promoter is emailed.</p>
+    </Overlay>
+  );
+}
+
+function CloseReferral({ api, r, onClose, onDone }: { api: Api; r: Referral; onClose: () => void; onDone: () => void }) {
+  const [reason, setReason] = useState('');
+  const [err, setErr] = useState<string | null>(null);
+  const reject = r.status === 'LOGGED';
+  const run = useMutation({ mutationFn: () => reject ? api.post(`/owner/referrals/${r.id}/reject`, { reason: reason.trim() }) : api.patch(`/owner/referrals/${r.id}/stage`, { status: 'LOST', reason: reason.trim() }), onSuccess: () => { toast.success(reject ? 'Rejected; the promoter sees the reason.' : 'Marked lost.'); onDone(); }, onError: (e) => setErr(msg(e)) });
+  return (
+    <Overlay title={reject ? `Reject ${r.schoolName}` : `${r.schoolName}: lost`} subtitle={reject ? 'The promoter sees this reason.' : 'The lead is marked lost too.'} onClose={onClose} side="center"
+      footer={<>{err ? <span className="sk-state err">{err}</span> : <span />}<button className="sk-btn" onClick={onClose}>Cancel</button><button className="sk-btn" data-variant="primary" disabled={run.isPending || (reject && reason.trim().length < 3)} onClick={() => run.mutate()}>{reject ? 'Reject' : 'Mark lost'}</button></>}>
+      <Field id="cr-reason" label={reject ? 'Why (required)' : 'Why (optional)'}>{(f) => <textarea {...f} className="sk-input" rows={3} value={reason} onChange={(e) => setReason(e.target.value)} autoFocus />}</Field>
+    </Overlay>
+  );
+}
+
+// ─── Payouts ────────────────────────────────────────────────────────────────
+
+function Payouts({ api, q, onDone }: { api: Api; q: ReturnType<typeof useQuery<Payout[]>>; onDone: () => void }) {
+  const [paying, setPaying] = useState<Payout | null>(null);
+  if (q.isLoading) return <p className="sk-state">Loading payouts…</p>;
+  if (q.isError) return <QueryError error={q.error} onRetry={q.refetch} />;
+  const rows = q.data ?? [];
+  const csv = () => {
+    const lines = [['Promoter', 'PAN', 'School', 'Gross', 'TDS', 'Net', 'Due', 'Status', 'UTR', 'Paid on'].join(',')].concat(rows.map((y) => [y.promoter.name, y.promoter.panMasked ?? '', y.referral.schoolName, y.grossMinor / 100, y.tdsMinor / 100, y.netMinor / 100, when(y.dueOn), y.status, y.utr ?? '', y.paidOn ? when(y.paidOn) : ''].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')));
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' })); a.download = `sckools-referral-payouts-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+  };
+  return (
+    <>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}><button className="sk-btn" onClick={csv} disabled={rows.length === 0}>Export for the accountant</button></div>
+      <section className="sk-card" aria-label="Payouts">
+        <div className="sk-card-h"><h3>Payouts</h3><span className="sk-muted" style={{ marginLeft: 'auto', fontSize: 12 }}>{rows.filter((y) => y.status === 'DUE').length} due</span><p className="sk-muted">What is owed, to whom, and whether their details are ready. Mark paid with the UTR; the promoter's statement updates.</p></div>
+        <div className="sk-card-b">
+        <RowList columns="minmax(0,1.4fr) minmax(0,1fr) auto auto auto auto auto" label="Payouts" className="rf-list rf-figs2">
+          {rows.map((y) => (
+            <Row key={y.id}>
+              <Cell><RowTitle title={y.promoter.name} sub={y.promoter.detailsComplete ? `${y.promoter.payeeName} · ${y.promoter.upi || `${y.promoter.bankAccountMasked} ${y.promoter.ifsc ?? ''}`} · PAN ${y.promoter.panMasked}${y.promoter.kycVerified ? '' : ' · not verified'}` : <span style={{ color: 'var(--sk-amber-ink)' }}>no payout details yet</span>} /></Cell>
+              <Cell><RowTitle title={y.referral.schoolName} sub={`${y.referral.city}${y.referral.invoiceMinor ? ` · invoice ${rupees(y.referral.invoiceMinor)}` : ''}`} /></Cell>
+              <Cell align="end"><RowTitle title={rupees(y.grossMinor)} sub="gross" /></Cell>
+              <Cell align="end"><RowTitle title={rupees(y.tdsMinor)} sub="TDS" /></Cell>
+              <Cell align="end"><RowTitle title={<b>{rupees(y.netMinor)}</b>} sub="net" /></Cell>
+              <Cell align="end"><RowTitle title={when(y.dueOn)} sub="due" /></Cell>
+              <Cell>{y.status === 'PAID' ? <RowTitle title={<span className="sk-pill" data-tone="good">Paid</span>} sub={`${y.utr} · ${when(y.paidOn!)}`} /> : <button className="sk-btn" data-variant="primary" disabled={!y.promoter.detailsComplete} title={y.promoter.detailsComplete ? undefined : 'Ask the promoter for payout details first'} onClick={() => setPaying(y)}>Mark paid</button>}</Cell>
+            </Row>
+          ))}
+          {rows.length === 0 && <p className="sk-muted" style={{ padding: '8px 0', margin: 0 }}>Nothing owed. Payouts appear here when a referred school is marked live.</p>}
+        </RowList>
+        </div>
+      </section>
+      {paying && <MarkPaid api={api} y={paying} onClose={() => setPaying(null)} onDone={() => { setPaying(null); onDone(); void q.refetch(); }} />}
+    </>
+  );
+}
+
+function MarkPaid({ api, y, onClose, onDone }: { api: Api; y: Payout; onClose: () => void; onDone: () => void }) {
+  const [utr, setUtr] = useState(''); const [paidOn, setPaidOn] = useState(new Date().toISOString().slice(0, 10));
+  const [err, setErr] = useState<string | null>(null);
+  const run = useMutation({ mutationFn: () => api.patch(`/owner/referrals/payouts/${y.id}/paid`, { utr: utr.trim(), paidOn }), onSuccess: () => { toast.success('Marked paid; the promoter is told.'); onDone(); }, onError: (e) => setErr(msg(e)) });
+  return (
+    <Overlay title={`Pay ${rupees(y.netMinor)} to ${y.promoter.name}`} subtitle={`${y.referral.schoolName} · gross ${rupees(y.grossMinor)}, TDS ${rupees(y.tdsMinor)}`} onClose={onClose} side="center"
+      footer={<>{err ? <span className="sk-state err">{err}</span> : <span />}<button className="sk-btn" onClick={onClose}>Cancel</button><button className="sk-btn" data-variant="primary" disabled={run.isPending || utr.trim().length < 4} onClick={() => run.mutate()}>Mark paid</button></>}>
+      <p className="sk-muted" style={{ margin: 0 }}>Pay to: {y.promoter.payeeName} · {y.promoter.upi || `${y.promoter.bankAccountMasked} · ${y.promoter.ifsc}`}</p>
+      <FieldRow>
+        <Field id="mp-utr" label="UTR / reference">{(f) => <input {...f} className="sk-input" value={utr} onChange={(e) => setUtr(e.target.value)} autoFocus />}</Field>
+        <Field id="mp-date" label="Paid on">{(f) => <input {...f} className="sk-input" type="date" value={paidOn} onChange={(e) => setPaidOn(e.target.value)} />}</Field>
+      </FieldRow>
+    </Overlay>
+  );
+}
+
+// ─── Settings ───────────────────────────────────────────────────────────────
+
+function SettingsTab({ api, enabled }: { api: Api; enabled: boolean }) {
+  const q = useQuery({ queryKey: ['owner-ref-settings'], queryFn: () => api.get<Settings>('/owner/referrals/settings'), enabled });
+  const [f, setF] = useState<Settings | null>(null);
+  const s = f ?? q.data ?? null;
+  const run = useMutation({ mutationFn: () => api.put<Settings>('/owner/referrals/settings', s), onSuccess: () => { toast.success('Saved.'); void q.refetch(); }, onError: (e) => toast.error(msg(e)) });
+  if (q.isLoading || !s) return q.isError ? <QueryError error={q.error} onRetry={q.refetch} /> : <p className="sk-state">Loading settings…</p>;
+  const upd = (patch: Partial<Settings>) => setF({ ...s, ...patch });
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: 12 }}>
+      <div className="sk-card">
+        <div className="sk-card-h"><h3>Suggested rate by expected schools</h3><p className="sk-muted">Pre-fills the Tasks tab. Never shown to promoters; every rate is still set by you per person.</p></div>
+        <div className="sk-card-b">
+          {Object.entries(s.ladder).map(([k, v]) => (
+            <div key={k} style={{ display: 'grid', gridTemplateColumns: '1fr 110px', gap: 10, alignItems: 'center', fontSize: 13.5 }}>
+              <span>{k} schools in six months</span>
+              <input className="sk-input" type="number" min={0} max={100} value={v} onChange={(e) => upd({ ladder: { ...s.ladder, [k]: Number(e.target.value) } })} aria-label={`Rate for ${k}`} />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="sk-card">
+        <div className="sk-card-h"><h3>Money and time</h3></div>
+        <div className="sk-card-b">
+          <Field id="st-cap" label="Default cap per school (₹, 0 = none)">{(p) => <input {...p} className="sk-input" type="number" min={0} value={Math.round(s.capMinor / 100)} onChange={(e) => upd({ capMinor: Math.round(Number(e.target.value) * 100) })} />}</Field>
+          <Field id="st-tds" label="TDS deducted (%)">{(p) => <input {...p} className="sk-input" type="number" min={0} max={30} value={s.tdsPct} onChange={(e) => upd({ tdsPct: Number(e.target.value) })} />}</Field>
+          <Field id="st-pay" label="Payout due, days after the school's first payment">{(p) => <input {...p} className="sk-input" type="number" min={0} max={365} value={s.payoutDays} onChange={(e) => upd({ payoutDays: Number(e.target.value) })} />}</Field>
+          <Field id="st-attr" label="Attribution window, days">{(p) => <input {...p} className="sk-input" type="number" min={7} max={730} value={s.attributionDays} onChange={(e) => upd({ attributionDays: Number(e.target.value) })} />}</Field>
+          <div><button className="sk-btn" data-variant="primary" disabled={run.isPending} onClick={() => run.mutate()}>Save</button></div>
+        </div>
+      </div>
+    </div>
+  );
+}

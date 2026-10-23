@@ -1,8 +1,9 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Optional, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { getPlatformPrisma } from '@skoolos/db';
 import type { LeadActivity, MarketingConfig, MarketingLead } from '@skoolos/db';
 import { MailService } from '../../common/mail/mail.service';
 import { runInBackground } from '../../common/notifications/run-in-background';
+import { ReferralsService } from '../referrals';
 import {
   CreateLeadActivityDto,
   CreateLeadDto,
@@ -11,6 +12,30 @@ import {
   UpdateLeadDto,
   UpdateMarketingConfigDto,
 } from './marketing.dto';
+
+/** The JSON column, read defensively: anything that is not `{n, label}` is dropped. */
+export function heroStatsOf(raw: unknown): { n: number; label: string }[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((s): s is { n: number; label: string } =>
+      !!s && typeof s === 'object' && Number.isFinite((s as { n?: unknown }).n) && typeof (s as { label?: unknown }).label === 'string')
+    .slice(0, 4)
+    .map((s) => ({ n: Math.round(s.n), label: s.label }));
+}
+
+/**
+ * The discount as the public site should show it NOW. The switch alone is not
+ * the truth: an offer whose end has passed is off, so a forgotten countdown
+ * never keeps selling at half price.
+ */
+export function resolveDiscount(
+  c: Pick<MarketingConfig, 'discountEnabled' | 'discountPercent' | 'discountLabel' | 'discountEndsAt'>,
+  now: Date,
+): PublicMarketingConfig['discount'] {
+  const endsAt = c.discountEndsAt ? c.discountEndsAt.toISOString() : null;
+  const expired = !!c.discountEndsAt && c.discountEndsAt.getTime() <= now.getTime();
+  return { enabled: c.discountEnabled && !expired, percent: c.discountPercent, label: c.discountLabel, endsAt };
+}
 
 /** Logging one of these counts as having reached the lead. NOTE does not. */
 const CONTACT_KINDS = new Set(['CALL', 'WHATSAPP', 'EMAIL', 'MEETING']);
@@ -34,7 +59,7 @@ export interface LeadDetail extends MarketingLead {
 export class MarketingService {
   private readonly logger = new Logger(MarketingService.name);
 
-  constructor(private readonly mail: MailService) {}
+  constructor(private readonly mail: MailService, @Optional() private readonly referrals?: ReferralsService) {}
 
   /** Returns the singleton config, creating it with defaults on first read. */
   async getConfigRow(): Promise<MarketingConfig> {
@@ -52,12 +77,20 @@ export class MarketingService {
       },
       contactEmail: c.contactEmail,
       contactPhone: c.contactPhone,
+      heroStats: heroStatsOf(c.heroStats),
+      discount: resolveDiscount(c, new Date()),
     };
   }
 
   async updateConfig(dto: UpdateMarketingConfigDto): Promise<MarketingConfig> {
     const db = getPlatformPrisma();
-    const data = { ...dto, contactPhone: dto.contactPhone ?? '' };
+    const { heroStats, discountEndsAt, ...rest } = dto;
+    const data = {
+      ...rest,
+      contactPhone: dto.contactPhone ?? '',
+      ...(heroStats !== undefined ? { heroStats: heroStats.map((s) => ({ n: s.n, label: s.label.trim() })) } : {}),
+      ...(discountEndsAt !== undefined ? { discountEndsAt: discountEndsAt === null ? null : new Date(discountEndsAt) } : {}),
+    };
     return db.marketingConfig.upsert({ where: { id: 'default' }, update: data, create: data });
   }
 
@@ -81,6 +114,12 @@ export class MarketingService {
       () => this.mail.sendLeadNotification(config.contactEmail, lead),
       () => undefined,
     );
+    // Refer & Earn: a quote asked for from a promoter's link is their referral.
+    // Best-effort and after the lead exists; an unknown code is simply ignored.
+    if (dto.ref && this.referrals) {
+      const ref = dto.ref;
+      runInBackground(() => this.referrals!.attributeLead(ref, lead), () => undefined);
+    }
     return { ok: true };
   }
 

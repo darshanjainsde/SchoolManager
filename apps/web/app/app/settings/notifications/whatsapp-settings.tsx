@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { QueryError } from '@/components/ui/query-state';
+import { ApiError } from '@/lib/api';
 import { Figure, Figures, Note, Overlay } from '@/components/ui/kit';
 import { SettingsCard, SettingsSection } from '../section';
 import { messageWords, whenIst } from './labels';
@@ -96,9 +97,21 @@ export function WhatsAppSettings() {
   });
 
   if (q.isError) {
+    // 403 is the plan saying no, not a fault: WhatsApp is part of Pro.
+    const refused = q.error instanceof ApiError && q.error.status === 403;
     return (
       <SettingsSection title="WhatsApp" testId="whatsapp-card">
-        <SettingsCard><QueryError error={q.error} onRetry={q.refetch} /></SettingsCard>
+        <SettingsCard>
+          {refused ? (
+            <p className="sk-muted" data-testid="whatsapp-plan-notice">
+              WhatsApp is part of the Pro plan. Leave, cover and absence notices reach teachers and
+              families as WhatsApp messages with buttons, from the school&rsquo;s own number. Ask Sckools
+              to move the school to Pro, or to switch WhatsApp on for a trial.
+            </p>
+          ) : (
+            <QueryError error={q.error} onRetry={q.refetch} />
+          )}
+        </SettingsCard>
       </SettingsSection>
     );
   }

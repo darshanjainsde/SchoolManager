@@ -28,7 +28,7 @@ export class SendWhatsAppTestDto {
 /** SCHOOL_ADMIN only: the switch decides what every family of the school receives. */
 @Controller('manage/whatsapp-settings')
 @UseGuards(SchoolJwtGuard, RequireFeatureGuard, RolesGuard)
-@RequireFeature('MANAGEMENT')
+@RequireFeature('WHATSAPP')
 @Roles('SCHOOL_ADMIN')
 export class WhatsAppSettingsController {
   constructor(

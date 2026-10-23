@@ -5,6 +5,7 @@ import { RolesGuard } from '../../common/auth/roles.guard';
 import { Roles } from '../../common/auth/roles.decorator';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import type { SchoolJwtPayload } from '../../common/auth/jwt-payload';
+import { RequireFeature, RequireFeatureGuard } from '../features';
 import { TenantContextService } from '../tenancy';
 import { PhoneVerifyService } from './phone-verify.service';
 
@@ -21,7 +22,8 @@ export class VerifyPhoneCodeDto {
 
 /** A person's own WhatsApp number — admin, teacher or staff; never a student's login. */
 @Controller('me/phone')
-@UseGuards(SchoolJwtGuard, RolesGuard)
+@UseGuards(SchoolJwtGuard, RequireFeatureGuard, RolesGuard)
+@RequireFeature('WHATSAPP')
 @Roles('SCHOOL_ADMIN', 'TEACHER', 'STAFF')
 export class PhoneVerifyController {
   constructor(
