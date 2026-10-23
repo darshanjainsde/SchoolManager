@@ -52,7 +52,8 @@ describe('owner console · Referrals', () => {
   it('a referral task shows the real duplicate verdict and will not accept over it', async () => {
     stub();
     renderWithProviders(<ReferralsPage />);
-    expect(await screen.findByText('Already in your lead pipeline')).toBeInTheDocument();
+    expect(await screen.findByText('Duplicate')).toBeInTheDocument();
+    expect(screen.getByText(/already in your lead pipeline/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Accept' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Reject with reason' })).toBeDisabled(); // until a reason is typed
   });

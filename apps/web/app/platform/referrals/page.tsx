@@ -51,7 +51,7 @@ export default function ReferralsPage() {
     <div>
       <header className="sk-pagehead">
         <h1>Referrals</h1>
-        <p>Refer &amp; Earn: everyone who introduces schools, every school they logged, and every rupee owed. Each referral is also a lead in your pipeline.</p>
+        <p>Refer &amp; Earn: the people who introduce schools, the schools they logged, and what is owed. Every accepted referral is also a lead in your pipeline.</p>
       </header>
       <nav className="sk-tabs" aria-label="Referral sections">
         {TABS.map((t) => (
@@ -68,12 +68,31 @@ export default function ReferralsPage() {
       <style>{`
         .rf-two { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 18px; align-items: start; }
         .rf-decide { background: var(--sk-bg-2); border: 1px solid var(--sk-line); border-radius: var(--sk-r-sm); padding: 12px 14px; }
-        .rf-kv { display: grid; grid-template-columns: minmax(110px, auto) minmax(0, 1fr); gap: 6px 14px; margin: 0; font-size: 13.5px; }
+        .rf-kv { display: grid; grid-template-columns: minmax(min(100%, 110px), auto) minmax(0, 1fr); gap: 6px 14px; margin: 0; font-size: 13.5px; }
         .rf-kv dt { color: var(--sk-ink-3); }
         .rf-kv dd { margin: 0; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
         .rf-actions { display: flex; gap: 8px; flex-wrap: wrap; }
         .rf-actions .sk-btn { min-height: 40px; }
         @media (max-width: 860px) { .rf-two { grid-template-columns: 1fr; } }
+        /* A phone: the fact list is one column (a 110px label beside a 3-word
+           value was two half-empty columns), and a stacked row keeps its
+           figures on ONE line each — "7 referred · 2 live · ₹1,24,950 earned"
+           instead of six lines of number-over-caption. */
+        @media (max-width: 560px) {
+          .rf-kv { grid-template-columns: 1fr; gap: 1px 0; }
+          .rf-kv dt { margin-top: 7px; font-size: 11.5px; }
+          .rf-list .sk-rowline { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: start; }
+          .rf-list .sk-rowcell { flex: 1 1 100%; }
+          /* Figures share a line in equal parts, number over caption, so the
+             same column lines up across rows and no tile is orphaned: three
+             on Promoters (7 · 2 · ₹1,24,950), four on Payouts as a 2×2 (a
+             third was too narrow for ₹52,90,942 and broke it mid-number). A
+             figure never wraps; the part is sized so the largest fits. */
+          .rf-list .sk-rowcell[data-align="end"] .sk-rowtitle { white-space: nowrap; overflow-wrap: normal; font-size: 13px; }
+          .rf-figs3 .sk-rowcell[data-align="end"] { flex: 0 0 calc((100% - 32px) / 3); }
+          .rf-figs2 .sk-rowcell[data-align="end"] { flex: 0 0 calc((100% - 16px) / 2); }
+          .rf-figs1 .sk-rowcell[data-align="end"] { flex: 0 0 auto; }
+        }
       `}</style>
     </div>
   );
@@ -137,9 +156,10 @@ function TaskCard({ api, t, onDone }: { api: Api; t: Task; onDone: () => void })
   const sub = t.kind === 'REFERRAL' && r
     ? `${[r.area, r.city].filter(Boolean).join(', ')}${r.studentsApprox ? ` · about ${r.studentsApprox.toLocaleString('en-IN')} students` : ''}${r.planInterest ? ` · ${r.planInterest}` : ''} · referred by ${p.name} (${p.code})${r.viaLink ? ' through their link' : ''}`
     : `${[p.city, p.email, p.phoneE164].filter(Boolean).join(' · ')} · joined ${when(p.createdAt)} · ${p.referred} referral${p.referred === 1 ? '' : 's'} so far`;
-  const verdict = t.lapsed ? <span className="sk-pill" data-tone="warn">Lapsed: not accepted inside the window</span>
-    : t.duplicate ? <span className="sk-pill" data-tone="bad">{t.duplicate.kind === 'referral' ? `Another promoter holds this school${t.duplicate.on ? ` since ${when(t.duplicate.on)}` : ''}` : t.duplicate.kind === 'lead' ? 'Already in your lead pipeline' : t.duplicate.kind === 'school' ? 'Already live on Sckools' : 'Held by a lapsed referral'}</span>
-    : <span className="sk-pill" data-tone="good">No match in referrals, leads or schools</span>;
+  // A pill never wraps, so it carries one word; the sentence sits beside it as text that can.
+  const verdict = t.lapsed ? <><span className="sk-pill" data-tone="warn">Lapsed</span> not accepted inside the window</>
+    : t.duplicate ? <><span className="sk-pill" data-tone="bad">Duplicate</span> {t.duplicate.kind === 'referral' ? `another promoter holds this school${t.duplicate.on ? ` since ${when(t.duplicate.on)}` : ''}` : t.duplicate.kind === 'lead' ? 'already in your lead pipeline' : t.duplicate.kind === 'school' ? 'already live on Sckools' : 'held by a lapsed referral'}</>
+    : <><span className="sk-pill" data-tone="good">Clear</span> no match in referrals, leads or schools</>;
   return (
     <div className="sk-card">
       <div className="sk-card-h">
@@ -214,8 +234,10 @@ function Promoters({ api, enabled, onDone }: { api: Api; enabled: boolean; onDon
         <button className="sk-btn" data-variant="primary" onClick={() => setAdding(true)}>+ Add a promoter</button>
       </div>
       {list.isLoading ? <p className="sk-state">Loading promoters…</p> : list.isError ? <QueryError error={list.error} onRetry={list.refetch} /> : (
-        <div className="sk-card">
-          <RowList columns="minmax(0,1.4fr) minmax(0,1fr) auto auto auto auto auto" label="Promoters">
+        <section className="sk-card" aria-label="Promoters">
+          <div className="sk-card-h"><h3>Promoters</h3><span className="sk-muted" style={{ marginLeft: 'auto', fontSize: 12 }}>{(list.data ?? []).length} {(list.data ?? []).length === 1 ? 'person' : 'people'}</span><p className="sk-muted">Everyone with an account, their rate, and what they have brought in. Rates are set per person.</p></div>
+          <div className="sk-card-b">
+          <RowList columns="minmax(0,1.6fr) minmax(0,1fr) auto auto auto auto auto" label="Promoters" className="rf-list rf-figs3">
             {(list.data ?? []).map((p) => (
               <Row key={p.id}>
                 <Cell><RowTitle title={<>{p.name} {p.status === 'SUSPENDED' && <span className="sk-pill" data-tone="bad">paused</span>}{!p.payoutDetailsAt && <span className="sk-pill" data-tone="warn">no payout details</span>}</>} sub={`${p.code} · ${[p.email, p.phoneE164].filter(Boolean).join(' · ')} · joined ${when(p.createdAt)}`} /></Cell>
@@ -233,9 +255,10 @@ function Promoters({ api, enabled, onDone }: { api: Api; enabled: boolean; onDon
                 </Cell>
               </Row>
             ))}
-            {(list.data ?? []).length === 0 && <p className="sk-muted" style={{ padding: 16, margin: 0 }}>No promoter matches.</p>}
+            {(list.data ?? []).length === 0 && <p className="sk-muted" style={{ padding: '8px 0', margin: 0 }}>No promoter matches.</p>}
           </RowList>
-        </div>
+          </div>
+        </section>
       )}
       {adding && <AddPromoter api={api} onClose={() => setAdding(false)} onDone={() => { setAdding(false); onDone(); void list.refetch(); }} />}
       {rateFor && <SetRate api={api} p={rateFor} onClose={() => setRateFor(null)} onDone={() => { setRateFor(null); onDone(); void list.refetch(); }} />}
@@ -306,8 +329,10 @@ function ReferralsTab({ api, enabled, onDone }: { api: Api; enabled: boolean; on
         <select className="sk-input" style={{ width: 'auto' }} value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Stage"><option value="">Any stage</option>{(Object.keys(STAGE_LABEL) as ReferralStatus[]).map((s) => <option key={s} value={s}>{STAGE_LABEL[s]}</option>)}</select>
       </div>
       {list.isLoading ? <p className="sk-state">Loading referrals…</p> : list.isError ? <QueryError error={list.error} onRetry={list.refetch} /> : (
-        <div className="sk-card">
-          <RowList columns="minmax(0,1.4fr) minmax(0,1fr) minmax(0,.8fr) auto auto auto" label="Referrals">
+        <section className="sk-card" aria-label="Referrals">
+          <div className="sk-card-h"><h3>Referrals</h3><span className="sk-muted" style={{ marginLeft: 'auto', fontSize: 12 }}>{rows.length} shown</span><p className="sk-muted">Every school a promoter logged, with the lead it became. A stage move here also moves the lead.</p></div>
+          <div className="sk-card-b">
+          <RowList columns="minmax(0,1.6fr) minmax(0,1.1fr) minmax(0,.9fr) auto auto auto" label="Referrals" className="rf-list rf-figs1">
             {rows.map((r) => {
               const next = NEXT[r.status];
               return (
@@ -327,9 +352,10 @@ function ReferralsTab({ api, enabled, onDone }: { api: Api; enabled: boolean; on
                 </Row>
               );
             })}
-            {rows.length === 0 && <p className="sk-muted" style={{ padding: 16, margin: 0 }}>No referral matches.</p>}
+            {rows.length === 0 && <p className="sk-muted" style={{ padding: '8px 0', margin: 0 }}>No referral matches.</p>}
           </RowList>
-        </div>
+          </div>
+        </section>
       )}
       {live && <MarkLive api={api} r={live} onClose={() => setLive(null)} onDone={() => { setLive(null); onDone(); void list.refetch(); }} />}
       {lost && <CloseReferral api={api} r={lost} onClose={() => setLost(null)} onDone={() => { setLost(null); onDone(); void list.refetch(); }} />}
@@ -381,8 +407,10 @@ function Payouts({ api, q, onDone }: { api: Api; q: ReturnType<typeof useQuery<P
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}><button className="sk-btn" onClick={csv} disabled={rows.length === 0}>Export for the accountant</button></div>
-      <div className="sk-card">
-        <RowList columns="minmax(0,1.2fr) minmax(0,1fr) auto auto auto auto auto" label="Payouts">
+      <section className="sk-card" aria-label="Payouts">
+        <div className="sk-card-h"><h3>Payouts</h3><span className="sk-muted" style={{ marginLeft: 'auto', fontSize: 12 }}>{rows.filter((y) => y.status === 'DUE').length} due</span><p className="sk-muted">What is owed, to whom, and whether their details are ready. Mark paid with the UTR; the promoter's statement updates.</p></div>
+        <div className="sk-card-b">
+        <RowList columns="minmax(0,1.4fr) minmax(0,1fr) auto auto auto auto auto" label="Payouts" className="rf-list rf-figs2">
           {rows.map((y) => (
             <Row key={y.id}>
               <Cell><RowTitle title={y.promoter.name} sub={y.promoter.detailsComplete ? `${y.promoter.payeeName} · ${y.promoter.upi || `${y.promoter.bankAccountMasked} ${y.promoter.ifsc ?? ''}`} · PAN ${y.promoter.panMasked}${y.promoter.kycVerified ? '' : ' · not verified'}` : <span style={{ color: 'var(--sk-amber-ink)' }}>no payout details yet</span>} /></Cell>
@@ -390,13 +418,14 @@ function Payouts({ api, q, onDone }: { api: Api; q: ReturnType<typeof useQuery<P
               <Cell align="end"><RowTitle title={rupees(y.grossMinor)} sub="gross" /></Cell>
               <Cell align="end"><RowTitle title={rupees(y.tdsMinor)} sub="TDS" /></Cell>
               <Cell align="end"><RowTitle title={<b>{rupees(y.netMinor)}</b>} sub="net" /></Cell>
-              <Cell><RowTitle title={when(y.dueOn)} sub="due" /></Cell>
+              <Cell align="end"><RowTitle title={when(y.dueOn)} sub="due" /></Cell>
               <Cell>{y.status === 'PAID' ? <RowTitle title={<span className="sk-pill" data-tone="good">Paid</span>} sub={`${y.utr} · ${when(y.paidOn!)}`} /> : <button className="sk-btn" data-variant="primary" disabled={!y.promoter.detailsComplete} title={y.promoter.detailsComplete ? undefined : 'Ask the promoter for payout details first'} onClick={() => setPaying(y)}>Mark paid</button>}</Cell>
             </Row>
           ))}
-          {rows.length === 0 && <p className="sk-muted" style={{ padding: 16, margin: 0 }}>Nothing owed. Payouts appear here when a referred school is marked live.</p>}
+          {rows.length === 0 && <p className="sk-muted" style={{ padding: '8px 0', margin: 0 }}>Nothing owed. Payouts appear here when a referred school is marked live.</p>}
         </RowList>
-      </div>
+        </div>
+      </section>
       {paying && <MarkPaid api={api} y={paying} onClose={() => setPaying(null)} onDone={() => { setPaying(null); onDone(); void q.refetch(); }} />}
     </>
   );
