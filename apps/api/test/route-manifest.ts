@@ -18,6 +18,31 @@
  * this becomes a list of good intentions.
  */
 export const AUTHZ_REVIEWED: string[] = [
+  // ── Support desk (24 Oct 2026) ──────────────────────────────────────────
+  // support-authz.e2e-spec.ts: the school door admits SCHOOL_ADMIN only (401
+  // anon, 403 STUDENT/TEACHER/STAFF); the owner door admits the platform token
+  // on the owner host only (401 anon, 401 school token, 403 on a school host).
+  // support-desk.e2e-spec.ts: tenancy (a second school's admin gets 404), the
+  // status machine, private notes, look-in consent, file keys, limits, sweep.
+  "GET /manage/support/counts",
+  "GET /manage/support",
+  "POST /manage/support",
+  "GET /manage/support/:id",
+  "POST /manage/support/:id/comment",
+  "POST /manage/support/:id/confirm",
+  "POST /manage/support/:id/reopen",
+  "POST /manage/support/:id/look-in",
+  "GET /manage/support/:id/file",
+  "GET /owner/support/counts",
+  "GET /owner/support/board",
+  "GET /owner/support/tickets",
+  "GET /owner/support/:id",
+  "POST /owner/support/:id/status",
+  "POST /owner/support/:id/comment",
+  "POST /owner/support/:id/assign",
+  "PATCH /owner/support/:id",
+  "POST /owner/support/:id/open-school",
+  "GET /owner/support/:id/file",
   // Refer & Earn (23 Oct 2026): promoter-contract.e2e-spec.ts asserts the two
   // public doors are rate-limited and anonymous, every /promoter route needs a
   // promoter token (401 without, 403 for a school/platform token, suspended
