@@ -4,10 +4,14 @@
 .mkt .earn-hero { display: grid; grid-template-columns: 1.15fr .85fr; gap: 36px; align-items: center; text-align: left; }
 .mkt .earn-hero .lede { margin-left: 0; margin-right: 0; }
 .mkt .earn-promise { display: grid; gap: 10px; }
-.mkt .earn-promise div { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; box-shadow: var(--sh); display: flex; gap: 12px; align-items: flex-start; }
+/* One card per promise: icon, then the words stacked. The card is the DIRECT child only —
+   a descendant `div` selector also styled the inner text block, drawing a card inside the
+   card and laying the title beside the line instead of above it (guard: earn-css.test.ts). */
+.mkt .earn-promise > div { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; box-shadow: var(--sh); display: flex; gap: 12px; align-items: flex-start; }
+.mkt .earn-promise > div > div { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .mkt .earn-promise i { width: 36px; height: 36px; border-radius: 11px; flex: none; display: grid; place-items: center; font-size: 18px; font-style: normal; background: var(--teal-soft); }
-.mkt .earn-promise b { display: block; font-size: 14px; }
-.mkt .earn-promise span { font-size: 13px; color: var(--muted); }
+.mkt .earn-promise b { display: block; font-size: 14px; line-height: 1.35; text-wrap: balance; }
+.mkt .earn-promise span { display: block; font-size: 13px; line-height: 1.5; color: var(--muted); }
 .mkt .earn-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
 .mkt .earn-fine { margin: 14px 0 0; font-size: 13px; color: var(--muted); }
 .mkt .earn-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
