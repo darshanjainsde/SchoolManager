@@ -35,9 +35,12 @@ cited source before asserting — this is a map, not the territory.
 Sckools runs a school online on one login: a **website studio** (presets, per-section layouts, festival skins, own
 domain), an **admissions desk**, **fees and receipts**, the **register**, **timetable**, **exams, results, report
 cards and certificates**, **leave and cover**, **diary, notes, assignments, messages**, **announcements and the
-reception TV**, a **library counter**, a **jobs board**, **alumni**, and the inter-school **Events Network** — with an
-**admin console**, **teacher** and **student** portals on the web, and a **family/staff mobile app**. Plans: Basic
-(website + admissions), Standard (+ events network, blog), Pro (+ the office, staff room, app, library, jobs),
+reception TV**, a **library counter**, a **jobs board**, **alumni**, **sports**, **salaries**, a **syllabus
+tracker**, the school on **WhatsApp**, and the inter-school **Events Network** — with an **admin console**,
+**teacher** and **student** portals on the web, and a **family/staff mobile app**. Plans (Ladder v2, live since
+2026-10-24): Basic "be found" (website, admissions, network events), Standard "run the day" (+ the whole ERP, both
+apps, host events, blog), Pro "run everything" (+ fees, salary, exam hall, report cards & press, library, sports,
+jobs, alumni, syllabus, WhatsApp). **Refer & Earn** pays promoters a share of a referred school's first payment.
 priced per student per year. The platform owner runs schools, tiers, domains, leads and prices from
 `owner.sckools.com`.
 

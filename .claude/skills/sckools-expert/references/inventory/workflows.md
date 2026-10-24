@@ -1,6 +1,6 @@
 # GitHub workflows (.github/workflows)
 
-_Generated 2026-09-08 from `9be058c` (staging-site-preview → origin/staging). Do not edit by hand — run the sckools-expert-update skill._
+_Generated 2026-10-24 from `e8b337a` (docs/skills-refresh → origin/main). Do not edit by hand — run the sckools-expert-update skill._
 
 | File | Name | Triggers | Branches | Paths |
 | --- | --- | --- | --- | --- |

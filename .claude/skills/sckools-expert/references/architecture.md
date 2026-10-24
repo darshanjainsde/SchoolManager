@@ -29,7 +29,8 @@ pnpm + turbo workspace (`pnpm-workspace.yaml`: `apps/*`, `packages/*`).
 
 ## 3. Identity
 
-- Five roles: `OWNER` (platform, no schoolId), `SCHOOL_ADMIN`, `TEACHER`, `STUDENT`, `STAFF`. **There is no PARENT role** — one STUDENT login is shared by student and guardian; keep copy role-neutral.
+- Seven roles: `OWNER` (platform, no schoolId), `SCHOOL_ADMIN`, `TEACHER`, `STUDENT`, `STAFF` (staffRole OFFICE/SUPPORT/DRIVER/HELPER/SECURITY/LIBRARIAN), `ALUMNUS`, `LIBRARIAN`. **There is no PARENT role** — one STUDENT login is shared by student and guardian; keep copy role-neutral.
+- Three JWT audiences (`apps/api/src/common/auth/jwt-payload.ts`): `school`, `platform`, and `promoter` (Refer & Earn: 30-day bearer token in localStorage, HMAC-derived secret, `tokenVersion` revocation — `apps/api/src/modules/referrals/promoter-jwt.guard.ts`). Login by one-time code (email/WhatsApp OTP, `OtpService`) exists for schools (switchable) and is the only door for promoters.
 - JWT access 15 min + refresh 30 days, Argon2id passwords, lockout 5 attempts / 15 min, audiences `school` vs `platform` are non-interchangeable. Owner may impersonate a school admin (15-min single-use host-bound token; `/login?imp=`).
 - App entry gate (mobile + web `/login`): no school code; `/auth/resolve-school` finds the host from an identifier (`apps/api/src/modules/auth/internal/auth.controller.ts`).
 - Login page is the school-branded "gatehouse" (`apps/web/app/login/GatehouseLogin.tsx`).
@@ -39,15 +40,18 @@ pnpm + turbo workspace (`pnpm-workspace.yaml`: `apps/*`, `packages/*`).
 - PostgreSQL (Supabase in prod/staging; Neon/Railway/Render configs remain in the repo for history), Prisma (`packages/db/prisma/schema.prisma`), hand-written SQL migrations (`packages/db/prisma/migrations`), RLS with roles `skoolos_app` / `skoolos_platform` in prod (staging runs as `postgres`).
 - Redis: feature resolution cache (300s), rate limits, lockouts, public-site cache.
 - Storage: S3-compatible (Supabase Storage on the same project; MinIO locally) via `apps/api/src/common/storage`.
+- Platform tables (no `schoolId`, `platform_only` deny-all RLS, read through the BYPASSRLS client): `School`, `MarketingConfig`, `MarketingLead`, `LeadActivity`, `MetricRollup`, `PasswordResetToken`, `SamplePack`, `SchoolBackup`, `SchoolRestore`, and the Refer & Earn five (`Promoter`, `Referral`, `ReferralEvent`, `ReferralPayout`, `ReferralTask`). The list is asserted in `apps/api/test/rls-coverage.e2e-spec.ts`.
+- Tenant policies are sargable since `20260921_000000_sargable_tenant_policies` (the setting is cast, not the column), so the `schoolId`-leading indexes finally serve the tenant predicate.
 - Prisma client is generated per workspace; deploys land **before** the production migration is run by hand, so any reader of brand-new tables must tolerate `P2021/P2022` (`isSchemaMissing` in `apps/api/src/common/errors/prisma-errors.ts`) — see the Hall of Fame reader for the pattern.
 
 ## 5. Web app shape
 
 - `apps/web/app/page.tsx` branches on host: platform host → marketing site; tenant host → `PublicSite` (`apps/web/components/public/PublicSite.tsx`) or 404 unless the school is `LIVE`.
-- Public site rendering: sections in `apps/web/components/public/sections/`, styling in `apps/web/components/public/ps-css.ts` (a CSS string; no backticks in its comments), studio option registries in `apps/web/components/public/site-variants.ts` (section layouts, gestures, festivals, footer, custom sections, band order) and `apps/web/app/app/website/studio-catalogues.ts`.
+- Public site rendering: sections in `apps/web/components/public/sections/`, styling in `apps/web/components/public/ps-css.css`, studio option registries in `apps/web/components/public/site-variants.ts` (section layouts, gestures, festivals, footer, custom sections, band order) and `apps/web/app/app/website/studio-catalogues.ts`.
 - Marketing site on `sckools.com` is currently served as **generated static pages** (`apps/web/public/site-preview/*.html`) through host-gated rewrites in `apps/web/next.config.mjs` (see business.md) — the React marketing components (`apps/web/components/marketing`) are the previous version.
 - Admin console: `apps/web/app/app/*` with a grouped sidebar (`apps/web/app/app/nav-model.ts`); UI kit `apps/web/components/ui`; theme tokens `apps/web/app/sk-theme.css` (use `var(--sk-*)`, never literal brand hex).
-- Middleware `apps/web/middleware.ts`: www → apex normalisation on its matcher only; CSP/security headers in `next.config.mjs` (`securityHeaders`).
+- Middleware `apps/web/middleware.ts`: www → apex normalisation; owner-only routes (`/owner`, `/platform/*`) 404 on any school host and are served on the owner host and the apex; a CSP per request with object storage allowed only under `/platform`; the matcher covers the consoles plus `/promoter/*` and `/earn/*` (`console-segments.test.ts`).
+- Refer & Earn pages: `apps/web/app/earn` (public door), `apps/web/app/promoter/*` (portal, `.sk-*` look), owner tab `apps/web/app/platform/referrals`; session client `apps/web/lib/promoter-session.ts`.
 
 ## 6. Mobile app shape
 
@@ -57,7 +61,7 @@ expo-router in `apps/mobile/src/app`: `(auth)` login/reset, `(family)` tabs (hom
 
 | Environment | Branch | Web | API | DB |
 |---|---|---|---|---|
-| Production | `main` | `sckools.com`, `<slug>.sckools.com`, custom domains, `owner.sckools.com` | `api.sckools.com` | Supabase (prod) — migrations run by hand via `db-migrate.yml` `environment=production` |
+| Production | `main` | `sckools.com` (+ `/owner`, `/earn`, `/promoter`), `<slug>.sckools.com`, custom domains, `owner.sckools.com` | `api.sckools.com` | Supabase (prod) — migrations dispatched by hand via `db-migrate.yml` `environment=production` BEFORE the merge (operations.md) |
 | Staging | `staging` | `test.sckools.com`, `<slug>.test.sckools.com`, `owner.test.sckools.com` | `api.test.sckools.com` | Supabase (staging) — migrations auto-apply on push (path-filtered), demo data re-seeds |
 
 Vercel team `team_FaL8TiC55WyNQFLSZ0BcZZdU`; web project `prj_FLMNZFAll14s8xwGYZ77iulD18Pw`. Region `bom1`. School custom domains are attached to the **web** project (`apps/api/src/modules/owner/internal/hosting-provider.service.ts`). Details and runbooks: operations.md.

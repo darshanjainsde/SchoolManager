@@ -2,6 +2,16 @@
 
 Newest first. Each entry is what an update run recorded — what shipped, where, and what the expert now knows.
 
+## 2026-10-24 — production release `e8b337a` (PR #182, `feat/marketing-site-fixes` → main)
+
+- **Live on sckools.com and the production API**: the rebuilt marketing site (hero scene with real device screens, plan cards as categories, `/#/features` with 54 categorised tiles, owner-run discount + hero figures), **Plan Ladder v2** (Basic / Standard / Pro as `packages/db/src/features.ts`; every key in a tier), **Refer & Earn** (`/earn`, `/promoter`, owner `/platform/referrals`, `apps/api/src/modules/referrals`), and the owner Referrals page measured 360–1920 (`apps/web/audit/referrals.test.tsx`).
+- Production migrations applied first, from the `staging` ref: `20261022_120000_marketing_hero_discount`, `20261023_090000_refer_and_earn`, `20261023_130000_referral_task_referral_idx`. Order rule recorded in `operations.md`.
+- The plan-ladder protect script (`apps/api/scripts/plan-ladder-protect.ts`) was skipped on Darshan's call: production holds dummy data. Prices still placeholders (₹30/45/60) until set in `/platform/settings`.
+- CI had been red since Plan Ladder v2: nine e2e failures (five feature-gate fixtures assuming PRO lacks SALARY/COURSE_MANAGEMENT/PRESS/ALUMNI; route-manifest, rls-coverage, fk-indexes and tenant-aggregates guards not told about Refer & Earn). Fixed in `c71e2f9`; rules in `conventions.md`.
+- Decision 2026-10-24: keep `owner.sckools.com` (its own browser origin) even though the apex `/owner` door works.
+- Narrative refreshed for everything since the 2026-09-08 stamp (441 commits): sports wing, salary & pay, syllabus tracker, WhatsApp channel, OTP login, backups, concerns, celebrations/sessions, message report & block. Inventories regenerated.
+- Mistake-ledger ids: `pushed-onto-a-red-pr-without-the-full-e2e`, `ui-shipped-without-the-audit-harness`, `shipped-ui-below-the-product-standard` (bumped); UI ledger `pill-carries-a-sentence`, `tested-only-with-short-values` (4×), `figure-row-orphans-a-tile-on-a-phone` (4×).
+
 ## 2026-09-08 — production release `9784853` (PR #86, staging → main)
 
 - Everything from the 2026-09-07/08 entries is live on sckools.com and the production API: rebuilt marketing site (per-route static pages, indexable, sitemap), per-student pricing tag, why-switch section, student-profile class label, Hall of Fame code.

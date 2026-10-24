@@ -144,7 +144,7 @@ const stamp = `_Generated ${when.slice(0, 10)} from \`${short}\` (${branch}${ups
   const gates = {};
   for (const f of walk('apps/api/src', (p) => p.endsWith('.ts') && !p.endsWith('.spec.ts'))) for (const m of read(f).matchAll(/@RequireFeature\(\s*['"]([A-Z_]+)['"]/g)) (gates[m[1]] ??= new Set()).add(f);
   const rows = keys.map((k) => [k, basic.includes(k) ? '✅' : '—', standard.includes(k) ? '✅' : '—', pro.includes(k) ? '✅' : '—', [...(gates[k] ?? [])].join('<br>')]);
-  writeFileSync(join(OUT, 'features.md'), `# Feature keys and tiers (packages/db/src/features.ts)\n\n${stamp}Tier sets are cumulative (BASIC ⊂ STANDARD ⊂ PRO) and a \`FeatureOverride\` row can add or remove any key per school. Keys in no tier (e.g. ALUMNI, PRESS) are override-only. Resolved sets are cached in Redis for 300s (feature-resolver.service.ts).\n\n${md(rows, ['Key', 'BASIC', 'STANDARD', 'PRO', 'Gated controllers'])}\n`);
+  writeFileSync(join(OUT, 'features.md'), `# Feature keys and tiers (packages/db/src/features.ts)\n\n${stamp}Tier sets are cumulative (BASIC ⊂ STANDARD ⊂ PRO) and a \`FeatureOverride\` row can add or remove any key per school. Since Plan Ladder v2 (2026-10-22) every key is in a tier; a disabled override protects a live school from a module its plan newly carries, an enabled one is a trial above the plan. Resolved sets are cached in Redis for 300s (feature-resolver.service.ts).\n\n${md(rows, ['Key', 'BASIC', 'STANDARD', 'PRO', 'Gated controllers'])}\n`);
 }
 
 /* ── notifications ── */

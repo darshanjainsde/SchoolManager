@@ -11,10 +11,11 @@ made. Every number here was measured, and says how.
 
 ## Freshness protocol (run FIRST, every invocation)
 
-Trained at commit **`daffe40`** (`origin/staging`, 2026-08-29) — PRs #40–#43
-all merged; staging is green and every migration is applied.
+Trained at commit **`e8b337a`** (`main` = `staging`, 2026-10-24, PR #182) —
+production and staging run the same commit and every migration through
+`20261023_130000_referral_task_referral_idx` is applied to both.
 
-1. `git fetch origin && git log --oneline daffe40..origin/staging | head -30`
+1. `git fetch origin && git log --oneline e8b337a..origin/staging | head -30`
 2. Empty → current; proceed.
 3. Otherwise skim (`git show --stat`), read anything contradicting this file,
    answer from CURRENT code, then **update this file** and bump the commit
@@ -38,11 +39,13 @@ real time. So:
 | Piece | Reality | How verified |
 |---|---|---|
 | Web | Vercel `skoolos-web` → sckools.com, *.sckools.com | `apps/web`, sckool-expert |
-| API | Vercel `skoolos-api`, **region `bom1`** (Mumbai), ncc-bundled single function, `maxDuration: 60` | `apps/api/vercel.json`, `apps/api/.vercel/project.json` |
-| Database | **Supabase Postgres** — transaction pooler :6543, session pooler :5432 | `docs/DATABASE.md`; `.github/workflows/db-{backup,migrate,restore-drill}.yml` |
+| API | Vercel `skoolos-api`, **region `bom1`** (Mumbai), ncc-bundled single function, `maxDuration: 60` | `apps/api/vercel.json` |
+| Database | **Supabase Postgres** — transaction pooler :6543, session pooler :5432. Staging project ref `pnczxkyteaocpdoufwyz`; object storage is Supabase Storage on the same project (staging `S3_ENDPOINT` was found pointing at a removed project on 3 Sept 2026 — env-only fix, not re-verified) | `docs/DATABASE.md`, `CLAUDE.md`; `.github/workflows/db-{backup,migrate,restore-drill,drift}.yml` |
 | Redis | Upstash | `.env.production.example`, `common/redis` |
 | Branches | `staging` → Preview, `main` → Production | sckool-expert |
-| Cron | 3 entries: exam-reminders, notification-outbox, library-due-soon | `apps/api/vercel.json` |
+| Cron | 10 entries: exam-reminders, notification-outbox, cover-nudge ×2, fee-due-soon, library-due-soon, session-start, school-backups (daily/weekly/snapshots) | `apps/api/vercel.json` |
+| Schema drift | `db-drift.yml`: `prisma migrate status` against BOTH databases daily 06:30 IST, read-only, red when either lags the repo | `.github/workflows/db-drift.yml` |
+| Release order | production `db-migrate` dispatch (from the ref carrying the files) → wait → merge PR → Vercel builds. Learned 2026-10-24: merging first 500s every reader of a new column | `.claude/skills/sckools-expert/references/operations.md` |
 
 **The Railway path in `docs/PRODUCTION.md` is stale** — it documents API+worker
 on Railway; they are on Vercel. `apps/worker` is a stub: a health endpoint and
@@ -167,6 +170,17 @@ A third variant, same root: **`count()` called with no `where` whatsoever** —
 dashboard's 66 ms. When auditing, grep for all three shapes: unscoped
 `findMany`, relation `_count`, and bare `count()`/`aggregate()`.
 
+**Now a static guard**: `apps/api/src/common/tenant-aggregates.spec.ts` fails
+the unit run on any `_count: { select` and any bare `count()/aggregate()/groupBy()`
+outside its two allow-lists. The only relation-count allowance is
+`modules/referrals/referrals.service.ts` (Promoter/Referral are platform tables
+with no tenant to scope by). Three more guards run in the e2e job against a real
+database: `route-coverage` (every mounted route is in `test/route-manifest.ts`),
+`rls-coverage` (every tenant table has `tenant_iso`; the exact list of tables
+without `schoolId` is asserted — 14 on 2026-10-24, the five Refer & Earn tables
+included, each `platform_only`), and `fk-indexes` (no FK column without a leading
+index — it caught `ReferralTask.referralId` on 2026-10-23).
+
 **Why the #34 scoping pass missed all of them:** it searched for queries
 missing `schoolId` in a `where`. These have no `where` to inspect — the tenant
 predicate is absent somewhere the reviewer cannot see it.
@@ -175,9 +189,20 @@ predicate is absent somewhere the reviewer cannot see it.
 
 The single most important fact in this file.
 
-Every policy is `("schoolId")::text = current_setting('app.current_tenant', true)`.
-The cast is on the **column** side, so **the uuid index can never serve it**. The
-tenant predicate is always a post-scan `Filter`, never an `Index Cond`.
+Until 2026-09-21 every policy was `("schoolId")::text = current_setting('app.current_tenant', true)`.
+The cast was on the **column** side, so **the uuid index could never serve it**: the
+tenant predicate was always a post-scan `Filter`, never an `Index Cond`.
+
+**Fixed by `20260921_000000_sargable_tenant_policies`**: the SETTING is cast to uuid
+instead, so the 129 `schoolId`-leading indexes finally serve the policy. Measured on
+a 30-school, 7.2M-row Attendance copy: a section/date read 46 ms → 2 ms warm (862 →
+2 ms cold); `count(*)` under RLS alone 1,399 ms (parallel seq scan) → 31 ms (bitmap
+index scan); `ORDER BY date DESC LIMIT 50` 1,271 → 37 ms. The companion
+`20260921_010000_fk_indexes` indexed every FK column, because a referential-integrity
+check on parent delete does NOT go through RLS and read the whole child table.
+
+The rule below still stands: RLS is correctness, the explicit `schoolId` is the plan.
+The consequences as they were BEFORE the fix, kept so the reasoning survives:
 
 Consequences:
 
@@ -287,6 +312,18 @@ cannot double-send.
   neither had written. When a PR is red, check WHICH STEP failed before
   reading the failure as yours.
 
+- **A tier-ladder change silently invalidates every "a PRO school without X"
+  fixture.** Plan Ladder v2 (2026-10-22) moved SALARY, COURSE_MANAGEMENT, PRESS
+  and ALUMNI into PRO; five feature-gate e2e suites kept passing locally
+  (nobody ran them) and failed in CI for a day. `seedMinimalSchool({ tier })`
+  now exists; the "without" school is STANDARD.
+
+- **A production deploy that lands before its migration is an outage, not a
+  degrade.** Prisma selects whole rows, so one new column on `MarketingConfig`
+  would have 500'd every marketing-config read. Migrations are additive with
+  defaults and run FIRST; the merge follows. The `isSchemaMissing` degrade
+  pattern only protects readers of whole NEW tables.
+
 ---
 
 ## 6. Standing decisions
@@ -323,10 +360,12 @@ throttler. Correct amount of Redis.
 The unit suite is **mock-based**: it proves a `where` clause changed, never that
 the query returns the same rows. Every scale change clears three checks:
 
-1. **Unit** — unchanged against baseline (915 on `perf/phase3`).
-2. **e2e against real Postgres** — `pnpm --filter @skoolos/api test:e2e`,
-   including `tenant-isolation` and `rls-coverage`. Some behaviours (RLS,
-   `SKIP LOCKED`) exist only in a real database.
+1. **Unit** — unchanged against baseline (2,909 api unit tests on 2026-10-23).
+2. **e2e against real Postgres** — `pnpm --filter @skoolos/api test:e2e`
+   (37 suites / 1,610 tests, ~4 min in CI, ~17 s per suite locally with the
+   repo `.env` sourced), including `tenant-isolation`, `rls-coverage`,
+   `route-coverage`, `fk-indexes`. Some behaviours (RLS, `SKIP LOCKED`) exist
+   only in a real database.
 3. **Differential API diff** — `scripts/loadtest/diff-api.py`. Two builds, one
    database, every GET route compared byte-for-byte.
 
