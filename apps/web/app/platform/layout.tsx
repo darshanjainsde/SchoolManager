@@ -11,7 +11,8 @@ import { OWNER_HOST } from '@/lib/hosts';
 import {
   LayoutDashboard, TrendingUp, School, FileText, PlusCircle,
   Printer, Briefcase, Link2, Compass, Activity, Gauge, LogOut, Menu, X, Users, Settings, Archive,
-  PackageOpen, Handshake } from 'lucide-react';
+  PackageOpen, Handshake, LifeBuoy,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import '../sk-theme.css';
 import { cn } from '@/lib/cn';
@@ -31,12 +32,13 @@ import { ConsoleSkeleton } from '@/components/console-skeleton';
 /* Line icons, not emoji. Emoji render in the OS's own colours and sizes, so
    nine of them down a dark rail read as nine unrelated stickers rather than
    one navigation — and they are the surest tell of an unfinished interface. */
-const NAV_ITEMS: { href: string; label: string; icon: LucideIcon; badge?: 'newLeads' | 'referralTasks' }[] = [
+const NAV_ITEMS: { href: string; label: string; icon: LucideIcon; badge?: 'newLeads' | 'referralTasks' | 'supportUnanswered' }[] = [
   { href: '/platform', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/platform/leads', label: 'Leads', icon: Users, badge: 'newLeads' },
   { href: '/platform/referrals', label: 'Referrals', icon: Handshake, badge: 'referralTasks' },
   { href: '/platform/scale', label: 'Scale', icon: TrendingUp },
   { href: '/platform/schools', label: 'Schools', icon: School },
+  { href: '/platform/support', label: 'Support', icon: LifeBuoy, badge: 'supportUnanswered' },
   { href: '/platform/backups', label: 'Backups', icon: Archive },
   { href: '/platform/sample-packs', label: 'Sample packs', icon: PackageOpen },
   { href: '/platform/blog', label: 'Blog Queue', icon: FileText },
@@ -134,7 +136,15 @@ export default function PlatformLayout({ children }: { children: ReactNode }) {
     enabled: !isLogin && status === 'authed' && audience === 'platform',
     staleTime: 60_000,
   });
-  const attention = overview.data?.attention ?? {};
+  // The support badge has its own cheap count: the overview is cached for two
+  // minutes, and a school that just wrote in should not wait that long to show.
+  const supportCounts = useQuery({
+    queryKey: ['owner-support-counts'],
+    queryFn: () => probeApi.get<{ unanswered: number }>('/owner/support/counts'),
+    enabled: !isLogin && status === 'authed' && audience === 'platform',
+    staleTime: 60_000,
+  });
+  const attention: Record<string, number | undefined> = { ...(overview.data?.attention ?? {}), supportUnanswered: supportCounts.data?.unanswered };
 
   useEffect(() => {
     if (hydrated && !isLogin && (status === 'anon' || (status === 'authed' && audience !== 'platform'))) {

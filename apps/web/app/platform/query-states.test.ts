@@ -24,6 +24,7 @@ const PAGES = [
   ['dashboard', 'app/platform/page.tsx', 'overview', 'overview.data'],
   ['leads', 'app/platform/leads/page.tsx', 'leads', 'leads.data'],
   ['settings', 'app/platform/settings/page.tsx', 'config', 'form'],
+  ['support', 'app/platform/support/page.tsx', 'board', 'board.data'],
 ] as const;
 
 describe.each(PAGES)('%s page covers every query state', (_name, file, query, dataVar) => {
