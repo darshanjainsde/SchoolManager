@@ -9,7 +9,7 @@ import { SUPPORT_STATUS_LABEL, SUPPORT_STATUS_TONE, type SupportFileLink, type S
 import { useApi } from '@/lib/use-api';
 import { OWNER_HOST } from '@/lib/hosts';
 import { TicketThread } from '@/components/support/ticket-thread';
-import { hoursLeft, when } from '@/lib/support';
+import { hoursLeft, openInNewTab, when } from '@/lib/support';
 import { OWNER_MOVES } from '../desk';
 
 /**
@@ -66,9 +66,11 @@ export default function SupportTicketPage() {
     onSuccess: () => { refresh(); setRef(null); toast.success('Reference saved.'); },
     onError: fail,
   });
+  // The tab opens in the click (openInNewTab); the single-use link lands in it after the await,
+  // so a popup blocker cannot eat a link the timeline already recorded.
   const openSchool = useMutation({
-    mutationFn: () => api.post<{ url: string; expiresInSeconds: number }>(`/owner/support/${id}/open-school`, {}),
-    onSuccess: ({ url }) => { window.open(url, '_blank', 'noopener'); refresh(); toast.success('Opening the school — single-use link, valid 15 minutes. The school sees this on its timeline.'); },
+    mutationFn: () => openInNewTab(async () => (await api.post<{ url: string; expiresInSeconds: number }>(`/owner/support/${id}/open-school`, {})).url),
+    onSuccess: () => { refresh(); toast.success('Opening the school — single-use link, valid 15 minutes. The school sees this on its timeline.'); },
     onError: fail,
   });
   const fileLink = async (key: string) => {
@@ -109,7 +111,7 @@ export default function SupportTicketPage() {
               ticket={t}
               viewer="OWNER"
               busy={busy}
-              onComment={(body, _files, visibleToSchool) => comment.mutate({ body, visibleToSchool })}
+              onComment={(body, _files, visibleToSchool) => comment.mutateAsync({ body, visibleToSchool })}
               fileLink={fileLink}
             />
           </section>

@@ -59,6 +59,7 @@ describe('Report a problem', () => {
     await user.type(within(dialog).getByLabelText('What happened'), 'Pressing Print receipt shows an error.');
     await user.click(within(dialog).getByRole('button', { name: 'Blocking us today' }));
     await user.upload(within(dialog).getByTestId('report-files'), [png('a.png'), png('b.png')]);
+    await waitFor(() => expect(within(dialog).getAllByRole('button', { name: /^Remove / })).toHaveLength(2));
     await user.click(within(dialog).getByRole('checkbox', { name: /Allow Sckools to open our console/ }));
     await user.click(within(dialog).getByRole('button', { name: 'Send to Sckools' }));
 
@@ -74,21 +75,21 @@ describe('Report a problem', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('keeps only five photos and says which were dropped; a photo over 5 MB is refused by name', async () => {
+  it('keeps only five photos and says which were dropped; a photo that breaks the 4 MB budget is refused by name', async () => {
     const user = userEvent.setup({ delay: null });
     stub(async () => created());
     renderWithProviders(<ReportProblem pagePath="/app" onClose={() => {}} />);
     const dialog = await screen.findByRole('dialog');
     const files = ['1', '2', '3', '4', '5', '6'].map((n) => png(`p${n}.png`));
     await user.upload(within(dialog).getByTestId('report-files'), files);
-    expect(within(dialog).getAllByRole('button', { name: /^Remove / })).toHaveLength(5);
+    await waitFor(() => expect(within(dialog).getAllByRole('button', { name: /^Remove / })).toHaveLength(5));
     expect(within(dialog).getByText(/p6\.png — only 5 photos fit/)).toBeInTheDocument();
 
     await user.click(within(dialog).getByRole('button', { name: 'Remove p5.png' }));
     const big = new File([new Uint8Array(8)], 'huge.png', { type: 'image/png' });
     Object.defineProperty(big, 'size', { value: 6 * 1024 * 1024 });
     await user.upload(within(dialog).getByTestId('report-files'), [big]);
-    expect(within(dialog).getByText(/huge\.png is over 5 MB/)).toBeInTheDocument();
+    expect(await within(dialog).findByText(/huge\.png — the photos together must be under 4 MB/)).toBeInTheDocument();
     expect(within(dialog).getAllByRole('button', { name: /^Remove / })).toHaveLength(4);
   });
 

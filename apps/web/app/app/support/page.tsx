@@ -165,9 +165,9 @@ export default function SupportPage() {
               ticket={detail.data}
               viewer="SCHOOL"
               busy={busy}
-              onComment={(body, files) => comment.mutate({ body, files })}
+              onComment={(body, files) => comment.mutateAsync({ body, files })}
               onConfirm={() => confirm.mutate()}
-              onReopen={(body) => reopen.mutate(body)}
+              onReopen={(body) => reopen.mutateAsync(body)}
               onLookIn={(allow) => lookIn.mutate(allow)}
               fileLink={fileLink}
             />

@@ -8,7 +8,7 @@ import { ApiError } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { useHost } from '@/components/use-host';
 import { Field, Note, Overlay } from '@/components/ui/kit';
-import { IMAGE_ACCEPT, MODULE_OPTIONS, SEVERITY_OPTIONS, TYPE_OPTIONS, acceptFiles, browserHint, moduleForPath } from '@/lib/support';
+import { IMAGE_ACCEPT, MODULE_OPTIONS, SEVERITY_OPTIONS, TYPE_OPTIONS, acceptFiles, browserHint, moduleForPath, shrinkImage } from '@/lib/support';
 
 /**
  * REPORT A PROBLEM — the one door a school admin has to Sckools, reachable
@@ -67,7 +67,7 @@ export function ReportProblem({ pagePath, onClose, onCreated }: {
         return;
       }
       if (e instanceof ApiError) {
-        if (e.status === 413) { setErrors((x) => ({ ...x, files: 'One of the photos is too large. Each one must be under 5 MB.' })); return; }
+        if (e.status === 413) { setErrors((x) => ({ ...x, files: 'The photos together must be under 4 MB. Remove one, or attach smaller ones.' })); return; }
         if (e.status === 429) { setServerNote(e.message || 'Your school has reached the daily limit for new tickets. Add to an existing one instead.'); return; }
         setServerNote(e.message || 'That could not be sent. Please try again.');
         return;
@@ -138,17 +138,19 @@ export function ReportProblem({ pagePath, onClose, onCreated }: {
         </Field>
 
         <div className="sk-field" data-invalid={errors.files ? '' : undefined}>
-          <span className="sk-lab" id="sup-files-label">Photos · up to 5</span>
+          <span className="sk-lab" id="sup-files-label">Photos · up to 5, 4 MB together</span>
           <div className="sk-sup-attach" aria-labelledby="sup-files-label">
             <label className="sk-btn sk-press" data-size="sm">
               <ImageIcon size={14} aria-hidden="true" /> Add photos
               <input
                 id="sup-files" type="file" accept={IMAGE_ACCEPT} multiple className="sk-sup-fileinput" aria-label="Add photos" data-testid="report-files"
-                onChange={(e) => {
-                  const { kept, dropped } = acceptFiles(files, Array.from(e.target.files ?? []));
+                onChange={async (e) => {
+                  const picked = Array.from(e.target.files ?? []);
+                  e.target.value = '';
+                  const small = await Promise.all(picked.map(shrinkImage));
+                  const { kept, dropped } = acceptFiles(files, small);
                   setFiles(kept);
                   setErrors((x) => ({ ...x, files: dropped.length ? dropped.join('; ') : undefined }));
-                  e.target.value = '';
                 }}
               />
             </label>

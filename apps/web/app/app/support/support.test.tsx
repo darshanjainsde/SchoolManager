@@ -120,6 +120,49 @@ describe('the school’s Help page', () => {
     expect(fd.getAll('files')).toHaveLength(1);
   });
 
+  it('a failed send keeps the words and photos for another try', async () => {
+    const user = userEvent.setup({ delay: null });
+    const stub = api({ '/manage/support/counts': COUNTS, '/manage/support/t1': detail(), '/manage/support': [row()] });
+    stub.postForm.mockRejectedValueOnce(new Error('The file store is unreachable right now.'));
+    (useApi as ReturnType<typeof vi.fn>).mockReturnValue(stub);
+    renderWithProviders(<SupportPage />);
+    await user.click(await screen.findByTestId('ticket-t1'));
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByLabelText('Write to Sckools'), 'Done — still fails.');
+    await user.upload(within(dialog).getByTestId('reply-files'), [new File([new Uint8Array(8)], 'again.png', { type: 'image/png' })]);
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Remove again.png' })).toBeInTheDocument());
+    await user.click(within(dialog).getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(stub.postForm).toHaveBeenCalled());
+    expect((within(dialog).getByLabelText('Write to Sckools') as HTMLTextAreaElement).value).toBe('Done — still fails.');
+    expect(within(dialog).getByRole('button', { name: 'Remove again.png' })).toBeInTheDocument();
+  });
+
+  it('reopen needs three characters before it can be sent', async () => {
+    const user = userEvent.setup({ delay: null });
+    const stub = api({ '/manage/support/counts': COUNTS, '/manage/support/t1': detail({ status: 'RESOLVED', canReopen: true, canConfirm: true }), '/manage/support': [row({ status: 'RESOLVED' })] });
+    (useApi as ReturnType<typeof vi.fn>).mockReturnValue(stub);
+    renderWithProviders(<SupportPage />);
+    await user.click(await screen.findByTestId('ticket-t1'));
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByLabelText('Say what is still wrong'), 'no');
+    expect(within(dialog).getByRole('button', { name: 'Reopen' })).toBeDisabled();
+    await user.type(within(dialog).getByLabelText('Say what is still wrong'), 'pe');
+    expect(within(dialog).getByRole('button', { name: 'Reopen' })).toBeEnabled();
+  });
+
+  it('a closed ticket with live consent still shows the switch, so the school can withdraw it', async () => {
+    (useApi as ReturnType<typeof vi.fn>).mockReturnValue(api({
+      '/manage/support/counts': COUNTS,
+      '/manage/support/t1': detail({ status: 'CLOSED', lookInUntil: new Date(Date.now() + 10 * 3_600_000).toISOString() }),
+      '/manage/support': [row({ status: 'CLOSED' })],
+    }));
+    const user = userEvent.setup({ delay: null });
+    renderWithProviders(<SupportPage />);
+    await user.click(await screen.findByTestId('ticket-t1'));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('checkbox', { name: /Allow Sckools to open our console/ })).toBeChecked();
+  });
+
   it('a failed load shows the error with a retry, never the empty copy; an empty list points at Report a problem', async () => {
     (useApi as ReturnType<typeof vi.fn>).mockReturnValue(api({ '/manage/support/counts': COUNTS, '/manage/support': new Error('boom') }));
     const first = renderWithProviders(<SupportPage />);

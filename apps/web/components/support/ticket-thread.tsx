@@ -5,7 +5,7 @@ import {
   SUPPORT_MODULE_LABEL, SUPPORT_SEVERITY_LABEL, SUPPORT_STATUS_LABEL, SUPPORT_STATUS_LABEL_SCHOOL, SUPPORT_STATUS_TONE,
   SUPPORT_TICKET_TYPE_LABEL, type SupportAttachment, type SupportTicketDetail,
 } from '@skoolos/types';
-import { IMAGE_ACCEPT, acceptFiles, hoursLeft, when } from '@/lib/support';
+import { IMAGE_ACCEPT, acceptFiles, hoursLeft, openInNewTab, shrinkImage, when } from '@/lib/support';
 
 /**
  * ONE TICKET'S THREAD — shared by the school's Help page and the owner's desk,
@@ -21,9 +21,10 @@ export function TicketThread({ ticket, viewer, busy, onComment, onConfirm, onReo
   ticket: SupportTicketDetail;
   viewer: 'SCHOOL' | 'OWNER';
   busy?: boolean;
-  onComment: (body: string, files: File[], visibleToSchool: boolean) => void;
+  /** Resolve when the server has it; the composer clears only then, so a failed send loses nothing. */
+  onComment: (body: string, files: File[], visibleToSchool: boolean) => Promise<unknown>;
   onConfirm?: () => void;
-  onReopen?: (body: string) => void;
+  onReopen?: (body: string) => Promise<unknown>;
   onLookIn?: (allow: boolean) => void;
   /** Resolves a stored key to a short-lived link; the thread opens it in a new tab. */
   fileLink: (key: string) => Promise<string>;
@@ -37,23 +38,22 @@ export function TicketThread({ ticket, viewer, busy, onComment, onConfirm, onReo
   const reopening = school && ticket.canReopen && (ticket.status === 'RESOLVED' || ticket.status === 'CLOSED');
   const closedForGood = school && ticket.status === 'CLOSED' && !ticket.canReopen;
   const canWrite = !closedForGood;
-
-  const send = () => {
-    const text = body.trim();
-    if (!text) return;
-    if (reopening && onReopen) onReopen(text);
-    else onComment(text, files, !privateNote);
-    setBody(''); setFiles([]); setFileNote(null); setPrivateNote(false);
-  };
-
-  const open = async (a: SupportAttachment) => {
-    try {
-      const url = await fileLink(a.key);
-      window.open(url, '_blank', 'noopener,noreferrer');
-    } catch { /* the toast is the caller's */ }
-  };
-
   const lookIn = hoursLeft(ticket.lookInUntil);
+  const tooShort = reopening && body.trim().length < 3;
+
+  const send = async () => {
+    const text = body.trim();
+    if (!text || tooShort) return;
+    try {
+      if (reopening && onReopen) await onReopen(text);
+      else await onComment(text, files, !privateNote);
+      setBody(''); setFiles([]); setFileNote(null); setPrivateNote(false);
+    } catch { /* kept: the words and photos stay for another try; the toast is the caller's */ }
+  };
+
+  const open = (a: SupportAttachment) => {
+    void openInNewTab(() => fileLink(a.key)).catch(() => { /* the toast is the caller's */ });
+  };
 
   return (
     <div className="sk-conthread" data-testid="ticket-thread">
@@ -136,10 +136,12 @@ export function TicketThread({ ticket, viewer, busy, onComment, onConfirm, onReo
                 <ImageIcon size={14} aria-hidden="true" /> Add photos
                 <input
                   type="file" accept={IMAGE_ACCEPT} multiple className="sk-sup-fileinput" aria-label="Add photos" data-testid="reply-files"
-                  onChange={(e) => {
-                    const { kept, dropped } = acceptFiles(files, Array.from(e.target.files ?? []));
-                    setFiles(kept); setFileNote(dropped.length ? dropped.join('; ') : null);
+                  onChange={async (e) => {
+                    const picked = Array.from(e.target.files ?? []);
                     e.target.value = '';
+                    const small = await Promise.all(picked.map(shrinkImage));
+                    const { kept, dropped } = acceptFiles(files, small);
+                    setFiles(kept); setFileNote(dropped.length ? dropped.join('; ') : null);
                   }}
                 />
               </label>
@@ -160,7 +162,7 @@ export function TicketThread({ ticket, viewer, busy, onComment, onConfirm, onReo
               </label>
             )}
             <span className="sp" style={{ flex: 1 }} />
-            <button type="button" className="sk-btn sk-press" data-variant="primary" disabled={busy || !body.trim()} onClick={send}>
+            <button type="button" className="sk-btn sk-press" data-variant="primary" disabled={busy || !body.trim() || tooShort} onClick={() => void send()}>
               <Send size={14} aria-hidden="true" /> {reopening ? 'Reopen' : privateNote ? 'Add note' : 'Send'}
             </button>
           </div>
@@ -171,7 +173,8 @@ export function TicketThread({ ticket, viewer, busy, onComment, onConfirm, onReo
         <p className="sk-state" style={{ margin: 0 }}>This ticket is closed. If it happens again, report a new problem and mention {ticket.ticketNo}.</p>
       )}
 
-      {school && onLookIn && ticket.status !== 'CLOSED' && (
+      {/* Shown while consent is live even on a closed ticket, so it can always be withdrawn. */}
+      {school && onLookIn && (ticket.status !== 'CLOSED' || !!lookIn) && (
         <label className="sk-sup-lookin" data-on={lookIn ? '' : undefined}>
           <input type="checkbox" checked={!!lookIn} disabled={busy} onChange={(e) => onLookIn(e.target.checked)} />
           <ShieldCheck size={16} aria-hidden="true" />
