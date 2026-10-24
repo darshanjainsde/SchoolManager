@@ -29,7 +29,6 @@ jest.mock('@skoolos/db', () => ({
   getPlatformPrisma: () => tx,
 }));
 
-// eslint-disable-next-line import/first
 import { SupportService } from './support.service';
 
 const code = (e: unknown) => ((e as ApiError).getResponse() as { code: string }).code;
