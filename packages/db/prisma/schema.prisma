@@ -478,6 +478,8 @@ model School {
   onboardingImports      OnboardingImport[]
   concerns               Concern[]
   concernComments        ConcernComment[]
+  supportTickets         SupportTicket[]
+  supportTicketEntries   SupportTicketEntry[]
   classTeacherLog        ClassTeacherAssignment[]
   emailDeliveries        EmailDelivery[]
   emailSuppressions      EmailSuppression[]
@@ -613,6 +615,8 @@ model User {
   impersonationTokens ImpersonationToken[]
   concernsRaised      Concern[]                @relation("ConcernRaisedBy")
   concernComments     ConcernComment[]
+  supportTicketsRaised SupportTicket[]          @relation("SupportTicketRaisedBy")
+  supportTicketEntries SupportTicketEntry[]
   classTeacherChanges ClassTeacherAssignment[] @relation("ClassTeacherChangedBy")
 
   @@unique([schoolId, email])
@@ -5420,6 +5424,86 @@ model ConcernComment {
 
   @@index([schoolId, concernId, createdAt])
   @@index([concernId])
+  @@index([authorId])
+}
+
+/// THE SUPPORT DESK — a school admin reports a problem with Sckools itself;
+/// the owner answers it from the owner console; the school watches every move.
+/// Tenant table under RLS (the school reads its own); the owner reads across
+/// schools through the platform client, as it does print orders.
+/// See docs/superpowers/specs/2026-10-24-support-desk-design.md.
+model SupportTicket {
+  id                   String               @id @default(uuid()) @db.Uuid
+  schoolId             String               @db.Uuid
+  /// One global sequence (SK-000142): the owner talks about tickets across schools.
+  number               Int                  @unique @default(autoincrement())
+  raisedById           String               @db.Uuid
+  /// BUG | QUESTION | DATA_FIX | BILLING | IDEA — SUPPORT_TICKET_TYPES (@skoolos/types).
+  type                 String
+  /// Which part of Sckools — SUPPORT_MODULES, mirrors the admin nav.
+  module               String
+  /// BLOCKING | ANNOYING | SUGGESTION — SUPPORT_SEVERITIES.
+  severity             String
+  title                String
+  body                 String
+  /// Private storage keys under support/<schoolId>/<ticketId>/.
+  attachmentKeys       String[]             @default([])
+  /// What the console captured on its own: { pagePath, tier, browser, appVersion }.
+  context              Json?
+  /// OPEN | ACKNOWLEDGED | IN_PROGRESS | WAITING_ON_SCHOOL | RESOLVED | CLOSED — SUPPORT_STATUSES.
+  status               String               @default("OPEN")
+  /// The platform user who took it. Attribution, not a relation: the owner is
+  /// a platform user (schoolId null) and this table is tenant-scoped.
+  assignedOwnerId      String?              @db.Uuid
+  /// While in the future, the school has allowed Sckools to open its console.
+  lookInUntil          DateTime?
+  /// The owner's own reference (a GitHub issue number). Never shown to the school.
+  externalRef          String?
+  acknowledgedAt       DateTime?
+  resolvedAt           DateTime?
+  closedAt             DateTime?
+  reopenedAt           DateTime?
+  lastActivityAt       DateTime             @default(now())
+  /// The two sides' last moves. "Unanswered" = school moved after the owner did.
+  lastSchoolActivityAt DateTime             @default(now())
+  lastOwnerActivityAt  DateTime?
+  createdAt            DateTime             @default(now())
+  school               School               @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  raisedBy             User                 @relation("SupportTicketRaisedBy", fields: [raisedById], references: [id], onDelete: Cascade)
+  entries              SupportTicketEntry[]
+
+  @@index([schoolId, status, lastActivityAt])
+  /// The owner's board reads every school at once.
+  @@index([status, lastActivityAt])
+  @@index([raisedById])
+}
+
+/// One entry on a ticket's timeline: a reply the school sees, a private owner
+/// note, a status move, or a system line (consent given, console opened,
+/// auto-closed). One table, so the story stays in order.
+model SupportTicketEntry {
+  id              String        @id @default(uuid()) @db.Uuid
+  schoolId        String        @db.Uuid
+  ticketId        String        @db.Uuid
+  /// Null for SYSTEM entries, and for an owner entry (platform user, no FK across the tenant boundary).
+  authorId        String?       @db.Uuid
+  /// SCHOOL | OWNER | SYSTEM
+  authorKind      String
+  /// Shown beside the entry; snapshotted so a renamed or deleted login keeps its line.
+  authorName      String?
+  body            String
+  attachmentKeys  String[]      @default([])
+  /// False = a note only the owner sees. Read on the way OUT for a school viewer.
+  visibleToSchool Boolean       @default(true)
+  statusFrom      String?
+  statusTo        String?
+  createdAt       DateTime      @default(now())
+  school          School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  ticket          SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author          User?         @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([schoolId, ticketId, createdAt])
+  @@index([ticketId])
   @@index([authorId])
 }
 

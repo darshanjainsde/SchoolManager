@@ -387,6 +387,18 @@ export type ErrorCode =
   | 'CHAPTER_NOT_FOUND'
   /** Syllabus: pair with 403 — the teacher does not teach this subject here */
   | 'SUBJECT_NOT_OWNED'
+  // ─── Support desk ──────────────────────────────────────────────────────────
+  /** An owner status move the machine does not allow (CLOSED → anything, a
+   *  backwards hop). Pair with 409. The desk only offers legal moves, so this
+   *  is a stale screen or a hand-written request. */
+  | 'SUPPORT_ILLEGAL_MOVE'
+  /** A school raised more tickets today than the per-school cap. 429. */
+  | 'SUPPORT_DAILY_LIMIT'
+  /** "Open as this school" without live consent from the school. 409. */
+  | 'SUPPORT_LOOK_IN_REQUIRED'
+  /** Reopen asked for outside the window after Resolved, or on a ticket that
+   *  is not resolved or closed. 400. */
+  | 'SUPPORT_REOPEN_WINDOW'
   | 'INTERNAL';
 
 export interface ApiErrorBody {

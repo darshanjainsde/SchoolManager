@@ -205,6 +205,8 @@ describe('shared portal contracts', () => {
       'SESSION_STARTED',
       // The sports desk: a fixture, a result, a record — one row per player.
       'SPORTS_NOTICE',
+      // The support desk: Sckools answered a school's ticket — to the admin who raised it.
+      'SUPPORT_UPDATE',
     ]);
   });
 

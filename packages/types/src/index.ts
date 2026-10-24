@@ -621,7 +621,7 @@ export interface MessageBlockResult {
 // HolidayTypeValue above, both also String columns).
 
 /** The events that write a `NotificationOutbox` row today. */
-export const NOTIFICATION_OUTBOX_KINDS = ['RESULT_PUBLISHED', 'EXAM_SCHEDULED', 'ASSIGNMENT_POSTED', 'MESSAGE_RECEIVED', 'LIBRARY_NOTICE', 'SESSION_STARTED', 'SPORTS_NOTICE', 'FEE_VERIFIED', 'FEE_REJECTED', 'FEE_DUE', 'LEAVE_APPLIED', 'LEAVE_DECIDED', 'COVER_ASSIGNED', 'CONCERN_RAISED', 'CONCERN_REPLIED', 'CONCERN_RESOLVED', 'LEAVE_CANCELLED', 'COVER_CANCELLED', 'COVER_UNFILLED', 'COVER_BATCH', 'MESSAGE_REPORTED'] as const;
+export const NOTIFICATION_OUTBOX_KINDS = ['RESULT_PUBLISHED', 'EXAM_SCHEDULED', 'ASSIGNMENT_POSTED', 'MESSAGE_RECEIVED', 'LIBRARY_NOTICE', 'SESSION_STARTED', 'SPORTS_NOTICE', 'FEE_VERIFIED', 'FEE_REJECTED', 'FEE_DUE', 'LEAVE_APPLIED', 'LEAVE_DECIDED', 'COVER_ASSIGNED', 'CONCERN_RAISED', 'CONCERN_REPLIED', 'CONCERN_RESOLVED', 'LEAVE_CANCELLED', 'COVER_CANCELLED', 'COVER_UNFILLED', 'COVER_BATCH', 'MESSAGE_REPORTED', 'SUPPORT_UPDATE'] as const;
 export type NotificationOutboxKind = (typeof NOTIFICATION_OUTBOX_KINDS)[number];
 
 /**
@@ -691,6 +691,9 @@ export const NOTIFICATION_KINDS = [
   'COVER_ASSIGNED',
   // A teacher or family reported a message thread — to every school admin.
   'MESSAGE_REPORTED',
+  // The support desk: Sckools picked up, answered, moved or resolved a ticket
+  // the school admin raised — to that admin only. Links to the ticket.
+  'SUPPORT',
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 
@@ -1975,3 +1978,162 @@ export interface StudentSyllabusSubjectDetail {
   year: SyllabusYear | null;
   chapters: StudentSyllabusChapter[];
 }
+
+/* ── The Support Desk ───────────────────────────────────────────────────────
+   A school admin reports a problem with Sckools itself (words, photos, the
+   diagnostics the console captured); the owner answers it school-wise; the
+   school watches every move. Spec: docs/superpowers/specs/2026-10-24-support-desk-design.md */
+
+export const SUPPORT_TICKET_TYPES = ['BUG', 'QUESTION', 'DATA_FIX', 'BILLING', 'IDEA'] as const;
+export type SupportTicketType = (typeof SUPPORT_TICKET_TYPES)[number];
+export const SUPPORT_TICKET_TYPE_LABEL: Record<SupportTicketType, string> = {
+  BUG: 'Something broke', QUESTION: 'A question', DATA_FIX: 'Fix our data', BILLING: 'Billing', IDEA: 'An idea',
+};
+
+/** Plain words, never P1/P2: the admin says how much it hurts, not how it is triaged. */
+export const SUPPORT_SEVERITIES = ['BLOCKING', 'ANNOYING', 'SUGGESTION'] as const;
+export type SupportSeverity = (typeof SUPPORT_SEVERITIES)[number];
+export const SUPPORT_SEVERITY_LABEL: Record<SupportSeverity, string> = {
+  BLOCKING: 'Blocking us today', ANNOYING: 'Annoying', SUGGESTION: 'Suggestion',
+};
+
+/** Mirrors the admin nav, so "Fees" on a ticket is the same Fees the admin opened. */
+export const SUPPORT_MODULES = [
+  'WEBSITE', 'BLOG', 'EVENTS', 'ENQUIRIES', 'CONCERNS', 'STUDENTS', 'TEACHERS', 'STAFF', 'CLASSES',
+  'ATTENDANCE', 'LEAVE', 'TIMETABLE', 'SYLLABUS', 'EXAMS', 'PRESS', 'FEES', 'PAY', 'LIBRARY', 'SPORTS',
+  'ANNOUNCEMENTS', 'ALUMNI', 'MESSAGES', 'SETTINGS', 'LOGIN', 'APP', 'OTHER',
+] as const;
+export type SupportModule = (typeof SUPPORT_MODULES)[number];
+export const SUPPORT_MODULE_LABEL: Record<SupportModule, string> = {
+  WEBSITE: 'Website', BLOG: 'Blog', EVENTS: 'Events', ENQUIRIES: 'Enquiries', CONCERNS: 'Complaint Box',
+  STUDENTS: 'Students', TEACHERS: 'Teachers', STAFF: 'Staff', CLASSES: 'Classes', ATTENDANCE: 'Attendance',
+  LEAVE: 'Leave', TIMETABLE: 'Timetable', SYLLABUS: 'Syllabus', EXAMS: 'Exams & results', PRESS: 'Reports & documents',
+  FEES: 'Fees', PAY: 'Pay', LIBRARY: 'Library', SPORTS: 'Sports', ANNOUNCEMENTS: 'Announcements', ALUMNI: 'Alumni',
+  MESSAGES: 'Messages', SETTINGS: 'Settings', LOGIN: 'Logging in', APP: 'The mobile app', OTHER: 'Something else',
+};
+
+export const SUPPORT_STATUSES = ['OPEN', 'ACKNOWLEDGED', 'IN_PROGRESS', 'WAITING_ON_SCHOOL', 'RESOLVED', 'CLOSED'] as const;
+export type SupportStatus = (typeof SUPPORT_STATUSES)[number];
+/** The owner's wording. */
+export const SUPPORT_STATUS_LABEL: Record<SupportStatus, string> = {
+  OPEN: 'Open', ACKNOWLEDGED: 'Acknowledged', IN_PROGRESS: 'In progress',
+  WAITING_ON_SCHOOL: 'Waiting on school', RESOLVED: 'Resolved', CLOSED: 'Closed',
+};
+/** The school's wording: the same state read from their side of the desk. */
+export const SUPPORT_STATUS_LABEL_SCHOOL: Record<SupportStatus, string> = {
+  OPEN: 'Open', ACKNOWLEDGED: 'Picked up', IN_PROGRESS: 'In progress',
+  WAITING_ON_SCHOOL: 'Waiting on you', RESOLVED: 'Resolved', CLOSED: 'Closed',
+};
+export const SUPPORT_STATUS_TONE: Record<SupportStatus, 'info' | 'warn' | 'good' | 'neutral'> = {
+  OPEN: 'info', ACKNOWLEDGED: 'info', IN_PROGRESS: 'info', WAITING_ON_SCHOOL: 'warn', RESOLVED: 'good', CLOSED: 'neutral',
+};
+
+/** After Resolved: the school may reopen for this many days; after this many quiet days it closes itself. */
+export const SUPPORT_REOPEN_DAYS = 14;
+export const SUPPORT_AUTO_CLOSE_DAYS = 7;
+/** How long a school's "let Sckools look" consent lasts. */
+export const SUPPORT_LOOK_IN_HOURS = 48;
+export const SUPPORT_MAX_FILES = 5;
+/**
+ * The whole request — every photo together — must fit under the platform's
+ * body cap: apps/api is one Vercel function, which refuses bodies over 4.5 MB
+ * before the app sees them. 4 MB leaves room for the form fields and multipart
+ * framing. The web form shrinks photos to fit; the API states the same budget.
+ */
+export const SUPPORT_MAX_REQUEST_BYTES = 4 * 1024 * 1024;
+export const SUPPORT_MAX_FILE_BYTES = SUPPORT_MAX_REQUEST_BYTES;
+/** One global sequence: the owner talks about tickets across schools. */
+export function supportTicketNo(n: number): string {
+  return `SK-${String(n).padStart(6, '0')}`;
+}
+
+export type SupportAuthorKind = 'SCHOOL' | 'OWNER' | 'SYSTEM';
+
+export interface SupportAttachment { key: string; name: string }
+
+/** What the console captured on its own when the ticket was raised. */
+export interface SupportTicketContext {
+  pagePath: string | null;
+  tier: string;
+  browser: string | null;
+  appVersion: string | null;
+}
+
+export interface SupportTicketRow {
+  id: string;
+  number: number;
+  ticketNo: string;
+  type: SupportTicketType;
+  module: SupportModule;
+  severity: SupportSeverity;
+  title: string;
+  status: SupportStatus;
+  createdAt: string;
+  lastActivityAt: string;
+  lastSchoolActivityAt: string;
+  lastOwnerActivityAt: string | null;
+  resolvedAt: string | null;
+  closedAt: string | null;
+  reopenedAt: string | null;
+  /** The school moved last and Sckools has not answered since. */
+  unanswered: boolean;
+  lookInUntil: string | null;
+  /** Entries the asking side may see. */
+  entryCount: number;
+  raisedBy: { name: string };
+  /** Present on the owner's side only; null on the school's own list. */
+  school: { id: string; name: string; slug: string; tier: string } | null;
+}
+
+export interface SupportEntryRow {
+  id: string;
+  authorKind: SupportAuthorKind;
+  authorName: string | null;
+  body: string;
+  attachments: SupportAttachment[];
+  visibleToSchool: boolean;
+  statusFrom: SupportStatus | null;
+  statusTo: SupportStatus | null;
+  createdAt: string;
+}
+
+export interface SupportTicketDetail extends SupportTicketRow {
+  body: string;
+  attachments: SupportAttachment[];
+  context: SupportTicketContext | null;
+  entries: SupportEntryRow[];
+  /** RESOLVED or CLOSED, inside the reopen window. */
+  canReopen: boolean;
+  /** RESOLVED — the school may close it. */
+  canConfirm: boolean;
+  assignedTo: { id: string; name: string } | null;
+  externalRef: string | null;
+  /** Other schools' open tickets on the same module in the last 7 days — the "three schools said Fees" signal. */
+  sameModuleOpen: number;
+}
+
+export interface SupportSchoolCounts { open: number; waitingOnYou: number; closed: number }
+
+export interface SupportOwnerCounts {
+  unanswered: number;
+  /** Unanswered for more than 24 hours. */
+  pastDay: number;
+  inProgress: number;
+  waitingOnSchool: number;
+  open: number;
+}
+
+export interface SupportBoardRow {
+  schoolId: string;
+  name: string;
+  slug: string;
+  tier: string;
+  open: number;
+  waitingOnSchool: number;
+  oldestUnansweredAt: string | null;
+  oldestUnansweredTitle: string | null;
+}
+
+export interface SupportBoard { counts: SupportOwnerCounts; schools: SupportBoardRow[] }
+
+export interface SupportFileLink { url: string; expiresInSeconds: number; name: string }

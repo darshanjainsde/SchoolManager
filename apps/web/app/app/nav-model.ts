@@ -29,7 +29,7 @@ import {
   Wallet,
   Receipt,
   CalendarRange,
-  UserRound, FileSpreadsheet } from 'lucide-react';
+  UserRound, FileSpreadsheet, LifeBuoy } from 'lucide-react';
 
 /**
  * The admin sidebar's shape — approved 2 Sept 2026 after the flat list hit 22
@@ -140,6 +140,8 @@ export const NAV_MODEL: NavEntry[] = [
   // The person's own page — name, password, WhatsApp number, what reaches
   // them. Above Settings because Settings is the school's, this is theirs.
   { kind: 'item', item: { href: '/app/profile', label: 'My profile', icon: UserRound } },
+  // The support desk: every tier, no feature gate — a school on BASIC can break too.
+  { kind: 'item', item: { href: '/app/support', label: 'Help', icon: LifeBuoy } },
   { kind: 'item', item: { href: '/app/settings', label: 'Settings', icon: Settings, requiredFeature: 'MANAGEMENT' } },
 ];
 

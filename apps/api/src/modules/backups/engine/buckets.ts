@@ -198,6 +198,8 @@ export const BUCKET_OF: Readonly<Record<string, Bucket>> = {
   /* ── day: families and the front desk ─────────────────────────────────── */
   Concern: 'day',
   ConcernComment: 'day',
+  SupportTicket: 'day',
+  SupportTicketEntry: 'day',
   Enquiry: 'day',
   EnquiryNote: 'day',
   Event: 'day',
