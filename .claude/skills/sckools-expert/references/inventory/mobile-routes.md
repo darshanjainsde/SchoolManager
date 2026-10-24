@@ -1,8 +1,8 @@
 # Mobile routes (apps/mobile/src/app, expo-router)
 
-_Generated 2026-09-08 from `9be058c` (staging-site-preview → origin/staging). Do not edit by hand — run the sckools-expert-update skill._
+_Generated 2026-10-24 from `e8b337a` (docs/skills-refresh → origin/main). Do not edit by hand — run the sckools-expert-update skill._
 
-49 route files. `(family)` = the STUDENT login shared by student and guardian; `(staff)` = SCHOOL_ADMIN / TEACHER / STAFF.
+101 route files. `(family)` = the STUDENT login shared by student and guardian; `(staff)` = SCHOOL_ADMIN / TEACHER / STAFF.
 
 | Route | File |
 | --- | --- |
@@ -12,16 +12,27 @@ _Generated 2026-09-08 from `9be058c` (staging-site-preview → origin/staging). 
 | /(family)/_layout | apps/mobile/src/app/(family)/_layout.tsx |
 | /(family)/(tabs)/_layout | apps/mobile/src/app/(family)/(tabs)/_layout.tsx |
 | /(family)/(tabs)/attendance | apps/mobile/src/app/(family)/(tabs)/attendance.tsx |
+| /(family)/(tabs)/fees | apps/mobile/src/app/(family)/(tabs)/fees.tsx |
 | /(family)/(tabs)/home/_layout | apps/mobile/src/app/(family)/(tabs)/home/_layout.tsx |
 | /(family)/(tabs)/home/assignments | apps/mobile/src/app/(family)/(tabs)/home/assignments.tsx |
+| /(family)/(tabs)/home/birthdays | apps/mobile/src/app/(family)/(tabs)/home/birthdays.tsx |
+| /(family)/(tabs)/home/concerns | apps/mobile/src/app/(family)/(tabs)/home/concerns.tsx |
+| /(family)/(tabs)/home/concerns/[id] | apps/mobile/src/app/(family)/(tabs)/home/concerns/[id].tsx |
 | /(family)/(tabs)/home/diary | apps/mobile/src/app/(family)/(tabs)/home/diary.tsx |
 | /(family)/(tabs)/home/holidays | apps/mobile/src/app/(family)/(tabs)/home/holidays.tsx |
 | /(family)/(tabs)/home/index | apps/mobile/src/app/(family)/(tabs)/home/index.tsx |
+| /(family)/(tabs)/home/library | apps/mobile/src/app/(family)/(tabs)/home/library.tsx |
 | /(family)/(tabs)/home/messages | apps/mobile/src/app/(family)/(tabs)/home/messages.tsx |
 | /(family)/(tabs)/home/messages/[threadId] | apps/mobile/src/app/(family)/(tabs)/home/messages/[threadId].tsx |
 | /(family)/(tabs)/home/notices | apps/mobile/src/app/(family)/(tabs)/home/notices.tsx |
 | /(family)/(tabs)/home/notifications | apps/mobile/src/app/(family)/(tabs)/home/notifications.tsx |
+| /(family)/(tabs)/home/receipt/[paymentId] | apps/mobile/src/app/(family)/(tabs)/home/receipt/[paymentId].tsx |
+| /(family)/(tabs)/home/report-cards | apps/mobile/src/app/(family)/(tabs)/home/report-cards.tsx |
+| /(family)/(tabs)/home/report-cards/[id] | apps/mobile/src/app/(family)/(tabs)/home/report-cards/[id].tsx |
 | /(family)/(tabs)/home/shelf | apps/mobile/src/app/(family)/(tabs)/home/shelf.tsx |
+| /(family)/(tabs)/home/sports | apps/mobile/src/app/(family)/(tabs)/home/sports.tsx |
+| /(family)/(tabs)/home/syllabus | apps/mobile/src/app/(family)/(tabs)/home/syllabus.tsx |
+| /(family)/(tabs)/home/syllabus/[subjectId] | apps/mobile/src/app/(family)/(tabs)/home/syllabus/[subjectId].tsx |
 | /(family)/(tabs)/home/timetable | apps/mobile/src/app/(family)/(tabs)/home/timetable.tsx |
 | /(family)/(tabs)/profile/_layout | apps/mobile/src/app/(family)/(tabs)/profile/_layout.tsx |
 | /(family)/(tabs)/profile/appearance | apps/mobile/src/app/(family)/(tabs)/profile/appearance.tsx |
@@ -34,9 +45,12 @@ _Generated 2026-09-08 from `9be058c` (staging-site-preview → origin/staging). 
 | /(staff)/(tabs)/home/_layout | apps/mobile/src/app/(staff)/(tabs)/home/_layout.tsx |
 | /(staff)/(tabs)/home/assignments | apps/mobile/src/app/(staff)/(tabs)/home/assignments.tsx |
 | /(staff)/(tabs)/home/class/[classSectionId] | apps/mobile/src/app/(staff)/(tabs)/home/class/[classSectionId].tsx |
+| /(staff)/(tabs)/home/concerns | apps/mobile/src/app/(staff)/(tabs)/home/concerns.tsx |
+| /(staff)/(tabs)/home/concerns/[id] | apps/mobile/src/app/(staff)/(tabs)/home/concerns/[id].tsx |
 | /(staff)/(tabs)/home/diary | apps/mobile/src/app/(staff)/(tabs)/home/diary.tsx |
 | /(staff)/(tabs)/home/holidays | apps/mobile/src/app/(staff)/(tabs)/home/holidays.tsx |
 | /(staff)/(tabs)/home/index | apps/mobile/src/app/(staff)/(tabs)/home/index.tsx |
+| /(staff)/(tabs)/home/library | apps/mobile/src/app/(staff)/(tabs)/home/library.tsx |
 | /(staff)/(tabs)/home/messages | apps/mobile/src/app/(staff)/(tabs)/home/messages.tsx |
 | /(staff)/(tabs)/home/messages/[threadId] | apps/mobile/src/app/(staff)/(tabs)/home/messages/[threadId].tsx |
 | /(staff)/(tabs)/home/notes | apps/mobile/src/app/(staff)/(tabs)/home/notes.tsx |
@@ -45,13 +59,51 @@ _Generated 2026-09-08 from `9be058c` (staging-site-preview → origin/staging). 
 | /(staff)/(tabs)/home/post | apps/mobile/src/app/(staff)/(tabs)/home/post.tsx |
 | /(staff)/(tabs)/home/requests | apps/mobile/src/app/(staff)/(tabs)/home/requests.tsx |
 | /(staff)/(tabs)/home/results/[examId] | apps/mobile/src/app/(staff)/(tabs)/home/results/[examId].tsx |
+| /(staff)/(tabs)/home/salary | apps/mobile/src/app/(staff)/(tabs)/home/salary.tsx |
+| /(staff)/(tabs)/home/syllabus | apps/mobile/src/app/(staff)/(tabs)/home/syllabus.tsx |
+| /(staff)/(tabs)/home/syllabus/[classSectionId] | apps/mobile/src/app/(staff)/(tabs)/home/syllabus/[classSectionId].tsx |
 | /(staff)/(tabs)/home/tests | apps/mobile/src/app/(staff)/(tabs)/home/tests.tsx |
 | /(staff)/(tabs)/profile/_layout | apps/mobile/src/app/(staff)/(tabs)/profile/_layout.tsx |
 | /(staff)/(tabs)/profile/appearance | apps/mobile/src/app/(staff)/(tabs)/profile/appearance.tsx |
 | /(staff)/(tabs)/profile/index | apps/mobile/src/app/(staff)/(tabs)/profile/index.tsx |
 | /(staff)/(tabs)/profile/password | apps/mobile/src/app/(staff)/(tabs)/profile/password.tsx |
+| /(staff)/(tabs)/profile/phone | apps/mobile/src/app/(staff)/(tabs)/profile/phone.tsx |
+| /(staff)/(tabs)/profile/switch | apps/mobile/src/app/(staff)/(tabs)/profile/switch.tsx |
 | /(staff)/(tabs)/timetable | apps/mobile/src/app/(staff)/(tabs)/timetable.tsx |
 | /(staff)/take/[classSectionId] | apps/mobile/src/app/(staff)/take/[classSectionId].tsx |
 | /(worker)/_layout | apps/mobile/src/app/(worker)/_layout.tsx |
-| /(worker)/today | apps/mobile/src/app/(worker)/today.tsx |
+| /(worker)/(tabs)/_layout | apps/mobile/src/app/(worker)/(tabs)/_layout.tsx |
+| /(worker)/(tabs)/books/_layout | apps/mobile/src/app/(worker)/(tabs)/books/_layout.tsx |
+| /(worker)/(tabs)/books/index | apps/mobile/src/app/(worker)/(tabs)/books/index.tsx |
+| /(worker)/(tabs)/counter/_layout | apps/mobile/src/app/(worker)/(tabs)/counter/_layout.tsx |
+| /(worker)/(tabs)/counter/index | apps/mobile/src/app/(worker)/(tabs)/counter/index.tsx |
+| /(worker)/(tabs)/counter/member/[kind]/[id] | apps/mobile/src/app/(worker)/(tabs)/counter/member/[kind]/[id].tsx |
+| /(worker)/(tabs)/desk/_layout | apps/mobile/src/app/(worker)/(tabs)/desk/_layout.tsx |
+| /(worker)/(tabs)/desk/index | apps/mobile/src/app/(worker)/(tabs)/desk/index.tsx |
+| /(worker)/(tabs)/desk/rules | apps/mobile/src/app/(worker)/(tabs)/desk/rules.tsx |
+| /(worker)/(tabs)/fines/_layout | apps/mobile/src/app/(worker)/(tabs)/fines/_layout.tsx |
+| /(worker)/(tabs)/fines/index | apps/mobile/src/app/(worker)/(tabs)/fines/index.tsx |
+| /(worker)/(tabs)/hall/_layout | apps/mobile/src/app/(worker)/(tabs)/hall/_layout.tsx |
+| /(worker)/(tabs)/hall/index | apps/mobile/src/app/(worker)/(tabs)/hall/index.tsx |
+| /(worker)/(tabs)/houses/_layout | apps/mobile/src/app/(worker)/(tabs)/houses/_layout.tsx |
+| /(worker)/(tabs)/houses/index | apps/mobile/src/app/(worker)/(tabs)/houses/index.tsx |
+| /(worker)/(tabs)/leavedesk/_layout | apps/mobile/src/app/(worker)/(tabs)/leavedesk/_layout.tsx |
+| /(worker)/(tabs)/leavedesk/index | apps/mobile/src/app/(worker)/(tabs)/leavedesk/index.tsx |
+| /(worker)/(tabs)/meets/_layout | apps/mobile/src/app/(worker)/(tabs)/meets/_layout.tsx |
+| /(worker)/(tabs)/meets/[id] | apps/mobile/src/app/(worker)/(tabs)/meets/[id].tsx |
+| /(worker)/(tabs)/meets/index | apps/mobile/src/app/(worker)/(tabs)/meets/index.tsx |
+| /(worker)/(tabs)/paydesk/_layout | apps/mobile/src/app/(worker)/(tabs)/paydesk/_layout.tsx |
+| /(worker)/(tabs)/paydesk/index | apps/mobile/src/app/(worker)/(tabs)/paydesk/index.tsx |
+| /(worker)/(tabs)/profile/_layout | apps/mobile/src/app/(worker)/(tabs)/profile/_layout.tsx |
+| /(worker)/(tabs)/profile/appearance | apps/mobile/src/app/(worker)/(tabs)/profile/appearance.tsx |
+| /(worker)/(tabs)/profile/index | apps/mobile/src/app/(worker)/(tabs)/profile/index.tsx |
+| /(worker)/(tabs)/profile/password | apps/mobile/src/app/(worker)/(tabs)/profile/password.tsx |
+| /(worker)/(tabs)/profile/phone | apps/mobile/src/app/(worker)/(tabs)/profile/phone.tsx |
+| /(worker)/(tabs)/profile/salary | apps/mobile/src/app/(worker)/(tabs)/profile/salary.tsx |
+| /(worker)/(tabs)/profile/switch | apps/mobile/src/app/(worker)/(tabs)/profile/switch.tsx |
+| /(worker)/(tabs)/records/_layout | apps/mobile/src/app/(worker)/(tabs)/records/_layout.tsx |
+| /(worker)/(tabs)/records/index | apps/mobile/src/app/(worker)/(tabs)/records/index.tsx |
+| /(worker)/(tabs)/today/_layout | apps/mobile/src/app/(worker)/(tabs)/today/_layout.tsx |
+| /(worker)/(tabs)/today/index | apps/mobile/src/app/(worker)/(tabs)/today/index.tsx |
+| /(worker)/(tabs)/today/notifications | apps/mobile/src/app/(worker)/(tabs)/today/notifications.tsx |
 | /index | apps/mobile/src/app/index.tsx |

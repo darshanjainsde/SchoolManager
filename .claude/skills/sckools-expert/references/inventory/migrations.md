@@ -1,8 +1,8 @@
 # Migrations (packages/db/prisma/migrations)
 
-_Generated 2026-09-08 from `9be058c` (staging-site-preview → origin/staging). Do not edit by hand — run the sckools-expert-update skill._
+_Generated 2026-10-24 from `e8b337a` (docs/skills-refresh → origin/main). Do not edit by hand — run the sckools-expert-update skill._
 
-82 migrations. Staging applies them on push to `staging` (db-migrate.yml, path-filtered); production is a manual `workflow_dispatch` with `environment=production`.
+121 migrations. Staging applies them on push to `staging` (db-migrate.yml, path-filtered); production is a manual `workflow_dispatch` with `environment=production`.
 
 | Migration | First comment |
 | --- | --- |
@@ -88,3 +88,42 @@ _Generated 2026-09-08 from `9be058c` (staging-site-preview → origin/staging). 
 | 20260905_010000_lead_activity_rls | LeadActivity shipped without row-level security. |
 | 20260907_000000_hall_of_fame_batches | Hall of Fame: batches (year is a dimension), groups (course / grades / custom), settings. |
 | 20260907_010000_hall_of_fame_year_repair | Repair for databases that ran the first cut of 20260907_000000 before its |
+| 20260910_000000_person_lifecycle | Person lifecycle (Active Roster, Track A). See |
+| 20260911_000000_celebrations | Birthdays & Celebrations (Active Roster, Track B). Additive: one homepage |
+| 20260912_000000_session_plans | Sessions / year end (Active Roster, Track C). See |
+| 20260913_000000_sports_wing | Sports wing P1. See docs/superpowers/specs/2026-09-10-sports-wing-design.md §8. |
+| 20260914_000000_records_site_config | Sports wing: the Book of Records on the public website (switch, consent, |
+| 20260915_000000_sports_team_basis | Sports wing: what a team is in a team sport (SECTIONS 9 A v 9 B, CLASSES 9 v 10, |
+| 20260916_000000_sports_stages | Sports wing: qualifying stages (class heats → best of each class → final), |
+| 20260917_000000_sports_gap | A break left on the venue after each slot: the umpire changing ends, the rake |
+| 20260918_000000_class_section_year_idx | The Sessions wizard asks "which class sections belong to this academic year?" |
+| 20260919_000000_fee_number_block | Reserve a BLOCK of invoice numbers in one statement. |
+| 20260920_000000_whatsapp | WhatsApp channel: the per-school switch and the delivery ledger. |
+| 20260920_100000_email_delivery | Email delivery ledger + suppression list. |
+| 20260920_200000_whatsapp_actions | A person's own verified WhatsApp number, and the record of what they tap. |
+| 20260921_000000_otp_login | OTP login: a display name for every login, notification switches, the |
+| 20260921_000000_sargable_tenant_policies | Make the tenant policy usable as an index condition. |
+| 20260921_010000_fk_indexes | Index the foreign keys Postgres has to check when a parent row is deleted. |
+| 20260921_020000_otp_challenge_rls | "OtpChallenge" shipped to staging with no row-level security at all. |
+| 20260922_000000_salary | ── SALARY ─────────────────────────────────────────────────────────────────── |
+| 20260924_000000_pay_grades | ═══════════════════════════════════════════════════════════════════════════ |
+| 20260925_000000_accounts_and_leave_pay | ═══════════════════════════════════════════════════════════════════════════ |
+| 20260926_010000_teacher_onboarding_record | ═══════════════════════════════════════════════════════════════════════════ |
+| 20260926_020000_festive_media_kind | A festival image the school chose itself (its own murti photo, its puja |
+| 20260927_000000_onboarding_import_log | Onboarding import log: one row per bulk import the Onboarding tab ran. |
+| 20260927_010000_class_teachers_and_concerns | Class-teacher history + the Complaint Box. |
+| 20260927_020000_login_otp_switch | The owner's switch for "sign in with a code". |
+| 20260927_030000_class_teacher_section_index | ClassTeacherAssignment.classSectionId had only the (schoolId, classSectionId, fromAt) |
+| 20261001_000000_school_backups | School backups: every school as one portable, password-locked file. |
+| 20261002_000000_backup_reasons | The two new backup reasons get a migration to themselves, on purpose. |
+| 20261002_010000_backup_buckets | Backup buckets: a school is four buckets, each saved and restored on its own. |
+| 20261006_000000_admissions_enum_values |  |
+| 20261006_000100_enquiry_lead_fields |  |
+| 20261007_000000_notification_delivery | Notification spine, Tier 1: one delivery row per (outbox row, person, channel). |
+| 20261007_010000_leave_cover_links | Notification spine, Tier 1b: the leave desk, done right. |
+| 20261015_000000_email_master_switch | Email master switch: a school can turn ALL its email off (a test school whose |
+| 20261016_000000_syllabus_tracker | Syllabus tracker (2026-10-16). Expand-only: three new tables and one enum, |
+| 20261019_000000_message_report_block | Message report & block (2026-10-19) — Google Play's user-generated-content |
+| 20261022_120000_marketing_hero_discount | Marketing config: hero figures + a time-boxed discount (2026-10-22). |
+| 20261023_090000_refer_and_earn | Refer & Earn (2026-10-23): promoters, referrals, payouts, owner tasks, and |
+| 20261023_130000_referral_task_referral_idx | ReferralTask.referralId is a foreign key (ON DELETE CASCADE) with no index: |

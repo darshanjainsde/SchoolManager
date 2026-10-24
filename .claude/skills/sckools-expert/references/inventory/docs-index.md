@@ -1,12 +1,12 @@
 # Documents in the repository
 
-_Generated 2026-09-08 from `9be058c` (staging-site-preview → origin/staging). Do not edit by hand — run the sckools-expert-update skill._
+_Generated 2026-10-24 from `e8b337a` (docs/skills-refresh → origin/main). Do not edit by hand — run the sckools-expert-update skill._
 
 | File | Title | Lines |
 | --- | --- | --- |
 | AUDIT-PHASE4-8.md | SkoolOS — Audit (Phases 4–8 + Settings + deploy config) | 242 |
 | AUDIT.md | SkoolOS — Implementation Audit (post-this-session) | 154 |
-| CLAUDE.md | Working in this repo | 187 |
+| CLAUDE.md | Working in this repo | 207 |
 | CODE-AUDIT.md | SkoolOS — Code Audit (no docker / no creds) | 248 |
 | DEPLOY-LIBRARY.md | Deploying the library service | 108 |
 | DEPLOY.md | Deploying SkoolOS to Vercel | 124 |
@@ -19,7 +19,8 @@ _Generated 2026-09-08 from `9be058c` (staging-site-preview → origin/staging). 
 | docs/PHASE6.md | Phase 6 — the public school website | 182 |
 | docs/PRODUCTION.md | SkoolOS — Production deploy checklist | 187 |
 | docs/RUNBOOK.md | Sckools Runbook — school #1 launch | 151 |
-| docs/SHIP-MOBILE.md | Shipping the Sckools mobile app (EAS → Google Play) | 321 |
+| docs/SHIP-MOBILE.md | Shipping the Sckools mobile app (EAS → Google Play) | 299 |
+| docs/play-listing/README.md | Google Play listing — the source of truth | 75 |
 | docs/superpowers/LIBRARY-TRAPS.md | Library service — known traps | 131 |
 | docs/superpowers/plans/2026-07-03-phase1-foundation.md | Phase 1 — Foundation Implementation Plan | 1243 |
 | docs/superpowers/plans/2026-07-03-phase2-owner-portal.md | Phase 2 — Owner Portal Implementation Plan | 729 |
@@ -55,6 +56,16 @@ _Generated 2026-09-08 from `9be058c` (staging-site-preview → origin/staging). 
 | docs/superpowers/plans/2026-08-15-librarian-counter-ship.md | Shipping the librarian's counter — what has to happen, in order | 119 |
 | docs/superpowers/plans/2026-08-16-library-wing-build.md | Library Wing — build plan (2026-08-16) | 129 |
 | docs/superpowers/plans/2026-08-19-website-studio.md | Website Studio — staging patch plan (2026-08-19) | 72 |
+| docs/superpowers/plans/2026-09-09-active-roster-a-lifecycle.md | Active Roster · Track A: Person Lifecycle — Implementation Plan | 1548 |
+| docs/superpowers/plans/2026-09-09-active-roster-b-birthdays.md | Active Roster · Track B: Birthdays & Celebrations — Implementation Plan | 949 |
+| docs/superpowers/plans/2026-09-09-active-roster-c-sessions.md | Active Roster · Track C: Sessions (year end) — Implementation Plan | 1300 |
+| docs/superpowers/plans/2026-09-10-sports-wing-p1.md | Sports wing P1 — Implementation Plan | 34 |
+| docs/superpowers/plans/2026-09-14-staging-to-main-promotion.md | Promotion: staging → main | 88 |
+| docs/superpowers/plans/2026-09-21-otp-login-p1.md | Plan — PR 1: OTP login, profile switching, admin profile (staging) | 71 |
+| docs/superpowers/plans/2026-10-06-admissions-tier-a.md | Admissions officer — Tier A Implementation Plan | 3965 |
+| docs/superpowers/plans/2026-10-06-spine-tier0.md | Notification spine — Tier 0 Implementation Plan | 1346 |
+| docs/superpowers/plans/2026-10-06-spine-tier1a.md | Notification spine — Tier 1a Implementation Plan (deliveries, identity, race-safe decisions) | 2818 |
+| docs/superpowers/plans/2026-10-06-spine-tier1b.md | Notification spine — Tier 1b Implementation Plan (the leave desk, done right) | 3039 |
 | docs/superpowers/specs/2026-07-03-skoolos-school-website-platform-design.md | SkoolOS — Multi-Tenant School Website Platform (Design Spec) | 226 |
 | docs/superpowers/specs/2026-07-04-phase7-student-portal-design.md | Phase 7 — Student Portal Design | 52 |
 | docs/superpowers/specs/2026-07-04-phase8-site-theming-redesign-design.md | Phase 8 — Public Site Theming & Redesign Design | 71 |
@@ -69,3 +80,14 @@ _Generated 2026-09-08 from `9be058c` (staging-site-preview → origin/staging). 
 | docs/superpowers/specs/2026-08-13-school-library-design.md | Sckools Library — design (school librarian edition) | 292 |
 | docs/superpowers/specs/2026-08-28-scale-hardening-v2-staging.md | Sckools — Scale Hardening & Observability, v2 (against `staging`) | 254 |
 | docs/superpowers/specs/2026-09-07-hall-of-fame-batches-design.md | Hall of Fame — batches, groups and layouts — design spec | 92 |
+| docs/superpowers/specs/2026-09-09-active-roster-celebrations-sessions-design.md | Active Roster, Celebrations & Sessions — design | 407 |
+| docs/superpowers/specs/2026-09-10-sports-wing-design.md | Sports wing — design (2026-09-10) | 55 |
+| docs/superpowers/specs/2026-09-21-whatsapp-identity-and-actions-design.md | WhatsApp identity + actions — architecture (2026-09-21) | 153 |
+| docs/superpowers/specs/2026-10-02-backup-buckets-design.md | Backup buckets — splitting a school's backup from one file into four | 163 |
+| docs/superpowers/specs/2026-10-06-admissions-officer-design.md | Admissions officer — a job, a desk, and the enquiry on WhatsApp (2026-10-06) | 220 |
+| docs/superpowers/specs/2026-10-06-notification-spine-and-whatsapp-desk-design.md | Notification spine + WhatsApp Desk — architecture (2026-10-06) | 433 |
+| docs/superpowers/specs/2026-10-16-syllabus-tracker-design.md | Syllabus tracker — where every class has reached (2026-10-16) | 89 |
+| docs/whatsapp/authentication-category-blocked.md | AUTHENTICATION templates are blocked on WABA 1615192556803051 | 106 |
+| docs/whatsapp/message-quality.md | Message quality — what to fix, and the copy to replace it with | 310 |
+| docs/whatsapp/support-appeal.md | Appeal messages — AUTHENTICATION category on WABA 1615192556803051 | 86 |
+| docs/whatsapp/templates.md | WhatsApp templates to submit | 115 |

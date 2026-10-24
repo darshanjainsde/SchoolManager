@@ -10,9 +10,11 @@ verifying against the code when precision matters.
 
 ## Freshness protocol (run FIRST, every invocation)
 
-This skill was trained at commit **`6f6667b`** (main, 2026-08-23).
+This skill was trained at commit **`e8b337a`** (main, 2026-10-24, PR #182). The companion
+`sckools-expert` skill (same folder, with `references/` + generated inventories) is the deeper map;
+this file is the one-screen version.
 
-1. `git fetch origin && git log --oneline 6f6667b..origin/main | head -30`
+1. `git fetch origin && git log --oneline e8b337a..origin/main | head -30`
 2. If empty → knowledge is current; proceed.
 3. If commits exist → skim them (`git show --stat`) for areas they touch, read
    the changed files where they contradict this document, answer from the
@@ -41,9 +43,13 @@ This skill was trained at commit **`6f6667b`** (main, 2026-08-23).
 - **apps/api/api/ tracked skeleton is LOAD-BEARING**: Vercel validates the
   functions pattern against checked-in files before building. Never untrack.
 - **DB migrations:** `.github/workflows/db-migrate.yml` — staging auto on
-  migration push; production via workflow_dispatch (inspect_only → apply).
-  Other workflows: `outbox-drain.yml` (cron '3-59/10'), `db-backup.yml`
-  (gpg-encrypted; repo is PUBLIC — never plaintext artifacts).
+  migration push; production via workflow_dispatch (`--ref staging`, the ref
+  that carries the files), run BEFORE the merge to main so the old code keeps
+  working on the additive schema; the sandbox refuses the dispatch, Darshan
+  runs it. Other workflows: `ci.yml` (build job + api e2e job), `db-drift.yml`
+  (daily 06:30 IST, read-only, fails when either DB lags), `outbox-drain.yml`
+  (every 10 min), `db-backup.yml` (gpg-encrypted; repo is PUBLIC — never
+  plaintext artifacts), `db-restore-drill.yml`, `demo-data.yml` (staging only).
 - **Ops:** `docs/RUNBOOK.md`. sentry-lite (dependency-free store-protocol
   reporter) on both tiers. RedisThrottlerStorage (INCR+PTTL, fail-open,
   enableOfflineQueue:false, `@Optional() @Inject(REDIS_THROTTLER_CLIENT)`).
@@ -55,17 +61,23 @@ This skill was trained at commit **`6f6667b`** (main, 2026-08-23).
 - `withTenant(schoolId, tx => …)` scopes Prisma under RLS; platform-wide reads
   use `getPlatformPrisma()` deliberately (cross-tenant checks like the
   one-school-per-teacher rule).
-- JWTs per audience (school/platform). Access token in memory (zustand
-  `auth-store`), refresh token in an HttpOnly cookie; single-flight refresh in
-  `apps/web/lib/api.ts`. Roles: SCHOOL_ADMIN, TEACHER, STUDENT, STAFF (staffRole
-  OFFICE/SUPPORT/HELPER/DRIVER/SECURITY/LIBRARIAN). `homeForRole` routes after
-  login; each portal layout re-enforces its own allowed roles.
+- JWTs per audience (school/platform/promoter). Access token in memory (zustand
+  `auth-store`), refresh token in an HttpOnly cookie scoped to `.sckools.com`;
+  single-flight refresh in `apps/web/lib/api.ts`. Promoters (Refer & Earn) use a
+  30-day bearer token in localStorage instead. Roles: OWNER, SCHOOL_ADMIN,
+  TEACHER, STUDENT, STAFF (staffRole OFFICE/SUPPORT/HELPER/DRIVER/SECURITY/
+  LIBRARIAN), ALUMNUS, LIBRARIAN. Login by one-time code (email/WhatsApp OTP)
+  is switchable per school. `homeForRole` routes after login; each portal
+  layout re-enforces its own allowed roles.
 - Gatehouse UI: `apps/web/app/login/` (GatehouseLogin, login.css `gh-*`
   classes, resolveLoginTheme by host). `/reset-password` wears the SAME
   gatehouse (GatehouseReset) — invite + reset emails link there.
-- Feature flags per school tier: PUBLIC_SITE, GALLERY, ENQUIRY, SOCIAL,
-  ABOUT_CONTACT, EVENTS, BLOG, MANAGEMENT, HIRING, LIBRARY —
-  `RequireFeatureGuard` on controllers, `requiredFeature` on nav items.
+- Feature flags per school tier — **Plan Ladder v2** (`packages/db/src/features.ts`,
+  live 2026-10-24): BASIC = PUBLIC_SITE, GALLERY, ENQUIRY, SOCIAL, ABOUT_CONTACT,
+  EVENTS; STANDARD = + EVENTS_HOST, MANAGEMENT, BLOG; PRO = + HIRING, LIBRARY,
+  FEES, ALUMNI, PRESS, SPORTS, SALARY, COURSE_MANAGEMENT, EXAM_HALL, WHATSAPP.
+  Every key is in a tier; `FeatureOverride` per school adds a trial or removes
+  a module. `RequireFeatureGuard` on controllers, `requiredFeature` on nav items.
 
 ## Portals (web routes → API)
 
@@ -108,7 +120,7 @@ This skill was trained at commit **`6f6667b`** (main, 2026-08-23).
   loanDays affects only new issues). Due-soon daily cron:
   `internal/cron/library-due-soon`.
 - **Staff `/staff`**: own attendance record only (`manage/staff-attendance/mine`).
-- **Public site**: `components/public/PublicSite.tsx` + `ps-css.ts` (PS_CSS) +
+- **Public site**: `components/public/PublicSite.tsx` + `ps-css.css` (PS_CSS) +
   `site-variants.ts` (SECTION_VARIANT_DEFS, SCROLL_FEELS — HORIZONTAL retired
   but still accepted → renders Classic; FESTIVALS ×15; normalizeHomeSections /
   normalizeSectionOrder; isSafeBlockUrl). Iron rules: DEFAULT emits no class;
@@ -116,6 +128,35 @@ This skill was trained at commit **`6f6667b`** (main, 2026-08-23).
   no transformed ancestor); hero renders as panel #1 under Panels (one ground,
   no nav backdrops); reveal clips end at inset(-3rem) (never inset(0) — it
   amputates shadows/overhangs).
+
+## Shipped between 2026-08-23 and 2026-10-24 (the Oct 2026 product)
+
+Each is a module under `apps/api/src/modules/<name>` with a console tab under
+`apps/web/app/app/<name>` unless noted; specs in `docs/superpowers/specs/`.
+
+- **Exam hall** (EXAM_HALL) seating + printing; **Press** (PRESS): report
+  windows, certificates (`CERT_VARIANTS`), print orders → owner `/platform/orders`.
+- **Fees** (FEES): plans per grade/category, terms, counter receipts, proofs,
+  late-fee rules, online-payment setup; family sees dues/receipts; number blocks.
+- **Alumni / Homecoming** (ALUMNI, role ALUMNUS): claims queue, guest sessions,
+  gifts, Hall of Fame batches as sessions.
+- **Sports wing** (SPORTS): houses, meets, fixtures/results, record book, public
+  `/sports` pages. **Salary & pay** (SALARY, `payroll`): pay grades, runs,
+  payslips, leave-to-pay, `me/pay`. **Syllabus tracker** (COURSE_MANAGEMENT):
+  chapters taught/reached per section. **WhatsApp** (WHATSAPP): school number as
+  a channel, phone verification, inbound actions.
+- Office: sessions + active roster + celebrations, class teachers, onboarding
+  import, concerns (complaint box), leave cover links, notification delivery
+  rows, email master switch, OTP login switch, message report & block (Play UGC).
+- Platform: school backups + sample packs (`/platform/backups`, buckets,
+  restores), leads pipeline + admissions officer, ops/scale/speed pages,
+  **Refer & Earn** (`referrals`: promoters, referrals, payouts, tasks; public
+  `/earn`, portal `/promoter`, owner `/platform/referrals`), marketing config
+  with discount + hero figures, Plan Ladder v2.
+- Marketing site rebuilt as static per-route pages in `apps/web/public/site-preview`
+  (home, `/pricing`, `/#/features` 54 tiles, `/start` quote, `/about`, `/earn`).
+- Mobile: Ink & Lit colour system, band + sheet Home, in-app account deletion,
+  Play readiness (release 19 Oct 2026).
 
 ## Email (Letterhead) — `apps/api/src/common/mail/`
 
@@ -141,7 +182,7 @@ This skill was trained at commit **`6f6667b`** (main, 2026-08-23).
 - DB: `EmailSettings` (1:1 School, additive migration 20260823090000, RLS
   tenant_iso). Admin API `manage/email-settings` (GET/PUT, PUT sender, POST
   sender/verify, sender/disable, test, GET preview) — SCHOOL_ADMIN only,
-  password write-only. UI: `apps/web/app/app/settings/email-card.tsx`.
+  password write-only. UI: `apps/web/app/app/settings/notifications/page.tsx`.
 - Specs: `letterhead.spec.ts` (9), `mail-identity.service.spec.ts` (9, every
   fallback branch), `mail-di.spec.ts` (bootstrap guard).
 
@@ -176,13 +217,19 @@ channel preferences.
 - Read `docs/superpowers/LIBRARY-TRAPS.md` and run the mistake ledger
   (`node ~/.claude/projects/-Users-darshanjain-Documents-SchoolManager-SchoolManager/mistakes/log.mjs list`)
   before implementing; log every new root cause immediately.
-- Staging first; fast-forward merge `git push origin origin/staging:main` only
-  on explicit request. After ANY api deploy, smoke `GET /ready` (deploy green
-  means built, not booted). Never `git add -A`. Never commit `.env`,
+- Staging first; main through a PR, merged (`gh pr merge --merge`) only on
+  explicit request and only after the production migration. Read `gh pr checks`
+  before pushing onto a PR. After ANY api deploy, smoke `GET /ready` (deploy
+  green means built, not booted). Never `git add -A`. Never commit `.env`,
   `apps/api/api` changes, or generated library output.
-- Verify with the package scripts (`pnpm --filter @skoolos/web test`, 754+
-  tests; `pnpm --filter @skoolos/api test`, 747+), `set -a && source .env`
-  for env, `pnpm preflight:library` before library-service pushes.
+- Verify with the package scripts (2026-10-23: api unit 2,909; api e2e 1,610
+  in 37 suites against real Postgres — `pnpm --filter @skoolos/api test:e2e`
+  with the repo `.env` sourced; web 231 vitest files; mobile 2,050; db 33;
+  types 200), `pnpm preflight:library` before library-service pushes. A tier
+  change, a new table or a new controller needs the FULL e2e: four guards
+  enumerate routes (`test/route-manifest.ts`), RLS-exempt tables
+  (`rls-coverage`), FK indexes (`fk-indexes`) and relation `_count`
+  (`src/common/tenant-aggregates.spec.ts`).
 - Every guard is proven by watching it fail (remove → red → restore → green).
 - API display fields (className, labels) arrive fully formatted — render
   verbatim, never re-prefix. Every enum render goes through a label map,

@@ -1,24 +1,24 @@
 # Data model (packages/db/prisma/schema.prisma)
 
-_Generated 2026-09-08 from `9be058c` (staging-site-preview → origin/staging). Do not edit by hand — run the sckools-expert-update skill._
+_Generated 2026-10-24 from `e8b337a` (docs/skills-refresh → origin/main). Do not edit by hand — run the sckools-expert-update skill._
 
-120 models, 56 enums. "RLS" is whether any migration enabled row-level security on the table; a tenant table with **no** is filtered by application code only.
+164 models, 79 enums. "RLS" is whether any migration enabled row-level security on the table; a tenant table with **no** is filtered by application code only.
 
 ## Models
 
 | Model | Tenant (schoolId) | RLS | Fields | Relations | Unique | Doc |
 | --- | --- | --- | --- | --- | --- | --- |
-| School | no | yes | 114 | Domain, EmailSettings, FeatureOverride, User, AuditLog, SchoolProfile, HomepageContent, StatItem, SocialLink, MenuItem, MediaAsset, FeaturedStaff, AcademicYear, Grade, ClassSection, Subject, Teacher, Student, Period, TimetableSlot, Event, Enquiry, Announcement, Course, CourseFee, AdmissionStep, AdmissionsSettings, HallOfFameEntry, HallOfFameGroup, HallOfFameSettings, Attendance, Substitution, Staff, StaffAttendance, LeaveApplication, LeaveTypeDef, LeaveAllocation, PushToken, Holiday, BlogPost, SchoolBlogSelection, Notification, ClassNote, ClassTodo, RegisterChangeRequest, NotificationOutbox, Assignment, MessageThread, Message, DiaryEntry, AttendanceNotice, JobPost, LibrarySettings, DesignDraft, SchoolPage, LibraryBookTitle, LibraryBookCopy, LibraryIssue, LibraryFine, LibraryHallVisit, LibraryHallMark, Result, AssignmentSeen, Room, SeatingPlan, Alumni, AlumniBatch, AlumniClaim, GiftItem, GiftPledge, GiftAttachment, GiftEvent, GiftReceipt, GiftDistribution, GuestSession, AlumniAccessToken, AlumniLinkRequest, FeeCategory, FeeTerm, FeePlan, FeePlanItem, FeeAssignment, FeeConcession, FeeInvoice, FeeInvoiceLine, FeePayment, FeeAllocation, FeeLedgerEntry, FeeReceipt, SchoolPaymentConfig, SchoolBankDetail, FeeAudit, FeeCounter, FeeSettings, PressIssue, PrintOrder, ResultNudge, PrintOrderEvent, PressCounter, ReportWindow, ReportRemark |  |  |
+| School | no | yes | 156 | Domain, EmailSettings, FeatureOverride, SyllabusChapter, SyllabusProgress, SyllabusStudentNote, User, AuditLog, SchoolProfile, HomepageContent, StatItem, SocialLink, MenuItem, MediaAsset, FeaturedStaff, AcademicYear, Grade, ClassSection, Subject, Teacher, Student, Period, TimetableSlot, Event, Enquiry, Announcement, Course, CourseFee, AdmissionStep, AdmissionsSettings, HallOfFameEntry, HallOfFameGroup, HallOfFameSettings, Attendance, Substitution, Staff, PayComponent, PayGrade, EmployeePay, PayRun, Payslip, PayAdjustment, TaxDeclaration, StaffAttendance, LeaveApplication, LeaveTypeDef, LeaveAllocation, PushToken, Holiday, BlogPost, SchoolBlogSelection, Notification, ClassNote, ClassTodo, RegisterChangeRequest, NotificationOutbox, NotificationDelivery, Assignment, MessageThread, Message, MessageReport, DiaryEntry, AttendanceNotice, JobPost, LibrarySettings, DesignDraft, SchoolPage, LibraryBookTitle, LibraryBookCopy, LibraryIssue, LibraryFine, LibraryHallVisit, LibraryHallMark, Result, AssignmentSeen, Room, SeatingPlan, Alumni, AlumniBatch, AlumniClaim, GiftItem, GiftPledge, GiftAttachment, GiftEvent, GiftReceipt, GiftDistribution, GuestSession, AlumniAccessToken, AlumniLinkRequest, FeeCategory, FeeTerm, FeePlan, FeePlanItem, FeeAssignment, FeeConcession, FeeInvoice, FeeInvoiceLine, FeePayment, FeeAllocation, FeeLedgerEntry, FeeReceipt, SchoolPaymentConfig, SchoolBankDetail, FeeAudit, FeeCounter, FeeSettings, PressIssue, PrintOrder, ResultNudge, PrintOrderEvent, PressCounter, ReportWindow, ReportRemark, SessionPlan, SessionDecision, SportsSettings, WhatsAppSettings, WhatsAppDelivery, OnboardingImport, Concern, ConcernComment, ClassTeacherAssignment, EmailDelivery, EmailSuppression, WhatsAppInbound, House, HousePoint, SportsTournament, SportsVenue, SportsEvent, SportsEntry, SportsMatch, SportsHeat, SportsMark, SportsRecord, SportsRecordAttempt |  |  |
 | Domain | yes | yes | 8 | School |  |  |
-| EmailSettings | yes | yes | 21 | School |  | A school's letterhead and (optionally) its own outbound sender. Every field is nullable and the row itself is optional: a school with no row |
+| EmailSettings | yes | yes | 22 | School |  | A school's letterhead and (optionally) its own outbound sender. Every field is nullable and the row itself is optional: a school with no row |
 | FeatureOverride | yes | yes | 5 | School | [schoolId, featureKey] |  |
-| User | yes | yes | 16 | School, RefreshToken, PasswordResetToken, ImpersonationToken | [schoolId, email] ; [schoolId, username] |  |
+| User | yes | yes | 28 | School, RefreshToken, PasswordResetToken, ImpersonationToken, Concern, ConcernComment, ClassTeacherAssignment | [schoolId, email] ; [schoolId, username] |  |
 | RefreshToken | yes | yes | 10 | User |  |  |
 | PushToken | yes | yes | 9 | School |  | One registered Expo push device per row, keyed by `token` (Expo issues a new token per app-install, so upsert-by-token is how a re-registeri |
 | Holiday | yes | yes | 8 | School |  | A school-configured holiday/closure shown on both mobile portals' read-only `/me/holidays` calendar. `type` is a plain String rather than a  |
 | AuditLog | yes | yes | 9 | School |  |  |
-| SchoolProfile | yes | yes | 54 | School |  |  |
-| HomepageContent | yes | yes | 16 | School |  |  |
+| SchoolProfile | yes | yes | 56 | School |  |  |
+| HomepageContent | yes | yes | 17 | School |  |  |
 | DesignDraft | yes | yes | 9 | School |  | A saved website look — the design subset of SchoolProfile as one JSON blob. "Preview" renders it client-side without touching the live site; |
 | SchoolPage | yes | yes | 11 | School | [schoolId, slug] | An admin-built extra page (Transport, Scholarships, Alumni…): typed content blocks, never raw HTML. The slug is FROZEN at creation like nav  |
 | StatItem | yes | yes | 6 | School |  |  |
@@ -33,29 +33,31 @@ _Generated 2026-09-08 from `9be058c` (staging-site-preview → origin/staging). 
 | HallOfFameGroup | yes | yes | 11 | School, Course, HallOfFameEntry |  |  |
 | HallOfFameEntry | yes | yes | 12 | School, HallOfFameGroup, Student | [groupId, batchYear, rank] | One podium place for one group in one batch year. Batches never replace each other: (group, year, rank) is the key, so Batch of 2022 keeps i |
 | HallOfFameSettings | yes | yes | 4 | School |  | Which batch the public section lands on (null = latest with entries) and how many earlier batches it lists. |
-| AcademicYear | yes | yes | 13 | School, ClassSection, TimetableSlot, LeaveAllocation, FeeTerm, FeePlan, ReportWindow | [schoolId, name] |  |
-| Grade | yes | yes | 7 | School, ClassSection, FeePlanItem | [schoolId, name] |  |
-| ClassSection | yes | yes | 20 | School, Grade, AcademicYear, Teacher, Student, TimetableSlot, Announcement, ClassNote, ClassTodo, RegisterChangeRequest, NotificationOutbox, Assignment, MessageThread, DiaryEntry | [schoolId, gradeId, name, academicYearId] |  |
-| Subject | yes | yes | 12 | School, TeacherSubject, TimetableSlot, ClassNote, ClassTodo, Assignment, MessageThread, DiaryEntry | [schoolId, code] |  |
-| Teacher | yes | yes | 18 | School, TeacherSubject, ClassSection, TimetableSlot, FeaturedStaff, MessageThread, LibraryIssue |  |  |
+| AcademicYear | yes | yes | 15 | School, ClassSection, TimetableSlot, LeaveAllocation, FeeTerm, FeePlan, ReportWindow, SessionPlan | [schoolId, name] |  |
+| Grade | yes | yes | 8 | School, ClassSection, FeePlanItem, SyllabusChapter | [schoolId, name] |  |
+| ClassSection | yes | yes | 22 | School, Grade, AcademicYear, Teacher, Student, TimetableSlot, Announcement, ClassNote, ClassTodo, RegisterChangeRequest, NotificationOutbox, Assignment, MessageThread, DiaryEntry, ClassTeacherAssignment, SyllabusProgress | [schoolId, gradeId, name, academicYearId] |  |
+| Subject | yes | yes | 13 | School, TeacherSubject, TimetableSlot, ClassNote, ClassTodo, Assignment, MessageThread, DiaryEntry, SyllabusChapter | [schoolId, code] |  |
+| Teacher | yes | yes | 63 | School, TeacherSubject, ClassSection, TimetableSlot, FeaturedStaff, MessageThread, LibraryIssue, EmployeePay, Payslip, PayAdjustment, TaxDeclaration, Concern, ClassTeacherAssignment, SyllabusProgress |  |  |
 | TeacherSubject | yes | yes | 6 | Teacher, Subject | [teacherId, subjectId] |  |
-| Student | yes | yes | 43 | School, ClassSection, Attendance, Result, AssignmentSeen, MessageThread, DiaryRecipient, DiaryAck, AttendanceNotice, LibraryIssue, FeeAssignment, FeeConcession, FeeInvoice, FeePayment, FeeLedgerEntry, PressIssue, ReportRemark, HallOfFameEntry | [schoolId, admissionNo] ; [schoolId, code] |  |
+| Student | yes | yes | 59 | School, ClassSection, Attendance, Result, AssignmentSeen, MessageThread, DiaryRecipient, DiaryAck, AttendanceNotice, LibraryIssue, FeeAssignment, FeeConcession, FeeInvoice, FeePayment, FeeLedgerEntry, PressIssue, ReportRemark, HallOfFameEntry, SessionDecision, House, SportsEntry, SyllabusStudentNote, Concern | [schoolId, admissionNo] ; [schoolId, code] |  |
 | Period | yes | yes | 9 | School, TimetableSlot | [schoolId, order] |  |
 | TimetableSlot | yes | yes | 16 | School, ClassSection, Period, Subject, Teacher, AcademicYear | [schoolId, classSectionId, dayOfWeek, periodId, academicYearId, effectiveFrom], name: "class_slot" ; [schoolId, teacherId, dayOfWeek, periodId, academicYearId, effectiveFrom], name: "teacher_slot" |  |
 | Attendance | yes | yes | 10 | School, Student | [studentId, date], name: "one_mark_per_student_day" |  |
-| Substitution | yes | yes | 10 | School | [classSectionId, periodId, date], name: "one_sub_per_slot_date" |  |
-| Staff | yes | yes | 12 | School |  |  |
+| Substitution | yes | yes | 13 | School, LeaveApplication | [classSectionId, periodId, date], name: "one_sub_per_slot_date" |  |
+| Staff | yes | yes | 25 | School, EmployeePay, Payslip, PayAdjustment, TaxDeclaration, LeaveApplication |  |  |
 | StaffAttendance | yes | yes | 9 | School | [teacherId, date], name: "one_teacher_mark_per_day" ; [staffId, date], name: "one_staff_mark_per_day" |  |
-| LeaveApplication | yes | yes | 14 | School, LeaveTypeDef |  |  |
-| LeaveTypeDef | yes | yes | 12 | School, LeaveAllocation, LeaveApplication | [schoolId, name] ; [schoolId, builtin] | A school's own leave vocabulary — quota and carry-forward policy live here. Seeded from the five built-in `LeaveType` values the first time  |
+| LeaveApplication | yes | yes | 19 | School, LeaveTypeDef, Staff, Substitution |  |  |
+| LeaveTypeDef | yes | yes | 14 | School, LeaveAllocation, LeaveApplication | [schoolId, name] ; [schoolId, builtin] | A school's own leave vocabulary — quota and carry-forward policy live here. Seeded from the five built-in `LeaveType` values the first time  |
 | LeaveAllocation | yes | yes | 12 | School, LeaveTypeDef, AcademicYear | [schoolId, teacherId, typeDefId, academicYearId] | One teacher's grant of one leave type for one academic year. `used` is deliberately NOT a column — it is derived from APPROVED applications  |
 | Exam | yes | yes | 11 | Result |  |  |
 | Result | yes | yes | 10 | School, Exam, Student | [examId, studentId], name: "one_result_per_exam_student" | `schoolId` is carried DIRECTLY rather than derived through `examId -> Exam.schoolId`, which is how this table's RLS policy used to establish |
-| NotificationOutbox | yes | yes | 13 | School, ClassSection |  | Transactional outbox for "families' phones get told" events (S6/S7 wiring, Portal Parity R3 Phase 4 Task 2). `ExamsService.create()`/`publis |
+| NotificationOutbox | yes | yes | 15 | NotificationDelivery, School, ClassSection |  | Transactional outbox for "families' phones get told" events (S6/S7 wiring, Portal Parity R3 Phase 4 Task 2). `ExamsService.create()`/`publis |
+| NotificationDelivery | yes | yes | 18 | School, NotificationOutbox | [outboxId, userId, channel] | What happened to one outbox row, for one person, on one channel. The truth about a message on a channel; provider ledgers keep receipts. |
 | Assignment | yes | yes | 14 | School, ClassSection, Subject, AssignmentSeen |  | A teacher-posted assignment for one class section (T21, Portal Parity R3 Phase 4 Task 4). `attachments` is a denormalised JSON array of `{ u |
 | AssignmentSeen | yes | yes | 8 | School, Assignment, Student | [assignmentId, studentId], name: "one_seen_per_assignment_student" | A student's "seen/opened" mark for an `Assignment` — v1's ONLY tracking signal (see `Assignment`'s docstring: no submission uploads yet). `A |
-| MessageThread | yes | yes | 14 | School, Student, Teacher, Subject, ClassSection, Message | [studentId, teacherId, subjectId], name: "one_thread_per_student_teacher_subject" |  |
-| Message | yes | yes | 9 | School, MessageThread |  |  |
+| MessageThread | yes | yes | 17 | School, Student, Teacher, Subject, ClassSection, Message, MessageReport | [studentId, teacherId, subjectId], name: "one_thread_per_student_teacher_subject" |  |
+| Message | yes | yes | 10 | School, MessageThread, MessageReport |  |  |
+| MessageReport | yes | yes | 12 | School, MessageThread, Message |  | A participant reporting a message thread (or one message in it) to the school — the "report" half of Google Play's user-generated-content ru |
 | Notification | yes | yes | 12 | School |  | In-app notification inbox — the per-user, per-event rows behind the bell in both portals (unread count + notification list). DISTINCT from ` |
 | Room | yes | yes | 11 | School, SeatingPlan | [schoolId, name] | A physical room, described only as far as seating needs it: how many rows of desks, how many desks in a row, and how many students share one |
 | SeatingPlan | yes | yes | 14 | School, Room |  | One generated seating chart for one room. `seats` is the whole plan as JSON, not a row per student. A plan is written once by the generator  |
@@ -65,12 +67,12 @@ _Generated 2026-09-08 from `9be058c` (staging-site-preview → origin/staging). 
 | EventRegistration | yes | yes | 21 | Event, EventTicketType, EventPayment | [eventId, studentId] | One person's place at one event. It lives in the HOST school's tenant — `schoolId` is the host, and that is what RLS scopes on. The host own |
 | EventPayment | yes | yes | 12 | EventRegistration |  | Money that changed hands. Written today by an admin recording cash at the office (`provider = "MANUAL"`), and by a gateway later — the same  |
 | PasswordResetToken | no | yes | 7 | User |  |  |
-| Enquiry | yes | yes | 14 | School, EnquiryNote |  |  |
+| Enquiry | yes | yes | 19 | School, EnquiryNote |  |  |
 | EnquiryNote | yes | yes | 9 | Enquiry |  | One line of an enquiry's history: a note somebody typed, or a stage change. Append-only by convention — nothing in the app updates or delete |
 | Announcement | yes | yes | 9 | School, ClassSection |  |  |
-| MarketingLead | no | yes | 13 | LeadActivity |  |  |
+| MarketingLead | no | yes | 14 | LeadActivity, Referral |  |  |
 | LeadActivity | no | yes | 9 | MarketingLead |  | Append-only timeline for one lead: notes, logged contact attempts and the stage moves between them. Never updated — corrections are new rows |
-| MarketingConfig | no | yes | 10 |  |  | Singleton (id = "default"): owner-editable pricing + public contact info. |
+| MarketingConfig | no | yes | 21 |  |  | THE PLATFORM'S SINGLE CONFIG ROW (id = "default"). Named for what it first held — the marketing site's prices and contact details — and it i |
 | ImpersonationToken | yes | yes | 9 | User |  | One-time 15-minute owner→school-admin login handoff (sha256 at rest, single-use, host-bound at exchange time). Mirrors PasswordResetToken. |
 | BlogPost | yes | yes | 18 | School, SchoolBlogSelection | [schoolId, slug] |  |
 | SchoolBlogSelection | yes | yes | 8 | School, BlogPost | [schoolId, postId] |  |
@@ -128,6 +130,48 @@ _Generated 2026-09-08 from `9be058c` (staging-site-preview → origin/staging). 
 | ResultNudge | yes | yes | 10 | School |  | The Result Room's nudge log: one row per reminder an admin sent a teacher about pending marks. Exists so the room can show "nudged yesterday |
 | PrintOrder | yes | yes | 20 | School, PrintOrderEvent |  |  |
 | PrintOrderEvent | yes | yes | 10 | School, PrintOrder |  |  |
+| SessionPlan | yes | yes | 22 | School, AcademicYear, SessionDecision |  | The office's year-end draft: from one AcademicYear to the next, with the pass mark that FLAGS (never decides), which exams count, how each s |
+| SessionDecision | yes | yes | 16 | School, SessionPlan, Student | [planId, studentId] | One row per child in a plan. Nothing about the child changes until Start; `appliedAt` is the receipt. Section ids are plain UUIDs on purpose |
+| SportsSettings | yes | yes | 10 | School |  | One row per school, created on first read with the defaults. `grouping` BANDS = bands of classes (`bands` JSON: [{id,label,stds}]); AGE = of |
+| House | yes | yes | 9 | School, Student, HousePoint | [schoolId, name] |  |
+| HousePoint | yes | yes | 9 | School, House |  | Points are rows, never a running total, so a correction is a row too. |
+| SportsTournament | yes | yes | 19 | School, SportsVenue, SportsEvent |  | Several sports on shared venues and days. `grouping` is fixed at creation. |
+| SportsVenue | yes | yes | 7 | School, SportsTournament |  |  |
+| SportsEvent | yes | yes | 24 | School, SportsTournament, SportsEntry, SportsMatch, SportsHeat |  | One sport × one group × one category inside a tournament. |
+| SportsEntry | yes | yes | 9 | School, SportsEvent, Student | [eventId, studentId] |  |
+| SportsMatch | yes | yes | 22 | School, SportsEvent |  | A knockout slot. Sides are keys, not FKs — `s:<studentId>` for an individual, `c:<std>-<section>` for a section team — so a result is histor |
+| SportsHeat | yes | yes | 12 | School, SportsEvent, SportsMark |  |  |
+| SportsMark | yes | yes | 9 | School, SportsHeat | [heatId, studentId] |  |
+| SportsRecord | yes | yes | 18 | School |  | A record line is sportKey × groupKey × category. STANDING is the current holder; BROKEN rows are the history (with `untilYear`); VOID rows w |
+| SportsRecordAttempt | yes | yes | 17 | School |  |  |
+| WhatsAppSettings | yes | yes | 6 | School |  | Per-school switch for the WhatsApp channel. Off by default: a school turns it on once it has told families (opt-in is Meta policy and the DP |
+| WhatsAppDelivery | yes | yes | 13 | School |  | The delivery ledger: one row per WhatsApp message we asked Meta to send. Meta's webhook later moves `status` SENT → DELIVERED → READ (or FAI |
+| EmailDelivery | yes | yes | 12 | School |  | The email delivery ledger — one row per message the platform asked a provider to send, whatever it was about. `schoolId` is null for mail th |
+| EmailSuppression | yes | yes | 6 | School |  | Addresses we will not send to again: a permanent bounce or a spam complaint. Platform-wide by address (a bounced mailbox is bounced for ever |
+| WhatsAppInbound | yes | yes | 8 | School |  | Every message or button tap a person sent US on WhatsApp, keyed by Meta's message id — which is what makes handling idempotent (Meta retries |
+| OtpChallenge | yes | yes | 12 |  |  | One-time code for a phone: login, password reset, or proving a number. Platform-side (a phone is not a tenant row): no schoolId FK, no RLS — |
+| PayComponent | yes | yes | 19 | School | [schoolId, key] | A named piece of money with FLAGS rather than a rate — is it taxable, does it count as "wages" for the Code on Wages 50% test, is the provid |
+| EmployeePay | yes | yes | 31 | School, Teacher, Staff, PayGrade |  | One person's pay, as it stood FROM a date. A raise writes a new row; nothing is ever edited in place. This is the single thing that makes a  |
+| PayGrade | yes | yes | 15 | School, EmployeePay | [schoolId, name] | A job's pay: the band it sits in, and the split when it differs from the school's own components. Putting the money on the job instead of on |
+| PayRun | yes | yes | 26 | School, Payslip, PayAdjustment | [schoolId, periodYear, periodMonth] | One month, for the whole school. Immutable once LOCKED, and it records the pack version and the date its rules were read at, so a school can |
+| Payslip | yes | yes | 31 | School, PayRun, Teacher, Staff | [payRunId, personKind, teacherId, staffId] | One person's month. The lines are a SNAPSHOT, not a join: a payslip must read the same in three years even after the structure, the person's |
+| PayAdjustment | yes | yes | 22 | School, PayRun, Teacher, Staff |  | An arrears line, a one-off, or days of unpaid absence, aimed at one month. A correction to a LOCKED run is one of these in the next run, nev |
+| TaxDeclaration | yes | yes | 23 | School, Teacher, Staff | [schoolId, personKind, teacherId, staffId, taxYear] | What the person declared for the year — rent, insurance, a previous employer. India calls this Form 124 since April 2026; it was Form 12BB.  |
+| OnboardingImport | yes | yes | 11 | School |  | One row per bulk import the Onboarding tab ran — what file, how many rows, what happened. The tab's "Imports" list and its "Last import" til |
+| ClassTeacherAssignment | yes | yes | 11 | School, ClassSection, Teacher, User |  | Who was a section's class teacher, and when. The live answer is ClassSection.classTeacherId; this is the dated record behind it, because a r |
+| Concern | yes | yes | 25 | School, Student, User, Teacher, ConcernComment |  | One thing a family raised — the Complaint Box. `audience` is the family's own choice of who should see it; `assignedTeacherId` is the class  |
+| ConcernComment | yes | yes | 13 | School, Concern, User |  | One entry on a concern's timeline: a comment the family can see, a private note the school keeps to itself, or a status change. One table, s |
+| SchoolBackup | no | yes | 25 | SchoolRestore |  |  |
+| SchoolRestore | no | yes | 17 | SchoolBackup |  |  |
+| SamplePack | no | yes | 19 |  |  | A named set of management data (`setup` + `day`) kept at PLATFORM level, so deleting a school can never take a pack with it. Loading one re- |
+| SyllabusChapter | yes | yes | 17 | School, Grade, Subject, SyllabusChapter, SyllabusProgress, SyllabusStudentNote |  |  |
+| SyllabusProgress | yes | yes | 13 | School, ClassSection, SyllabusChapter, Teacher | [classSectionId, chapterId] | One row per (section, chapter) once a teacher has touched it. Absence means NOT_STARTED, so a brand-new section has no rows at all. |
+| SyllabusStudentNote | yes | yes | 10 | School, Student, SyllabusChapter | [studentId, chapterId] | A child's own revision note on a chapter. Private: only that student reads it. |
+| Promoter | no | yes | 35 | Referral, ReferralPayout, ReferralTask |  | A person who introduces schools. Signs in by a one-time code (email or WhatsApp); no password. `tokenVersion` is bumped on suspend/remove so |
+| Referral | no | yes | 32 | Promoter, MarketingLead, ReferralEvent, ReferralPayout, ReferralTask |  | One school a promoter introduced. Becomes a MarketingLead when accepted, and links to the School once it is live. Money in paise. |
+| ReferralEvent | no | yes | 8 | Referral |  | Append-only timeline for one referral: stage moves and notes. |
+| ReferralPayout | no | yes | 15 | Promoter, Referral |  | What is owed for one live referral. One per referral, ever. |
+| ReferralTask | no | yes | 10 | Promoter, Referral |  | Something waiting on the owner: a commission request, a new referral to accept, payout details to verify. Closed by the action that resolves |
 
 ## Enums
 
@@ -139,8 +183,9 @@ _Generated 2026-09-08 from `9be058c` (staging-site-preview → origin/staging). 
 | DomainStatus | PENDING, LIVE, ERROR |
 | EmailSenderMode | DEFAULT, CUSTOM |
 | EmailSenderStatus | UNVERIFIED, VERIFIED, FAILING |
+| LopBasis | CALENDAR_DAY, WORKING_DAY, WARN_ONLY |
 | UserRole | OWNER, SCHOOL_ADMIN, TEACHER, STUDENT, STAFF, ALUMNUS, LIBRARIAN |
-| MediaKind | LOGO, FAVICON, HERO, GALLERY, STAFF, EVENT, PRINCIPAL, COURSE, HOF, ABOUT, AVATAR |
+| MediaKind | LOGO, FAVICON, HERO, GALLERY, STAFF, EVENT, PRINCIPAL, COURSE, HOF, ABOUT, AVATAR, FESTIVE |
 | SocialPlatform | FACEBOOK, INSTAGRAM, YOUTUBE, X, LINKEDIN |
 | MenuKind | CLASS, PAGE, CUSTOM |
 | EventAudienceKind | SCHOOL_ONLY, CITY, SELECTED, EVERYWHERE |
@@ -148,14 +193,19 @@ _Generated 2026-09-08 from `9be058c` (staging-site-preview → origin/staging). 
 | EventStatus | DRAFT, PENDING, APPROVED, REJECTED |
 | RegistrationStatus | HELD, CONFIRMED, WAITLISTED, DECLINED, CANCELLED |
 | PaymentStatus | NOT_REQUIRED, PENDING, PAID, REFUNDED |
-| EnquiryStatus | NEW, CONTACTED, VISITED, APPLIED, ENROLLED, CLOSED, LOST |
+| EnquiryStatus | NEW, CONTACTED, INTERESTED, VISITED, APPLIED, ENROLLED, CLOSED, LOST |
+| EnquirySource | WEBSITE, COURSE_CARD, WALK_IN, PHONE, WHATSAPP, REFERRAL |
 | AttendanceStatus | PRESENT, ABSENT, LATE |
 | PeriodKind | CLASS, BREAK |
-| StaffRole | OFFICE, SUPPORT, DRIVER, HELPER, SECURITY, LIBRARIAN, OTHER |
+| StaffRole | OFFICE, SUPPORT, DRIVER, HELPER, SECURITY, LIBRARIAN, SPORTS, ACCOUNTS, ADMISSIONS, OTHER |
 | LeaveType | SICK, CASUAL, EARNED, UNPAID, OTHER |
 | LeaveStatus | PENDING, APPROVED, REJECTED, CANCELLED |
 | PersonAttendanceStatus | PRESENT, ABSENT, LATE, ON_LEAVE |
 | ClassNoteVisibility | ALL_TEACHERS, SUBJECT_TEACHERS |
+| StudentStatus | ACTIVE, ALUMNI, TRANSFERRED, LEFT |
+| StaffStatus | ACTIVE, LEFT |
+| SessionPlanStatus | DRAFT, SCHEDULED, STARTED, CANCELLED |
+| SessionDecisionKind | PROMOTE, STAY, PASS_OUT, LEAVE |
 | HallOfFameGroupKind | COURSE, GRADES, CUSTOM |
 | LeadStatus | NEW, CONTACTED, QUALIFIED, DEMO, WON, LOST, CLOSED |
 | LeadActivityKind | NOTE, CALL, WHATSAPP, EMAIL, MEETING, STAGE_CHANGE |
@@ -189,3 +239,20 @@ _Generated 2026-09-08 from `9be058c` (staging-site-preview → origin/staging). 
 | FeePaymentMethod | UPI, NEFT_IMPS, CHEQUE, CASH, CARD, NETBANKING, OTHER |
 | FeeLedgerKind | DEBIT, CREDIT |
 | LateFeeMode | NONE, FLAT, PER_DAY |
+| SportsTournamentStatus | DRAFT, LIVE, DONE |
+| PayComponentKind | EARNING, DEDUCTION, EMPLOYER_COST |
+| PayComponentCalc | FIXED, PCT_OF_BASIC, PCT_OF_GROSS, BALANCE |
+| PayPersonKind | TEACHER, STAFF |
+| PayRunStatus | DRAFT, CALCULATED, APPROVED, LOCKED, PAID |
+| PayTaxRegime | NEW, OLD |
+| PayDeclarationStatus | DRAFT, SUBMITTED |
+| SchoolBackupStatus | RUNNING, READY, FAILED, EXPIRED |
+| SchoolBackupReason | MANUAL, BEFORE_DELETE, BEFORE_REPLACE, WEEKLY, UPLOADED, SNAPSHOT, BEFORE_RESET, PACK |
+| SchoolRestoreStatus | RUNNING, DONE, FAILED |
+| SyllabusStatus | NOT_STARTED, TEACHING, DONE |
+| PromoterStatus | ACTIVE, SUSPENDED, REMOVED |
+| ReferralStatus | LOGGED, ACCEPTED, CONTACTED, DEMO_DONE, PROPOSAL_SENT, WON, LIVE, PAYOUT_DUE, PAID, REJECTED, LOST |
+| ReferralTaskKind | COMMISSION, REFERRAL, KYC |
+| ReferralTaskStatus | OPEN, DONE |
+| ReferralPayoutStatus | DUE, PAID, ON_HOLD |
+| ReferralEventActor | PROMOTER, OWNER, SYSTEM |

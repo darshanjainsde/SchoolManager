@@ -18,7 +18,7 @@ Every key is in a tier now; nothing is "on request". Overrides per school live i
 
 ## Pricing (decided 2026-09-07)
 
-Per student, per year, in INR and USD, set by the owner in `/platform/settings` (`MarketingConfig`); other currencies convert live from USD (`apps/web/lib/fx.ts`). The homepage hero carries a hanging price tag "Starting from ₹{basic} per student, a year" that links to `/pricing`; the pricing page has three plan cards, a student-count slider and FAQs. Staging currently holds test rates. Promotion plans follow once rates are final.
+Per student, per year, in INR and USD, set by the owner in `/platform/settings` (`MarketingConfig`); other currencies convert live from USD (`apps/web/lib/fx.ts`). The homepage hero carries a hanging price tag "Starting from ₹{basic} per student, a year" that links to `/pricing`; the pricing page has three plan cards, a student-count slider and FAQs. Production rates on 2026-10-24: ₹30 / ₹45 / ₹60 per student per year (USD 1 / 2 / 3) — placeholders until the owner sets the real ones (production currently holds dummy data). Migration `20261022_120000_marketing_hero_discount` added the owner-run **launch discount** (`discountEnabled/Percent/Label/EndsAt`, countdown on the site) and editable **hero figures** (`heroStats`); both are edited in `/platform/settings` and read by `GET /marketing/config`.
 
 ## Marketing site (sckools.com)
 
@@ -27,7 +27,8 @@ Per student, per year, in INR and USD, set by the owner in `/platform/settings` 
 - Leads: `POST /marketing/leads` (`{name?, phone, email?, school?, interest?, source}`) feeds the owner lead pipeline (`LeadActivity`); the callback modal and the two-step quote journey (`/start`) both post there with the modules, size and — from the switch section — the ticked pains and the maths.
 - Contact: +91 95994 43324, admin@sckools.com.
 - Service promises the copy makes (must be honoured): free site + data migration, keep the domain, zero downtime, two months of custom features, data handed back on exit, office training on a call.
-- Honesty rules: WhatsApp/SMS are not built (email + push + in-app only) — list only as "coming" if committed; counters are honest counts.
+- Honesty rules: WhatsApp IS built (Pro, `WHATSAPP`, since 2026-09-20: outbound channel, phone verification, inbound actions); SMS is not — never list SMS; counters are honest counts.
+- **Plan cards** (home + `/pricing`, 2026-10-22): three equal-height cards, each a list of categories with short feature names ("Fee counter", "Exam hall seating"), no prose. **Features page** (`/#/features`, 2026-10-22): 54 tiles in four desks (front office, teachers, families, website), every tile categorised and renamed in plain English, filter by desk and plan.
 
 ## Go-to-market
 
@@ -39,14 +40,14 @@ Per student, per year, in INR and USD, set by the owner in `/platform/settings` 
 
 Sckools name everywhere; Tassel-S logo; indigo `#4F46E5` / amber `#F59E0B`; the school-site "daylight" palette on the marketing pages (teal `#0d9488`, violet `#6d4aff`, gold `#f5a623`, coral `#ff7a45`).
 
-## Refer & Earn (built 2026-10-23, staging first)
+## Refer & Earn (built 2026-10-23, live on production 2026-10-24)
 
 A promoter (any adult: teacher, parent, tuition owner, supplier, consultant) introduces schools and is paid a share of the school's first-year payment once it is live and has paid. Nothing is paid for a lead.
 
 - **Public page** `sckools.com/earn` (apps/web/app/earn, components/earn). Says NO rates: the rate is set per person by the owner.
 - **Sign in / sign up**: one door, a six-digit code by email (MailService) or WhatsApp (the platform's OTP senders, `OtpPurpose 'PROMOTER'`, challenge `schoolId` null). No password. First-timer gives a name and the questionnaire (who, how many schools in six months, areas, how they know schools, GST). Token: audience `promoter`, 30 days, signed with an HMAC-derived secret (`promoterSecret()`), `ver` = `Promoter.tokenVersion`; kept in localStorage `sk_promoter_session`; /earn and /promoter are in the middleware CSP matcher.
 - **Promoter portal** `sckools.com/promoter` (`.sk-*` look): dashboard with the commission card (not set → "Get my commission %" → pending → set), figures, referrals; log a referral (required: school, city, contact, phone, consent; instant duplicate check); timeline per referral; payouts (PAN + bank or UPI, statement with gross/TDS/net); share link `/start?ref=CODE` (the static site stores `sk-ref` 90 days and sends `ref` with every lead; `MarketingService.createLead` → `ReferralsService.attributeLead`).
-- **Owner console** `owner.sckools.com/platform/referrals`: Tasks (commission requests with the questionnaire beside a rate box pre-filled from the ladder; new referrals with accept/reject; payout details to verify), Promoters (filters, set rate, pause/restore with a reason, send login link, add by hand), Referrals (filters by promoter/city/stage, stage moves that also move the lead, mark live with the invoice → payout), Payouts (mark paid with UTR, CSV), Settings (ladder, cap, payout days, attribution days, TDS %). Sidebar badge = open tasks (`attention.referralTasks`).
+- **Owner console** `owner.sckools.com/platform/referrals` (also `sckools.com/platform/referrals`; measured 360–1920 by `apps/web/audit/referrals.test.tsx`): Tasks (commission requests with the questionnaire beside a rate box pre-filled from the ladder; new referrals with accept/reject; payout details to verify), Promoters (filters, set rate, pause/restore with a reason, send login link, add by hand), Referrals (filters by promoter/city/stage, stage moves that also move the lead, mark live with the invoice → payout), Payouts (mark paid with UTR, CSV), Settings (ladder, cap, payout days, attribution days, TDS %). Sidebar badge = open tasks (`attention.referralTasks`).
 - **Rules in code** (`apps/api/src/modules/referrals/referral-rules.ts`): first accepted referral holds a school for `referralAttributionDays` (default 90); schools already in the lead pipeline (180 days) or already live are refused with the reason; stages move forward only; LIVE needs the rate and the invoice and creates the ONE payout (`rewardMinor` = pct of invoice capped by the promoter's cap or the platform cap; TDS `referralTdsPct`); PAYOUT_DUE → PAID on mark paid; suspension bumps `tokenVersion`.
 - **Data**: `Promoter`, `Referral` (→ `MarketingLead` on accept, source `referral:CODE`), `ReferralEvent`, `ReferralPayout`, `ReferralTask`; settings on `MarketingConfig.referral*`. Platform tables: RLS on, `platform_only` deny-all policy, read through the BYPASSRLS client only. Migration `20261023_090000_refer_and_earn`.
 - **Tests**: `referral-rules.spec`, `referrals.dto.spec`, `referrals.service.spec`, `promoter-auth.spec` (unit); `test/promoter-contract.e2e-spec.ts` (booted app: audiences, masking, suspended, required fields, owner host); web `lib/promoter-session.test.ts`; `console-segments.test.ts` covers the new sessions.
