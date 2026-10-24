@@ -83,10 +83,10 @@ export default function SupportTicketPage() {
   const busy = comment.isPending || status.isPending || assign.isPending || patch.isPending || openSchool.isPending;
 
   return (
-    <div className="sk-own-grid">
+    <>
       <header className="sk-own-head">
         <div style={{ minWidth: 0 }}>
-          <Link href="/platform/support" className="sk-own-link" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+          <Link href="/platform/support" className="sk-own-link sk-sup-back">
             <ArrowLeft size={14} aria-hidden="true" /> Support
           </Link>
           <h1>{t ? <><span className="sk-sup-no">{t.ticketNo}</span> {t.title}</> : 'Ticket'}</h1>
@@ -126,12 +126,12 @@ export default function SupportTicketPage() {
                   <span className="sk-own-sub">Closed. Only the school can reopen it.</span>
                 ) : (
                   <div className="sk-own-fld">
-                    <label htmlFor="sup-move" className="sk-sronly">Move to</label>
+                    <label htmlFor="sup-move">Move to</label>
                     <select id="sup-move" className="sk-input" value={move} onChange={(e) => setMove(e.target.value as SupportStatus | '')}>
                       <option value="">Choose a move…</option>
                       {moves.map((m) => <option key={m} value={m}>{SUPPORT_STATUS_LABEL[m]}</option>)}
                     </select>
-                    <label htmlFor="sup-move-note" className="sk-sronly">Note to the school</label>
+                    <label htmlFor="sup-move-note">Note to the school</label>
                     <input id="sup-move-note" className="sk-input" placeholder="A line the school reads with the move (optional)" maxLength={4000} value={note} onChange={(e) => setNote(e.target.value)} />
                     <button type="button" className="sk-own-btn" data-kind="primary" disabled={!move || busy} onClick={() => move && status.mutate(move)}>Move</button>
                   </div>
@@ -141,7 +141,7 @@ export default function SupportTicketPage() {
               <span>Assigned</span>
               <span>
                 {t.assignedTo ? t.assignedTo.name : <span className="sk-own-sub">Nobody yet</span>}{' '}
-                <button type="button" className="sk-own-link" disabled={busy} onClick={() => assign.mutate(!t.assignedTo)}>{t.assignedTo ? 'Hand back' : 'Take it'}</button>
+                <button type="button" className="sk-own-btn" disabled={busy} onClick={() => assign.mutate(!t.assignedTo)}>{t.assignedTo ? 'Hand back' : 'Take it'}</button>
               </span>
 
               <span>Look-in</span>
@@ -162,10 +162,12 @@ export default function SupportTicketPage() {
 
               <span>Reference</span>
               <span>
-                <div className="sk-own-fld" style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
-                  <label htmlFor="sup-ref" className="sk-sronly">GitHub or other reference</label>
+                <div className="sk-own-fld">
+                  <label htmlFor="sup-ref">GitHub or other reference</label>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                   <input id="sup-ref" className="sk-input" placeholder="#412" maxLength={120} value={ref ?? t.externalRef ?? ''} onChange={(e) => setRef(e.target.value)} style={{ minWidth: 0 }} />
                   <button type="button" className="sk-own-btn" disabled={ref === null || busy} onClick={() => patch.mutate(ref && ref.trim() ? ref.trim() : null)}>Save</button>
+                  </div>
                 </div>
                 <span className="sk-own-sub" style={{ fontSize: 11.5 }}>The school never sees this.</span>
               </span>
@@ -181,6 +183,6 @@ export default function SupportTicketPage() {
           </aside>
         </div>
       )}
-    </div>
+    </>
   );
 }

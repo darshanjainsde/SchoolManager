@@ -143,7 +143,7 @@ export function ReportProblem({ pagePath, onClose, onCreated }: {
             <label className="sk-btn sk-press" data-size="sm">
               <ImageIcon size={14} aria-hidden="true" /> Add photos
               <input
-                id="sup-files" type="file" accept={IMAGE_ACCEPT} multiple className="sk-sronly" data-testid="report-files"
+                id="sup-files" type="file" accept={IMAGE_ACCEPT} multiple className="sk-sup-fileinput" aria-label="Add photos" data-testid="report-files"
                 onChange={(e) => {
                   const { kept, dropped } = acceptFiles(files, Array.from(e.target.files ?? []));
                   setFiles(kept);

@@ -119,7 +119,7 @@ export function TicketThread({ ticket, viewer, busy, onComment, onConfirm, onReo
 
       {canWrite && (
         <div className="sk-conreply">
-          <label className="sk-sronly" htmlFor="ticket-reply">
+          <label className="sk-lab" htmlFor="ticket-reply">
             {reopening ? 'Say what is still wrong' : school ? 'Write to Sckools' : 'Write to the school'}
           </label>
           <textarea
@@ -135,7 +135,7 @@ export function TicketThread({ ticket, viewer, busy, onComment, onConfirm, onReo
               <label className="sk-btn sk-press" data-size="sm">
                 <ImageIcon size={14} aria-hidden="true" /> Add photos
                 <input
-                  type="file" accept={IMAGE_ACCEPT} multiple className="sk-sronly" data-testid="reply-files"
+                  type="file" accept={IMAGE_ACCEPT} multiple className="sk-sup-fileinput" aria-label="Add photos" data-testid="reply-files"
                   onChange={(e) => {
                     const { kept, dropped } = acceptFiles(files, Array.from(e.target.files ?? []));
                     setFiles(kept); setFileNote(dropped.length ? dropped.join('; ') : null);

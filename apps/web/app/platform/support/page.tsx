@@ -48,7 +48,7 @@ export default function SupportPage() {
   const rows = list.data ?? [];
 
   return (
-    <div className="sk-own-grid">
+    <>
       <header className="sk-own-head">
         <div>
           <h1>Support</h1>
@@ -95,7 +95,7 @@ export default function SupportPage() {
             <div className="sk-own-tablewrap">
               <table className="sk-own-table" data-testid="support-board">
                 <thead>
-                  <tr><th>School</th><th>Plan</th><th>Open</th><th>Waiting on school</th><th>Oldest unanswered</th><th><span className="sk-sronly">Actions</span></th></tr>
+                  <tr><th>School</th><th>Plan</th><th>Open</th><th>Waiting on school</th><th>Oldest unanswered</th><th aria-label="Actions"></th></tr>
                 </thead>
                 <tbody>
                   {board.data.schools.map((s) => {
@@ -200,6 +200,6 @@ export default function SupportPage() {
           </div>
         )}
       </section>
-    </div>
+    </>
   );
 }
