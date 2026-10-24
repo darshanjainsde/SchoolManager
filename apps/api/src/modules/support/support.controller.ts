@@ -30,7 +30,7 @@ import { SupportService, type UploadedImage } from './support.service';
  */
 
 const photos = () =>
-  UseInterceptors(FilesInterceptor('files', SUPPORT_MAX_FILES, { limits: { fileSize: SUPPORT_MAX_FILE_BYTES } }));
+  UseInterceptors(FilesInterceptor('files', SUPPORT_MAX_FILES, { limits: { fileSize: SUPPORT_MAX_FILE_BYTES, files: SUPPORT_MAX_FILES } }));
 
 const asImages = (files?: Express.Multer.File[]): UploadedImage[] =>
   (files ?? []).map((f) => ({ originalname: f.originalname, buffer: f.buffer, mimetype: f.mimetype }));
@@ -70,7 +70,9 @@ export class SchoolSupportController {
     return this.svc.schoolDetail(this.v(u), id);
   }
 
+  // Each reply can mail the owner; a burst is coalesced there, and this caps the rest.
   @Post(':id/comment') @HttpCode(200)
+  @Throttle({ default: { limit: 30, ttl: 600_000 } })
   @photos()
   comment(
     @Param('id', ParseUUIDPipe) id: string,
@@ -88,12 +90,14 @@ export class SchoolSupportController {
   }
 
   @Post(':id/reopen') @HttpCode(200)
+  @Throttle({ default: { limit: 10, ttl: 3_600_000 } })
   reopen(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ReopenDto, @CurrentUser() u: SchoolJwtPayload) {
     return this.svc.reopen(this.v(u), id, dto.body);
   }
 
   /** Allow, or withdraw, Sckools opening the console to investigate. */
   @Post(':id/look-in') @HttpCode(200)
+  @Throttle({ default: { limit: 20, ttl: 3_600_000 } })
   lookIn(@Param('id', ParseUUIDPipe) id: string, @Body() dto: LookInDto, @CurrentUser() u: SchoolJwtPayload) {
     return this.svc.setLookIn(this.v(u), id, dto.allow);
   }
@@ -123,7 +127,7 @@ export class OwnerSupportController {
 
   @Get('tickets')
   tickets(
-    @Query('schoolId') schoolId?: string,
+    @Query('schoolId', new ParseUUIDPipe({ optional: true })) schoolId?: string,
     @Query('status') status?: string,
     @Query('type') type?: string,
     @Query('module') module?: string,

@@ -2034,7 +2034,14 @@ export const SUPPORT_AUTO_CLOSE_DAYS = 7;
 /** How long a school's "let Sckools look" consent lasts. */
 export const SUPPORT_LOOK_IN_HOURS = 48;
 export const SUPPORT_MAX_FILES = 5;
-export const SUPPORT_MAX_FILE_BYTES = 5 * 1024 * 1024;
+/**
+ * The whole request — every photo together — must fit under the platform's
+ * body cap: apps/api is one Vercel function, which refuses bodies over 4.5 MB
+ * before the app sees them. 4 MB leaves room for the form fields and multipart
+ * framing. The web form shrinks photos to fit; the API states the same budget.
+ */
+export const SUPPORT_MAX_REQUEST_BYTES = 4 * 1024 * 1024;
+export const SUPPORT_MAX_FILE_BYTES = SUPPORT_MAX_REQUEST_BYTES;
 /** One global sequence: the owner talks about tickets across schools. */
 export function supportTicketNo(n: number): string {
   return `SK-${String(n).padStart(6, '0')}`;

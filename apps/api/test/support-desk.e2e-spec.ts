@@ -299,4 +299,102 @@ describe('the support desk', () => {
     const res = await raise(adminTwo, two.host, { title: 'One too many' }, 0).expect(429);
     expect(res.body.code).toBe('SUPPORT_DAILY_LIMIT');
   });
+
+  // ── the review's findings, each pinned (24 Oct 2026) ──────────────────
+
+  /** A fresh ticket in school one, moved by the owner to `to` through the API. */
+  const freshTicket = async (title: string, to?: 'RESOLVED' | 'WAITING_ON_SCHOOL') => {
+    const res = await raise(adminOne, one.host, { title }, 0).expect(201);
+    if (to) await api().post(`/owner/support/${res.body.id}/status`).set(asOwner()).send({ status: to }).expect(200);
+    return res.body.id as string;
+  };
+
+  it('two confirms at once: exactly one wins, one line on the timeline', async () => {
+    const id = await freshTicket('Race: double confirm', 'RESOLVED');
+    const results = await Promise.all([0, 1].map(() => api().post(`/manage/support/${id}/confirm`).set(asSchool(adminOne, one.host))));
+    expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
+    const lines = await db.supportTicketEntry.count({ where: { ticketId: id, body: 'Confirmed fixed.' } });
+    expect(lines).toBe(1);
+  });
+
+  it('confirm and reopen at once never leave a closed ticket that cannot be reopened', async () => {
+    const id = await freshTicket('Race: confirm vs reopen', 'RESOLVED');
+    await Promise.all([
+      api().post(`/manage/support/${id}/confirm`).set(asSchool(adminOne, one.host)),
+      api().post(`/manage/support/${id}/reopen`).set(asSchool(adminOne, one.host)).send({ body: 'Still broken.' }),
+    ]);
+    const t = await db.supportTicket.findUnique({ where: { id }, select: { status: true, resolvedAt: true } });
+    // The dead state the old read-then-update could reach: CLOSED with no resolution date.
+    expect(t?.status === 'CLOSED' && t.resolvedAt === null).toBe(false);
+    expect(['CLOSED', 'OPEN']).toContain(t?.status);
+  });
+
+  it('closing ends look-in consent, and a closed ticket can neither be opened as the school nor granted consent', async () => {
+    const id = await freshTicket('Look-in ends with the ticket', 'RESOLVED');
+    await api().post(`/manage/support/${id}/look-in`).set(asSchool(adminOne, one.host)).send({ allow: true }).expect(200);
+    const closed = await api().post(`/manage/support/${id}/confirm`).set(asSchool(adminOne, one.host)).expect(200);
+    expect(closed.body.lookInUntil).toBeNull();
+    const refused = await api().post(`/owner/support/${id}/open-school`).set(asOwner()).expect(409);
+    expect(refused.body.code).toBe('SUPPORT_LOOK_IN_REQUIRED');
+    await api().post(`/manage/support/${id}/look-in`).set(asSchool(adminOne, one.host)).send({ allow: true }).expect(409);
+  });
+
+  it('the owner closing a ticket also ends look-in consent', async () => {
+    const id = await freshTicket('Owner closes with consent live', 'RESOLVED');
+    await api().post(`/manage/support/${id}/look-in`).set(asSchool(adminOne, one.host)).send({ allow: true }).expect(200);
+    await api().post(`/owner/support/${id}/status`).set(asOwner()).send({ status: 'CLOSED' }).expect(200);
+    const t = await db.supportTicket.findUnique({ where: { id }, select: { lookInUntil: true } });
+    expect(t?.lookInUntil).toBeNull();
+  });
+
+  it('opening the console is not answering: the ticket stays unanswered', async () => {
+    const id = await freshTicket('Look is not answer');
+    await api().post(`/manage/support/${id}/look-in`).set(asSchool(adminOne, one.host)).send({ allow: true }).expect(200);
+    await api().post(`/owner/support/${id}/open-school`).set(asOwner()).expect(200);
+    const res = await api().get(`/owner/support/${id}`).set(asOwner()).expect(200);
+    expect(res.body.unanswered).toBe(true);
+    expect(res.body.lastOwnerActivityAt).toBeNull();
+  });
+
+  it('a private note does not move the ticket up the school list', async () => {
+    const id = await freshTicket('Private note leaves no trace');
+    const before = (await api().get(`/manage/support/${id}`).set(asSchool(adminOne, one.host)).expect(200)).body.lastActivityAt;
+    await api().post(`/owner/support/${id}/comment`).set(asOwner()).send({ body: 'internal only', visibleToSchool: false }).expect(200);
+    const after = (await api().get(`/manage/support/${id}`).set(asSchool(adminOne, one.host)).expect(200)).body.lastActivityAt;
+    expect(after).toBe(before);
+  });
+
+  it('a reply on a resolved ticket is refused and points at confirm or reopen', async () => {
+    const id = await freshTicket('Reply on resolved', 'RESOLVED');
+    const res = await api().post(`/manage/support/${id}/comment`).set(asSchool(adminOne, one.host)).field('body', 'still broken').expect(409);
+    expect(res.body.message).toMatch(/reopen/i);
+  });
+
+  it('a run of school replies mails the owner once', async () => {
+    const id = await freshTicket('Coalesce owner alerts');
+    const before = sent.length;
+    for (const body of ['one', 'two', 'three']) {
+      await api().post(`/manage/support/${id}/comment`).set(asSchool(adminOne, one.host)).field('body', body).expect(200);
+    }
+    expect(sent.length - before).toBe(1);
+  });
+
+  it('photos over 4 MB together are refused with the total, before anything is stored', async () => {
+    const big = Buffer.concat([PNG.subarray(0, 8), Buffer.alloc(1_600_000, 1)]);
+    const before = fakeStorage.upload.mock.calls.length;
+    let req = api().post('/manage/support').set(asSchool(adminOne, one.host))
+      .field('type', 'BUG').field('module', 'FEES').field('severity', 'ANNOYING').field('title', 'Too big together').field('body', 'Three large screenshots.');
+    for (let i = 0; i < 3; i++) req = req.attach('files', big, { filename: `big-${i}.png`, contentType: 'image/png' });
+    const res = await req.expect(413);
+    expect(res.body.message).toMatch(/under 4 MB/);
+    expect(fakeStorage.upload.mock.calls.length).toBe(before);
+  });
+
+  it('a title of only spaces is refused, not stored as empty', async () => {
+    await raise(adminOne, one.host, { title: '      ' }, 0).expect(400);
+  });
+
+  it('a school filter that is not an id is a 400, not a 500', async () => {
+    await api().get('/owner/support/tickets').query({ schoolId: 'raffles' }).set(asOwner()).expect(400);
+  });
 });

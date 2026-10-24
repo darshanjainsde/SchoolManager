@@ -6,6 +6,7 @@ import {
   SUPPORT_AUTO_CLOSE_DAYS,
   SUPPORT_LOOK_IN_HOURS,
   SUPPORT_MAX_FILES,
+  SUPPORT_MAX_REQUEST_BYTES,
   SUPPORT_MODULE_LABEL,
   SUPPORT_REOPEN_DAYS,
   SUPPORT_SEVERITY_LABEL,
@@ -54,6 +55,19 @@ const HOUR = 3_600_000;
 const PER_SCHOOL_PER_DAY = 20;
 const FILE_TTL = 300;
 const LIVE: SupportStatus[] = ['OPEN', 'ACKNOWLEDGED', 'IN_PROGRESS', 'WAITING_ON_SCHOOL'];
+/** The school may write on these; RESOLVED is answered by confirm or reopen, CLOSED by reopen. */
+const WRITABLE: SupportStatus[] = ['OPEN', 'ACKNOWLEDGED', 'IN_PROGRESS', 'WAITING_ON_SCHOOL'];
+/** A run of school replies inside this window reaches the owner's inbox once. */
+const OWNER_ALERT_COALESCE_MS = 10 * 60_000;
+
+/**
+ * The answer when a guarded write found the ticket already moved by someone
+ * else. Every status write here is `updateMany` on the status it expects, so
+ * two people acting at once cannot both win (a READ COMMITTED read-then-update
+ * lets them — see the ledger entry txn-scope-is-not-mutual-exclusion).
+ */
+const moved = () =>
+  new ApiError('SUPPORT_ILLEGAL_MOVE', 'This ticket changed while you were looking at it. Refresh and try again.', 409, 'status');
 
 /**
  * THE SUPPORT DESK — a school reports a problem with Sckools itself; the
@@ -148,6 +162,18 @@ export class SupportService {
     const now = new Date();
     try {
       await withTenant(v.schoolId, async (tx) => {
+        // The first count was a fast refusal; THIS one is the guarantee. Two
+        // creates racing for the last slot serialise on the school's lock, and
+        // the loser's photos are removed by the catch below.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'support:' + v.schoolId}))`;
+        const inDay = await tx.supportTicket.count({ where: { schoolId: v.schoolId, createdAt: { gte: new Date(Date.now() - DAY) } } });
+        if (inDay >= PER_SCHOOL_PER_DAY) {
+          throw new ApiError(
+            'SUPPORT_DAILY_LIMIT',
+            `Your school has raised ${PER_SCHOOL_PER_DAY} tickets in the last day. Add to one of them instead, or try again tomorrow.`,
+            429,
+          );
+        }
         await tx.supportTicket.create({
           data: {
             id: ticketId,
@@ -198,25 +224,35 @@ export class SupportService {
       tx.supportTicket.findFirst({ where: { id, schoolId: v.schoolId }, select: { id: true, status: true } }),
     );
     if (!t) throw this.notFound();
-    if (t.status === 'CLOSED') {
-      throw new ApiError('SUPPORT_ILLEGAL_MOVE', 'This ticket is closed. Reopen it to write more, or raise a new one.', 409, 'id');
-    }
+    if (!WRITABLE.includes(t.status as SupportStatus)) throw this.notWritable(t.status);
     const keys = await this.store(v.schoolId, id, files);
     const now = new Date();
     try {
       await withTenant(v.schoolId, async (tx) => {
         const me = await tx.user.findFirst({ where: { id: v.userId, schoolId: v.schoolId }, select: { name: true, email: true } });
-        const flips = t.status === 'WAITING_ON_SCHOOL';
+        // Guarded on the status AS IT IS NOW, not as it was before the upload:
+        // the photos took seconds, and Sckools may have moved it meanwhile.
+        const flip = await tx.supportTicket.updateMany({
+          where: { id, schoolId: v.schoolId, status: 'WAITING_ON_SCHOOL' },
+          data: { status: 'IN_PROGRESS', lastActivityAt: now, lastSchoolActivityAt: now },
+        });
+        const flips = flip.count === 1;
+        if (!flips) {
+          const bump = await tx.supportTicket.updateMany({
+            where: { id, schoolId: v.schoolId, status: { in: WRITABLE } },
+            data: { lastActivityAt: now, lastSchoolActivityAt: now },
+          });
+          if (bump.count === 0) {
+            const cur = await tx.supportTicket.findFirst({ where: { id, schoolId: v.schoolId }, select: { status: true } });
+            throw this.notWritable(cur?.status ?? 'CLOSED');
+          }
+        }
         await tx.supportTicketEntry.create({
           data: {
             schoolId: v.schoolId, ticketId: id, authorId: v.userId, authorKind: 'SCHOOL', authorName: me?.name ?? me?.email ?? null,
             body: body.trim().slice(0, PREVIEW), attachmentKeys: keys, visibleToSchool: true,
             statusFrom: flips ? 'WAITING_ON_SCHOOL' : null, statusTo: flips ? 'IN_PROGRESS' : null,
           },
-        });
-        await tx.supportTicket.update({
-          where: { id },
-          data: { lastActivityAt: now, lastSchoolActivityAt: now, ...(flips ? { status: 'IN_PROGRESS' } : {}) },
         });
       });
     } catch (e) {
@@ -237,13 +273,18 @@ export class SupportService {
       }
       const me = await tx.user.findFirst({ where: { id: v.userId, schoolId: v.schoolId }, select: { name: true, email: true } });
       const now = new Date();
+      // Closing ends any look-in consent: a closed ticket is no reason to open the console.
+      const done = await tx.supportTicket.updateMany({
+        where: { id, schoolId: v.schoolId, status: 'RESOLVED' },
+        data: { status: 'CLOSED', closedAt: now, lookInUntil: null, lastActivityAt: now, lastSchoolActivityAt: now },
+      });
+      if (done.count === 0) throw moved();
       await tx.supportTicketEntry.create({
         data: {
           schoolId: v.schoolId, ticketId: id, authorId: v.userId, authorKind: 'SCHOOL', authorName: me?.name ?? me?.email ?? null,
           body: 'Confirmed fixed.', visibleToSchool: true, statusFrom: 'RESOLVED', statusTo: 'CLOSED',
         },
       });
-      await tx.supportTicket.update({ where: { id }, data: { status: 'CLOSED', closedAt: now, lastActivityAt: now, lastSchoolActivityAt: now } });
     });
     return this.schoolDetail(v, id);
   }
@@ -265,15 +306,16 @@ export class SupportService {
       }
       const me = await tx.user.findFirst({ where: { id: v.userId, schoolId: v.schoolId }, select: { name: true, email: true } });
       const now = new Date();
+      const done = await tx.supportTicket.updateMany({
+        where: { id, schoolId: v.schoolId, status: t.status, resolvedAt: t.resolvedAt },
+        data: { status: 'OPEN', reopenedAt: now, resolvedAt: null, closedAt: null, lastActivityAt: now, lastSchoolActivityAt: now },
+      });
+      if (done.count === 0) throw moved();
       await tx.supportTicketEntry.create({
         data: {
           schoolId: v.schoolId, ticketId: id, authorId: v.userId, authorKind: 'SCHOOL', authorName: me?.name ?? me?.email ?? null,
           body: body.trim().slice(0, PREVIEW), visibleToSchool: true, statusFrom: t.status, statusTo: 'OPEN',
         },
-      });
-      await tx.supportTicket.update({
-        where: { id },
-        data: { status: 'OPEN', reopenedAt: now, resolvedAt: null, closedAt: null, lastActivityAt: now, lastSchoolActivityAt: now },
       });
     });
     await this.notifyOwner('REOPENED', v.schoolId, id);
@@ -283,8 +325,11 @@ export class SupportService {
   /** Consent to look in, or its withdrawal. A timestamp, so it expires by itself. */
   async setLookIn(v: SchoolViewer, id: string, allow: boolean): Promise<SupportTicketDetail> {
     await withTenant(v.schoolId, async (tx) => {
-      const t = await tx.supportTicket.findFirst({ where: { id, schoolId: v.schoolId }, select: { id: true } });
+      const t = await tx.supportTicket.findFirst({ where: { id, schoolId: v.schoolId }, select: { id: true, status: true } });
       if (!t) throw this.notFound();
+      if (allow && t.status === 'CLOSED') {
+        throw new ApiError('SUPPORT_ILLEGAL_MOVE', 'This ticket is closed, so there is nothing for Sckools to investigate. Reopen it first.', 409, 'allow');
+      }
       const me = await tx.user.findFirst({ where: { id: v.userId, schoolId: v.schoolId }, select: { name: true, email: true } });
       const who = me?.name ?? me?.email ?? 'The school';
       const now = new Date();
@@ -397,15 +442,9 @@ export class SupportService {
     assertOwnerMove(from, status);
     const now = new Date();
     const who = await this.ownerName(o.userId);
-    await db.$transaction([
-      db.supportTicketEntry.create({
-        data: {
-          schoolId: t.schoolId, ticketId: id, authorKind: 'OWNER', authorName: who, visibleToSchool: true,
-          body: (note ?? '').trim().slice(0, PREVIEW), statusFrom: from, statusTo: status,
-        },
-      }),
-      db.supportTicket.update({
-        where: { id },
+    await db.$transaction(async (tx) => {
+      const done = await tx.supportTicket.updateMany({
+        where: { id, schoolId: t.schoolId, status: from },
         data: {
           status,
           lastActivityAt: now,
@@ -413,9 +452,18 @@ export class SupportService {
           acknowledgedAt: status === 'ACKNOWLEDGED' && !t.acknowledgedAt ? now : undefined,
           resolvedAt: status === 'RESOLVED' ? now : from === 'RESOLVED' && status !== 'CLOSED' ? null : undefined,
           closedAt: status === 'CLOSED' ? now : undefined,
+          // Closing ends any look-in consent.
+          lookInUntil: status === 'CLOSED' ? null : undefined,
         },
-      }),
-    ]);
+      });
+      if (done.count === 0) throw moved();
+      await tx.supportTicketEntry.create({
+        data: {
+          schoolId: t.schoolId, ticketId: id, authorKind: 'OWNER', authorName: who, visibleToSchool: true,
+          body: (note ?? '').trim().slice(0, PREVIEW), statusFrom: from, statusTo: status,
+        },
+      });
+    });
     const kind: SchoolUpdateKind = status === 'ACKNOWLEDGED' ? 'ACKNOWLEDGED' : status === 'RESOLVED' ? 'RESOLVED' : 'STATUS';
     await this.notifySchool(kind, t.schoolId, id, SUPPORT_STATUS_LABEL_SCHOOL[status]);
     return this.ownerDetail(o, id);
@@ -434,7 +482,8 @@ export class SupportService {
       }),
       db.supportTicket.update({
         where: { id },
-        data: { lastActivityAt: now, ...(visibleToSchool ? { lastOwnerActivityAt: now } : {}) },
+        // A private note leaves no trace the school can see — not even a fresher "last activity".
+        data: visibleToSchool ? { lastActivityAt: now, lastOwnerActivityAt: now } : {},
       }),
     ]);
     if (visibleToSchool) await this.notifySchool('REPLIED', t.schoolId, id);
@@ -466,9 +515,9 @@ export class SupportService {
   /** "Open as this school" — only while the school's consent clock is running, and always on the record. */
   async openSchool(o: Owner, id: string): Promise<{ url: string; expiresInSeconds: number }> {
     const db = getPlatformPrisma();
-    const t = await db.supportTicket.findUnique({ where: { id }, select: { schoolId: true, lookInUntil: true } });
+    const t = await db.supportTicket.findUnique({ where: { id }, select: { schoolId: true, lookInUntil: true, status: true } });
     if (!t) throw this.notFound();
-    if (!lookInActive(t.lookInUntil)) {
+    if (t.status === 'CLOSED' || !lookInActive(t.lookInUntil)) {
       throw new ApiError(
         'SUPPORT_LOOK_IN_REQUIRED',
         'The school has not allowed Sckools to open its console for this ticket, or the permission has expired. Ask them to switch it on from their Help page.',
@@ -482,7 +531,8 @@ export class SupportService {
       db.supportTicketEntry.create({
         data: { schoolId: t.schoolId, ticketId: id, authorKind: 'SYSTEM', visibleToSchool: true, body: `Sckools (${who}) opened your console to investigate this ticket.` },
       }),
-      db.supportTicket.update({ where: { id }, data: { lastActivityAt: now, lastOwnerActivityAt: now } }),
+      // Looking is not answering: the ticket still counts as unanswered until someone writes back.
+      db.supportTicket.update({ where: { id }, data: { lastActivityAt: now } }),
     ]);
     await this.notifySchool('OPENED', t.schoolId, id);
     return minted;
@@ -511,7 +561,12 @@ export class SupportService {
     const now = new Date();
     for (const t of due) {
       if (!autoCloseDue(t.resolvedAt, now)) continue;
-      await db.supportTicket.update({ where: { id: t.id }, data: { status: 'CLOSED', closedAt: now, lastActivityAt: now } });
+      // Guarded: the owner may have pulled it back, or another sweep beaten us to it.
+      const done = await db.supportTicket.updateMany({
+        where: { id: t.id, schoolId: t.schoolId, status: 'RESOLVED', resolvedAt: { lt: cutoff } },
+        data: { status: 'CLOSED', closedAt: now, lookInUntil: null, lastActivityAt: now },
+      });
+      if (done.count === 0) continue;
       await db.supportTicketEntry.create({
         data: {
           schoolId: t.schoolId, ticketId: t.id, authorKind: 'SYSTEM', visibleToSchool: true, statusFrom: 'RESOLVED', statusTo: 'CLOSED',
@@ -528,7 +583,20 @@ export class SupportService {
     if (files.length > SUPPORT_MAX_FILES) {
       throw new ApiError('VALIDATION', `Attach up to ${SUPPORT_MAX_FILES} photos.`, 400, 'files');
     }
+    // apps/api is one Vercel function, which refuses bodies over 4.5 MB before
+    // Nest sees them. The client shrinks photos to fit; this states the same
+    // budget so a hand-written request gets the same answer.
+    const total = files.reduce((n, f) => n + f.buffer.length, 0);
+    if (total > SUPPORT_MAX_REQUEST_BYTES) {
+      throw new ApiError('VALIDATION', 'The photos together must be under 4 MB. Attach fewer, or smaller ones.', 413, 'files');
+    }
     for (const f of files) assertUploadKind(f.buffer, IMAGE_KINDS, 'photo', { field: 'files' });
+  }
+
+  private notWritable(status: string): ApiError {
+    return status === 'RESOLVED'
+      ? new ApiError('SUPPORT_ILLEGAL_MOVE', 'Sckools marked this resolved. Confirm it is fixed, or reopen it to say what is still wrong.', 409, 'id')
+      : new ApiError('SUPPORT_ILLEGAL_MOVE', 'This ticket is closed. Reopen it to write more, or raise a new one.', 409, 'id');
   }
 
   /** Private storage, keyed under the ticket so a key names where it belongs. */
@@ -703,6 +771,13 @@ export class SupportService {
         },
       });
       if (!t) return;
+      // One letter per burst: a run of replies inside the window reaches the inbox once.
+      if (kind === 'REPLIED') {
+        const recent = await db.supportTicketEntry.findMany({
+          where: { ticketId: id, schoolId, authorKind: 'SCHOOL' }, orderBy: { createdAt: 'desc' }, take: 2, select: { createdAt: true },
+        });
+        if (recent.length === 2 && recent[0]!.createdAt.getTime() - recent[1]!.createdAt.getTime() < OWNER_ALERT_COALESCE_MS) return;
+      }
       const preview = kind === 'RAISED' ? t.body : (t.entries[0]?.body ?? t.body);
       const { subject, letter } = ownerAlertLetter(kind, {
         ticketNo: supportTicketNo(t.number),

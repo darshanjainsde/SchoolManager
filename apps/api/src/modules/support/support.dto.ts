@@ -15,12 +15,14 @@ const toBool = () =>
     return value;
   });
 
+const trimmed = () => Transform(({ value }) => (typeof value === 'string' ? value.trim() : value));
+
 export class CreateTicketDto {
   @IsIn([...SUPPORT_TICKET_TYPES]) type!: (typeof SUPPORT_TICKET_TYPES)[number];
   @IsIn([...SUPPORT_MODULES]) module!: (typeof SUPPORT_MODULES)[number];
   @IsIn([...SUPPORT_SEVERITIES]) severity!: (typeof SUPPORT_SEVERITIES)[number];
-  @IsString() @MinLength(3) @MaxLength(120) title!: string;
-  @IsString() @MinLength(3) @MaxLength(4000) body!: string;
+  @trimmed() @IsString() @MinLength(3) @MaxLength(120) title!: string;
+  @trimmed() @IsString() @MinLength(3) @MaxLength(4000) body!: string;
   /** The console route the Report button was pressed on. */
   @IsOptional() @IsString() @MaxLength(200) pagePath?: string;
   @IsOptional() @IsString() @MaxLength(40) appVersion?: string;
@@ -29,11 +31,11 @@ export class CreateTicketDto {
 }
 
 export class SchoolCommentDto {
-  @IsString() @MinLength(1) @MaxLength(4000) body!: string;
+  @trimmed() @IsString() @MinLength(1) @MaxLength(4000) body!: string;
 }
 
 export class ReopenDto {
-  @IsString() @MinLength(3) @MaxLength(4000) body!: string;
+  @trimmed() @IsString() @MinLength(3) @MaxLength(4000) body!: string;
 }
 
 export class LookInDto {
@@ -41,7 +43,7 @@ export class LookInDto {
 }
 
 export class OwnerCommentDto {
-  @IsString() @MinLength(1) @MaxLength(4000) body!: string;
+  @trimmed() @IsString() @MinLength(1) @MaxLength(4000) body!: string;
   /** False = a private note the school never sees. */
   @IsOptional() @toBool() @IsBoolean() visibleToSchool?: boolean;
 }
