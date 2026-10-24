@@ -50,6 +50,6 @@ describe('private key prefixes', () => {
   });
 
   it('names exactly the categories that presign on read', () => {
-    expect([...PRIVATE_PREFIXES].sort()).toEqual(['backups/', 'fee-proofs/', 'print-orders/']);
+    expect([...PRIVATE_PREFIXES].sort()).toEqual(['backups/', 'fee-proofs/', 'print-orders/', 'support/']);
   });
 });

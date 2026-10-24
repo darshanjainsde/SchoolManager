@@ -80,6 +80,8 @@ const ALLOWED: Record<string, string> = {
   'modules/backups/sample-packs.service.ts':
     'the pack library: SamplePack rows (platform-level, no schoolId, platform_only by policy) and the one School row a pack is cut from. Loading a pack into a school goes through BucketRestoresService, not from here',
   'modules/owner/internal/impersonation.service.ts': 'operator console',
+  'modules/support/support.service.ts':
+    'the owner\'s support desk IS the cross-tenant read (every school\'s tickets on one board), behind OwnerHostGuard + the platform JWT; every where names schoolId where a school is involved, and the school\'s own door runs under withTenant',
   'modules/press/operator-orders.service.ts':
     'the print-order desk at sckools.com/sv/orders — cross-tenant BY PURPOSE (every school\'s orders on one queue), behind OwnerHostGuard + platform JWT; writes touch one order by id and its events only',
   'common/metrics/metrics.service.ts':

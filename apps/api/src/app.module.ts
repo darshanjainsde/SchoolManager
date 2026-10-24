@@ -25,6 +25,7 @@ import { BackupsModule } from './modules/backups';
 import { CmsModule } from './modules/cms';
 import { ManagementModule } from './modules/management';
 import { ConcernsModule } from './modules/concerns';
+import { SupportModule } from './modules/support';
 import { CommunityModule } from './modules/community';
 import { HiringModule } from './modules/hiring';
 import { PublicModule } from './modules/public';
@@ -98,6 +99,7 @@ import { RedisThrottlerStorage } from './common/throttler/redis-throttler.storag
     CmsModule,
     ManagementModule,
     ConcernsModule,
+    SupportModule,
     CommunityModule,
     HiringModule,
     PublicModule,

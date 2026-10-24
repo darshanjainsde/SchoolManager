@@ -23,5 +23,6 @@ import { OwnerController } from './owner.controller';
   imports: [JwtModule.register({}), AuthModule, FeaturesModule, MarketingModule, HiringModule, BackupsModule],
   controllers: [OwnerAuthController, OwnerController],
   providers: [OpsService, OwnerAuthService, OwnerHostGuard, OwnerSchoolsService, OwnerDomainsService, HostingProviderService, OwnerCacheInterceptor, SpeedService, OwnerEventsService, ImpersonationService, OwnerOverviewService],
+  exports: [ImpersonationService],
 })
 export class OwnerModule {}

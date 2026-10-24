@@ -132,6 +132,7 @@ export const OUTBOX_EMAIL: Record<NotificationOutboxKind, boolean> = {
   COVER_UNFILLED: true,
   COVER_BATCH: true,
   MESSAGE_REPORTED: true,
+  SUPPORT_UPDATE: true,
 };
 
 /**
@@ -335,6 +336,16 @@ export function toNotificationMessage(kind: NotificationOutboxKind, payload: unk
       return {
         kind: 'ANNOUNCEMENT',
         payload: { schoolName: p.schoolName, title: p.title, body: p.body, className: 'Complaint Box', postedOn },
+      };
+    }
+    case 'SUPPORT_UPDATE': {
+      // The support desk, to the one admin who raised the ticket (targetUserId):
+      // picked up, moved, answered, resolved, or the console opened under consent.
+      // Same single-reader ANNOUNCEMENT shape as the Complaint Box.
+      const p = payload as { schoolName: string; title: string; body: string };
+      return {
+        kind: 'ANNOUNCEMENT',
+        payload: { schoolName: p.schoolName, title: p.title, body: p.body, className: 'Support desk', postedOn },
       };
     }
     case 'MESSAGE_REPORTED': {
