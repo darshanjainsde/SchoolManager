@@ -1,5 +1,5 @@
 'use client';
-import { Bell, BookOpen, CalendarCheck, FileText, GraduationCap, Library, Megaphone, MessageSquare, NotebookPen, Receipt, Sparkles, TrendingDown, Trophy, CalendarClock, UserRoundCheck, Flag, type LucideIcon } from 'lucide-react';
+import { Bell, BookOpen, CalendarCheck, FileText, GraduationCap, Library, Megaphone, MessageSquare, NotebookPen, Receipt, Sparkles, TrendingDown, Trophy, CalendarClock, UserRoundCheck, Flag, LifeBuoy, type LucideIcon } from 'lucide-react';
 import type { NotificationKind } from '@skoolos/types';
 
 /** Which portal the bell/view is mounted in — decides route targets by role. */
@@ -30,6 +30,8 @@ export const KIND_ICON: Record<NotificationKind, LucideIcon> = {
   COVER_ASSIGNED: UserRoundCheck,
   // A teacher or family reported a message thread — an admin's notice.
   MESSAGE_REPORTED: Flag,
+  // The support desk answered the admin's ticket.
+  SUPPORT: LifeBuoy,
 };
 
 /** Fallback for a kind the client doesn't know yet (server added one later). */

@@ -1,5 +1,6 @@
 'use client';
 import { SwitchProfile } from '@/components/switch-profile';
+import { ReportDoor } from '@/components/support/report-door';
 import { useSchoolMark } from '@/components/use-school-mark';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -467,6 +468,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
             <div className="border-t border-white/10 p-4">
               <ProfileDoor name={me?.name ?? null} pathname={pathname} href={profileHref} onNavigate={() => setDrawerOpen(false)} />
+              <ReportDoor onOpen={() => setDrawerOpen(false)} />
               <div className="skosx mb-2"><SwitchProfile onDone={() => setDrawerOpen(false)} /></div>
               <div className="skosx mb-3">
                 <ThemeToggle />
@@ -546,6 +548,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         {/* Logout */}
         <div className={cn('border-t border-white/10', collapsed ? 'p-2' : 'p-4')}>
           <ProfileDoor name={me?.name ?? null} pathname={pathname} href={profileHref} collapsed={collapsed} />
+          <ReportDoor collapsed={collapsed} />
           {!collapsed && <div className="skosx mb-2"><SwitchProfile /></div>}
           {!collapsed && <div className="skosx mb-3"><ThemeToggle /></div>}
           <button
