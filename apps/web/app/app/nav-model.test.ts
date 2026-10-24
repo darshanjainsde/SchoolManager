@@ -17,7 +17,7 @@ const EVERY_ROUTE = [
   '/app/staff-attendance', '/app/leave', '/app/requests',
   '/app/timetable', '/app/availability',
   '/app/syllabus', '/app/exam-hall', '/app/press', '/app/press/orders',
-  '/app/fees', '/app/pay', '/app/library', '/app/sports', '/app/announcements', '/app/alumni', '/app/profile', '/app/settings',
+  '/app/fees', '/app/pay', '/app/library', '/app/sports', '/app/announcements', '/app/alumni', '/app/profile', '/app/support', '/app/settings',
 ].sort();
 
 describe('the grouped sidebar model', () => {
@@ -49,7 +49,7 @@ describe('the grouped sidebar model', () => {
     const labels = model.map((e) => (e.kind === 'item' ? e.item.label : `▾${e.label}`));
     // Website group survives (the Website page itself is ungated), Admissions
     // survives via ENQUIRY; People/Attendance/Timetable/Exams vanish whole.
-    expect(labels).toEqual(['Dashboard', '▾Website', '▾Admissions', 'Announcements', 'My profile']);
+    expect(labels).toEqual(['Dashboard', '▾Website', '▾Admissions', 'Announcements', 'My profile', 'Help']);
   });
 
   it('a STANDARD school (plan ladder v2) sees the whole office and hosts events, but no money or specialist desk', () => {
