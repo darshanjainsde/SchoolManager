@@ -201,10 +201,11 @@ describe('press authorization', () => {
       .expect(404);
   });
 
-  it('gates the whole module behind the PRESS override — no tier grants it', async () => {
-    // A PRO school WITHOUT the override gets 403 even as an admin: the module
-    // must be unreachable everywhere until the owner console turns it on.
-    const other = await seedMinimalSchool();
+  it('gates the whole module behind the PRESS feature — a STANDARD school is shut out', async () => {
+    // PRESS is a PRO feature since Plan Ladder v2. A STANDARD school with no
+    // override gets 403 even as an admin: the module must be unreachable
+    // everywhere until the tier or the owner console grants it.
+    const other = await seedMinimalSchool({ tier: 'STANDARD' });
     const token = signSchoolToken({ sub: other.adminUserId, schoolId: other.schoolId, role: 'SCHOOL_ADMIN' });
 
     await request(app.getHttpServer())

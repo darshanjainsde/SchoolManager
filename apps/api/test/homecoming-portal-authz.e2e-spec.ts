@@ -223,7 +223,7 @@ describe('Alumni portal authorization', () => {
     });
 
     it('is refused entirely for a school without the ALUMNI feature', async () => {
-      const plainSchool = await seedMinimalSchool();
+      const plainSchool = await seedMinimalSchool({ tier: 'STANDARD' }); // ALUMNI is PRO since Plan Ladder v2
       await request(srv()).post('/alumni/claims')
         .set({ 'X-Skoolos-Host': plainSchool.host }).send(claim()).expect(403);
     });
@@ -361,7 +361,7 @@ describe('Alumni portal authorization', () => {
 
   describe('the feature gate covers the alumnus side too', () => {
     it('refuses public and member routes alike for a school without ALUMNI', async () => {
-      const plainSchool = await seedMinimalSchool();
+      const plainSchool = await seedMinimalSchool({ tier: 'STANDARD' });
       for (const r of [...PUBLIC_ROUTES, ...MEMBER_ROUTES, ...TRUSTED_ROUTES]) {
         const res = await call(r, { 'X-Skoolos-Host': plainSchool.host });
         expect({ route: r.path, status: res.status }).toEqual({ route: r.path, status: 403 });
